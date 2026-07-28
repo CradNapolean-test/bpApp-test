@@ -1,4 +1,5 @@
 import { isoWeekKey } from '@/lib/utils/dates';
+import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { dayCalories } from '@/lib/calculations';
 import type { DailyLogRow } from '@/lib/data/types';
 
@@ -12,7 +13,7 @@ interface WeekPoint {
 
 function buildWeeklyTrend(logs: DailyLogRow[]): WeekPoint[] {
   const byWeek = new Map<string, DailyLogRow[]>();
-  for (const log of logs) {
+  for (const log of logs.filter(hasLoggedData)) {
     const week = isoWeekKey(log.log_date);
     if (!byWeek.has(week)) byWeek.set(week, []);
     byWeek.get(week)!.push(log);
