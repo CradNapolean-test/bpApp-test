@@ -35,7 +35,11 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = request.nextUrl.pathname.startsWith('/login');
+  // /api/cron/* authenticates via CRON_SECRET (checked inside the route itself), not a
+  // Supabase session cookie — Vercel Cron calls it server-to-server with no browser
+  // session, so it must be exempt from the cookie-based redirect below.
+  const isPublicPath =
+    request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/api/cron');
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
