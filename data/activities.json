@@ -1,0 +1,178 @@
+[
+  {
+    "name": "walking, 2.5 mph, level, firm surface",
+    "met": 3.0
+  },
+  {
+    "name": "walking, 2.5 mph, downhill",
+    "met": 3.3
+  },
+  {
+    "name": "walking, 2.8 to 3.2 mph, level, moderate pace, firm surface",
+    "met": 3.5
+  },
+  {
+    "name": "walking, 3.5 mph, level, brisk, firm surface, walking for exercise",
+    "met": 4.3
+  },
+  {
+    "name": "walking, 2.9 to 3.5 mph, uphill, 1 to 5% grade",
+    "met": 5.3
+  },
+  {
+    "name": "walking, 2.9 to 3.5 mph, uphill, 6% to 15% grade",
+    "met": 8.0
+  },
+  {
+    "name": "walking, 4.0 mph, level, firm surface, very brisk pace",
+    "met": 5.0
+  },
+  {
+    "name": "walking, 4.5 mph, level, firm surface, very, very brisk",
+    "met": 7.0
+  },
+  {
+    "name": "walking, 5.0 mph, level, firm surface",
+    "met": 8.3
+  },
+  {
+    "name": "walking, 5.0 mph, uphill, 3% grade",
+    "met": 9.8
+  },
+  {
+    "name": "bicycling, stationary, 30-50 watts, very light to light effort",
+    "met": 3.5
+  },
+  {
+    "name": "bicycling, stationary, 90-100 watts, moderate to vigorous effort",
+    "met": 6.8
+  },
+  {
+    "name": "bicycling, stationary, 101-160 watts, vigorous effort",
+    "met": 8.8
+  },
+  {
+    "name": "bicycling, stationary, 161-200 watts, vigorous effort",
+    "met": 11.0
+  },
+  {
+    "name": "bicycling, stationary, 201-270 watts, very vigorous effort",
+    "met": 14.0
+  },
+  {
+    "name": "bicycling, stationary, 51-89 watts, light-to-moderate effort",
+    "met": 4.8
+  },
+  {
+    "name": "Crosstrainer, Moderate effort",
+    "met": 5.0
+  },
+  {
+    "name": "Stairs",
+    "met": 9.0
+  },
+  {
+    "name": "Skipping",
+    "met": 11.0
+  },
+  {
+    "name": "Rowing - Vigorous",
+    "met": 6.0
+  },
+  {
+    "name": "Rowing - Moderate",
+    "met": 4.8
+  },
+  {
+    "name": "Ski Erg",
+    "met": 6.8
+  },
+  {
+    "name": "running, 4 mph (15 min/mile)/ 6.4kph",
+    "met": 6.0
+  },
+  {
+    "name": "running, 5 mph (12 min/mile) / 8 kph",
+    "met": 8.3
+  },
+  {
+    "name": "running, 5.2 mph (11.5 min/mile) / 8.4 kph",
+    "met": 9.0
+  },
+  {
+    "name": "running, 6 mph (10 min/mile) / 9.7 kph",
+    "met": 9.8
+  },
+  {
+    "name": "running, 6.7 mph (9 min/mile) / 10.8 kph",
+    "met": 10.5
+  },
+  {
+    "name": "running, 7 mph (8.5 min/mile) / 11.3 kph",
+    "met": 11.0
+  },
+  {
+    "name": "running, 7.5 mph (8 min/mile) / 12.1 kph",
+    "met": 11.8
+  },
+  {
+    "name": "running, 8 mph (7.5 min/mile) / 12.9 kph",
+    "met": 11.8
+  },
+  {
+    "name": "running, 8.6 mph (7 min/mile) / 13.8 kph",
+    "met": 12.3
+  },
+  {
+    "name": "running, 9 mph (6.5 min/mile) / 14.5 kph",
+    "met": 12.8
+  },
+  {
+    "name": "running, 10 mph (6 min/mile) / 16.1 kph",
+    "met": 14.5
+  },
+  {
+    "name": "running, 11 mph (5.5 min/mile) / 17.7 kph",
+    "met": 16.0
+  },
+  {
+    "name": "running, 12 mph (5 min/mile) / 19.3 kph",
+    "met": 19.0
+  },
+  {
+    "name": "running, 13 mph (4.6 min/mile) / 20.9 kph",
+    "met": 19.8
+  },
+  {
+    "name": "running, 14 mph (4.3 min/mile) / 22.5 kph",
+    "met": 23.0
+  },
+  {
+    "name": "swimming laps, freestyle, fast, vigorous effort",
+    "met": 9.8
+  },
+  {
+    "name": "swimming laps, freestyle, front crawl, slow, light or moderate effort",
+    "met": 5.8
+  },
+  {
+    "name": "swimming, backstroke, general, training or competition",
+    "met": 9.5
+  },
+  {
+    "name": "swimming, backstroke, recreational",
+    "met": 4.8
+  },
+  {
+    "name": "swimming, breaststroke, general, training or competition",
+    "met": 10.3
+  },
+  {
+    "name": "swimming, breaststroke, recreational",
+    "met": 5.3
+  },
+  {
+    "name": "swimming, butterfly, general",
+    "met": 13.8
+  }
+]
