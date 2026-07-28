@@ -9,7 +9,7 @@ import { MealPlannerTab } from './MealPlannerTab';
 import { ActivityTab } from './ActivityTab';
 import { InsightsTab } from './InsightsTab';
 import { OverviewTab } from './OverviewTab';
-import { ChatTab } from './ChatTab';
+import { ChatPopup } from './ChatPopup';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
 import { WorkoutTab } from './WorkoutTab';
@@ -28,22 +28,34 @@ import type {
   WorkoutProgramRow,
 } from '@/lib/data/types';
 
-// The coaching tab set is shared by both roles. Coach view additionally gets a "Credits"
-// tab (grant credits + assign membership, no booking UI — a coach doesn't book on a
-// client's behalf). The client's own booking/credits experience lives one level up, in
-// the separate "Classes" area (see the area toggle below), not as a coaching tab.
-const COACHING_TABS = [
-  'Setup',
-  'Weekly Log',
-  'Food Tracking',
-  'Meal Planner',
-  'Activity',
-  'Insights',
-  'Overview',
-  'Chat',
-  'Workout',
-] as const;
-type CoachingTab = (typeof COACHING_TABS)[number] | 'Credits';
+// Screens are grouped into categories rather than one flat tab bar. Chat isn't a screen
+// at all anymore — it's a floating popup (ChatPopup) visible from anywhere in the shell.
+type Screen =
+  | 'Setup'
+  | 'Weekly Log'
+  | 'Food Tracking'
+  | 'Meal Planner'
+  | 'Activity'
+  | 'Insights'
+  | 'Overview'
+  | 'Workout'
+  | 'Credits';
+
+type Category = 'Nutrition' | 'Training' | 'Accountability' | 'Account Settings';
+const CATEGORY_ORDER: Category[] = ['Nutrition', 'Training', 'Accountability', 'Account Settings'];
+
+function screensForCategory(category: Category, isCoachView: boolean): Screen[] {
+  switch (category) {
+    case 'Nutrition':
+      return ['Food Tracking', 'Meal Planner'];
+    case 'Training':
+      return ['Activity', 'Workout'];
+    case 'Accountability':
+      return ['Weekly Log', 'Insights', 'Overview'];
+    case 'Account Settings':
+      return isCoachView ? ['Setup', 'Credits'] : ['Setup'];
+  }
+}
 
 type Area = 'Coaching' | 'Classes';
 
@@ -93,12 +105,16 @@ export function DashboardShell({
   packages: MembershipPackageRow[];
 }) {
   const [area, setArea] = useState<Area>('Coaching');
-  const [tab, setTab] = useState<CoachingTab>('Setup');
+  const [category, setCategory] = useState<Category>('Nutrition');
+  const [screen, setScreen] = useState<Screen>('Food Tracking');
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
 
-  const tabsForRole: CoachingTab[] = isCoachView ? [...COACHING_TABS, 'Credits'] : [...COACHING_TABS];
+  function handleCategoryClick(c: Category) {
+    setCategory(c);
+    setScreen(screensForCategory(c, isCoachView)[0]);
+  }
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -130,27 +146,43 @@ export function DashboardShell({
 
       {(isCoachView || area === 'Coaching') && (
         <>
-          <nav className="mt-6 flex flex-wrap gap-1 border-b border-black/10 dark:border-white/10">
-            {tabsForRole.map((t) => (
+          <nav className="mt-6 flex flex-wrap gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+            {CATEGORY_ORDER.map((c) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={c}
+                onClick={() => handleCategoryClick(c)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  category === c
+                    ? 'bg-foreground text-background'
+                    : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </nav>
+
+          <nav className="mt-4 flex flex-wrap gap-1 border-b border-black/10 dark:border-white/10">
+            {screensForCategory(category, isCoachView).map((s) => (
+              <button
+                key={s}
+                onClick={() => setScreen(s)}
                 className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
-                  tab === t
+                  screen === s
                     ? 'border-b-2 border-foreground text-black dark:text-zinc-50'
                     : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
                 }`}
               >
-                {t}
+                {s}
               </button>
             ))}
           </nav>
 
           <div className="mt-6">
-            {tab === 'Setup' && (
+            {screen === 'Setup' && (
               <SetupTab clientId={clientId} initialProfile={profile} readOnly={isCoachView} />
             )}
-            {tab === 'Weekly Log' && (
+            {screen === 'Weekly Log' && (
               <WeeklyLogTab
                 clientId={clientId}
                 weekDates={weekDates}
@@ -160,24 +192,21 @@ export function DashboardShell({
                 readOnly={isCoachView}
               />
             )}
-            {tab === 'Food Tracking' && (
+            {screen === 'Food Tracking' && (
               <FoodTrackingTab dailyLogId={todayLogId} initialEntries={foodDiaryEntries} readOnly={isCoachView} />
             )}
-            {tab === 'Meal Planner' && (
+            {screen === 'Meal Planner' && (
               <MealPlannerTab clientId={clientId} initialEntries={mealPlanEntries} readOnly={isCoachView} />
             )}
-            {tab === 'Activity' && (
+            {screen === 'Activity' && (
               <ActivityTab activities={activities} bodyWeightKg={todayBodyweight} programWeek={programWeek} />
             )}
-            {tab === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
-            {tab === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
-            {tab === 'Chat' && (
-              <ChatTab clientId={clientId} initialMessages={messages} currentUserId={currentUserId} />
-            )}
-            {tab === 'Workout' && (
+            {screen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
+            {screen === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
+            {screen === 'Workout' && (
               <WorkoutTab clientId={clientId} isCoachView={isCoachView} programs={programs} workoutLogs={workoutLogs} />
             )}
-            {tab === 'Credits' && isCoachView && (
+            {screen === 'Credits' && isCoachView && (
               <CreditsTab clientId={clientId} creditsBalance={creditsBalance} membership={membership} packages={packages} />
             )}
           </div>
@@ -189,6 +218,8 @@ export function DashboardShell({
           <ClassesArea classes={classes} bookings={bookings} creditsBalance={creditsBalance} membership={membership} />
         </div>
       )}
+
+      <ChatPopup clientId={clientId} initialMessages={messages} currentUserId={currentUserId} />
     </div>
   );
 }

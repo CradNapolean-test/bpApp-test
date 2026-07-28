@@ -70,7 +70,10 @@ export function ChatTab({
                 }`}
               >
                 <p>{m.text}</p>
-                <p className={`mt-1 text-[10px] opacity-60`}>
+                {/* suppressHydrationWarning: formatted in the viewer's own timezone/locale,
+                    which the server can't know in advance — this text is expected to
+                    differ between the SSR pass and the client, not a real mismatch. */}
+                <p className="mt-1 text-[10px] opacity-60" suppressHydrationWarning>
                   {new Date(m.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
