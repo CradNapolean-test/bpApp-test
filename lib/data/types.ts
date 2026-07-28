@@ -115,6 +115,8 @@ export interface BookingRow {
   booking_date: string;
   status: BookingStatus;
   created_at: string;
+  attended: boolean;
+  attended_at: string | null;
   class: ClassRow | null;
 }
 
@@ -163,4 +165,41 @@ export interface WorkoutLogRow {
   actual_load: number | null;
   actual_rpe: number | null;
   logged_at: string;
+}
+
+export interface MembershipPackageRow {
+  id: string;
+  coach_id: string;
+  name: string;
+  credits_per_week: number;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ClientMembershipRow {
+  id: string;
+  client_id: string;
+  package_id: string;
+  started_at: string;
+  ended_at: string | null;
+  last_reset_week: string | null;
+  created_at: string;
+  package: MembershipPackageRow | null;
+}
+
+export interface ScheduleOccurrence {
+  classId: string;
+  className: string;
+  date: string;
+  startTime: string | null;
+  capacity: number;
+  bookedCount: number;
+}
+
+export interface RosterEntry {
+  bookingId: string;
+  clientId: string;
+  clientName: string;
+  status: BookingStatus;
+  attended: boolean;
 }

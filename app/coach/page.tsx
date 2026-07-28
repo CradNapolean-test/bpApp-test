@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getMyClients } from '@/lib/data/coach';
 import { SignOutButton } from '@/app/_components/SignOutButton';
+import { CoachNav } from './_components/CoachNav';
 import { AddClientForm } from './_components/AddClientForm';
 
 export default async function CoachPage() {
@@ -24,13 +25,12 @@ export default async function CoachPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Clients</h1>
-          <Link href="/coach/classes" className="text-sm text-zinc-500 hover:underline">
-            Manage classes &rarr;
-          </Link>
-        </div>
+        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Clients</h1>
         <SignOutButton />
+      </div>
+
+      <div className="mt-4">
+        <CoachNav />
       </div>
 
       <div className="mt-6 rounded-lg border border-black/10 p-4 dark:border-white/10">

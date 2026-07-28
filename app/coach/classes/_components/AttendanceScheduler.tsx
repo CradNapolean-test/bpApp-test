@@ -1,0 +1,94 @@
+'use client';
+
+import { useState } from 'react';
+import { getRoster, markAttendance } from '@/lib/data/classes';
+import type { RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
+
+export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
+  const [selected, setSelected] = useState<ScheduleOccurrence | null>(null);
+  const [roster, setRoster] = useState<RosterEntry[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function openOccurrence(occ: ScheduleOccurrence) {
+    setSelected(occ);
+    setLoading(true);
+    try {
+      const r = await getRoster(occ.classId, occ.date);
+      setRoster(r);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function toggleAttended(entry: RosterEntry) {
+    if (!selected) return;
+    const nextAttended = !entry.attended;
+    setRoster((prev) =>
+      prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: nextAttended } : r)) : prev
+    );
+    try {
+      await markAttendance(entry.bookingId, nextAttended);
+    } catch {
+      // Revert on failure.
+      setRoster((prev) =>
+        prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: entry.attended } : r)) : prev
+      );
+    }
+  }
+
+  if (selected) {
+    return (
+      <div className="space-y-4">
+        <button onClick={() => setSelected(null)} className="text-sm text-zinc-500 hover:underline">
+          &larr; Back to schedule
+        </button>
+        <h3 className="text-lg font-medium text-black dark:text-zinc-50">
+          {selected.className} — {selected.date}
+        </h3>
+        {loading && <p className="text-sm text-zinc-500">Loading roster…</p>}
+        {!loading && (
+          <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+            {(roster ?? []).map((entry) => (
+              <li key={entry.bookingId} className="flex items-center justify-between p-3 text-sm">
+                <span>
+                  {entry.clientName} <span className="text-zinc-500">({entry.status})</span>
+                </span>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={entry.attended}
+                    onChange={() => toggleAttended(entry)}
+                  />
+                  Attended
+                </label>
+              </li>
+            ))}
+            {(roster ?? []).length === 0 && <li className="p-3 text-sm text-zinc-500">No bookings for this occurrence.</li>}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+      {occurrences.map((occ) => (
+        <li key={`${occ.classId}-${occ.date}`}>
+          <button
+            onClick={() => openOccurrence(occ)}
+            className="flex w-full items-center justify-between p-3 text-left text-sm hover:bg-black/[.02] dark:hover:bg-white/[.03]"
+          >
+            <span>
+              {occ.className} — {occ.date}
+              {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
+            </span>
+            <span className="text-zinc-500">
+              {occ.bookedCount}/{occ.capacity} booked
+            </span>
+          </button>
+        </li>
+      ))}
+      {occurrences.length === 0 && <li className="p-3 text-sm text-zinc-500">No upcoming occurrences.</li>}
+    </ul>
+  );
+}

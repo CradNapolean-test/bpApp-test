@@ -40,6 +40,8 @@ export default async function DashboardPage() {
       creditsBalance={bundle.creditsBalance}
       programs={bundle.programs}
       workoutLogs={bundle.workoutLogs}
+      membership={bundle.membership}
+      packages={bundle.packages}
     />
   );
 }

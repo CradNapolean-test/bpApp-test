@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { getClasses } from '@/lib/data/classes';
+import { getClasses, getScheduleOccurrences } from '@/lib/data/classes';
+import { getPackages } from '@/lib/data/memberships';
 import { SignOutButton } from '@/app/_components/SignOutButton';
-import { ClassManager } from './_components/ClassManager';
+import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { ClassesHubShell } from './_components/ClassesHubShell';
 
 export default async function CoachClassesPage() {
   const supabase = await createClient();
@@ -19,21 +20,23 @@ export default async function CoachClassesPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const classes = await getClasses();
+  const [classes, occurrences, packages] = await Promise.all([
+    getClasses(),
+    getScheduleOccurrences(),
+    getPackages(),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Classes</h1>
-          <Link href="/coach" className="text-sm text-zinc-500 hover:underline">
-            &larr; Back to clients
-          </Link>
-        </div>
+        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Classes</h1>
         <SignOutButton />
       </div>
+      <div className="mt-4">
+        <CoachNav />
+      </div>
       <div className="mt-6">
-        <ClassManager initialClasses={classes} />
+        <ClassesHubShell initialClasses={classes} occurrences={occurrences} initialPackages={packages} />
       </div>
     </div>
   );

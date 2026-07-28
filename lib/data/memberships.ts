@@ -1,0 +1,52 @@
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import type { ClientMembershipRow, MembershipPackageRow } from './types';
+
+export async function getPackages(): Promise<MembershipPackageRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('membership_packages')
+    .select('*')
+    .order('credits_per_week');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function createPackage(fields: Omit<MembershipPackageRow, 'id' | 'coach_id' | 'created_at'>): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase.from('membership_packages').insert({ ...fields, coach_id: user.id });
+  if (error) throw error;
+}
+
+export async function deletePackage(packageId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('membership_packages').delete().eq('id', packageId);
+  if (error) throw error;
+}
+
+export async function getMyMembership(clientId: string): Promise<ClientMembershipRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('client_memberships')
+    .select('*, package:membership_packages(*)')
+    .eq('client_id', clientId)
+    .is('ended_at', null)
+    .maybeSingle();
+  if (error) throw error;
+  return data as unknown as ClientMembershipRow | null;
+}
+
+export async function assignMembership(clientId: string, packageId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('assign_membership', {
+    p_client_id: clientId,
+    p_package_id: packageId,
+  });
+  if (error) throw error;
+}

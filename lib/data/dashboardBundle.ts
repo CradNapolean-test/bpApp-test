@@ -8,6 +8,7 @@ import { getActivities } from './foods';
 import { getMessages } from './chat';
 import { getClasses, getCreditsBalance, getUpcomingBookings } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
+import { getMyMembership, getPackages } from './memberships';
 import { toIsoDate, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 
 const HISTORY_DAYS = 84;
@@ -35,6 +36,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     creditsBalance,
     programs,
     workoutLogs,
+    membership,
+    packages,
   ] = await Promise.all([
     getClientProfile(clientId),
     getDailyLogs(clientId, dates[0], dates[6]),
@@ -48,6 +51,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getCreditsBalance(clientId),
     getPrograms(clientId),
     getWorkoutLogs(clientId),
+    getMyMembership(clientId),
+    getPackages(),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
@@ -73,5 +78,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     creditsBalance,
     programs,
     workoutLogs,
+    membership,
+    packages,
   };
 }
