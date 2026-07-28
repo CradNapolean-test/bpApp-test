@@ -37,6 +37,7 @@ export default async function CoachClientPage({
       clientId={clientId}
       clientLabel={bundle.profile?.name ?? targetProfile.email}
       isCoachView={true}
+      currentUserId={user.id}
       profile={bundle.profile}
       weekDates={bundle.weekDates}
       weekLogs={bundle.weekLogs}
@@ -46,6 +47,12 @@ export default async function CoachClientPage({
       mealPlanEntries={bundle.mealPlanEntries}
       activities={bundle.activities}
       programWeek={bundle.programWeek}
+      messages={bundle.messages}
+      classes={bundle.classes}
+      bookings={bundle.bookings}
+      creditsBalance={bundle.creditsBalance}
+      programs={bundle.programs}
+      workoutLogs={bundle.workoutLogs}
     />
   );
 }

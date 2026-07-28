@@ -25,3 +25,11 @@ export function isoWeekKey(dateStr: string): string {
   const start = startOfWeek(d);
   return toIsoDate(start);
 }
+
+// Next occurrence (today counts) of a class's day_of_week (0=Sunday..6=Saturday, matching
+// classes.day_of_week / Postgres's own convention), so booking a recurring class doesn't
+// require the client to pick a date by hand.
+export function nextDateForWeekday(dayOfWeek: number, from: Date = new Date()): string {
+  const diff = (dayOfWeek - from.getUTCDay() + 7) % 7;
+  return toIsoDate(addDays(from, diff));
+}

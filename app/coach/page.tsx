@@ -24,7 +24,12 @@ export default async function CoachPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Clients</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Clients</h1>
+          <Link href="/coach/classes" className="text-sm text-zinc-500 hover:underline">
+            Manage classes &rarr;
+          </Link>
+        </div>
         <SignOutButton />
       </div>
 

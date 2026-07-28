@@ -86,3 +86,81 @@ export interface ActivityRow {
   name: string;
   met: number;
 }
+
+export interface ChatMessageRow {
+  id: string;
+  client_id: string;
+  sender_id: string;
+  text: string;
+  created_at: string;
+}
+
+export interface ClassRow {
+  id: string;
+  coach_id: string;
+  name: string;
+  day_of_week: number | null;
+  start_time: string | null;
+  capacity: number;
+  coach_note: string | null;
+  cutoff_hours: number;
+}
+
+export type BookingStatus = 'booked' | 'waitlist' | 'cancelled';
+
+export interface BookingRow {
+  id: string;
+  class_id: string;
+  client_id: string;
+  booking_date: string;
+  status: BookingStatus;
+  created_at: string;
+  class: ClassRow | null;
+}
+
+export interface CreditsLedgerRow {
+  id: string;
+  client_id: string;
+  delta: number;
+  reason: string;
+  granted_by: string | null;
+  created_at: string;
+}
+
+export interface WorkoutExerciseRow {
+  id: string;
+  program_day_id: string;
+  name: string;
+  sets: number | null;
+  reps: string | null;
+  load: number | null;
+  rpe: number | null;
+  notes: string | null;
+}
+
+export interface WorkoutProgramDayRow {
+  id: string;
+  program_id: string;
+  week_num: number;
+  day_label: string;
+  workout_exercises: WorkoutExerciseRow[];
+}
+
+export interface WorkoutProgramRow {
+  id: string;
+  client_id: string;
+  name: string;
+  created_at: string;
+  workout_program_days: WorkoutProgramDayRow[];
+}
+
+export interface WorkoutLogRow {
+  id: string;
+  client_id: string;
+  exercise_id: string | null;
+  set_number: number | null;
+  actual_reps: number | null;
+  actual_load: number | null;
+  actual_rpe: number | null;
+  logged_at: string;
+}

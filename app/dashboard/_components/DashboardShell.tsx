@@ -9,12 +9,20 @@ import { MealPlannerTab } from './MealPlannerTab';
 import { ActivityTab } from './ActivityTab';
 import { InsightsTab } from './InsightsTab';
 import { OverviewTab } from './OverviewTab';
+import { ChatTab } from './ChatTab';
+import { ClassesTab } from './ClassesTab';
+import { WorkoutTab } from './WorkoutTab';
 import type {
   ActivityRow,
+  BookingRow,
+  ChatMessageRow,
+  ClassRow,
   ClientProfileRow,
   DailyLogRow,
   FoodDiaryEntryRow,
   MealPlanEntryRow,
+  WorkoutLogRow,
+  WorkoutProgramRow,
 } from '@/lib/data/types';
 
 const TABS = [
@@ -25,6 +33,9 @@ const TABS = [
   'Activity',
   'Insights',
   'Overview',
+  'Chat',
+  'Classes',
+  'Workout',
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -32,6 +43,7 @@ export function DashboardShell({
   clientId,
   clientLabel,
   isCoachView,
+  currentUserId,
   profile,
   weekDates,
   weekLogs,
@@ -41,10 +53,17 @@ export function DashboardShell({
   mealPlanEntries,
   activities,
   programWeek,
+  messages,
+  classes,
+  bookings,
+  creditsBalance,
+  programs,
+  workoutLogs,
 }: {
   clientId: string;
   clientLabel: string;
   isCoachView: boolean;
+  currentUserId: string;
   profile: ClientProfileRow | null;
   weekDates: string[];
   weekLogs: DailyLogRow[];
@@ -54,6 +73,12 @@ export function DashboardShell({
   mealPlanEntries: MealPlanEntryRow[];
   activities: ActivityRow[];
   programWeek: number;
+  messages: ChatMessageRow[];
+  classes: ClassRow[];
+  bookings: BookingRow[];
+  creditsBalance: number;
+  programs: WorkoutProgramRow[];
+  workoutLogs: WorkoutLogRow[];
 }) {
   const [tab, setTab] = useState<Tab>('Setup');
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
@@ -111,6 +136,21 @@ export function DashboardShell({
         )}
         {tab === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
         {tab === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
+        {tab === 'Chat' && (
+          <ChatTab clientId={clientId} initialMessages={messages} currentUserId={currentUserId} />
+        )}
+        {tab === 'Classes' && (
+          <ClassesTab
+            clientId={clientId}
+            isCoachView={isCoachView}
+            classes={classes}
+            bookings={bookings}
+            creditsBalance={creditsBalance}
+          />
+        )}
+        {tab === 'Workout' && (
+          <WorkoutTab clientId={clientId} isCoachView={isCoachView} programs={programs} workoutLogs={workoutLogs} />
+        )}
       </div>
     </div>
   );

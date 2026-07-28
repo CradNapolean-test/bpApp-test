@@ -5,6 +5,9 @@ import { getDailyLog, getDailyLogs, getOrCreateDailyLog } from './dailyLogs';
 import { getFoodDiaryEntries } from './foodDiary';
 import { getMealPlanEntries } from './mealPlan';
 import { getActivities } from './foods';
+import { getMessages } from './chat';
+import { getClasses, getCreditsBalance, getUpcomingBookings } from './classes';
+import { getPrograms, getWorkoutLogs } from './workouts';
 import { toIsoDate, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 
 const HISTORY_DAYS = 84;
@@ -19,13 +22,32 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
   const dates = weekDatesFor(weekStart);
   const historyStart = toIsoDate(addDays(today, -HISTORY_DAYS));
 
-  const [profile, weekLogs, historyLogs, mealPlanEntries, activities, todayLog] = await Promise.all([
+  const [
+    profile,
+    weekLogs,
+    historyLogs,
+    mealPlanEntries,
+    activities,
+    todayLog,
+    messages,
+    classes,
+    bookings,
+    creditsBalance,
+    programs,
+    workoutLogs,
+  ] = await Promise.all([
     getClientProfile(clientId),
     getDailyLogs(clientId, dates[0], dates[6]),
     getDailyLogs(clientId, historyStart, todayIso),
     getMealPlanEntries(clientId),
     getActivities(),
     canWrite ? getOrCreateDailyLog(clientId, todayIso) : getDailyLog(clientId, todayIso),
+    getMessages(clientId),
+    getClasses(),
+    getUpcomingBookings(clientId),
+    getCreditsBalance(clientId),
+    getPrograms(clientId),
+    getWorkoutLogs(clientId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
@@ -45,5 +67,11 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     todayLogId: todayLog?.id ?? null,
     foodDiaryEntries,
     programWeek,
+    messages,
+    classes,
+    bookings,
+    creditsBalance,
+    programs,
+    workoutLogs,
   };
 }

@@ -24,6 +24,7 @@ export default async function DashboardPage() {
       clientId={user.id}
       clientLabel={bundle.profile?.name ?? profile.email}
       isCoachView={false}
+      currentUserId={user.id}
       profile={bundle.profile}
       weekDates={bundle.weekDates}
       weekLogs={bundle.weekLogs}
@@ -33,6 +34,12 @@ export default async function DashboardPage() {
       mealPlanEntries={bundle.mealPlanEntries}
       activities={bundle.activities}
       programWeek={bundle.programWeek}
+      messages={bundle.messages}
+      classes={bundle.classes}
+      bookings={bundle.bookings}
+      creditsBalance={bundle.creditsBalance}
+      programs={bundle.programs}
+      workoutLogs={bundle.workoutLogs}
     />
   );
 }

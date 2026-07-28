@@ -3,8 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addFoodDiaryEntry, removeFoodDiaryEntry, syncFoodDiaryToLog } from '@/lib/data/foodDiary';
+import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { lookupBarcode } from '@/lib/openFoodFacts';
 import { totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
+import { BarcodeScanner } from './BarcodeScanner';
 import type { FoodDiaryEntryRow, FoodRow } from '@/lib/data/types';
 
 export function FoodTrackingTab({
@@ -18,12 +21,34 @@ export function FoodTrackingTab({
 }) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
   const totals = totalMacros(initialEntries);
 
   async function handleAdd(food: FoodRow, portions: number) {
     if (!dailyLogId) return;
     await addFoodDiaryEntry(dailyLogId, food.id, portions);
     router.refresh();
+  }
+
+  async function handleBarcodeDetected(barcode: string) {
+    setScanning(false);
+    setScanStatus('Looking up…');
+    try {
+      let food = await getFoodByBarcode(barcode);
+      if (!food) {
+        const product = await lookupBarcode(barcode);
+        if (!product) {
+          setScanStatus(`No product found for barcode ${barcode} — try search below.`);
+          return;
+        }
+        food = await upsertFoodFromBarcode(barcode, { ...product, portion: '100 grams' });
+      }
+      await handleAdd(food, 1);
+      setScanStatus(`Added ${food.name}.`);
+    } catch (err) {
+      setScanStatus(err instanceof Error ? err.message : 'Lookup failed.');
+    }
   }
 
   async function handleRemove(id: string) {
@@ -87,7 +112,26 @@ export function FoodTrackingTab({
         )}
       </ul>
 
-      {!readOnly && <FoodSearchPicker onAdd={handleAdd} />}
+      {!readOnly && (
+        <div className="space-y-2">
+          {!scanning && (
+            <button
+              onClick={() => {
+                setScanning(true);
+                setScanStatus(null);
+              }}
+              className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium dark:border-white/10"
+            >
+              Scan barcode
+            </button>
+          )}
+          {scanning && (
+            <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
+          )}
+          {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
+          <FoodSearchPicker onAdd={handleAdd} />
+        </div>
+      )}
     </div>
   );
 }
