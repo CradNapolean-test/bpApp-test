@@ -48,5 +48,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profileError.message }, { status: 400 });
   }
 
+  // Auto-assign the coach's default onboarding form, if they have one -- same admin
+  // client, bypasses RLS the same way the profiles insert above does.
+  const { data: defaultTemplate } = await admin
+    .from('form_templates')
+    .select('id, name')
+    .eq('coach_id', user.id)
+    .eq('is_default_onboarding', true)
+    .maybeSingle();
+
+  if (defaultTemplate) {
+    await admin
+      .from('form_assignments')
+      .insert({ template_id: defaultTemplate.id, client_id: newUser.user.id });
+    await admin
+      .from('notifications')
+      .insert({ client_id: newUser.user.id, message: `Welcome! Please fill out: ${defaultTemplate.name}` });
+  }
+
   return NextResponse.json({ email, password, clientId: newUser.user.id });
 }

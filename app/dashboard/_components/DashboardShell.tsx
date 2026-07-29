@@ -11,6 +11,7 @@ import { InsightsTab } from './InsightsTab';
 import { OverviewTab } from './OverviewTab';
 import { ProgressTab } from './ProgressTab';
 import { HabitsTab } from './HabitsTab';
+import { FormsTab } from './FormsTab';
 import { NotificationBanner } from './NotificationBanner';
 import { ChatPopup } from './ChatPopup';
 import { ClassesArea } from './ClassesArea';
@@ -25,6 +26,8 @@ import type {
   ClientProfileRow,
   DailyLogRow,
   FoodDiaryEntryRow,
+  FormAssignmentWithDetails,
+  FormTemplateRow,
   HabitWithLogs,
   MealPlanEntryRow,
   MeasurementLogRow,
@@ -41,6 +44,7 @@ type Screen =
   | 'Setup'
   | 'Weekly Log'
   | 'Habits'
+  | 'Forms'
   | 'Food Tracking'
   | 'Meal Planner'
   | 'Activity'
@@ -62,7 +66,7 @@ function screensForCategory(category: Category, isCoachView: boolean): Screen[] 
     case 'Training':
       return ['Activity', 'Workout'];
     case 'Accountability':
-      return ['Weekly Log', 'Habits', 'Insights'];
+      return ['Weekly Log', 'Habits', 'Forms', 'Insights'];
     case 'Progress':
       return ['Overview', 'Progress & Photos'];
     case 'Account Settings':
@@ -98,6 +102,8 @@ export function DashboardShell({
   measurementLogs,
   habits,
   notifications,
+  formTemplates,
+  formAssignments,
 }: {
   clientId: string;
   clientLabel: string;
@@ -124,6 +130,8 @@ export function DashboardShell({
   measurementLogs: MeasurementLogRow[];
   habits: HabitWithLogs[];
   notifications: NotificationRow[];
+  formTemplates: FormTemplateRow[];
+  formAssignments: FormAssignmentWithDetails[];
 }) {
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Nutrition');
@@ -217,6 +225,14 @@ export function DashboardShell({
             )}
             {screen === 'Habits' && (
               <HabitsTab clientId={clientId} isCoachView={isCoachView} habits={habits} />
+            )}
+            {screen === 'Forms' && (
+              <FormsTab
+                clientId={clientId}
+                isCoachView={isCoachView}
+                templates={formTemplates}
+                assignments={formAssignments}
+              />
             )}
             {screen === 'Food Tracking' && (
               <FoodTrackingTab dailyLogId={todayLogId} initialEntries={foodDiaryEntries} readOnly={isCoachView} />

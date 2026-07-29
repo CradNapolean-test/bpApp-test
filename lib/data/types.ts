@@ -264,3 +264,48 @@ export interface RosterEntry {
   status: BookingStatus;
   attended: boolean;
 }
+
+export type FormQuestionType = 'short_text' | 'long_text' | 'number' | 'single_choice' | 'multi_choice';
+
+export interface FormTemplateRow {
+  id: string;
+  coach_id: string;
+  name: string;
+  description: string | null;
+  is_default_onboarding: boolean;
+  created_at: string;
+}
+
+export interface FormQuestionRow {
+  id: string;
+  template_id: string;
+  order_index: number;
+  question_text: string;
+  question_type: FormQuestionType;
+  options: string[] | null;
+  required: boolean;
+}
+
+export interface FormTemplateWithQuestions extends FormTemplateRow {
+  questions: FormQuestionRow[];
+}
+
+export interface FormAssignmentRow {
+  id: string;
+  template_id: string;
+  client_id: string;
+  assigned_at: string;
+  completed_at: string | null;
+}
+
+export interface FormResponseRow {
+  id: string;
+  assignment_id: string;
+  question_id: string;
+  answer: unknown;
+}
+
+export interface FormAssignmentWithDetails extends FormAssignmentRow {
+  template: FormTemplateWithQuestions;
+  responses: FormResponseRow[];
+}

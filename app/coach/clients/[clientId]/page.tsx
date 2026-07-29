@@ -64,6 +64,8 @@ export default async function CoachClientPage({
         measurementLogs={bundle.measurementLogs}
         habits={bundle.habits}
         notifications={bundle.notifications}
+        formTemplates={bundle.formTemplates}
+        formAssignments={bundle.formAssignments}
       />
     </>
   );

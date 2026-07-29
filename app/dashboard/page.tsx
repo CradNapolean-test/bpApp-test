@@ -46,6 +46,8 @@ export default async function DashboardPage() {
       measurementLogs={bundle.measurementLogs}
       habits={bundle.habits}
       notifications={bundle.notifications}
+      formTemplates={bundle.formTemplates}
+      formAssignments={bundle.formAssignments}
     />
   );
 }
