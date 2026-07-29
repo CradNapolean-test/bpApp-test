@@ -16,6 +16,8 @@ export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProdu
 
   const product = data.product;
   const nutriments = product.nutriments ?? {};
+  // Open Food Facts reports per-100g; the app's foods table stores per-1g throughout, so
+  // divide down here rather than carrying a "100g" special case through the rest of the code.
   const protein = nutriments.proteins_100g;
   const carbs = nutriments.carbohydrates_100g;
   const fat = nutriments.fat_100g;
@@ -23,8 +25,8 @@ export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProdu
 
   return {
     name: product.product_name || product.generic_name || `Unknown product (${barcode})`,
-    protein: Number(protein),
-    carbs: Number(carbs),
-    fat: Number(fat),
+    protein: Number(protein) / 100,
+    carbs: Number(carbs) / 100,
+    fat: Number(fat) / 100,
   };
 }

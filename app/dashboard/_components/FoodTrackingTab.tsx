@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { addFoodDiaryEntry, removeFoodDiaryEntry, syncFoodDiaryToLog } from '@/lib/data/foodDiary';
 import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { lookupBarcode } from '@/lib/openFoodFacts';
-import { totalMacros } from '@/lib/utils/foodTotals';
+import { formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { FoodDiaryEntryRow, FoodRow } from '@/lib/data/types';
@@ -42,9 +42,9 @@ export function FoodTrackingTab({
           setScanStatus(`No product found for barcode ${barcode} — try search below.`);
           return;
         }
-        food = await upsertFoodFromBarcode(barcode, { ...product, portion: '100 grams' });
+        food = await upsertFoodFromBarcode(barcode, { ...product, portion: '1 gram' });
       }
-      await handleAdd(food, 1);
+      await handleAdd(food, 100);
       setScanStatus(`Added ${food.name}.`);
     } catch (err) {
       setScanStatus(err instanceof Error ? err.message : 'Lookup failed.');
@@ -93,9 +93,7 @@ export function FoodTrackingTab({
           <li key={entry.id} className="flex items-center justify-between p-3">
             <div className="text-sm">
               <p className="font-medium text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
-              <p className="text-xs text-zinc-500">
-                {entry.portions}× {entry.food?.portion}
-              </p>
+              <p className="text-xs text-zinc-500">{formatQuantity(entry)}</p>
             </div>
             {!readOnly && (
               <button

@@ -9,6 +9,14 @@ export function entryMacros(entry: { food: { protein: number; carbs: number; fat
   return { protein, carbs, fat, calories: dayCalories(protein, carbs, fat) };
 }
 
+// Most foods are stored per-1g, so an entry's quantity means grams ("150g"); a handful of
+// foods without a known gram weight (e.g. "1 Egg") keep their original per-unit portion, so
+// the quantity means a count of that unit instead ("2× 1 Egg").
+export function formatQuantity(entry: { portions: number; food: { portion: string | null } | null }): string {
+  if (entry.food?.portion === '1 gram') return `${entry.portions}g`;
+  return `${entry.portions}× ${entry.food?.portion ?? 'unknown portion'}`;
+}
+
 export function totalMacros(entries: (FoodDiaryEntryRow | MealPlanEntryRow)[]) {
   return entries.reduce(
     (acc, entry) => {

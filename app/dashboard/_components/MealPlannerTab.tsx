@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addMealPlanEntry, removeMealPlanEntry } from '@/lib/data/mealPlan';
-import { totalMacros } from '@/lib/utils/foodTotals';
+import { formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import type { MealPlanEntryRow, MealPlanSection, FoodRow } from '@/lib/data/types';
 
@@ -72,7 +72,7 @@ export function MealPlannerTab({
               {entries.map((entry) => (
                 <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
                   <span>
-                    {entry.food?.name} <span className="text-zinc-500">× {entry.portions}</span>
+                    {entry.food?.name} <span className="text-zinc-500">{formatQuantity(entry)}</span>
                   </span>
                   {!readOnly && (
                     <button

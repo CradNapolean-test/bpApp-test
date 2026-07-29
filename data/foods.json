@@ -1,1 +1,3390 @@
-[{"name": "Chicken Breast", "portion": "100 grams", "protein": 23.2, "carbs": 0.0, "fat": 1.1}, {"name": "5% Lean Beef Mince", "portion": "100 grams", "protein": 31.0, "carbs": 0.5, "fat": 4.7}, {"name": "2% Lean Turkey Mince", "portion": "100 grams", "protein": 25.4, "carbs": 0.2, "fat": 1.3}, {"name": "Wild Alaskan Salmon", "portion": "100 grams", "protein": 19.4, "carbs": 0.0, "fat": 13.1}, {"name": "Tinned Tuna In Brine", "portion": "100 grams", "protein": 27.0, "carbs": 0.0, "fat": 0.5}, {"name": "Large Whole Egg", "portion": "1 Egg", "protein": 6.0, "carbs": 0.0, "fat": 5.0}, {"name": "Egg Whites", "portion": "100 grams", "protein": 10.9, "carbs": 0.8, "fat": 0.0}, {"name": "Collective Greek Yoghurt", "portion": "150 grams", "protein": 8.0, "carbs": 13.0, "fat": 8.6}, {"name": "Blueberry Granola with Probiotics", "portion": "40 grams", "protein": 4.8, "carbs": 18.4, "fat": 8.6}, {"name": "White button mushrooms", "portion": "70 grams", "protein": 2.2, "carbs": 2.3, "fat": 0.2}, {"name": "Feta", "portion": "28 grams", "protein": 4.0, "carbs": 1.1, "fat": 6.0}, {"name": "carrot", "portion": "100 grams", "protein": 0.6, "carbs": 4.9, "fat": 0.4}, {"name": "Capsicum", "portion": "100 grams", "protein": 3.0, "carbs": 3.0, "fat": 0.2}, {"name": "Broccoli", "portion": "100 grams", "protein": 2.8, "carbs": 6.6, "fat": 0.4}, {"name": "Cherry Tomatoes", "portion": "17 grams", "protein": 0.1, "carbs": 0.7, "fat": 0.0}, {"name": "Crumpet", "portion": "1 Crumpet", "protein": 2.9, "carbs": 18.7, "fat": 0.4}, {"name": "Wholemeal Bread", "portion": "1 Slice", "protein": 4.2, "carbs": 15.1, "fat": 1.5}, {"name": "White Bread", "portion": "1 Slice", "protein": 4.0, "carbs": 16.5, "fat": 0.9}, {"name": "Sweet Potato", "portion": "100 grams", "protein": 1.2, "carbs": 21.3, "fat": 0.3}, {"name": "White Potato", "portion": "100 grams", "protein": 2.1, "carbs": 17.2, "fat": 0.2}, {"name": "McCains 5% Oven Chips", "portion": "100 grams (frozen)", "protein": 2.1, "carbs": 22.3, "fat": 3.3}, {"name": "Almonds", "portion": "15 Almonds", "protein": 4.5, "carbs": 4.5, "fat": 9.0}, {"name": "Cauliflower", "portion": "100 grams", "protein": 1.0, "carbs": 10.0, "fat": 0.4}, {"name": "Edam Cheese", "portion": "10 grams", "protein": 2.5, "carbs": 0.0, "fat": 2.5}, {"name": "Farrahs Spinach Wrap", "portion": "1 wrap", "protein": 4.5, "carbs": 28.6, "fat": 4.1}, {"name": "Zucchini", "portion": "100 grams", "protein": 1.0, "carbs": 6.0, "fat": 0.2}, {"name": "Pic's Peanut Butter", "portion": "20 grams", "protein": 5.3, "carbs": 2.9, "fat": 9.6}, {"name": "Apple", "portion": "100 grams", "protein": 0.4, "carbs": 10.5, "fat": 0.1}, {"name": "Sirloin steak", "portion": "100 grams", "protein": 23.0, "carbs": 0.0, "fat": 4.0}, {"name": "Butter", "portion": 5.0, "protein": 0.5, "carbs": 0.5, "fat": 4.1}, {"name": "Medium Banana ", "portion": "1 Banana", "protein": 1.1, "carbs": 20.6, "fat": 0.3}, {"name": "Strawberries", "portion": "100 grams", "protein": 0.8, "carbs": 6.0, "fat": 0.1}, {"name": "Blueberries", "portion": "100 grams", "protein": 0.6, "carbs": 6.9, "fat": 0.2}, {"name": "Watermelon", "portion": "100 grams", "protein": 0.4, "carbs": 6.9, "fat": 0.3}, {"name": "Pitted Cherries", "portion": "100 grams", "protein": 0.9, "carbs": 11.5, "fat": 0.1}, {"name": "Asparagus", "portion": "100 grams", "protein": 2.9, "carbs": 4.1, "fat": 0.6}, {"name": "Romaine Lettuce Leaves", "portion": "100 grams", "protein": 0.8, "carbs": 0.8, "fat": 0.5}, {"name": "Red Onion", "portion": "180 grams", "protein": 2.2, "carbs": 14.2, "fat": 0.4}, {"name": "Corn ", "portion": "100 grams", "protein": 3.0, "carbs": 19.0, "fat": 1.0}, {"name": "White Rice", "portion": "100 grams", "protein": 9.0, "carbs": 83.0, "fat": 0.4}, {"name": "Tuna", "portion": "100 grams", "protein": 25.0, "carbs": 0.0, "fat": 0.8}, {"name": "green bean", "portion": "125 grams", "protein": 2.36, "carbs": 9.85, "fat": 0.3}, {"name": "anchor cream", "portion": "100ml", "protein": 2.4, "carbs": 3.0, "fat": 37.4}, {"name": "Lindt 70% Dark Chocolate", "portion": "1 Square", "protein": 0.8, "carbs": 3.4, "fat": 4.1}, {"name": "Cashew Nuts", "portion": "10 grams", "protein": 2.0, "carbs": 2.2, "fat": 4.5}, {"name": "Avocado", "portion": "100 grams", "protein": 1.9, "carbs": 1.9, "fat": 19.5}, {"name": "Couscous", "portion": "1/4 cup", "protein": 5.0, "carbs": 30.0, "fat": 0.0}, {"name": "Pink Lady Apple", "portion": "1 Apple", "protein": 0.4, "carbs": 19.1, "fat": 0.2}, {"name": "Spinach", "portion": "25 grams", "protein": 0.7, "carbs": 0.4, "fat": 0.2}, {"name": "Chicken Stock", "portion": "1 cup", "protein": 6.0, "carbs": 8.5, "fat": 3.0}, {"name": "Chia Seeds", "portion": "100 grams", "protein": 17.0, "carbs": 42.0, "fat": 31.0}, {"name": "Spaghetti", "portion": "75 grams ", "protein": 9.4, "carbs": 54.8, "fat": 1.1}, {"name": "Peanuts", "portion": "100 grams", "protein": 25.0, "carbs": 13.0, "fat": 49.0}, {"name": "Champagne Ham", "portion": "75 Grams", "protein": 12.0, "carbs": 2.0, "fat": 2.0}, {"name": "Protein powder, whey & vanilla flavoured, 100% Whey Protein WPC/WPI, Balance", "portion": 100, "protein": 78.8, "carbs": 4.2, "fat": 4.1}, {"name": "Cheese, parmesan, powder", "portion": 100, "protein": 44.9, "carbs": 0.1, "fat": 29.3}, {"name": "Milk, cow, powder, instant, skim", "portion": 100, "protein": 38.2, "carbs": 45.6, "fat": 0.8}, {"name": "Pork, leg steak, lean, stewed", "portion": 100, "protein": 35.1, "carbs": 0, "fat": 3.9}, {"name": "Chicken, mince, pan fried, with no added fat, premium, Tegal", "portion": 100, "protein": 34.7, "carbs": 0, "fat": 5.2}, {"name": "Beef, forequarter brisket point end, separable lean, braised", "portion": 100, "protein": 34.5, "carbs": 0, "fat": 7.1}, {"name": "Beef, hindquarter topside cap off, separable lean, braised", "portion": 100, "protein": 34.5, "carbs": 0, "fat": 7.3}, {"name": "Beef, hindquarter topside cap off, separable lean & fat, braised", "portion": 100, "protein": 34.2, "carbs": 0, "fat": 8}, {"name": "Lamb, forequarter fore-shank, separable lean, braised", "portion": 100, "protein": 33.3, "carbs": 0, "fat": 8.4}, {"name": "Beef, hindquarter silverside excluding the eye, separable lean, braised", "portion": 100, "protein": 33.2, "carbs": 0, "fat": 10.3}, {"name": "Cheese, parmesan, from cows' milk, ungrated", "portion": 100, "protein": 32.6, "carbs": 0, "fat": 25.9}, {"name": "Lamb, hindquarter knuckle, separable lean, braised", "portion": 100, "protein": 32.5, "carbs": 0, "fat": 7.4}, {"name": "Pork, loin, medallion, lean, grilled", "portion": 100, "protein": 32.4, "carbs": 0, "fat": 5.9}, {"name": "Beef, forequarter chuck steak, separable lean, braised", "portion": 100, "protein": 32.1, "carbs": 0, "fat": 8.9}, {"name": "Beef, hindquarter silverside, excluding the eye, separable lean & fat, braised", "portion": 100, "protein": 31.9, "carbs": 0, "fat": 12.7}, {"name": "Pork, leg roast, lean, roasted", "portion": 100, "protein": 31.8, "carbs": 0, "fat": 5.2}, {"name": "Pork, schnitzel, lean, fried", "portion": 100, "protein": 31.5, "carbs": 0, "fat": 3.9}, {"name": "Lamb, forequarter round neck chops, separable lean, braised", "portion": 100, "protein": 31.4, "carbs": 0, "fat": 15.4}, {"name": "Ox, offal, heart, simmered", "portion": 100, "protein": 31.3, "carbs": 0, "fat": 6}, {"name": "Beef, hindquarter shank, separable lean, braised", "portion": 100, "protein": 31.2, "carbs": 0, "fat": 4.6}, {"name": "Chicken, breast, grilled", "portion": 100, "protein": 31.2, "carbs": 0, "fat": 4.6}, {"name": "Lamb, forequarter shoulder chops, separable lean, braised", "portion": 100, "protein": 31.1, "carbs": 0, "fat": 14.6}, {"name": "Beef, hindquarter skirt steak, separable lean, braised", "portion": 100, "protein": 30.8, "carbs": 0, "fat": 7.9}, {"name": "Beef, forequarter & hindquarter assorted cuts, separable lean, cooked", "portion": 100, "protein": 30.7, "carbs": 0, "fat": 8.6}, {"name": "Turkey, flesh, roasted", "portion": 100, "protein": 30.6, "carbs": 0, "fat": 4.2}, {"name": "Milk, cow, powder, instant, whole", "portion": 100, "protein": 30.2, "carbs": 33, "fat": 26.4}, {"name": "Beef, hindquarter rump steak, separable lean, fast-fried", "portion": 100, "protein": 30.2, "carbs": 0, "fat": 7.5}, {"name": "Beef, hindquarter skirt steak, separable lean & fat, braised", "portion": 100, "protein": 30.2, "carbs": 0, "fat": 9.2}, {"name": "Pork, forequarter scotch fillet, separable lean, grilled", "portion": 100, "protein": 30.2, "carbs": 0, "fat": 9.6}, {"name": "Beef, forequarter scotch fillet, separable lean, fast-roasted", "portion": 100, "protein": 30.1, "carbs": 0, "fat": 13.2}, {"name": "Beef, hindquarter rump steak, separable lean & fat, fast-fried", "portion": 100, "protein": 30, "carbs": 0, "fat": 7.8}, {"name": "Mutton, leg, lean, roasted", "portion": 100, "protein": 30, "carbs": 0, "fat": 7.5}, {"name": "Turkey, lean & fat, roasted in oven bag", "portion": 100, "protein": 30, "carbs": 0, "fat": 5.5}, {"name": "Beef, forequarter chuck steak, separable lean & fat, braised", "portion": 100, "protein": 29.9, "carbs": 0, "fat": 13.3}, {"name": "Beef, forequarter oyster blade, separable lean, braised", "portion": 100, "protein": 29.9, "carbs": 0, "fat": 8.5}, {"name": "Beef, hindquarter shank, separable lean & fat, braised", "portion": 100, "protein": 29.7, "carbs": 0, "fat": 8.8}, {"name": "Beef, hindquarter silverside, separable lean, slow-roasted", "portion": 100, "protein": 29.7, "carbs": 0, "fat": 5}, {"name": "Flour, soy, full fat", "portion": 100, "protein": 29.5, "carbs": 24.4, "fat": 18.2}, {"name": "Beef, hindquarter silverside, separable lean & fat, slow-roasted", "portion": 100, "protein": 29.5, "carbs": 0, "fat": 5.6}, {"name": "Cheese, cheddar, light, Mainland", "portion": 100, "protein": 29.4, "carbs": 0, "fat": 22.4}, {"name": "Beef, forequarter brisket navel end, separable lean, braised", "portion": 100, "protein": 29.4, "carbs": 0, "fat": 16.4}, {"name": "Beef, hindquarter fillet, separable lean, fast-fried", "portion": 100, "protein": 29.4, "carbs": 0, "fat": 9}, {"name": "Pork, loin chops, lean, grilled", "portion": 100, "protein": 29.4, "carbs": 0, "fat": 6.5}, {"name": "Beef, hindquarter fillet, separable lean & fat, fast-fried", "portion": 100, "protein": 29.3, "carbs": 0, "fat": 9.3}, {"name": "Pork, shoulder, separable lean, roasted", "portion": 100, "protein": 29.2, "carbs": 0, "fat": 12.4}, {"name": "Lamb, hindquarter striploin, separable lean & fat, fast-roasted", "portion": 100, "protein": 29, "carbs": 0, "fat": 4.6}, {"name": "Lamb, hindquarter striploin, separable lean, fast-roasted", "portion": 100, "protein": 29, "carbs": 0, "fat": 4.5}, {"name": "Turkey, lean, fat & skin, roasted", "portion": 100, "protein": 28.9, "carbs": 0, "fat": 7.8}, {"name": "Chicken, deli cooked, breast", "portion": 100, "protein": 28.8, "carbs": 0, "fat": 2.1}, {"name": "Beef, forequarter & hindquarter assorted cuts, separable lean & fat, cooked", "portion": 100, "protein": 28.6, "carbs": 0, "fat": 13.4}, {"name": "Beef, forequarter oyster blade, separable lean & fat, braised", "portion": 100, "protein": 28.5, "carbs": 0, "fat": 12.5}, {"name": "Beef, hindquarter sirloin, separable lean, fast-fried", "portion": 100, "protein": 28.5, "carbs": 0, "fat": 11.4}, {"name": "Lamb, forequarter breast, separable lean, braised", "portion": 100, "protein": 28.2, "carbs": 0, "fat": 17.5}, {"name": "Lamb, forequarter fore-shank, separable lean & fat, braised", "portion": 100, "protein": 28.2, "carbs": 0, "fat": 19.9}, {"name": "Cheese, edam", "portion": 100, "protein": 28.1, "carbs": 0, "fat": 26.9}, {"name": "Pork, midloin chops, lean & fat, grilled", "portion": 100, "protein": 28, "carbs": 0, "fat": 10.5}, {"name": "Wheat germ", "portion": 100, "protein": 27.9, "carbs": 36.4, "fat": 9.7}, {"name": "Lamb, hindquarter fillet, separable lean & fat, fast-fried", "portion": 100, "protein": 27.9, "carbs": 0, "fat": 5}, {"name": "Lamb, hindquarter fillet, separable lean, fast-fried", "portion": 100, "protein": 27.9, "carbs": 0, "fat": 4.8}, {"name": "Lamb, hindquarter flap boneless, separable lean, simmered", "portion": 100, "protein": 27.9, "carbs": 0, "fat": 13.6}, {"name": "Lamb, hindquarter knuckle, separable lean & fat, braised", "portion": 100, "protein": 27.9, "carbs": 0, "fat": 18.1}, {"name": "Beef, forequarter scotch fillet, separable lean & fat, fast-roasted", "portion": 100, "protein": 27.8, "carbs": 0, "fat": 18}, {"name": "Venison, Medallion, Silver Fern, cooked", "portion": 100, "protein": 27.7, "carbs": 0, "fat": 1.8}, {"name": "Venison, Stir Fry, Silver Fern, cooked", "portion": 100, "protein": 27.7, "carbs": 0, "fat": 1.2}, {"name": "Cheese, mozzarella", "portion": 100, "protein": 27.6, "carbs": 0.1, "fat": 17.8}, {"name": "Beef, hindquarter thick flank, separable lean, fast-fried", "portion": 100, "protein": 27.5, "carbs": 0, "fat": 7.6}, {"name": "Chicken, deli cooked, drumstick", "portion": 100, "protein": 27.5, "carbs": 0, "fat": 6.9}, {"name": "Lamb, forequarter & hindquarter assorted cuts, separable lean, cooked", "portion": 100, "protein": 27.4, "carbs": 0, "fat": 8.9}, {"name": "Lamb, hindquarter middle loin chop, separable lean, fast-fried", "portion": 100, "protein": 27.4, "carbs": 0, "fat": 10.7}, {"name": "Ox, offal, kidney, simmered", "portion": 100, "protein": 27.3, "carbs": 0, "fat": 5.3}, {"name": "Pork, forequarter shoulder roast, lean 74%, fat 20% & skin 6%, roasted", "portion": 100, "protein": 27.3, "carbs": 0, "fat": 18.5}, {"name": "Rabbit, flesh, stewed", "portion": 100, "protein": 27.3, "carbs": 0, "fat": 7.7}, {"name": "Beef, forequarter ribs prepared, separable lean, fast-roasted", "portion": 100, "protein": 27.2, "carbs": 0, "fat": 9.7}, {"name": "Lamb, forequarter round neck chops, separable lean & fat, braised", "portion": 100, "protein": 26.9, "carbs": 0, "fat": 24.8}, {"name": "Tuna, canned in brine, plain, drained", "portion": 100, "protein": 26.8, "carbs": 0, "fat": 1}, {"name": "Chicken, wing, flesh, grilled", "portion": 100, "protein": 26.8, "carbs": 0, "fat": 8.8}, {"name": "Tuna, canned in spring water, plain, salt added, drained", "portion": 100, "protein": 26.6, "carbs": 0, "fat": 1}, {"name": "Beef, hindquarter thick flank, separable lean & fat, fast-fried", "portion": 100, "protein": 26.6, "carbs": 0, "fat": 9.9}, {"name": "Venison, red deer, leg, flesh, roasted", "portion": 100, "protein": 26.6, "carbs": 0, "fat": 5.6}, {"name": "Tuna, canned in assorted oils, plain, drained", "portion": 100, "protein": 26.4, "carbs": 0, "fat": 7.6}, {"name": "Chicken, drumstick, flesh, grilled", "portion": 100, "protein": 26.4, "carbs": 0, "fat": 6.8}, {"name": "Lamb, hindquarter leg chop, separable lean, fast-fried", "portion": 100, "protein": 26.3, "carbs": 0, "fat": 6.4}, {"name": "Lamb, offal, heart, simmered & drained", "portion": 100, "protein": 26.3, "carbs": 0, "fat": 6.2}, {"name": "Kahawai, flesh, baked", "portion": 100, "protein": 26.2, "carbs": 0.4, "fat": 2.7}, {"name": "Venison, Diced, Silver Fern, cooked", "portion": 100, "protein": 25.9, "carbs": 0, "fat": 1.3}, {"name": "Lamb, offal, lambs fry, fried", "portion": 100, "protein": 25.8, "carbs": 0, "fat": 6.6}, {"name": "Chicken, crumbed, breast, deep fried, Kentucky Fried Chicken", "portion": 100, "protein": 25.6, "carbs": 6, "fat": 16.3}, {"name": "Lamb, hindquarter double loin, separable lean, fast-roasted", "portion": 100, "protein": 25.5, "carbs": 0, "fat": 6.7}, {"name": "Chicken, drumstick, lean & fat, roasted in oven bag", "portion": 100, "protein": 25.4, "carbs": 0, "fat": 7.5}, {"name": "Kahawai, flesh, deep fried", "portion": 100, "protein": 25.3, "carbs": 0.3, "fat": 9.3}, {"name": "Duck, composite cuts, separable lean, roasted", "portion": 100, "protein": 25.3, "carbs": 0, "fat": 9.7}, {"name": "Lamb, hindquarter leg boned, separable lean, slow-roasted", "portion": 100, "protein": 25.3, "carbs": 0, "fat": 6.4}, {"name": "Snapper, flesh, baked", "portion": 100, "protein": 25.2, "carbs": 0.4, "fat": 3.4}, {"name": "Tarakihi, flesh, deep fried", "portion": 100, "protein": 25.2, "carbs": 0.2, "fat": 4.1}, {"name": "Lamb, forequarter shoulder boneless rolled & netted, separable lean, slow-roasted", "portion": 100, "protein": 25.1, "carbs": 0, "fat": 10.9}, {"name": "Lamb, forequarter shoulder square cut, separable lean, slow-roasted", "portion": 100, "protein": 25.1, "carbs": 0, "fat": 10.1}, {"name": "Beef, forequarter ribs prepared, separable lean & fat, fast-roasted", "portion": 100, "protein": 24.9, "carbs": 0, "fat": 15.6}, {"name": "Beef, hindquarter sirloin, separable lean & fat, fast-fried", "portion": 100, "protein": 24.9, "carbs": 0, "fat": 22.3}, {"name": "Baking cocoa, powder, Bournville, Cadbury", "portion": 100, "protein": 24.7, "carbs": 12.4, "fat": 15.8}, {"name": "Lamb, forequarter shoulder chops, separable lean & fat, braised", "portion": 100, "protein": 24.7, "carbs": 0, "fat": 28.5}, {"name": "Cheese, cheddar", "portion": 100, "protein": 24.6, "carbs": 0, "fat": 35.6}, {"name": "Chicken, breast, lean & fat, roasted", "portion": 100, "protein": 24.6, "carbs": 0, "fat": 7}, {"name": "Cheese, cheddar mild", "portion": 100, "protein": 24.4, "carbs": 0, "fat": 37.1}, {"name": "Tarakihi, flesh, baked", "portion": 100, "protein": 24.4, "carbs": 0.3, "fat": 1.3}, {"name": "Chicken, deli cooked, thigh", "portion": 100, "protein": 24.4, "carbs": 0, "fat": 8.3}, {"name": "Lamb, forequarter rack fully frenched, separable lean, fast-roasted", "portion": 100, "protein": 24.4, "carbs": 0, "fat": 8.4}, {"name": "Lamb, forequarter rack partially frenched, separable lean, fast-roasted", "portion": 100, "protein": 24.4, "carbs": 0, "fat": 10.6}, {"name": "Beef, mince, premium, simmered", "portion": 100, "protein": 24.2, "carbs": 0, "fat": 3.3}, {"name": "Chicken, leg, flesh, grilled", "portion": 100, "protein": 24.2, "carbs": 0, "fat": 11.1}, {"name": "Flounder, flesh, baked", "portion": 100, "protein": 24.1, "carbs": 0.3, "fat": 3.1}, {"name": "Snapper, flesh, deep fried", "portion": 100, "protein": 24.1, "carbs": 0.3, "fat": 6.3}, {"name": "Chicken, composite cuts, flesh, cooked", "portion": 100, "protein": 24, "carbs": 0, "fat": 8.3}, {"name": "Cheese, Colby", "portion": 100, "protein": 23.9, "carbs": 0, "fat": 34}, {"name": "Beef, mince, lean, stewed", "portion": 100, "protein": 23.9, "carbs": 0, "fat": 6}, {"name": "Pork, leg shank, lean & fat, roasted", "portion": 100, "protein": 23.9, "carbs": 0, "fat": 18.3}, {"name": "Hoki, flesh, deep fried", "portion": 100, "protein": 23.8, "carbs": 0.2, "fat": 8.4}, {"name": "Lamb, hindquarter leg chop, separable lean & fat, fast-fried", "portion": 100, "protein": 23.8, "carbs": 0, "fat": 14.2}, {"name": "Lamb, hindquarter rump, separable lean, fast-roasted", "portion": 100, "protein": 23.7, "carbs": 0, "fat": 5.3}, {"name": "Pork, leg steak, separable lean, grilled", "portion": 100, "protein": 23.5, "carbs": 0, "fat": 2.9}, {"name": "Flour, pea, yellow, dry", "portion": 100, "protein": 23.4, "carbs": 40.3, "fat": 2.7}, {"name": "Lamb, forequarter rack fully frenched, separable lean & fat, fast-roasted", "portion": 100, "protein": 23.3, "carbs": 0, "fat": 12}, {"name": "Lamb, hindquarter leg boned, separable lean & fat, slow-roasted", "portion": 100, "protein": 23.3, "carbs": 0, "fat": 13.2}, {"name": "Ox, offal, liver, fast-fried", "portion": 100, "protein": 23.3, "carbs": 0, "fat": 4.7}, {"name": "Tempeh, fried in sunflower oil", "portion": 100, "protein": 23.2, "carbs": 12.2, "fat": 33.8}, {"name": "Salmon, pink or red, flesh, canned in spring water, drained", "portion": 100, "protein": 23.1, "carbs": 0, "fat": 6}, {"name": "Beef, canned, Lite Corned Beef, Salisbury", "portion": 100, "protein": 23, "carbs": 0, "fat": 13.5}, {"name": "Pork, leg steak, lean & fat, grilled", "portion": 100, "protein": 23, "carbs": 0, "fat": 5.5}, {"name": "Chicken, thigh, flesh, roasted", "portion": 100, "protein": 22.9, "carbs": 0, "fat": 10.1}, {"name": "Cheese, camembert", "portion": 100, "protein": 22.6, "carbs": 0.1, "fat": 21.7}, {"name": "Orange roughy, flesh, deep fried", "portion": 100, "protein": 22.6, "carbs": 0.3, "fat": 11}, {"name": "Chicken, breast, lean, fat & skin, roasted in oven bag", "portion": 100, "protein": 22.6, "carbs": 0, "fat": 12.6}, {"name": "Lamb, mince, standard, stewed", "portion": 100, "protein": 22.6, "carbs": 0, "fat": 11.3}, {"name": "Coffee, instant, decaffeinated, dry powder", "portion": 100, "protein": 22.5, "carbs": 0.4, "fat": 1}, {"name": "Coffee, instant, dry powder", "portion": 100, "protein": 22.5, "carbs": 0.4, "fat": 0.9}, {"name": "Cheese, processed, sliced, reduced fat", "portion": 100, "protein": 22.5, "carbs": 4, "fat": 11.4}, {"name": "Beef, canned, Corned Beef, Salisbury", "portion": 100, "protein": 22.5, "carbs": 0, "fat": 12.6}, {"name": "Lamb, forequarter & hindquarter assorted cuts, separable lean & fat, cooked", "portion": 100, "protein": 22.5, "carbs": 0, "fat": 22.4}, {"name": "Nutri-Grain, Kellogg's, fortified", "portion": 100, "protein": 22.4, "carbs": 67.8, "fat": 2.7}, {"name": "Chicken, crumbed, drumstick, fried, Kentucky Fried Chicken", "portion": 100, "protein": 22.3, "carbs": 8.3, "fat": 13.7}, {"name": "Snapper, flesh, microwaved", "portion": 100, "protein": 22.2, "carbs": 0.4, "fat": 3.9}, {"name": "Hoki, flesh, baked", "portion": 100, "protein": 22, "carbs": 0.3, "fat": 1.3}, {"name": "Salmon, king, fillet, flesh, cold or hot smoked, New Zealand", "portion": 100, "protein": 21.9, "carbs": 0, "fat": 18.4}, {"name": "Flour, almond, white, dry", "portion": 100, "protein": 21.7, "carbs": 4.1, "fat": 55.6}, {"name": "Cheese, blue vein", "portion": 100, "protein": 21.7, "carbs": 0, "fat": 29.9}, {"name": "Hoki, fillet, frozen, flesh, pan-fried with oil, no salt added", "portion": 100, "protein": 21.7, "carbs": 0, "fat": 5.5}, {"name": "Mackerel, canned in oil, drained", "portion": 100, "protein": 21.7, "carbs": 0, "fat": 12.2}, {"name": "Flour, chickpea or channa (besan), yellow", "portion": 100, "protein": 21.4, "carbs": 45.9, "fat": 6.3}, {"name": "Sardines, canned in oil, drained", "portion": 100, "protein": 21.3, "carbs": 0, "fat": 13.5}, {"name": "Cheese, processed", "portion": 100, "protein": 21.2, "carbs": 0.6, "fat": 28.2}, {"name": "Lamb, forequarter rack partially frenched, separable lean & fat, fast-roasted", "portion": 100, "protein": 21.1, "carbs": 0, "fat": 21.4}, {"name": "Venison, mince, Silver Fern, raw", "portion": 100, "protein": 21, "carbs": 0, "fat": 2.9}, {"name": "Chicken, crumbed, wing, deep fried, Kentucky Fried Chicken", "portion": 100, "protein": 20.9, "carbs": 6.9, "fat": 28.4}, {"name": "Salmon, king, fillet, skin & bones removed, fresh, baked without fat, no salt added, New Zealand", "portion": 100, "protein": 20.7, "carbs": 0, "fat": 24.2}, {"name": "Tuna, in brine, plain, canned, undrained", "portion": 100, "protein": 20.7, "carbs": 0, "fat": 0.7}, {"name": "Chicken, wing, lean 63%, separable fat 2% & skin 35%, roasted in oven bag", "portion": 100, "protein": 20.6, "carbs": 0, "fat": 20.2}, {"name": "Lamb, forequarter shoulder boneless rolled & netted, separable lean & fat, slow-roasted", "portion": 100, "protein": 20.6, "carbs": 0, "fat": 24.9}, {"name": "Orange roughy, flesh, baked", "portion": 100, "protein": 20.5, "carbs": 0.3, "fat": 10.2}, {"name": "Sardines, canned in water, drained", "portion": 100, "protein": 20.5, "carbs": 0, "fat": 8.2}, {"name": "Tuna, canned in spring water, plain, salt added, undrained", "portion": 100, "protein": 20.1, "carbs": 0, "fat": 0.7}, {"name": "Cheese, haloumi, from cows' milk", "portion": 100, "protein": 20, "carbs": 1.5, "fat": 26.5}, {"name": "Salmon, king, fillet, skin & bones removed, fresh, pan-fried with oil, New Zealand", "portion": 100, "protein": 20, "carbs": 0, "fat": 25.8}, {"name": "Turkey, lean & fat, raw", "portion": 100, "protein": 20, "carbs": 0, "fat": 4.7}, {"name": "Tuna, canned in assorted oil, plain, undrained", "portion": 100, "protein": 19.9, "carbs": 0, "fat": 21.3}, {"name": "Chicken, thigh, lean 72%, separable fat 9% & skin 19%, roasted in oven bag", "portion": 100, "protein": 19.8, "carbs": 0, "fat": 19.8}, {"name": "Lamb, offal, kidney, fried", "portion": 100, "protein": 19.8, "carbs": 0, "fat": 3.6}, {"name": "Beef mince, prime, 5-10% fat, raw", "portion": 100, "protein": 19.4, "carbs": 0, "fat": 11.6}, {"name": "Cheese, feta, from cows' milk, reduced fat", "portion": 100, "protein": 19.3, "carbs": 1.3, "fat": 2.4}, {"name": "Salmon, king, fillet, skin & bones removed, fresh, steamed, New Zealand", "portion": 100, "protein": 19.3, "carbs": 0, "fat": 25.9}, {"name": "Beef mince, standard, 10-20% fat, raw", "portion": 100, "protein": 19.3, "carbs": 0, "fat": 16.8}, {"name": "Lamb, hindquarter rump, separable lean & fat, fast-roasted", "portion": 100, "protein": 19.3, "carbs": 0, "fat": 21.2}, {"name": "Lamb, hindquarter double loin, separable lean & fat, fast-roasted", "portion": 100, "protein": 19.1, "carbs": 0, "fat": 27.7}, {"name": "Lamb, forequarter shoulder square cut, separable lean & fat, slow-roasted", "portion": 100, "protein": 18.9, "carbs": 0, "fat": 29.7}, {"name": "Lamb, hindquarter flap boneless, separable lean & fat, simmered", "portion": 100, "protein": 18.9, "carbs": 0, "fat": 36.8}, {"name": "Lamb, hindquarter middle loin chop, separable lean & fat, fast-fried", "portion": 100, "protein": 18.8, "carbs": 0, "fat": 34.5}, {"name": "Chicken, crumbed, thigh, fried, Kentucky Fried Chicken", "portion": 100, "protein": 18.6, "carbs": 5.9, "fat": 27.8}, {"name": "Tempeh", "portion": 100, "protein": 18.5, "carbs": 7.8, "fat": 10.8}, {"name": "Special K, Original, Kellogg's, fortified", "portion": 100, "protein": 18.4, "carbs": 64.3, "fat": 2}, {"name": "Salmon, king, fillet, skin & bones removed, fresh, raw, New Zealand", "portion": 100, "protein": 18.2, "carbs": 0, "fat": 21.2}, {"name": "Special K, Forest Berries, Kellogg's, fortified", "portion": 100, "protein": 18.1, "carbs": 70.2, "fat": 0.9}, {"name": "Chicken, deli cooked, skin", "portion": 100, "protein": 18.1, "carbs": 0, "fat": 31.6}, {"name": "Sardines, canned in oil, undrained", "portion": 100, "protein": 18, "carbs": 0, "fat": 22.4}, {"name": "Chicken, nugget, deep fried, McDonald's", "portion": 100, "protein": 17.6, "carbs": 13.5, "fat": 18.2}, {"name": "Burger, Quarter Pounder with cheese, McDonald's", "portion": 100, "protein": 17.5, "carbs": 16.8, "fat": 14.8}, {"name": "Cheese, feta, from cows' milk, traditional", "portion": 100, "protein": 16.9, "carbs": 1.1, "fat": 23.4}, {"name": "Egg, chicken, yolk, raw", "portion": 100, "protein": 16.9, "carbs": 0.2, "fat": 30.3}, {"name": "Eel, smoked", "portion": 100, "protein": 16.8, "carbs": 0, "fat": 11.1}, {"name": "Chicken, composite cuts, lean, fat & skin, raw, Size 10", "portion": 100, "protein": 16.8, "carbs": 0, "fat": 15.3}, {"name": "Pork, ham, separable lean 92% & fat 8%, cooked", "portion": 100, "protein": 16.8, "carbs": 0, "fat": 8.7}, {"name": "Energy food drink, dry powder, Chocolatte Frothy Classic & Extreme Choc, Jarrah", "portion": 100, "protein": 16.6, "carbs": 42.5, "fat": 9.3}, {"name": "Flour, coconut", "portion": 100, "protein": 16.6, "carbs": 19.5, "fat": 14}, {"name": "Mackerel, canned in oil, undrained", "portion": 100, "protein": 16.5, "carbs": 0, "fat": 9.5}, {"name": "Sardines, canned in tomato sauce, undrained", "portion": 100, "protein": 16.3, "carbs": 2.2, "fat": 7.4}, {"name": "Tongue, beef & sheep, canned", "portion": 100, "protein": 16, "carbs": 0, "fat": 16.5}, {"name": "Basa, fillet, frozen, flesh, pan-fried with oil, no salt added", "portion": 100, "protein": 15.7, "carbs": 0, "fat": 2.2}, {"name": "Tuna, canned in oil, assorted flavours, undrained", "portion": 100, "protein": 15.4, "carbs": 2.3, "fat": 7}, {"name": "Fish, battered, deep fried, Independent Shops", "portion": 100, "protein": 15.2, "carbs": 14.6, "fat": 20.3}, {"name": "Burger, cheeseburger, McDonald's", "portion": 100, "protein": 15.1, "carbs": 25.1, "fat": 10.7}, {"name": "Wheat bran", "portion": 100, "protein": 15, "carbs": 23.3, "fat": 6.7}, {"name": "Egg, chicken, white & yolk, fried in butter", "portion": 100, "protein": 15, "carbs": 0, "fat": 16.8}, {"name": "Mackerel, canned in tomato sauce, undrained", "portion": 100, "protein": 15, "carbs": 2.6, "fat": 10.8}, {"name": "Egg, chicken, white & yolk, fried in vegetable oil", "portion": 100, "protein": 14.7, "carbs": 0.6, "fat": 18.3}, {"name": "Oat bran", "portion": 100, "protein": 14.6, "carbs": 54.9, "fat": 5.1}, {"name": "Cheese, feta, from goats' milk", "portion": 100, "protein": 14.6, "carbs": 0.9, "fat": 20.1}, {"name": "Salmon, assorted flavours, canned, undrained", "portion": 100, "protein": 14.6, "carbs": 1, "fat": 9.2}, {"name": "Beef, corned silverside, raw", "portion": 100, "protein": 14.5, "carbs": 0, "fat": 5.7}, {"name": "Coffee mix, instant, dry powder, Cafe Menu Cappuccino, Nescafe", "portion": 100, "protein": 14.3, "carbs": 35, "fat": 23}, {"name": "Oats, Traditional Wholegrain Oats, Harraways", "portion": 100, "protein": 14.3, "carbs": 58.9, "fat": 7}, {"name": "Oatmeal, dry", "portion": 100, "protein": 14.1, "carbs": 66.2, "fat": 4.7}, {"name": "Lamb, offal, brain, raw, simmered, drained & fried", "portion": 100, "protein": 14, "carbs": 0, "fat": 10.9}, {"name": "Cheese, cottage", "portion": 100, "protein": 13.7, "carbs": 2, "fat": 3.5}, {"name": "All Bran Original, Kellogg's, fortified", "portion": 100, "protein": 13.6, "carbs": 62.3, "fat": 3.3}, {"name": "Burger, cheeseburger", "portion": 100, "protein": 13.6, "carbs": 21.4, "fat": 13.3}, {"name": "Curry, beef korma, Indian, takeaway", "portion": 100, "protein": 13.6, "carbs": 5.1, "fat": 16.9}, {"name": "Curry, rogan josh, Indian, takeaway", "portion": 100, "protein": 13.6, "carbs": 3.7, "fat": 10.5}, {"name": "Bread, Soy & Linseed, Vogel's & Burgen", "portion": 100, "protein": 13.3, "carbs": 30.4, "fat": 7.1}, {"name": "Burger, hamburger, McDonald's", "portion": 100, "protein": 13.3, "carbs": 27.3, "fat": 9.9}, {"name": "Curry, beef madras, Indian, takeaway", "portion": 100, "protein": 13.3, "carbs": 4.5, "fat": 15.5}, {"name": "Pizza, meat, thick crust", "portion": 100, "protein": 13.2, "carbs": 33.3, "fat": 6.6}, {"name": "Couscous, white wheat, dry", "portion": 100, "protein": 13.1, "carbs": 67.3, "fat": 1.9}, {"name": "Egg, chicken, white & yolk, milk added, scrambled", "portion": 100, "protein": 13.1, "carbs": 0, "fat": 14.2}, {"name": "Egg, chicken, white & yolk, raw", "portion": 100, "protein": 13.1, "carbs": 0.7, "fat": 8.1}, {"name": "Burger, Big Mac, McDonald's", "portion": 100, "protein": 13.1, "carbs": 19.2, "fat": 15.6}, {"name": "Pizza, frozen, meat lovers, premium, baked", "portion": 100, "protein": 13.1, "carbs": 22.2, "fat": 8.3}, {"name": "Fish, cake, deep fried in peanut oil", "portion": 100, "protein": 13, "carbs": 14.1, "fat": 14.4}, {"name": "Weet-Bix Oat Bran, Sanitarium, fortified", "portion": 100, "protein": 12.8, "carbs": 72.6, "fat": 2.5}, {"name": "Oats, wholegrain, raw, New Zealand", "portion": 100, "protein": 12.8, "carbs": 56.1, "fat": 6.7}, {"name": "Egg, chicken, white & yolk, poached", "portion": 100, "protein": 12.8, "carbs": 0.6, "fat": 9.6}, {"name": "Pizza, supreme, thin crust, Pizza Hut", "portion": 100, "protein": 12.8, "carbs": 22.9, "fat": 8.8}, {"name": "Lamb, forequarter breast, separable lean & fat, braised", "portion": 100, "protein": 12.7, "carbs": 0, "fat": 53.5}, {"name": "Pizza, barbeque chicken, thick crust", "portion": 100, "protein": 12.6, "carbs": 33.5, "fat": 6.3}, {"name": "Cracker, mixed grain, Cruskits, Light, Arnott's", "portion": 100, "protein": 12.5, "carbs": 65.2, "fat": 2.5}, {"name": "Weet-Bix, Sanitarium, fortified", "portion": 100, "protein": 12.5, "carbs": 58.4, "fat": 2.3}, {"name": "Oats, toasted, Rolled Oats, Harraways", "portion": 100, "protein": 12.5, "carbs": 61.6, "fat": 7.5}, {"name": "Egg foo young with chicken, omelette, Chinese, takeaway", "portion": 100, "protein": 12.5, "carbs": 1.5, "fat": 14.3}, {"name": "Beef, offal, sweetbreads, simmered", "portion": 100, "protein": 12.5, "carbs": 0, "fat": 29.8}, {"name": "San Bran, Sanitarium", "portion": 100, "protein": 12.4, "carbs": 41.4, "fat": 1.4}, {"name": "Savoury, bacon & egg, baked", "portion": 100, "protein": 12.3, "carbs": 17.9, "fat": 18.3}, {"name": "Tuna, canned in water, assorted flavours, undrained", "portion": 100, "protein": 12.3, "carbs": 4.7, "fat": 1.1}, {"name": "Bread, 9 Grain & Seed Toast, Tip Top, fortified", "portion": 100, "protein": 12.2, "carbs": 35, "fat": 4}, {"name": "Oats, rolled, raw, New Zealand", "portion": 100, "protein": 12.2, "carbs": 56.7, "fat": 7.2}, {"name": "Egg, chicken, white & yolk, boiled", "portion": 100, "protein": 12.2, "carbs": 0.6, "fat": 9.5}, {"name": "Flour, wheat, wholemeal", "portion": 100, "protein": 12.1, "carbs": 60.8, "fat": 1.7}, {"name": "Pizza, frozen, Hawaiian & House special, premium, baked", "portion": 100, "protein": 12.1, "carbs": 24.6, "fat": 6.5}, {"name": "Weeties, Sanitarium", "portion": 100, "protein": 11.9, "carbs": 61.5, "fat": 2.1}, {"name": "Burger, Filet-o-Fish, McDonald's", "portion": 100, "protein": 11.9, "carbs": 24.7, "fat": 15.5}, {"name": "Saveloy, battered, fried, Independent Shops", "portion": 100, "protein": 11.9, "carbs": 18.4, "fat": 20.8}, {"name": "Milo powder, fortified vitamins B2, B3, B6, B12, C & D, Ca, Fe and P", "portion": 100, "protein": 11.8, "carbs": 74.8, "fat": 9.2}, {"name": "Bread, Station Seed & Grain, MacKenzie", "portion": 100, "protein": 11.7, "carbs": 31, "fat": 4.8}, {"name": "Cracker, mixed grain, Litebread, Original Crisp bread, Huntley & Palmers", "portion": 100, "protein": 11.7, "carbs": 66.3, "fat": 3}, {"name": "Cracker, wheat, Cream Crackers, Reduced Fat, Huntley & Palmers", "portion": 100, "protein": 11.7, "carbs": 66.2, "fat": 4.2}, {"name": "Curry, butter chicken, Indian, takeaway", "portion": 100, "protein": 11.7, "carbs": 5.1, "fat": 12}, {"name": "Cracker, wheat, cheese flavoured", "portion": 100, "protein": 11.6, "carbs": 58, "fat": 22.4}, {"name": "Puffed Wheat, Sanitarium", "portion": 100, "protein": 11.6, "carbs": 77.9, "fat": 1.4}, {"name": "Fish, cake, baked", "portion": 100, "protein": 11.6, "carbs": 19.2, "fat": 12.8}, {"name": "Fish, fillet, crumbed, frozen, fried", "portion": 100, "protein": 11.5, "carbs": 12.2, "fat": 12.3}, {"name": "Bread, Swiss Bake Grains Plus, Molenberg, Quality Bakers", "portion": 100, "protein": 11.4, "carbs": 35.2, "fat": 3.2}, {"name": "Bread, Salba Traditional European Rye, Yarrows", "portion": 100, "protein": 11.3, "carbs": 32, "fat": 4}, {"name": "Cracker, rye, Crispbread, Ryvita", "portion": 100, "protein": 11.3, "carbs": 67.4, "fat": 1.6}, {"name": "Egg, chicken, white, raw", "portion": 100, "protein": 11.3, "carbs": 0.4, "fat": 0.2}, {"name": "Pizza, Hawaiian, thick crust", "portion": 100, "protein": 11.1, "carbs": 33.7, "fat": 5.5}, {"name": "Beef salad, Thai, takeaway", "portion": 100, "protein": 11, "carbs": 7.1, "fat": 2.5}, {"name": "Fish, fillet, crumbed, frozen, baked", "portion": 100, "protein": 11, "carbs": 11.7, "fat": 12}, {"name": "Cheese, cottage, light, 1% fat", "portion": 100, "protein": 10.9, "carbs": 2.4, "fat": 0.6}, {"name": "Cracker, wheat, Salada, Light, Original, Arnott's", "portion": 100, "protein": 10.8, "carbs": 66.3, "fat": 2.7}, {"name": "Scone, white, with cheese", "portion": 100, "protein": 10.8, "carbs": 34.6, "fat": 11.4}, {"name": "Bread, Salba Traditional Wholegrain, Yarrows", "portion": 100, "protein": 10.7, "carbs": 32.3, "fat": 3.2}, {"name": "Burger, hamburger", "portion": 100, "protein": 10.7, "carbs": 22.4, "fat": 10.2}, {"name": "Curry, chicken masala, Indian, takeaway", "portion": 100, "protein": 10.6, "carbs": 5.7, "fat": 9.4}, {"name": "Bread, wheatmeal, sliced, prepacked", "portion": 100, "protein": 10.5, "carbs": 36.6, "fat": 2.9}, {"name": "Cheese, cream, reduced fat 16%, Country Goodness", "portion": 100, "protein": 10.5, "carbs": 15.7, "fat": 16.7}, {"name": "Bread, pita, white", "portion": 100, "protein": 10.4, "carbs": 49.2, "fat": 0.9}, {"name": "Croissant, plain", "portion": 100, "protein": 10.4, "carbs": 38.6, "fat": 22.5}, {"name": "Bread, French, stick or loaf, plain, as purchased", "portion": 100, "protein": 10.3, "carbs": 49.4, "fat": 2.1}, {"name": "Topper, lasagne, baked", "portion": 100, "protein": 10.3, "carbs": 20.2, "fat": 11.4}, {"name": "Cheese, ricotta, from cows' milk", "portion": 100, "protein": 10.3, "carbs": 3.3, "fat": 12.8}, {"name": "Bread roll or bun, wholemeal, fortified", "portion": 100, "protein": 10.2, "carbs": 37.6, "fat": 2.6}, {"name": "Pie, savoury, egg & bacon, individual size, ready to eat", "portion": 100, "protein": 10.2, "carbs": 19, "fat": 15.4}, {"name": "Bread, wholemeal, pita", "portion": 100, "protein": 10.1, "carbs": 41.9, "fat": 2.2}, {"name": "Pizza, frozen, Hawaiian & Combination, individual size, baked", "portion": 100, "protein": 10.1, "carbs": 30.1, "fat": 8.9}, {"name": "Bread, Nature's Grain, River Mill, fortified", "portion": 100, "protein": 10, "carbs": 41.5, "fat": 2}, {"name": "Cracker, wheat, Water Cracker, Arnott's", "portion": 100, "protein": 10, "carbs": 73.7, "fat": 7.2}, {"name": "Milk, condensed, sweetened, skim", "portion": 100, "protein": 10, "carbs": 57.2, "fat": 0.2}, {"name": "Bread, mixed grain, light, sliced, prepacked", "portion": 100, "protein": 9.9, "carbs": 40.7, "fat": 2.8}, {"name": "Noodle, chow mein style, fried, as purchased", "portion": 100, "protein": 9.9, "carbs": 60.4, "fat": 14.2}, {"name": "Sausage roll, with cheese, baked", "portion": 100, "protein": 9.9, "carbs": 24.7, "fat": 18.5}, {"name": "Bagels, white, plain, toasted", "portion": 100, "protein": 9.7, "carbs": 49.7, "fat": 1.8}, {"name": "Bread, mixed grain, Ancient Grains, Vogel's", "portion": 100, "protein": 9.7, "carbs": 32.9, "fat": 4}, {"name": "Cracker, wheat, sesame", "portion": 100, "protein": 9.7, "carbs": 54.6, "fat": 22.6}, {"name": "Bread, Tuscan Mixed Grain, Freya's", "portion": 100, "protein": 9.6, "carbs": 39.1, "fat": 2.7}, {"name": "English muffin, bread-like, assorted flavours, toasted", "portion": 100, "protein": 9.6, "carbs": 40.6, "fat": 0.6}, {"name": "Cheese spread, light, Philadelphia", "portion": 100, "protein": 9.6, "carbs": 0, "fat": 12.5}, {"name": "Fish, fingers, deep fried in peanut oil", "portion": 100, "protein": 9.6, "carbs": 23.1, "fat": 15.4}, {"name": "Pork, sweet & sour, Chinese, takeaway", "portion": 100, "protein": 9.6, "carbs": 20.6, "fat": 15.5}, {"name": "Yoghurt, Greek style, low fat, Cyclops", "portion": 100, "protein": 9.5, "carbs": 3, "fat": 4.5}, {"name": "Chow mein, beef, lean & fat, stir fried", "portion": 100, "protein": 9.5, "carbs": 4.4, "fat": 9.4}, {"name": "Bread roll or bun, white, fortified", "portion": 100, "protein": 9.4, "carbs": 45.3, "fat": 2.1}, {"name": "Bread, Mixed Grain & Toasted Sesame Toast, Vogel's", "portion": 100, "protein": 9.4, "carbs": 30.1, "fat": 5.7}, {"name": "Bread, plain, Panini, prepacked", "portion": 100, "protein": 9.4, "carbs": 46.8, "fat": 8.4}, {"name": "Bread, mixed grain, heavy, sliced, prepacked", "portion": 100, "protein": 9.3, "carbs": 42.6, "fat": 2.3}, {"name": "Sultana Bran, Kellogg's, fortified", "portion": 100, "protein": 9.2, "carbs": 63.9, "fat": 1.6}, {"name": "Milk, condensed, sweetened, whole", "portion": 100, "protein": 9.2, "carbs": 54.7, "fat": 8.2}, {"name": "Bread, white, sliced, prepacked", "portion": 100, "protein": 9.1, "carbs": 43.1, "fat": 2.4}, {"name": "Flour, wheat, white", "portion": 100, "protein": 9.1, "carbs": 72.4, "fat": 1.2}, {"name": "Fish, fingers, baked", "portion": 100, "protein": 9, "carbs": 20.3, "fat": 10.3}, {"name": "Pasta, fresh, ravioli, beef & pork, cooked", "portion": 100, "protein": 8.9, "carbs": 24, "fat": 3.1}, {"name": "Fried rice, combination, Chinese, takeaway", "portion": 100, "protein": 8.9, "carbs": 14.8, "fat": 5}, {"name": "Fruitful Breakfast, Hubbards", "portion": 100, "protein": 8.8, "carbs": 59.7, "fat": 12}, {"name": "Simply Toasted Muesli Apricot, Hubbards", "portion": 100, "protein": 8.8, "carbs": 58.4, "fat": 10.3}, {"name": "Toasted Muesli Golden Oats & Fruit, Sanitarium", "portion": 100, "protein": 8.8, "carbs": 60, "fat": 14.4}, {"name": "Toasted Muesli Super Fruity, Sanitarium, fortified", "portion": 100, "protein": 8.8, "carbs": 64.8, "fat": 9.8}, {"name": "Toasted Strawberry and Rhubarb, Sanitarium", "portion": 100, "protein": 8.8, "carbs": 55.9, "fat": 11.7}, {"name": "Chop suey, pork", "portion": 100, "protein": 8.8, "carbs": 2.1, "fat": 8.8}, {"name": "Savoury, mince & cheese, heated", "portion": 100, "protein": 8.8, "carbs": 23.3, "fat": 16.3}, {"name": "Sausage roll, party size, baked", "portion": 100, "protein": 8.7, "carbs": 25.1, "fat": 15.5}, {"name": "Bread, ciabatta, loaf, plain, as purchased", "portion": 100, "protein": 8.6, "carbs": 43.8, "fat": 3.1}, {"name": "Scone, white, plain", "portion": 100, "protein": 8.6, "carbs": 45.6, "fat": 5.2}, {"name": "Sustain, Kellogg's, fortified", "portion": 100, "protein": 8.6, "carbs": 68.1, "fat": 2.8}, {"name": "Pizza base, thick, from white flour, no topping", "portion": 100, "protein": 8.5, "carbs": 45.6, "fat": 4}, {"name": "Milk, cow, whole, evaporated, fluid", "portion": 100, "protein": 8.4, "carbs": 9.5, "fat": 8.4}, {"name": "Pie, savoury, chicken, individual size, ready to eat", "portion": 100, "protein": 8.4, "carbs": 20.4, "fat": 13.5}, {"name": "Bread, chapatti or roti, wholemeal, restaurant", "portion": 100, "protein": 8.3, "carbs": 42.3, "fat": 4.9}, {"name": "Cracker, rice, seaweed flavoured, Sakata", "portion": 100, "protein": 8.3, "carbs": 72.6, "fat": 1.6}, {"name": "Wafer, wholegrain rice", "portion": 100, "protein": 8.3, "carbs": 70.5, "fat": 3.5}, {"name": "Curry, chicken, green, Thai, takeaway", "portion": 100, "protein": 8.2, "carbs": 5.3, "fat": 7.9}, {"name": "Sausage roll, individual size, microwaved", "portion": 100, "protein": 8.2, "carbs": 28.4, "fat": 15}, {"name": "Cracker, corn, Cruskits, Arnott's", "portion": 100, "protein": 8.1, "carbs": 73.3, "fat": 1.2}, {"name": "Cornmeal, wholegrain, yellow", "portion": 100, "protein": 8.1, "carbs": 63.5, "fat": 3.6}, {"name": "Noodle, pad thai with chicken & egg, Thai, takeaway", "portion": 100, "protein": 8.1, "carbs": 16, "fat": 8.1}, {"name": "Pie, mince, family size", "portion": 100, "protein": 8.1, "carbs": 19.4, "fat": 11}, {"name": "Cracker, wheat, Meal Mates, Griffin's", "portion": 100, "protein": 8, "carbs": 49.9, "fat": 25.7}, {"name": "Just Right, Original Kellogg's, fortified", "portion": 100, "protein": 7.9, "carbs": 76.3, "fat": 2.1}, {"name": "Cluster Crisp, Manuka Honey with Roasted Cashew, Sanitarium, fortified", "portion": 100, "protein": 7.8, "carbs": 56.8, "fat": 12.9}, {"name": "Cluster Crisp, Sanitarium, fortified", "portion": 100, "protein": 7.8, "carbs": 56.8, "fat": 12.7}, {"name": "Cluster Crisp, Vanilla Almond, Sanitarium, fortified", "portion": 100, "protein": 7.8, "carbs": 56.8, "fat": 12.4}, {"name": "Pie, savoury, mince & cheese, individual size, ready to eat", "portion": 100, "protein": 7.8, "carbs": 19.1, "fat": 14.2}, {"name": "Crunchy Nut Corn Flakes, Kellogg's, fortified", "portion": 100, "protein": 7.7, "carbs": 79.3, "fat": 3.3}, {"name": "1 egg (size 7, 66.0 g)", "portion": 52.5, "protein": 7.7, "carbs": 0.3, "fat": 9.6}, {"name": "Chicken and cashew, stir fry, Chinese", "portion": 100, "protein": 7.7, "carbs": 2.1, "fat": 9.1}, {"name": "Bun, currant", "portion": 100, "protein": 7.6, "carbs": 49.3, "fat": 7.5}, {"name": "Garlic bread, made with butter, La Famiglia & Signature Range", "portion": 100, "protein": 7.6, "carbs": 41.5, "fat": 19.6}, {"name": "Garlic bread, made with margarine, Pams & Mamma Fiorelli's", "portion": 100, "protein": 7.6, "carbs": 41.5, "fat": 21.5}, {"name": "Yoghurt dessert, Greek style, chocolate flavoured, sweetened, premium", "portion": 100, "protein": 7.6, "carbs": 8.8, "fat": 6.4}, {"name": "1 egg (size 7, 66.0 g)", "portion": 59.5, "protein": 7.6, "carbs": 0.3, "fat": 5.7}, {"name": "Savoury, mince, heated", "portion": 100, "protein": 7.6, "carbs": 22.9, "fat": 15.6}, {"name": "Biscuit, Malt", "portion": 100, "protein": 7.5, "carbs": 71.1, "fat": 13.5}, {"name": "Bread roll, currant, commercial", "portion": 100, "protein": 7.5, "carbs": 57.3, "fat": 1.4}, {"name": "Skippy Cornflakes, Sanitarium, fortified", "portion": 100, "protein": 7.5, "carbs": 76.2, "fat": 1.3}, {"name": "Light 'n' Tasty, Apricot, Sanitarium, fortified", "portion": 100, "protein": 7.4, "carbs": 69.9, "fat": 2.9}, {"name": "Light 'n' Tasty, Berry, Sanitarium, fortified", "portion": 100, "protein": 7.4, "carbs": 69.6, "fat": 2.6}, {"name": "Light 'n' Tasty, Peach & Raspberry, Sanitarium, fortified", "portion": 100, "protein": 7.4, "carbs": 67.6, "fat": 3.8}, {"name": "Flour, rice, brown, dry", "portion": 100, "protein": 7.4, "carbs": 67.7, "fat": 2.8}, {"name": "1 egg (size 7, 66.0 g)", "portion": 56.7, "protein": 7.4, "carbs": 0.4, "fat": 4.6}, {"name": "Noodle, chow mein, combination, Chinese", "portion": 100, "protein": 7.3, "carbs": 1.1, "fat": 5}, {"name": "Cracker, wheat, Snax, Griffin's", "portion": 100, "protein": 7.2, "carbs": 54.6, "fat": 24.5}, {"name": "Biscuit, peanut brownie", "portion": 100, "protein": 7.1, "carbs": 64.4, "fat": 21.6}, {"name": "Bread, naan, white, plain, restaurant", "portion": 100, "protein": 7.1, "carbs": 44.1, "fat": 5.3}, {"name": "Scone, white, with dates", "portion": 100, "protein": 7.1, "carbs": 47.5, "fat": 4.8}, {"name": "Frozen meal, macaroni cheese, baked", "portion": 100, "protein": 7.1, "carbs": 14.7, "fat": 6.2}, {"name": "Taco shell, corn flour, baked, commercial", "portion": 100, "protein": 7.1, "carbs": 58.5, "fat": 20.8}, {"name": "Milk, coffee flavour, reduced fat, high protein, sugar-sweetened", "portion": 100, "protein": 7.1, "carbs": 6.9, "fat": 1.6}, {"name": "1 egg (size 7, 66.0 g)", "portion": 58.3, "protein": 7.1, "carbs": 0.3, "fat": 5.5}, {"name": "Biscuit, Arrowroot", "portion": 100, "protein": 7, "carbs": 76.1, "fat": 10.5}, {"name": "Flour, rice, white, dry", "portion": 100, "protein": 7, "carbs": 74.3, "fat": 1.1}, {"name": "Cracker, rice, barbecue flavoured", "portion": 100, "protein": 6.9, "carbs": 80.7, "fat": 2.8}, {"name": "Pasta, fresh, assorted type, cooked", "portion": 100, "protein": 6.9, "carbs": 24.2, "fat": 0.6}, {"name": "Chop suey, chicken, lean & fat, stir fried", "portion": 100, "protein": 6.9, "carbs": 5.7, "fat": 6}, {"name": "Rice Bubbles, Kellogg's, fortified", "portion": 100, "protein": 6.7, "carbs": 82.1, "fat": 1.1}, {"name": "Couscous, white wheat, cooked in water, not drained, no salt or fat added", "portion": 100, "protein": 6.7, "carbs": 32.7, "fat": 1}, {"name": "Frozen meal, lasagne, beef, bake", "portion": 100, "protein": 6.7, "carbs": 14.9, "fat": 4.4}, {"name": "1 egg (size 6, 59.7 g)", "portion": 45.5, "protein": 6.7, "carbs": 0.3, "fat": 8.3}, {"name": "1 egg (size 6, 59.7 g)", "portion": 52.4, "protein": 6.7, "carbs": 0.3, "fat": 5}, {"name": "1 egg (size 6, 59.7 g)", "portion": 51.3, "protein": 6.7, "carbs": 0.3, "fat": 4.2}, {"name": "Cracker, rice, plain", "portion": 100, "protein": 6.6, "carbs": 75.7, "fat": 3.8}, {"name": "Crumpet, white, toasted", "portion": 100, "protein": 6.6, "carbs": 34.3, "fat": 1}, {"name": "1 egg (size 7, 66.0 g)", "portion": 43.7, "protein": 6.6, "carbs": 0, "fat": 7.3}, {"name": "1 egg (size 6, 59.7 g)", "portion": 44.2, "protein": 6.6, "carbs": 0, "fat": 7.4}, {"name": "1 egg (size 6, 59.7 g)", "portion": 53.5, "protein": 6.5, "carbs": 0.3, "fat": 5.1}, {"name": "Biscuit, Chocolate Chip, Cookie Time", "portion": 100, "protein": 6.4, "carbs": 61.7, "fat": 23.4}, {"name": "Biscuit, Dark Chocolate, Wheaten, Griffin's", "portion": 100, "protein": 6.4, "carbs": 55.6, "fat": 23.8}, {"name": "Cake, sponge, plain", "portion": 100, "protein": 6.4, "carbs": 56.2, "fat": 4.3}, {"name": "Doughnut, chocolate iced", "portion": 100, "protein": 6.4, "carbs": 43.9, "fat": 21.4}, {"name": "Frozen meal, spaghetti bolognaise, baked", "portion": 100, "protein": 6.3, "carbs": 13.3, "fat": 4.4}, {"name": "Pasta, wholemeal wheat flour, assorted shapes, boiled, drained, no salt added", "portion": 100, "protein": 6.3, "carbs": 21.8, "fat": 1.3}, {"name": "Beef, black bean, stir fry, Chinese", "portion": 100, "protein": 6.3, "carbs": 2.8, "fat": 5.8}, {"name": "Biscuit, milk chocolate, Wheaten, Griffin's", "portion": 100, "protein": 6.2, "carbs": 60, "fat": 24.2}, {"name": "1 egg (size 5, 51.3 g)", "portion": 41.2, "protein": 6.2, "carbs": 0, "fat": 6.9}, {"name": "Chow mein, chicken", "portion": 100, "protein": 6.2, "carbs": 13.5, "fat": 1}, {"name": "Biscuit, Dark Chocolate, Digestive, Arnott's", "portion": 100, "protein": 6.1, "carbs": 61.9, "fat": 23.7}, {"name": "Bread, Gluten free 6 Seed, Vogel's", "portion": 100, "protein": 6.1, "carbs": 30.8, "fat": 7.9}, {"name": "Muffin, bran", "portion": 100, "protein": 6.1, "carbs": 40.6, "fat": 8.1}, {"name": "Biscuit, Milk Chocolate, Digestives, Arnott's", "portion": 100, "protein": 6, "carbs": 65.1, "fat": 22.4}, {"name": "Porridge, oats, prepared with trim milk (0.5 % fat), unsweetened, no salt added", "portion": 100, "protein": 6, "carbs": 17.1, "fat": 1.8}, {"name": "Ricies, Sanitarium, fortified", "portion": 100, "protein": 6, "carbs": 77.9, "fat": 1.1}, {"name": "1 egg (size 5, 51.3 g)", "portion": 47, "protein": 6, "carbs": 0.3, "fat": 4.5}, {"name": "Biscuit, Chocolate Chip Fudge, Farmbake, Arnott's", "portion": 100, "protein": 5.9, "carbs": 68.9, "fat": 20.1}, {"name": "Couscous, wholemeal wheat, cooked in water, not drained, no salt or fat added", "portion": 100, "protein": 5.9, "carbs": 24.6, "fat": 1.2}, {"name": "1 egg (size 5, 51.3 g)", "portion": 39.9, "protein": 5.9, "carbs": 0.2, "fat": 7.3}, {"name": "1 egg (size 5, 51.3 g)", "portion": 45, "protein": 5.9, "carbs": 0.3, "fat": 3.6}, {"name": "Savoury, potato top, heated", "portion": 100, "protein": 5.9, "carbs": 21.3, "fat": 11.3}, {"name": "Pasta, wheat flour with egg, boiled, drained", "portion": 100, "protein": 5.8, "carbs": 29, "fat": 0.3}, {"name": "Soup, chicken and sweet corn, Chinese, takeaway", "portion": 100, "protein": 5.8, "carbs": 4.7, "fat": 1.7}, {"name": "Soup, tom yam gai, chicken, Thai, takeaway", "portion": 100, "protein": 5.8, "carbs": 1.3, "fat": 1.3}, {"name": "Porridge, oats, assorted fruits flavoured, sugar-sweetened, prepared with trim milk (0.5% fat)", "portion": 100, "protein": 5.7, "carbs": 20.7, "fat": 2}, {"name": "Pasta, fresh, fettuccine, herb & garlic, cooked", "portion": 100, "protein": 5.7, "carbs": 21.9, "fat": 1.7}, {"name": "Yoghurt, Greek style, low fat , Fresh 'n Fruity", "portion": 100, "protein": 5.7, "carbs": 4.1, "fat": 2.7}, {"name": "Biscuit, Afghan", "portion": 100, "protein": 5.6, "carbs": 64.9, "fat": 21.7}, {"name": "Doughnut, non-chocolate iced", "portion": 100, "protein": 5.6, "carbs": 49.8, "fat": 18.8}, {"name": "Breakfast cereals, rice puffed, cocoa coated, ready to eat, fortified", "portion": 100, "protein": 5.6, "carbs": 80.1, "fat": 1}, {"name": "Coco Pops, Kellogg's, fortified", "portion": 100, "protein": 5.6, "carbs": 84.4, "fat": 1.1}, {"name": "Porridge, oats, plain, sweetened with honey and/or sugar, prepared with trim milk (0.5% fat)", "portion": 100, "protein": 5.6, "carbs": 22.8, "fat": 1.9}, {"name": "Porridge, oats, prepared with standard milk (3.3% fat), unsweetened, no salt added", "portion": 100, "protein": 5.6, "carbs": 16.7, "fat": 4.3}, {"name": "Chow mein, prawn", "portion": 100, "protein": 5.6, "carbs": 6.1, "fat": 10.9}, {"name": "Biscuit, Classic Dark, Tim Tam, Arnott's", "portion": 100, "protein": 5.5, "carbs": 63.7, "fat": 26.9}, {"name": "Biscuit, Double Deck Dark Chocolate Delight, Chit Chat, Griffin's", "portion": 100, "protein": 5.5, "carbs": 65, "fat": 24.3}, {"name": "Biscuit, milk chocolate, Double Chocolate, Cookies, Ernest Adams", "portion": 100, "protein": 5.5, "carbs": 66.1, "fat": 21.1}, {"name": "Biscuit, shortbread", "portion": 100, "protein": 5.5, "carbs": 59.7, "fat": 23.9}, {"name": "Pasta, wheat flour with vegetable flavours, boiled, drained", "portion": 100, "protein": 5.5, "carbs": 30.1, "fat": 0.3}, {"name": "Milk, sheep, whole, fresh, fluid", "portion": 100, "protein": 5.5, "carbs": 4.8, "fat": 6.5}, {"name": "Biscuit, with coconut, Krispie, Griffin's", "portion": 100, "protein": 5.4, "carbs": 65.4, "fat": 17}, {"name": "1 egg (size 5, 51.3 g)", "portion": 44.2, "protein": 5.4, "carbs": 0.2, "fat": 4.2}, {"name": "Spring roll, traditional, with meat, deep fried, Highmark", "portion": 100, "protein": 5.4, "carbs": 22.3, "fat": 16.3}, {"name": "Biscuit, MallowPuffs, Griffin's", "portion": 100, "protein": 5.3, "carbs": 63.9, "fat": 16.6}, {"name": "Muffin, chocolate", "portion": 100, "protein": 5.3, "carbs": 53.1, "fat": 20}, {"name": "Fromage frais, assorted fruits & flavours, Fruche", "portion": 100, "protein": 5.3, "carbs": 14.7, "fat": 0.7}, {"name": "Fromage frais, vanilla, Fruche", "portion": 100, "protein": 5.3, "carbs": 14.5, "fat": 0.8}, {"name": "Milk, cow, high calcium 0.1% fat, fluid, fortified", "portion": 100, "protein": 5.3, "carbs": 4.9, "fat": 0.1}, {"name": "Spring roll, traditional with meat, baked, Highmark", "portion": 100, "protein": 5.3, "carbs": 22, "fat": 14.2}, {"name": "Doughnut, cinnamon & sugar dusted", "portion": 100, "protein": 5.2, "carbs": 51.1, "fat": 18.6}, {"name": "Energy food drink, dry powder, Drinking Chocolate, Cadbury", "portion": 100, "protein": 5.2, "carbs": 85.1, "fat": 2.5}, {"name": "Porridge, oats, assorted fruits flavoured, sugar-sweetened, prepared with standard milk (3.3% fat)", "portion": 100, "protein": 5.2, "carbs": 21.4, "fat": 4.3}]
+[
+  {
+    "name": "Chicken Breast",
+    "portion": "1 gram",
+    "protein": 0.232,
+    "carbs": 0,
+    "fat": 0.011
+  },
+  {
+    "name": "5% Lean Beef Mince",
+    "portion": "1 gram",
+    "protein": 0.31,
+    "carbs": 0.005,
+    "fat": 0.047
+  },
+  {
+    "name": "2% Lean Turkey Mince",
+    "portion": "1 gram",
+    "protein": 0.254,
+    "carbs": 0.002,
+    "fat": 0.013
+  },
+  {
+    "name": "Wild Alaskan Salmon",
+    "portion": "1 gram",
+    "protein": 0.194,
+    "carbs": 0,
+    "fat": 0.131
+  },
+  {
+    "name": "Tinned Tuna In Brine",
+    "portion": "1 gram",
+    "protein": 0.27,
+    "carbs": 0,
+    "fat": 0.005
+  },
+  {
+    "name": "Large Whole Egg",
+    "portion": "1 Egg",
+    "protein": 6,
+    "carbs": 0,
+    "fat": 5
+  },
+  {
+    "name": "Egg Whites",
+    "portion": "1 gram",
+    "protein": 0.109,
+    "carbs": 0.008,
+    "fat": 0
+  },
+  {
+    "name": "Collective Greek Yoghurt",
+    "portion": "1 gram",
+    "protein": 0.0533,
+    "carbs": 0.0867,
+    "fat": 0.0573
+  },
+  {
+    "name": "Blueberry Granola with Probiotics",
+    "portion": "1 gram",
+    "protein": 0.12,
+    "carbs": 0.46,
+    "fat": 0.215
+  },
+  {
+    "name": "White button mushrooms",
+    "portion": "1 gram",
+    "protein": 0.0314,
+    "carbs": 0.0329,
+    "fat": 0.0029
+  },
+  {
+    "name": "Feta",
+    "portion": "1 gram",
+    "protein": 0.1429,
+    "carbs": 0.0393,
+    "fat": 0.2143
+  },
+  {
+    "name": "carrot",
+    "portion": "1 gram",
+    "protein": 0.006,
+    "carbs": 0.049,
+    "fat": 0.004
+  },
+  {
+    "name": "Capsicum",
+    "portion": "1 gram",
+    "protein": 0.03,
+    "carbs": 0.03,
+    "fat": 0.002
+  },
+  {
+    "name": "Broccoli",
+    "portion": "1 gram",
+    "protein": 0.028,
+    "carbs": 0.066,
+    "fat": 0.004
+  },
+  {
+    "name": "Cherry Tomatoes",
+    "portion": "1 gram",
+    "protein": 0.0059,
+    "carbs": 0.0412,
+    "fat": 0
+  },
+  {
+    "name": "Crumpet",
+    "portion": "1 Crumpet",
+    "protein": 2.9,
+    "carbs": 18.7,
+    "fat": 0.4
+  },
+  {
+    "name": "Wholemeal Bread",
+    "portion": "1 Slice",
+    "protein": 4.2,
+    "carbs": 15.1,
+    "fat": 1.5
+  },
+  {
+    "name": "White Bread",
+    "portion": "1 Slice",
+    "protein": 4,
+    "carbs": 16.5,
+    "fat": 0.9
+  },
+  {
+    "name": "Sweet Potato",
+    "portion": "1 gram",
+    "protein": 0.012,
+    "carbs": 0.213,
+    "fat": 0.003
+  },
+  {
+    "name": "White Potato",
+    "portion": "1 gram",
+    "protein": 0.021,
+    "carbs": 0.172,
+    "fat": 0.002
+  },
+  {
+    "name": "McCains 5% Oven Chips",
+    "portion": "1 gram",
+    "protein": 0.021,
+    "carbs": 0.223,
+    "fat": 0.033
+  },
+  {
+    "name": "Almonds",
+    "portion": "15 Almonds",
+    "protein": 4.5,
+    "carbs": 4.5,
+    "fat": 9
+  },
+  {
+    "name": "Cauliflower",
+    "portion": "1 gram",
+    "protein": 0.01,
+    "carbs": 0.1,
+    "fat": 0.004
+  },
+  {
+    "name": "Edam Cheese",
+    "portion": "1 gram",
+    "protein": 0.25,
+    "carbs": 0,
+    "fat": 0.25
+  },
+  {
+    "name": "Farrahs Spinach Wrap",
+    "portion": "1 wrap",
+    "protein": 4.5,
+    "carbs": 28.6,
+    "fat": 4.1
+  },
+  {
+    "name": "Zucchini",
+    "portion": "1 gram",
+    "protein": 0.01,
+    "carbs": 0.06,
+    "fat": 0.002
+  },
+  {
+    "name": "Pic's Peanut Butter",
+    "portion": "1 gram",
+    "protein": 0.265,
+    "carbs": 0.145,
+    "fat": 0.48
+  },
+  {
+    "name": "Apple",
+    "portion": "1 gram",
+    "protein": 0.004,
+    "carbs": 0.105,
+    "fat": 0.001
+  },
+  {
+    "name": "Sirloin steak",
+    "portion": "1 gram",
+    "protein": 0.23,
+    "carbs": 0,
+    "fat": 0.04
+  },
+  {
+    "name": "Butter",
+    "portion": "1 gram",
+    "protein": 0.1,
+    "carbs": 0.1,
+    "fat": 0.82
+  },
+  {
+    "name": "Medium Banana ",
+    "portion": "1 Banana",
+    "protein": 1.1,
+    "carbs": 20.6,
+    "fat": 0.3
+  },
+  {
+    "name": "Strawberries",
+    "portion": "1 gram",
+    "protein": 0.008,
+    "carbs": 0.06,
+    "fat": 0.001
+  },
+  {
+    "name": "Blueberries",
+    "portion": "1 gram",
+    "protein": 0.006,
+    "carbs": 0.069,
+    "fat": 0.002
+  },
+  {
+    "name": "Watermelon",
+    "portion": "1 gram",
+    "protein": 0.004,
+    "carbs": 0.069,
+    "fat": 0.003
+  },
+  {
+    "name": "Pitted Cherries",
+    "portion": "1 gram",
+    "protein": 0.009,
+    "carbs": 0.115,
+    "fat": 0.001
+  },
+  {
+    "name": "Asparagus",
+    "portion": "1 gram",
+    "protein": 0.029,
+    "carbs": 0.041,
+    "fat": 0.006
+  },
+  {
+    "name": "Romaine Lettuce Leaves",
+    "portion": "1 gram",
+    "protein": 0.008,
+    "carbs": 0.008,
+    "fat": 0.005
+  },
+  {
+    "name": "Red Onion",
+    "portion": "1 gram",
+    "protein": 0.0122,
+    "carbs": 0.0789,
+    "fat": 0.0022
+  },
+  {
+    "name": "Corn ",
+    "portion": "1 gram",
+    "protein": 0.03,
+    "carbs": 0.19,
+    "fat": 0.01
+  },
+  {
+    "name": "White Rice",
+    "portion": "1 gram",
+    "protein": 0.09,
+    "carbs": 0.83,
+    "fat": 0.004
+  },
+  {
+    "name": "Tuna",
+    "portion": "1 gram",
+    "protein": 0.25,
+    "carbs": 0,
+    "fat": 0.008
+  },
+  {
+    "name": "green bean",
+    "portion": "1 gram",
+    "protein": 0.0189,
+    "carbs": 0.0788,
+    "fat": 0.0024
+  },
+  {
+    "name": "anchor cream",
+    "portion": "100ml",
+    "protein": 2.4,
+    "carbs": 3,
+    "fat": 37.4
+  },
+  {
+    "name": "Lindt 70% Dark Chocolate",
+    "portion": "1 Square",
+    "protein": 0.8,
+    "carbs": 3.4,
+    "fat": 4.1
+  },
+  {
+    "name": "Cashew Nuts",
+    "portion": "1 gram",
+    "protein": 0.2,
+    "carbs": 0.22,
+    "fat": 0.45
+  },
+  {
+    "name": "Avocado",
+    "portion": "1 gram",
+    "protein": 0.019,
+    "carbs": 0.019,
+    "fat": 0.195
+  },
+  {
+    "name": "Couscous",
+    "portion": "1/4 cup",
+    "protein": 5,
+    "carbs": 30,
+    "fat": 0
+  },
+  {
+    "name": "Pink Lady Apple",
+    "portion": "1 Apple",
+    "protein": 0.4,
+    "carbs": 19.1,
+    "fat": 0.2
+  },
+  {
+    "name": "Spinach",
+    "portion": "1 gram",
+    "protein": 0.028,
+    "carbs": 0.016,
+    "fat": 0.008
+  },
+  {
+    "name": "Chicken Stock",
+    "portion": "1 cup",
+    "protein": 6,
+    "carbs": 8.5,
+    "fat": 3
+  },
+  {
+    "name": "Chia Seeds",
+    "portion": "1 gram",
+    "protein": 0.17,
+    "carbs": 0.42,
+    "fat": 0.31
+  },
+  {
+    "name": "Spaghetti",
+    "portion": "1 gram",
+    "protein": 0.1253,
+    "carbs": 0.7307,
+    "fat": 0.0147
+  },
+  {
+    "name": "Peanuts",
+    "portion": "1 gram",
+    "protein": 0.25,
+    "carbs": 0.13,
+    "fat": 0.49
+  },
+  {
+    "name": "Champagne Ham",
+    "portion": "1 gram",
+    "protein": 0.16,
+    "carbs": 0.0267,
+    "fat": 0.0267
+  },
+  {
+    "name": "Protein powder, whey & vanilla flavoured, 100% Whey Protein WPC/WPI, Balance",
+    "portion": "1 gram",
+    "protein": 0.788,
+    "carbs": 0.042,
+    "fat": 0.041
+  },
+  {
+    "name": "Cheese, parmesan, powder",
+    "portion": "1 gram",
+    "protein": 0.449,
+    "carbs": 0.001,
+    "fat": 0.293
+  },
+  {
+    "name": "Milk, cow, powder, instant, skim",
+    "portion": "1 gram",
+    "protein": 0.382,
+    "carbs": 0.456,
+    "fat": 0.008
+  },
+  {
+    "name": "Pork, leg steak, lean, stewed",
+    "portion": "1 gram",
+    "protein": 0.351,
+    "carbs": 0,
+    "fat": 0.039
+  },
+  {
+    "name": "Chicken, mince, pan fried, with no added fat, premium, Tegal",
+    "portion": "1 gram",
+    "protein": 0.347,
+    "carbs": 0,
+    "fat": 0.052
+  },
+  {
+    "name": "Beef, forequarter brisket point end, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.345,
+    "carbs": 0,
+    "fat": 0.071
+  },
+  {
+    "name": "Beef, hindquarter topside cap off, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.345,
+    "carbs": 0,
+    "fat": 0.073
+  },
+  {
+    "name": "Beef, hindquarter topside cap off, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.342,
+    "carbs": 0,
+    "fat": 0.08
+  },
+  {
+    "name": "Lamb, forequarter fore-shank, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.333,
+    "carbs": 0,
+    "fat": 0.084
+  },
+  {
+    "name": "Beef, hindquarter silverside excluding the eye, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.332,
+    "carbs": 0,
+    "fat": 0.103
+  },
+  {
+    "name": "Cheese, parmesan, from cows' milk, ungrated",
+    "portion": "1 gram",
+    "protein": 0.326,
+    "carbs": 0,
+    "fat": 0.259
+  },
+  {
+    "name": "Lamb, hindquarter knuckle, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.325,
+    "carbs": 0,
+    "fat": 0.074
+  },
+  {
+    "name": "Pork, loin, medallion, lean, grilled",
+    "portion": "1 gram",
+    "protein": 0.324,
+    "carbs": 0,
+    "fat": 0.059
+  },
+  {
+    "name": "Beef, forequarter chuck steak, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.321,
+    "carbs": 0,
+    "fat": 0.089
+  },
+  {
+    "name": "Beef, hindquarter silverside, excluding the eye, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.319,
+    "carbs": 0,
+    "fat": 0.127
+  },
+  {
+    "name": "Pork, leg roast, lean, roasted",
+    "portion": "1 gram",
+    "protein": 0.318,
+    "carbs": 0,
+    "fat": 0.052
+  },
+  {
+    "name": "Pork, schnitzel, lean, fried",
+    "portion": "1 gram",
+    "protein": 0.315,
+    "carbs": 0,
+    "fat": 0.039
+  },
+  {
+    "name": "Lamb, forequarter round neck chops, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.314,
+    "carbs": 0,
+    "fat": 0.154
+  },
+  {
+    "name": "Ox, offal, heart, simmered",
+    "portion": "1 gram",
+    "protein": 0.313,
+    "carbs": 0,
+    "fat": 0.06
+  },
+  {
+    "name": "Beef, hindquarter shank, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.312,
+    "carbs": 0,
+    "fat": 0.046
+  },
+  {
+    "name": "Chicken, breast, grilled",
+    "portion": "1 gram",
+    "protein": 0.312,
+    "carbs": 0,
+    "fat": 0.046
+  },
+  {
+    "name": "Lamb, forequarter shoulder chops, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.311,
+    "carbs": 0,
+    "fat": 0.146
+  },
+  {
+    "name": "Beef, hindquarter skirt steak, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.308,
+    "carbs": 0,
+    "fat": 0.079
+  },
+  {
+    "name": "Beef, forequarter & hindquarter assorted cuts, separable lean, cooked",
+    "portion": "1 gram",
+    "protein": 0.307,
+    "carbs": 0,
+    "fat": 0.086
+  },
+  {
+    "name": "Turkey, flesh, roasted",
+    "portion": "1 gram",
+    "protein": 0.306,
+    "carbs": 0,
+    "fat": 0.042
+  },
+  {
+    "name": "Milk, cow, powder, instant, whole",
+    "portion": "1 gram",
+    "protein": 0.302,
+    "carbs": 0.33,
+    "fat": 0.264
+  },
+  {
+    "name": "Beef, hindquarter rump steak, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.302,
+    "carbs": 0,
+    "fat": 0.075
+  },
+  {
+    "name": "Beef, hindquarter skirt steak, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.302,
+    "carbs": 0,
+    "fat": 0.092
+  },
+  {
+    "name": "Pork, forequarter scotch fillet, separable lean, grilled",
+    "portion": "1 gram",
+    "protein": 0.302,
+    "carbs": 0,
+    "fat": 0.096
+  },
+  {
+    "name": "Beef, forequarter scotch fillet, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.301,
+    "carbs": 0,
+    "fat": 0.132
+  },
+  {
+    "name": "Beef, hindquarter rump steak, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.3,
+    "carbs": 0,
+    "fat": 0.078
+  },
+  {
+    "name": "Mutton, leg, lean, roasted",
+    "portion": "1 gram",
+    "protein": 0.3,
+    "carbs": 0,
+    "fat": 0.075
+  },
+  {
+    "name": "Turkey, lean & fat, roasted in oven bag",
+    "portion": "1 gram",
+    "protein": 0.3,
+    "carbs": 0,
+    "fat": 0.055
+  },
+  {
+    "name": "Beef, forequarter chuck steak, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.299,
+    "carbs": 0,
+    "fat": 0.133
+  },
+  {
+    "name": "Beef, forequarter oyster blade, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.299,
+    "carbs": 0,
+    "fat": 0.085
+  },
+  {
+    "name": "Beef, hindquarter shank, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.297,
+    "carbs": 0,
+    "fat": 0.088
+  },
+  {
+    "name": "Beef, hindquarter silverside, separable lean, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.297,
+    "carbs": 0,
+    "fat": 0.05
+  },
+  {
+    "name": "Flour, soy, full fat",
+    "portion": "1 gram",
+    "protein": 0.295,
+    "carbs": 0.244,
+    "fat": 0.182
+  },
+  {
+    "name": "Beef, hindquarter silverside, separable lean & fat, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.295,
+    "carbs": 0,
+    "fat": 0.056
+  },
+  {
+    "name": "Cheese, cheddar, light, Mainland",
+    "portion": "1 gram",
+    "protein": 0.294,
+    "carbs": 0,
+    "fat": 0.224
+  },
+  {
+    "name": "Beef, forequarter brisket navel end, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.294,
+    "carbs": 0,
+    "fat": 0.164
+  },
+  {
+    "name": "Beef, hindquarter fillet, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.294,
+    "carbs": 0,
+    "fat": 0.09
+  },
+  {
+    "name": "Pork, loin chops, lean, grilled",
+    "portion": "1 gram",
+    "protein": 0.294,
+    "carbs": 0,
+    "fat": 0.065
+  },
+  {
+    "name": "Beef, hindquarter fillet, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.293,
+    "carbs": 0,
+    "fat": 0.093
+  },
+  {
+    "name": "Pork, shoulder, separable lean, roasted",
+    "portion": "1 gram",
+    "protein": 0.292,
+    "carbs": 0,
+    "fat": 0.124
+  },
+  {
+    "name": "Lamb, hindquarter striploin, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.29,
+    "carbs": 0,
+    "fat": 0.046
+  },
+  {
+    "name": "Lamb, hindquarter striploin, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.29,
+    "carbs": 0,
+    "fat": 0.045
+  },
+  {
+    "name": "Turkey, lean, fat & skin, roasted",
+    "portion": "1 gram",
+    "protein": 0.289,
+    "carbs": 0,
+    "fat": 0.078
+  },
+  {
+    "name": "Chicken, deli cooked, breast",
+    "portion": "1 gram",
+    "protein": 0.288,
+    "carbs": 0,
+    "fat": 0.021
+  },
+  {
+    "name": "Beef, forequarter & hindquarter assorted cuts, separable lean & fat, cooked",
+    "portion": "1 gram",
+    "protein": 0.286,
+    "carbs": 0,
+    "fat": 0.134
+  },
+  {
+    "name": "Beef, forequarter oyster blade, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.285,
+    "carbs": 0,
+    "fat": 0.125
+  },
+  {
+    "name": "Beef, hindquarter sirloin, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.285,
+    "carbs": 0,
+    "fat": 0.114
+  },
+  {
+    "name": "Lamb, forequarter breast, separable lean, braised",
+    "portion": "1 gram",
+    "protein": 0.282,
+    "carbs": 0,
+    "fat": 0.175
+  },
+  {
+    "name": "Lamb, forequarter fore-shank, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.282,
+    "carbs": 0,
+    "fat": 0.199
+  },
+  {
+    "name": "Cheese, edam",
+    "portion": "1 gram",
+    "protein": 0.281,
+    "carbs": 0,
+    "fat": 0.269
+  },
+  {
+    "name": "Pork, midloin chops, lean & fat, grilled",
+    "portion": "1 gram",
+    "protein": 0.28,
+    "carbs": 0,
+    "fat": 0.105
+  },
+  {
+    "name": "Wheat germ",
+    "portion": "1 gram",
+    "protein": 0.279,
+    "carbs": 0.364,
+    "fat": 0.097
+  },
+  {
+    "name": "Lamb, hindquarter fillet, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.279,
+    "carbs": 0,
+    "fat": 0.05
+  },
+  {
+    "name": "Lamb, hindquarter fillet, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.279,
+    "carbs": 0,
+    "fat": 0.048
+  },
+  {
+    "name": "Lamb, hindquarter flap boneless, separable lean, simmered",
+    "portion": "1 gram",
+    "protein": 0.279,
+    "carbs": 0,
+    "fat": 0.136
+  },
+  {
+    "name": "Lamb, hindquarter knuckle, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.279,
+    "carbs": 0,
+    "fat": 0.181
+  },
+  {
+    "name": "Beef, forequarter scotch fillet, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.278,
+    "carbs": 0,
+    "fat": 0.18
+  },
+  {
+    "name": "Venison, Medallion, Silver Fern, cooked",
+    "portion": "1 gram",
+    "protein": 0.277,
+    "carbs": 0,
+    "fat": 0.018
+  },
+  {
+    "name": "Venison, Stir Fry, Silver Fern, cooked",
+    "portion": "1 gram",
+    "protein": 0.277,
+    "carbs": 0,
+    "fat": 0.012
+  },
+  {
+    "name": "Cheese, mozzarella",
+    "portion": "1 gram",
+    "protein": 0.276,
+    "carbs": 0.001,
+    "fat": 0.178
+  },
+  {
+    "name": "Beef, hindquarter thick flank, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.275,
+    "carbs": 0,
+    "fat": 0.076
+  },
+  {
+    "name": "Chicken, deli cooked, drumstick",
+    "portion": "1 gram",
+    "protein": 0.275,
+    "carbs": 0,
+    "fat": 0.069
+  },
+  {
+    "name": "Lamb, forequarter & hindquarter assorted cuts, separable lean, cooked",
+    "portion": "1 gram",
+    "protein": 0.274,
+    "carbs": 0,
+    "fat": 0.089
+  },
+  {
+    "name": "Lamb, hindquarter middle loin chop, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.274,
+    "carbs": 0,
+    "fat": 0.107
+  },
+  {
+    "name": "Ox, offal, kidney, simmered",
+    "portion": "1 gram",
+    "protein": 0.273,
+    "carbs": 0,
+    "fat": 0.053
+  },
+  {
+    "name": "Pork, forequarter shoulder roast, lean 74%, fat 20% & skin 6%, roasted",
+    "portion": "1 gram",
+    "protein": 0.273,
+    "carbs": 0,
+    "fat": 0.185
+  },
+  {
+    "name": "Rabbit, flesh, stewed",
+    "portion": "1 gram",
+    "protein": 0.273,
+    "carbs": 0,
+    "fat": 0.077
+  },
+  {
+    "name": "Beef, forequarter ribs prepared, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.272,
+    "carbs": 0,
+    "fat": 0.097
+  },
+  {
+    "name": "Lamb, forequarter round neck chops, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.269,
+    "carbs": 0,
+    "fat": 0.248
+  },
+  {
+    "name": "Tuna, canned in brine, plain, drained",
+    "portion": "1 gram",
+    "protein": 0.268,
+    "carbs": 0,
+    "fat": 0.01
+  },
+  {
+    "name": "Chicken, wing, flesh, grilled",
+    "portion": "1 gram",
+    "protein": 0.268,
+    "carbs": 0,
+    "fat": 0.088
+  },
+  {
+    "name": "Tuna, canned in spring water, plain, salt added, drained",
+    "portion": "1 gram",
+    "protein": 0.266,
+    "carbs": 0,
+    "fat": 0.01
+  },
+  {
+    "name": "Beef, hindquarter thick flank, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.266,
+    "carbs": 0,
+    "fat": 0.099
+  },
+  {
+    "name": "Venison, red deer, leg, flesh, roasted",
+    "portion": "1 gram",
+    "protein": 0.266,
+    "carbs": 0,
+    "fat": 0.056
+  },
+  {
+    "name": "Tuna, canned in assorted oils, plain, drained",
+    "portion": "1 gram",
+    "protein": 0.264,
+    "carbs": 0,
+    "fat": 0.076
+  },
+  {
+    "name": "Chicken, drumstick, flesh, grilled",
+    "portion": "1 gram",
+    "protein": 0.264,
+    "carbs": 0,
+    "fat": 0.068
+  },
+  {
+    "name": "Lamb, hindquarter leg chop, separable lean, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.263,
+    "carbs": 0,
+    "fat": 0.064
+  },
+  {
+    "name": "Lamb, offal, heart, simmered & drained",
+    "portion": "1 gram",
+    "protein": 0.263,
+    "carbs": 0,
+    "fat": 0.062
+  },
+  {
+    "name": "Kahawai, flesh, baked",
+    "portion": "1 gram",
+    "protein": 0.262,
+    "carbs": 0.004,
+    "fat": 0.027
+  },
+  {
+    "name": "Venison, Diced, Silver Fern, cooked",
+    "portion": "1 gram",
+    "protein": 0.259,
+    "carbs": 0,
+    "fat": 0.013
+  },
+  {
+    "name": "Lamb, offal, lambs fry, fried",
+    "portion": "1 gram",
+    "protein": 0.258,
+    "carbs": 0,
+    "fat": 0.066
+  },
+  {
+    "name": "Chicken, crumbed, breast, deep fried, Kentucky Fried Chicken",
+    "portion": "1 gram",
+    "protein": 0.256,
+    "carbs": 0.06,
+    "fat": 0.163
+  },
+  {
+    "name": "Lamb, hindquarter double loin, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.255,
+    "carbs": 0,
+    "fat": 0.067
+  },
+  {
+    "name": "Chicken, drumstick, lean & fat, roasted in oven bag",
+    "portion": "1 gram",
+    "protein": 0.254,
+    "carbs": 0,
+    "fat": 0.075
+  },
+  {
+    "name": "Kahawai, flesh, deep fried",
+    "portion": "1 gram",
+    "protein": 0.253,
+    "carbs": 0.003,
+    "fat": 0.093
+  },
+  {
+    "name": "Duck, composite cuts, separable lean, roasted",
+    "portion": "1 gram",
+    "protein": 0.253,
+    "carbs": 0,
+    "fat": 0.097
+  },
+  {
+    "name": "Lamb, hindquarter leg boned, separable lean, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.253,
+    "carbs": 0,
+    "fat": 0.064
+  },
+  {
+    "name": "Snapper, flesh, baked",
+    "portion": "1 gram",
+    "protein": 0.252,
+    "carbs": 0.004,
+    "fat": 0.034
+  },
+  {
+    "name": "Tarakihi, flesh, deep fried",
+    "portion": "1 gram",
+    "protein": 0.252,
+    "carbs": 0.002,
+    "fat": 0.041
+  },
+  {
+    "name": "Lamb, forequarter shoulder boneless rolled & netted, separable lean, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.251,
+    "carbs": 0,
+    "fat": 0.109
+  },
+  {
+    "name": "Lamb, forequarter shoulder square cut, separable lean, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.251,
+    "carbs": 0,
+    "fat": 0.101
+  },
+  {
+    "name": "Beef, forequarter ribs prepared, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.249,
+    "carbs": 0,
+    "fat": 0.156
+  },
+  {
+    "name": "Beef, hindquarter sirloin, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.249,
+    "carbs": 0,
+    "fat": 0.223
+  },
+  {
+    "name": "Baking cocoa, powder, Bournville, Cadbury",
+    "portion": "1 gram",
+    "protein": 0.247,
+    "carbs": 0.124,
+    "fat": 0.158
+  },
+  {
+    "name": "Lamb, forequarter shoulder chops, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.247,
+    "carbs": 0,
+    "fat": 0.285
+  },
+  {
+    "name": "Cheese, cheddar",
+    "portion": "1 gram",
+    "protein": 0.246,
+    "carbs": 0,
+    "fat": 0.356
+  },
+  {
+    "name": "Chicken, breast, lean & fat, roasted",
+    "portion": "1 gram",
+    "protein": 0.246,
+    "carbs": 0,
+    "fat": 0.07
+  },
+  {
+    "name": "Cheese, cheddar mild",
+    "portion": "1 gram",
+    "protein": 0.244,
+    "carbs": 0,
+    "fat": 0.371
+  },
+  {
+    "name": "Tarakihi, flesh, baked",
+    "portion": "1 gram",
+    "protein": 0.244,
+    "carbs": 0.003,
+    "fat": 0.013
+  },
+  {
+    "name": "Chicken, deli cooked, thigh",
+    "portion": "1 gram",
+    "protein": 0.244,
+    "carbs": 0,
+    "fat": 0.083
+  },
+  {
+    "name": "Lamb, forequarter rack fully frenched, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.244,
+    "carbs": 0,
+    "fat": 0.084
+  },
+  {
+    "name": "Lamb, forequarter rack partially frenched, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.244,
+    "carbs": 0,
+    "fat": 0.106
+  },
+  {
+    "name": "Beef, mince, premium, simmered",
+    "portion": "1 gram",
+    "protein": 0.242,
+    "carbs": 0,
+    "fat": 0.033
+  },
+  {
+    "name": "Chicken, leg, flesh, grilled",
+    "portion": "1 gram",
+    "protein": 0.242,
+    "carbs": 0,
+    "fat": 0.111
+  },
+  {
+    "name": "Flounder, flesh, baked",
+    "portion": "1 gram",
+    "protein": 0.241,
+    "carbs": 0.003,
+    "fat": 0.031
+  },
+  {
+    "name": "Snapper, flesh, deep fried",
+    "portion": "1 gram",
+    "protein": 0.241,
+    "carbs": 0.003,
+    "fat": 0.063
+  },
+  {
+    "name": "Chicken, composite cuts, flesh, cooked",
+    "portion": "1 gram",
+    "protein": 0.24,
+    "carbs": 0,
+    "fat": 0.083
+  },
+  {
+    "name": "Cheese, Colby",
+    "portion": "1 gram",
+    "protein": 0.239,
+    "carbs": 0,
+    "fat": 0.34
+  },
+  {
+    "name": "Beef, mince, lean, stewed",
+    "portion": "1 gram",
+    "protein": 0.239,
+    "carbs": 0,
+    "fat": 0.06
+  },
+  {
+    "name": "Pork, leg shank, lean & fat, roasted",
+    "portion": "1 gram",
+    "protein": 0.239,
+    "carbs": 0,
+    "fat": 0.183
+  },
+  {
+    "name": "Hoki, flesh, deep fried",
+    "portion": "1 gram",
+    "protein": 0.238,
+    "carbs": 0.002,
+    "fat": 0.084
+  },
+  {
+    "name": "Lamb, hindquarter leg chop, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.238,
+    "carbs": 0,
+    "fat": 0.142
+  },
+  {
+    "name": "Lamb, hindquarter rump, separable lean, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.237,
+    "carbs": 0,
+    "fat": 0.053
+  },
+  {
+    "name": "Pork, leg steak, separable lean, grilled",
+    "portion": "1 gram",
+    "protein": 0.235,
+    "carbs": 0,
+    "fat": 0.029
+  },
+  {
+    "name": "Flour, pea, yellow, dry",
+    "portion": "1 gram",
+    "protein": 0.234,
+    "carbs": 0.403,
+    "fat": 0.027
+  },
+  {
+    "name": "Lamb, forequarter rack fully frenched, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.233,
+    "carbs": 0,
+    "fat": 0.12
+  },
+  {
+    "name": "Lamb, hindquarter leg boned, separable lean & fat, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.233,
+    "carbs": 0,
+    "fat": 0.132
+  },
+  {
+    "name": "Ox, offal, liver, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.233,
+    "carbs": 0,
+    "fat": 0.047
+  },
+  {
+    "name": "Tempeh, fried in sunflower oil",
+    "portion": "1 gram",
+    "protein": 0.232,
+    "carbs": 0.122,
+    "fat": 0.338
+  },
+  {
+    "name": "Salmon, pink or red, flesh, canned in spring water, drained",
+    "portion": "1 gram",
+    "protein": 0.231,
+    "carbs": 0,
+    "fat": 0.06
+  },
+  {
+    "name": "Beef, canned, Lite Corned Beef, Salisbury",
+    "portion": "1 gram",
+    "protein": 0.23,
+    "carbs": 0,
+    "fat": 0.135
+  },
+  {
+    "name": "Pork, leg steak, lean & fat, grilled",
+    "portion": "1 gram",
+    "protein": 0.23,
+    "carbs": 0,
+    "fat": 0.055
+  },
+  {
+    "name": "Chicken, thigh, flesh, roasted",
+    "portion": "1 gram",
+    "protein": 0.229,
+    "carbs": 0,
+    "fat": 0.101
+  },
+  {
+    "name": "Cheese, camembert",
+    "portion": "1 gram",
+    "protein": 0.226,
+    "carbs": 0.001,
+    "fat": 0.217
+  },
+  {
+    "name": "Orange roughy, flesh, deep fried",
+    "portion": "1 gram",
+    "protein": 0.226,
+    "carbs": 0.003,
+    "fat": 0.11
+  },
+  {
+    "name": "Chicken, breast, lean, fat & skin, roasted in oven bag",
+    "portion": "1 gram",
+    "protein": 0.226,
+    "carbs": 0,
+    "fat": 0.126
+  },
+  {
+    "name": "Lamb, mince, standard, stewed",
+    "portion": "1 gram",
+    "protein": 0.226,
+    "carbs": 0,
+    "fat": 0.113
+  },
+  {
+    "name": "Coffee, instant, decaffeinated, dry powder",
+    "portion": "1 gram",
+    "protein": 0.225,
+    "carbs": 0.004,
+    "fat": 0.01
+  },
+  {
+    "name": "Coffee, instant, dry powder",
+    "portion": "1 gram",
+    "protein": 0.225,
+    "carbs": 0.004,
+    "fat": 0.009
+  },
+  {
+    "name": "Cheese, processed, sliced, reduced fat",
+    "portion": "1 gram",
+    "protein": 0.225,
+    "carbs": 0.04,
+    "fat": 0.114
+  },
+  {
+    "name": "Beef, canned, Corned Beef, Salisbury",
+    "portion": "1 gram",
+    "protein": 0.225,
+    "carbs": 0,
+    "fat": 0.126
+  },
+  {
+    "name": "Lamb, forequarter & hindquarter assorted cuts, separable lean & fat, cooked",
+    "portion": "1 gram",
+    "protein": 0.225,
+    "carbs": 0,
+    "fat": 0.224
+  },
+  {
+    "name": "Nutri-Grain, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.224,
+    "carbs": 0.678,
+    "fat": 0.027
+  },
+  {
+    "name": "Chicken, crumbed, drumstick, fried, Kentucky Fried Chicken",
+    "portion": "1 gram",
+    "protein": 0.223,
+    "carbs": 0.083,
+    "fat": 0.137
+  },
+  {
+    "name": "Snapper, flesh, microwaved",
+    "portion": "1 gram",
+    "protein": 0.222,
+    "carbs": 0.004,
+    "fat": 0.039
+  },
+  {
+    "name": "Hoki, flesh, baked",
+    "portion": "1 gram",
+    "protein": 0.22,
+    "carbs": 0.003,
+    "fat": 0.013
+  },
+  {
+    "name": "Salmon, king, fillet, flesh, cold or hot smoked, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.219,
+    "carbs": 0,
+    "fat": 0.184
+  },
+  {
+    "name": "Flour, almond, white, dry",
+    "portion": "1 gram",
+    "protein": 0.217,
+    "carbs": 0.041,
+    "fat": 0.556
+  },
+  {
+    "name": "Cheese, blue vein",
+    "portion": "1 gram",
+    "protein": 0.217,
+    "carbs": 0,
+    "fat": 0.299
+  },
+  {
+    "name": "Hoki, fillet, frozen, flesh, pan-fried with oil, no salt added",
+    "portion": "1 gram",
+    "protein": 0.217,
+    "carbs": 0,
+    "fat": 0.055
+  },
+  {
+    "name": "Mackerel, canned in oil, drained",
+    "portion": "1 gram",
+    "protein": 0.217,
+    "carbs": 0,
+    "fat": 0.122
+  },
+  {
+    "name": "Flour, chickpea or channa (besan), yellow",
+    "portion": "1 gram",
+    "protein": 0.214,
+    "carbs": 0.459,
+    "fat": 0.063
+  },
+  {
+    "name": "Sardines, canned in oil, drained",
+    "portion": "1 gram",
+    "protein": 0.213,
+    "carbs": 0,
+    "fat": 0.135
+  },
+  {
+    "name": "Cheese, processed",
+    "portion": "1 gram",
+    "protein": 0.212,
+    "carbs": 0.006,
+    "fat": 0.282
+  },
+  {
+    "name": "Lamb, forequarter rack partially frenched, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.211,
+    "carbs": 0,
+    "fat": 0.214
+  },
+  {
+    "name": "Venison, mince, Silver Fern, raw",
+    "portion": "1 gram",
+    "protein": 0.21,
+    "carbs": 0,
+    "fat": 0.029
+  },
+  {
+    "name": "Chicken, crumbed, wing, deep fried, Kentucky Fried Chicken",
+    "portion": "1 gram",
+    "protein": 0.209,
+    "carbs": 0.069,
+    "fat": 0.284
+  },
+  {
+    "name": "Salmon, king, fillet, skin & bones removed, fresh, baked without fat, no salt added, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.207,
+    "carbs": 0,
+    "fat": 0.242
+  },
+  {
+    "name": "Tuna, in brine, plain, canned, undrained",
+    "portion": "1 gram",
+    "protein": 0.207,
+    "carbs": 0,
+    "fat": 0.007
+  },
+  {
+    "name": "Chicken, wing, lean 63%, separable fat 2% & skin 35%, roasted in oven bag",
+    "portion": "1 gram",
+    "protein": 0.206,
+    "carbs": 0,
+    "fat": 0.202
+  },
+  {
+    "name": "Lamb, forequarter shoulder boneless rolled & netted, separable lean & fat, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.206,
+    "carbs": 0,
+    "fat": 0.249
+  },
+  {
+    "name": "Orange roughy, flesh, baked",
+    "portion": "1 gram",
+    "protein": 0.205,
+    "carbs": 0.003,
+    "fat": 0.102
+  },
+  {
+    "name": "Sardines, canned in water, drained",
+    "portion": "1 gram",
+    "protein": 0.205,
+    "carbs": 0,
+    "fat": 0.082
+  },
+  {
+    "name": "Tuna, canned in spring water, plain, salt added, undrained",
+    "portion": "1 gram",
+    "protein": 0.201,
+    "carbs": 0,
+    "fat": 0.007
+  },
+  {
+    "name": "Cheese, haloumi, from cows' milk",
+    "portion": "1 gram",
+    "protein": 0.2,
+    "carbs": 0.015,
+    "fat": 0.265
+  },
+  {
+    "name": "Salmon, king, fillet, skin & bones removed, fresh, pan-fried with oil, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.2,
+    "carbs": 0,
+    "fat": 0.258
+  },
+  {
+    "name": "Turkey, lean & fat, raw",
+    "portion": "1 gram",
+    "protein": 0.2,
+    "carbs": 0,
+    "fat": 0.047
+  },
+  {
+    "name": "Tuna, canned in assorted oil, plain, undrained",
+    "portion": "1 gram",
+    "protein": 0.199,
+    "carbs": 0,
+    "fat": 0.213
+  },
+  {
+    "name": "Chicken, thigh, lean 72%, separable fat 9% & skin 19%, roasted in oven bag",
+    "portion": "1 gram",
+    "protein": 0.198,
+    "carbs": 0,
+    "fat": 0.198
+  },
+  {
+    "name": "Lamb, offal, kidney, fried",
+    "portion": "1 gram",
+    "protein": 0.198,
+    "carbs": 0,
+    "fat": 0.036
+  },
+  {
+    "name": "Beef mince, prime, 5-10% fat, raw",
+    "portion": "1 gram",
+    "protein": 0.194,
+    "carbs": 0,
+    "fat": 0.116
+  },
+  {
+    "name": "Cheese, feta, from cows' milk, reduced fat",
+    "portion": "1 gram",
+    "protein": 0.193,
+    "carbs": 0.013,
+    "fat": 0.024
+  },
+  {
+    "name": "Salmon, king, fillet, skin & bones removed, fresh, steamed, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.193,
+    "carbs": 0,
+    "fat": 0.259
+  },
+  {
+    "name": "Beef mince, standard, 10-20% fat, raw",
+    "portion": "1 gram",
+    "protein": 0.193,
+    "carbs": 0,
+    "fat": 0.168
+  },
+  {
+    "name": "Lamb, hindquarter rump, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.193,
+    "carbs": 0,
+    "fat": 0.212
+  },
+  {
+    "name": "Lamb, hindquarter double loin, separable lean & fat, fast-roasted",
+    "portion": "1 gram",
+    "protein": 0.191,
+    "carbs": 0,
+    "fat": 0.277
+  },
+  {
+    "name": "Lamb, forequarter shoulder square cut, separable lean & fat, slow-roasted",
+    "portion": "1 gram",
+    "protein": 0.189,
+    "carbs": 0,
+    "fat": 0.297
+  },
+  {
+    "name": "Lamb, hindquarter flap boneless, separable lean & fat, simmered",
+    "portion": "1 gram",
+    "protein": 0.189,
+    "carbs": 0,
+    "fat": 0.368
+  },
+  {
+    "name": "Lamb, hindquarter middle loin chop, separable lean & fat, fast-fried",
+    "portion": "1 gram",
+    "protein": 0.188,
+    "carbs": 0,
+    "fat": 0.345
+  },
+  {
+    "name": "Chicken, crumbed, thigh, fried, Kentucky Fried Chicken",
+    "portion": "1 gram",
+    "protein": 0.186,
+    "carbs": 0.059,
+    "fat": 0.278
+  },
+  {
+    "name": "Tempeh",
+    "portion": "1 gram",
+    "protein": 0.185,
+    "carbs": 0.078,
+    "fat": 0.108
+  },
+  {
+    "name": "Special K, Original, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.184,
+    "carbs": 0.643,
+    "fat": 0.02
+  },
+  {
+    "name": "Salmon, king, fillet, skin & bones removed, fresh, raw, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.182,
+    "carbs": 0,
+    "fat": 0.212
+  },
+  {
+    "name": "Special K, Forest Berries, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.181,
+    "carbs": 0.702,
+    "fat": 0.009
+  },
+  {
+    "name": "Chicken, deli cooked, skin",
+    "portion": "1 gram",
+    "protein": 0.181,
+    "carbs": 0,
+    "fat": 0.316
+  },
+  {
+    "name": "Sardines, canned in oil, undrained",
+    "portion": "1 gram",
+    "protein": 0.18,
+    "carbs": 0,
+    "fat": 0.224
+  },
+  {
+    "name": "Chicken, nugget, deep fried, McDonald's",
+    "portion": "1 gram",
+    "protein": 0.176,
+    "carbs": 0.135,
+    "fat": 0.182
+  },
+  {
+    "name": "Burger, Quarter Pounder with cheese, McDonald's",
+    "portion": "1 gram",
+    "protein": 0.175,
+    "carbs": 0.168,
+    "fat": 0.148
+  },
+  {
+    "name": "Cheese, feta, from cows' milk, traditional",
+    "portion": "1 gram",
+    "protein": 0.169,
+    "carbs": 0.011,
+    "fat": 0.234
+  },
+  {
+    "name": "Egg, chicken, yolk, raw",
+    "portion": "1 gram",
+    "protein": 0.169,
+    "carbs": 0.002,
+    "fat": 0.303
+  },
+  {
+    "name": "Eel, smoked",
+    "portion": "1 gram",
+    "protein": 0.168,
+    "carbs": 0,
+    "fat": 0.111
+  },
+  {
+    "name": "Chicken, composite cuts, lean, fat & skin, raw, Size 10",
+    "portion": "1 gram",
+    "protein": 0.168,
+    "carbs": 0,
+    "fat": 0.153
+  },
+  {
+    "name": "Pork, ham, separable lean 92% & fat 8%, cooked",
+    "portion": "1 gram",
+    "protein": 0.168,
+    "carbs": 0,
+    "fat": 0.087
+  },
+  {
+    "name": "Energy food drink, dry powder, Chocolatte Frothy Classic & Extreme Choc, Jarrah",
+    "portion": "1 gram",
+    "protein": 0.166,
+    "carbs": 0.425,
+    "fat": 0.093
+  },
+  {
+    "name": "Flour, coconut",
+    "portion": "1 gram",
+    "protein": 0.166,
+    "carbs": 0.195,
+    "fat": 0.14
+  },
+  {
+    "name": "Mackerel, canned in oil, undrained",
+    "portion": "1 gram",
+    "protein": 0.165,
+    "carbs": 0,
+    "fat": 0.095
+  },
+  {
+    "name": "Sardines, canned in tomato sauce, undrained",
+    "portion": "1 gram",
+    "protein": 0.163,
+    "carbs": 0.022,
+    "fat": 0.074
+  },
+  {
+    "name": "Tongue, beef & sheep, canned",
+    "portion": "1 gram",
+    "protein": 0.16,
+    "carbs": 0,
+    "fat": 0.165
+  },
+  {
+    "name": "Basa, fillet, frozen, flesh, pan-fried with oil, no salt added",
+    "portion": "1 gram",
+    "protein": 0.157,
+    "carbs": 0,
+    "fat": 0.022
+  },
+  {
+    "name": "Tuna, canned in oil, assorted flavours, undrained",
+    "portion": "1 gram",
+    "protein": 0.154,
+    "carbs": 0.023,
+    "fat": 0.07
+  },
+  {
+    "name": "Fish, battered, deep fried, Independent Shops",
+    "portion": "1 gram",
+    "protein": 0.152,
+    "carbs": 0.146,
+    "fat": 0.203
+  },
+  {
+    "name": "Burger, cheeseburger, McDonald's",
+    "portion": "1 gram",
+    "protein": 0.151,
+    "carbs": 0.251,
+    "fat": 0.107
+  },
+  {
+    "name": "Wheat bran",
+    "portion": "1 gram",
+    "protein": 0.15,
+    "carbs": 0.233,
+    "fat": 0.067
+  },
+  {
+    "name": "Egg, chicken, white & yolk, fried in butter",
+    "portion": "1 gram",
+    "protein": 0.15,
+    "carbs": 0,
+    "fat": 0.168
+  },
+  {
+    "name": "Mackerel, canned in tomato sauce, undrained",
+    "portion": "1 gram",
+    "protein": 0.15,
+    "carbs": 0.026,
+    "fat": 0.108
+  },
+  {
+    "name": "Egg, chicken, white & yolk, fried in vegetable oil",
+    "portion": "1 gram",
+    "protein": 0.147,
+    "carbs": 0.006,
+    "fat": 0.183
+  },
+  {
+    "name": "Oat bran",
+    "portion": "1 gram",
+    "protein": 0.146,
+    "carbs": 0.549,
+    "fat": 0.051
+  },
+  {
+    "name": "Cheese, feta, from goats' milk",
+    "portion": "1 gram",
+    "protein": 0.146,
+    "carbs": 0.009,
+    "fat": 0.201
+  },
+  {
+    "name": "Salmon, assorted flavours, canned, undrained",
+    "portion": "1 gram",
+    "protein": 0.146,
+    "carbs": 0.01,
+    "fat": 0.092
+  },
+  {
+    "name": "Beef, corned silverside, raw",
+    "portion": "1 gram",
+    "protein": 0.145,
+    "carbs": 0,
+    "fat": 0.057
+  },
+  {
+    "name": "Coffee mix, instant, dry powder, Cafe Menu Cappuccino, Nescafe",
+    "portion": "1 gram",
+    "protein": 0.143,
+    "carbs": 0.35,
+    "fat": 0.23
+  },
+  {
+    "name": "Oats, Traditional Wholegrain Oats, Harraways",
+    "portion": "1 gram",
+    "protein": 0.143,
+    "carbs": 0.589,
+    "fat": 0.07
+  },
+  {
+    "name": "Oatmeal, dry",
+    "portion": "1 gram",
+    "protein": 0.141,
+    "carbs": 0.662,
+    "fat": 0.047
+  },
+  {
+    "name": "Lamb, offal, brain, raw, simmered, drained & fried",
+    "portion": "1 gram",
+    "protein": 0.14,
+    "carbs": 0,
+    "fat": 0.109
+  },
+  {
+    "name": "Cheese, cottage",
+    "portion": "1 gram",
+    "protein": 0.137,
+    "carbs": 0.02,
+    "fat": 0.035
+  },
+  {
+    "name": "All Bran Original, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.136,
+    "carbs": 0.623,
+    "fat": 0.033
+  },
+  {
+    "name": "Burger, cheeseburger",
+    "portion": "1 gram",
+    "protein": 0.136,
+    "carbs": 0.214,
+    "fat": 0.133
+  },
+  {
+    "name": "Curry, beef korma, Indian, takeaway",
+    "portion": "1 gram",
+    "protein": 0.136,
+    "carbs": 0.051,
+    "fat": 0.169
+  },
+  {
+    "name": "Curry, rogan josh, Indian, takeaway",
+    "portion": "1 gram",
+    "protein": 0.136,
+    "carbs": 0.037,
+    "fat": 0.105
+  },
+  {
+    "name": "Bread, Soy & Linseed, Vogel's & Burgen",
+    "portion": "1 gram",
+    "protein": 0.133,
+    "carbs": 0.304,
+    "fat": 0.071
+  },
+  {
+    "name": "Burger, hamburger, McDonald's",
+    "portion": "1 gram",
+    "protein": 0.133,
+    "carbs": 0.273,
+    "fat": 0.099
+  },
+  {
+    "name": "Curry, beef madras, Indian, takeaway",
+    "portion": "1 gram",
+    "protein": 0.133,
+    "carbs": 0.045,
+    "fat": 0.155
+  },
+  {
+    "name": "Pizza, meat, thick crust",
+    "portion": "1 gram",
+    "protein": 0.132,
+    "carbs": 0.333,
+    "fat": 0.066
+  },
+  {
+    "name": "Couscous, white wheat, dry",
+    "portion": "1 gram",
+    "protein": 0.131,
+    "carbs": 0.673,
+    "fat": 0.019
+  },
+  {
+    "name": "Egg, chicken, white & yolk, milk added, scrambled",
+    "portion": "1 gram",
+    "protein": 0.131,
+    "carbs": 0,
+    "fat": 0.142
+  },
+  {
+    "name": "Egg, chicken, white & yolk, raw",
+    "portion": "1 gram",
+    "protein": 0.131,
+    "carbs": 0.007,
+    "fat": 0.081
+  },
+  {
+    "name": "Burger, Big Mac, McDonald's",
+    "portion": "1 gram",
+    "protein": 0.131,
+    "carbs": 0.192,
+    "fat": 0.156
+  },
+  {
+    "name": "Pizza, frozen, meat lovers, premium, baked",
+    "portion": "1 gram",
+    "protein": 0.131,
+    "carbs": 0.222,
+    "fat": 0.083
+  },
+  {
+    "name": "Fish, cake, deep fried in peanut oil",
+    "portion": "1 gram",
+    "protein": 0.13,
+    "carbs": 0.141,
+    "fat": 0.144
+  },
+  {
+    "name": "Weet-Bix Oat Bran, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.128,
+    "carbs": 0.726,
+    "fat": 0.025
+  },
+  {
+    "name": "Oats, wholegrain, raw, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.128,
+    "carbs": 0.561,
+    "fat": 0.067
+  },
+  {
+    "name": "Egg, chicken, white & yolk, poached",
+    "portion": "1 gram",
+    "protein": 0.128,
+    "carbs": 0.006,
+    "fat": 0.096
+  },
+  {
+    "name": "Pizza, supreme, thin crust, Pizza Hut",
+    "portion": "1 gram",
+    "protein": 0.128,
+    "carbs": 0.229,
+    "fat": 0.088
+  },
+  {
+    "name": "Lamb, forequarter breast, separable lean & fat, braised",
+    "portion": "1 gram",
+    "protein": 0.127,
+    "carbs": 0,
+    "fat": 0.535
+  },
+  {
+    "name": "Pizza, barbeque chicken, thick crust",
+    "portion": "1 gram",
+    "protein": 0.126,
+    "carbs": 0.335,
+    "fat": 0.063
+  },
+  {
+    "name": "Cracker, mixed grain, Cruskits, Light, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.125,
+    "carbs": 0.652,
+    "fat": 0.025
+  },
+  {
+    "name": "Weet-Bix, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.125,
+    "carbs": 0.584,
+    "fat": 0.023
+  },
+  {
+    "name": "Oats, toasted, Rolled Oats, Harraways",
+    "portion": "1 gram",
+    "protein": 0.125,
+    "carbs": 0.616,
+    "fat": 0.075
+  },
+  {
+    "name": "Egg foo young with chicken, omelette, Chinese, takeaway",
+    "portion": "1 gram",
+    "protein": 0.125,
+    "carbs": 0.015,
+    "fat": 0.143
+  },
+  {
+    "name": "Beef, offal, sweetbreads, simmered",
+    "portion": "1 gram",
+    "protein": 0.125,
+    "carbs": 0,
+    "fat": 0.298
+  },
+  {
+    "name": "San Bran, Sanitarium",
+    "portion": "1 gram",
+    "protein": 0.124,
+    "carbs": 0.414,
+    "fat": 0.014
+  },
+  {
+    "name": "Savoury, bacon & egg, baked",
+    "portion": "1 gram",
+    "protein": 0.123,
+    "carbs": 0.179,
+    "fat": 0.183
+  },
+  {
+    "name": "Tuna, canned in water, assorted flavours, undrained",
+    "portion": "1 gram",
+    "protein": 0.123,
+    "carbs": 0.047,
+    "fat": 0.011
+  },
+  {
+    "name": "Bread, 9 Grain & Seed Toast, Tip Top, fortified",
+    "portion": "1 gram",
+    "protein": 0.122,
+    "carbs": 0.35,
+    "fat": 0.04
+  },
+  {
+    "name": "Oats, rolled, raw, New Zealand",
+    "portion": "1 gram",
+    "protein": 0.122,
+    "carbs": 0.567,
+    "fat": 0.072
+  },
+  {
+    "name": "Egg, chicken, white & yolk, boiled",
+    "portion": "1 gram",
+    "protein": 0.122,
+    "carbs": 0.006,
+    "fat": 0.095
+  },
+  {
+    "name": "Flour, wheat, wholemeal",
+    "portion": "1 gram",
+    "protein": 0.121,
+    "carbs": 0.608,
+    "fat": 0.017
+  },
+  {
+    "name": "Pizza, frozen, Hawaiian & House special, premium, baked",
+    "portion": "1 gram",
+    "protein": 0.121,
+    "carbs": 0.246,
+    "fat": 0.065
+  },
+  {
+    "name": "Weeties, Sanitarium",
+    "portion": "1 gram",
+    "protein": 0.119,
+    "carbs": 0.615,
+    "fat": 0.021
+  },
+  {
+    "name": "Burger, Filet-o-Fish, McDonald's",
+    "portion": "1 gram",
+    "protein": 0.119,
+    "carbs": 0.247,
+    "fat": 0.155
+  },
+  {
+    "name": "Saveloy, battered, fried, Independent Shops",
+    "portion": "1 gram",
+    "protein": 0.119,
+    "carbs": 0.184,
+    "fat": 0.208
+  },
+  {
+    "name": "Milo powder, fortified vitamins B2, B3, B6, B12, C & D, Ca, Fe and P",
+    "portion": "1 gram",
+    "protein": 0.118,
+    "carbs": 0.748,
+    "fat": 0.092
+  },
+  {
+    "name": "Bread, Station Seed & Grain, MacKenzie",
+    "portion": "1 gram",
+    "protein": 0.117,
+    "carbs": 0.31,
+    "fat": 0.048
+  },
+  {
+    "name": "Cracker, mixed grain, Litebread, Original Crisp bread, Huntley & Palmers",
+    "portion": "1 gram",
+    "protein": 0.117,
+    "carbs": 0.663,
+    "fat": 0.03
+  },
+  {
+    "name": "Cracker, wheat, Cream Crackers, Reduced Fat, Huntley & Palmers",
+    "portion": "1 gram",
+    "protein": 0.117,
+    "carbs": 0.662,
+    "fat": 0.042
+  },
+  {
+    "name": "Curry, butter chicken, Indian, takeaway",
+    "portion": "1 gram",
+    "protein": 0.117,
+    "carbs": 0.051,
+    "fat": 0.12
+  },
+  {
+    "name": "Cracker, wheat, cheese flavoured",
+    "portion": "1 gram",
+    "protein": 0.116,
+    "carbs": 0.58,
+    "fat": 0.224
+  },
+  {
+    "name": "Puffed Wheat, Sanitarium",
+    "portion": "1 gram",
+    "protein": 0.116,
+    "carbs": 0.779,
+    "fat": 0.014
+  },
+  {
+    "name": "Fish, cake, baked",
+    "portion": "1 gram",
+    "protein": 0.116,
+    "carbs": 0.192,
+    "fat": 0.128
+  },
+  {
+    "name": "Fish, fillet, crumbed, frozen, fried",
+    "portion": "1 gram",
+    "protein": 0.115,
+    "carbs": 0.122,
+    "fat": 0.123
+  },
+  {
+    "name": "Bread, Swiss Bake Grains Plus, Molenberg, Quality Bakers",
+    "portion": "1 gram",
+    "protein": 0.114,
+    "carbs": 0.352,
+    "fat": 0.032
+  },
+  {
+    "name": "Bread, Salba Traditional European Rye, Yarrows",
+    "portion": "1 gram",
+    "protein": 0.113,
+    "carbs": 0.32,
+    "fat": 0.04
+  },
+  {
+    "name": "Cracker, rye, Crispbread, Ryvita",
+    "portion": "1 gram",
+    "protein": 0.113,
+    "carbs": 0.674,
+    "fat": 0.016
+  },
+  {
+    "name": "Egg, chicken, white, raw",
+    "portion": "1 gram",
+    "protein": 0.113,
+    "carbs": 0.004,
+    "fat": 0.002
+  },
+  {
+    "name": "Pizza, Hawaiian, thick crust",
+    "portion": "1 gram",
+    "protein": 0.111,
+    "carbs": 0.337,
+    "fat": 0.055
+  },
+  {
+    "name": "Beef salad, Thai, takeaway",
+    "portion": "1 gram",
+    "protein": 0.11,
+    "carbs": 0.071,
+    "fat": 0.025
+  },
+  {
+    "name": "Fish, fillet, crumbed, frozen, baked",
+    "portion": "1 gram",
+    "protein": 0.11,
+    "carbs": 0.117,
+    "fat": 0.12
+  },
+  {
+    "name": "Cheese, cottage, light, 1% fat",
+    "portion": "1 gram",
+    "protein": 0.109,
+    "carbs": 0.024,
+    "fat": 0.006
+  },
+  {
+    "name": "Cracker, wheat, Salada, Light, Original, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.108,
+    "carbs": 0.663,
+    "fat": 0.027
+  },
+  {
+    "name": "Scone, white, with cheese",
+    "portion": "1 gram",
+    "protein": 0.108,
+    "carbs": 0.346,
+    "fat": 0.114
+  },
+  {
+    "name": "Bread, Salba Traditional Wholegrain, Yarrows",
+    "portion": "1 gram",
+    "protein": 0.107,
+    "carbs": 0.323,
+    "fat": 0.032
+  },
+  {
+    "name": "Burger, hamburger",
+    "portion": "1 gram",
+    "protein": 0.107,
+    "carbs": 0.224,
+    "fat": 0.102
+  },
+  {
+    "name": "Curry, chicken masala, Indian, takeaway",
+    "portion": "1 gram",
+    "protein": 0.106,
+    "carbs": 0.057,
+    "fat": 0.094
+  },
+  {
+    "name": "Bread, wheatmeal, sliced, prepacked",
+    "portion": "1 gram",
+    "protein": 0.105,
+    "carbs": 0.366,
+    "fat": 0.029
+  },
+  {
+    "name": "Cheese, cream, reduced fat 16%, Country Goodness",
+    "portion": "1 gram",
+    "protein": 0.105,
+    "carbs": 0.157,
+    "fat": 0.167
+  },
+  {
+    "name": "Bread, pita, white",
+    "portion": "1 gram",
+    "protein": 0.104,
+    "carbs": 0.492,
+    "fat": 0.009
+  },
+  {
+    "name": "Croissant, plain",
+    "portion": "1 gram",
+    "protein": 0.104,
+    "carbs": 0.386,
+    "fat": 0.225
+  },
+  {
+    "name": "Bread, French, stick or loaf, plain, as purchased",
+    "portion": "1 gram",
+    "protein": 0.103,
+    "carbs": 0.494,
+    "fat": 0.021
+  },
+  {
+    "name": "Topper, lasagne, baked",
+    "portion": "1 gram",
+    "protein": 0.103,
+    "carbs": 0.202,
+    "fat": 0.114
+  },
+  {
+    "name": "Cheese, ricotta, from cows' milk",
+    "portion": "1 gram",
+    "protein": 0.103,
+    "carbs": 0.033,
+    "fat": 0.128
+  },
+  {
+    "name": "Bread roll or bun, wholemeal, fortified",
+    "portion": "1 gram",
+    "protein": 0.102,
+    "carbs": 0.376,
+    "fat": 0.026
+  },
+  {
+    "name": "Pie, savoury, egg & bacon, individual size, ready to eat",
+    "portion": "1 gram",
+    "protein": 0.102,
+    "carbs": 0.19,
+    "fat": 0.154
+  },
+  {
+    "name": "Bread, wholemeal, pita",
+    "portion": "1 gram",
+    "protein": 0.101,
+    "carbs": 0.419,
+    "fat": 0.022
+  },
+  {
+    "name": "Pizza, frozen, Hawaiian & Combination, individual size, baked",
+    "portion": "1 gram",
+    "protein": 0.101,
+    "carbs": 0.301,
+    "fat": 0.089
+  },
+  {
+    "name": "Bread, Nature's Grain, River Mill, fortified",
+    "portion": "1 gram",
+    "protein": 0.1,
+    "carbs": 0.415,
+    "fat": 0.02
+  },
+  {
+    "name": "Cracker, wheat, Water Cracker, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.1,
+    "carbs": 0.737,
+    "fat": 0.072
+  },
+  {
+    "name": "Milk, condensed, sweetened, skim",
+    "portion": "1 gram",
+    "protein": 0.1,
+    "carbs": 0.572,
+    "fat": 0.002
+  },
+  {
+    "name": "Bread, mixed grain, light, sliced, prepacked",
+    "portion": "1 gram",
+    "protein": 0.099,
+    "carbs": 0.407,
+    "fat": 0.028
+  },
+  {
+    "name": "Noodle, chow mein style, fried, as purchased",
+    "portion": "1 gram",
+    "protein": 0.099,
+    "carbs": 0.604,
+    "fat": 0.142
+  },
+  {
+    "name": "Sausage roll, with cheese, baked",
+    "portion": "1 gram",
+    "protein": 0.099,
+    "carbs": 0.247,
+    "fat": 0.185
+  },
+  {
+    "name": "Bagels, white, plain, toasted",
+    "portion": "1 gram",
+    "protein": 0.097,
+    "carbs": 0.497,
+    "fat": 0.018
+  },
+  {
+    "name": "Bread, mixed grain, Ancient Grains, Vogel's",
+    "portion": "1 gram",
+    "protein": 0.097,
+    "carbs": 0.329,
+    "fat": 0.04
+  },
+  {
+    "name": "Cracker, wheat, sesame",
+    "portion": "1 gram",
+    "protein": 0.097,
+    "carbs": 0.546,
+    "fat": 0.226
+  },
+  {
+    "name": "Bread, Tuscan Mixed Grain, Freya's",
+    "portion": "1 gram",
+    "protein": 0.096,
+    "carbs": 0.391,
+    "fat": 0.027
+  },
+  {
+    "name": "English muffin, bread-like, assorted flavours, toasted",
+    "portion": "1 gram",
+    "protein": 0.096,
+    "carbs": 0.406,
+    "fat": 0.006
+  },
+  {
+    "name": "Cheese spread, light, Philadelphia",
+    "portion": "1 gram",
+    "protein": 0.096,
+    "carbs": 0,
+    "fat": 0.125
+  },
+  {
+    "name": "Fish, fingers, deep fried in peanut oil",
+    "portion": "1 gram",
+    "protein": 0.096,
+    "carbs": 0.231,
+    "fat": 0.154
+  },
+  {
+    "name": "Pork, sweet & sour, Chinese, takeaway",
+    "portion": "1 gram",
+    "protein": 0.096,
+    "carbs": 0.206,
+    "fat": 0.155
+  },
+  {
+    "name": "Yoghurt, Greek style, low fat, Cyclops",
+    "portion": "1 gram",
+    "protein": 0.095,
+    "carbs": 0.03,
+    "fat": 0.045
+  },
+  {
+    "name": "Chow mein, beef, lean & fat, stir fried",
+    "portion": "1 gram",
+    "protein": 0.095,
+    "carbs": 0.044,
+    "fat": 0.094
+  },
+  {
+    "name": "Bread roll or bun, white, fortified",
+    "portion": "1 gram",
+    "protein": 0.094,
+    "carbs": 0.453,
+    "fat": 0.021
+  },
+  {
+    "name": "Bread, Mixed Grain & Toasted Sesame Toast, Vogel's",
+    "portion": "1 gram",
+    "protein": 0.094,
+    "carbs": 0.301,
+    "fat": 0.057
+  },
+  {
+    "name": "Bread, plain, Panini, prepacked",
+    "portion": "1 gram",
+    "protein": 0.094,
+    "carbs": 0.468,
+    "fat": 0.084
+  },
+  {
+    "name": "Bread, mixed grain, heavy, sliced, prepacked",
+    "portion": "1 gram",
+    "protein": 0.093,
+    "carbs": 0.426,
+    "fat": 0.023
+  },
+  {
+    "name": "Sultana Bran, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.092,
+    "carbs": 0.639,
+    "fat": 0.016
+  },
+  {
+    "name": "Milk, condensed, sweetened, whole",
+    "portion": "1 gram",
+    "protein": 0.092,
+    "carbs": 0.547,
+    "fat": 0.082
+  },
+  {
+    "name": "Bread, white, sliced, prepacked",
+    "portion": "1 gram",
+    "protein": 0.091,
+    "carbs": 0.431,
+    "fat": 0.024
+  },
+  {
+    "name": "Flour, wheat, white",
+    "portion": "1 gram",
+    "protein": 0.091,
+    "carbs": 0.724,
+    "fat": 0.012
+  },
+  {
+    "name": "Fish, fingers, baked",
+    "portion": "1 gram",
+    "protein": 0.09,
+    "carbs": 0.203,
+    "fat": 0.103
+  },
+  {
+    "name": "Pasta, fresh, ravioli, beef & pork, cooked",
+    "portion": "1 gram",
+    "protein": 0.089,
+    "carbs": 0.24,
+    "fat": 0.031
+  },
+  {
+    "name": "Fried rice, combination, Chinese, takeaway",
+    "portion": "1 gram",
+    "protein": 0.089,
+    "carbs": 0.148,
+    "fat": 0.05
+  },
+  {
+    "name": "Fruitful Breakfast, Hubbards",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.597,
+    "fat": 0.12
+  },
+  {
+    "name": "Simply Toasted Muesli Apricot, Hubbards",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.584,
+    "fat": 0.103
+  },
+  {
+    "name": "Toasted Muesli Golden Oats & Fruit, Sanitarium",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.6,
+    "fat": 0.144
+  },
+  {
+    "name": "Toasted Muesli Super Fruity, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.648,
+    "fat": 0.098
+  },
+  {
+    "name": "Toasted Strawberry and Rhubarb, Sanitarium",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.559,
+    "fat": 0.117
+  },
+  {
+    "name": "Chop suey, pork",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.021,
+    "fat": 0.088
+  },
+  {
+    "name": "Savoury, mince & cheese, heated",
+    "portion": "1 gram",
+    "protein": 0.088,
+    "carbs": 0.233,
+    "fat": 0.163
+  },
+  {
+    "name": "Sausage roll, party size, baked",
+    "portion": "1 gram",
+    "protein": 0.087,
+    "carbs": 0.251,
+    "fat": 0.155
+  },
+  {
+    "name": "Bread, ciabatta, loaf, plain, as purchased",
+    "portion": "1 gram",
+    "protein": 0.086,
+    "carbs": 0.438,
+    "fat": 0.031
+  },
+  {
+    "name": "Scone, white, plain",
+    "portion": "1 gram",
+    "protein": 0.086,
+    "carbs": 0.456,
+    "fat": 0.052
+  },
+  {
+    "name": "Sustain, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.086,
+    "carbs": 0.681,
+    "fat": 0.028
+  },
+  {
+    "name": "Pizza base, thick, from white flour, no topping",
+    "portion": "1 gram",
+    "protein": 0.085,
+    "carbs": 0.456,
+    "fat": 0.04
+  },
+  {
+    "name": "Milk, cow, whole, evaporated, fluid",
+    "portion": "1 gram",
+    "protein": 0.084,
+    "carbs": 0.095,
+    "fat": 0.084
+  },
+  {
+    "name": "Pie, savoury, chicken, individual size, ready to eat",
+    "portion": "1 gram",
+    "protein": 0.084,
+    "carbs": 0.204,
+    "fat": 0.135
+  },
+  {
+    "name": "Bread, chapatti or roti, wholemeal, restaurant",
+    "portion": "1 gram",
+    "protein": 0.083,
+    "carbs": 0.423,
+    "fat": 0.049
+  },
+  {
+    "name": "Cracker, rice, seaweed flavoured, Sakata",
+    "portion": "1 gram",
+    "protein": 0.083,
+    "carbs": 0.726,
+    "fat": 0.016
+  },
+  {
+    "name": "Wafer, wholegrain rice",
+    "portion": "1 gram",
+    "protein": 0.083,
+    "carbs": 0.705,
+    "fat": 0.035
+  },
+  {
+    "name": "Curry, chicken, green, Thai, takeaway",
+    "portion": "1 gram",
+    "protein": 0.082,
+    "carbs": 0.053,
+    "fat": 0.079
+  },
+  {
+    "name": "Sausage roll, individual size, microwaved",
+    "portion": "1 gram",
+    "protein": 0.082,
+    "carbs": 0.284,
+    "fat": 0.15
+  },
+  {
+    "name": "Cracker, corn, Cruskits, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.081,
+    "carbs": 0.733,
+    "fat": 0.012
+  },
+  {
+    "name": "Cornmeal, wholegrain, yellow",
+    "portion": "1 gram",
+    "protein": 0.081,
+    "carbs": 0.635,
+    "fat": 0.036
+  },
+  {
+    "name": "Noodle, pad thai with chicken & egg, Thai, takeaway",
+    "portion": "1 gram",
+    "protein": 0.081,
+    "carbs": 0.16,
+    "fat": 0.081
+  },
+  {
+    "name": "Pie, mince, family size",
+    "portion": "1 gram",
+    "protein": 0.081,
+    "carbs": 0.194,
+    "fat": 0.11
+  },
+  {
+    "name": "Cracker, wheat, Meal Mates, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.08,
+    "carbs": 0.499,
+    "fat": 0.257
+  },
+  {
+    "name": "Just Right, Original Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.079,
+    "carbs": 0.763,
+    "fat": 0.021
+  },
+  {
+    "name": "Cluster Crisp, Manuka Honey with Roasted Cashew, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.078,
+    "carbs": 0.568,
+    "fat": 0.129
+  },
+  {
+    "name": "Cluster Crisp, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.078,
+    "carbs": 0.568,
+    "fat": 0.127
+  },
+  {
+    "name": "Cluster Crisp, Vanilla Almond, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.078,
+    "carbs": 0.568,
+    "fat": 0.124
+  },
+  {
+    "name": "Pie, savoury, mince & cheese, individual size, ready to eat",
+    "portion": "1 gram",
+    "protein": 0.078,
+    "carbs": 0.191,
+    "fat": 0.142
+  },
+  {
+    "name": "Crunchy Nut Corn Flakes, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.077,
+    "carbs": 0.793,
+    "fat": 0.033
+  },
+  {
+    "name": "1 egg (size 7, 66.0 g)",
+    "portion": "1 gram",
+    "protein": 0.1467,
+    "carbs": 0.0057,
+    "fat": 0.1829
+  },
+  {
+    "name": "Chicken and cashew, stir fry, Chinese",
+    "portion": "1 gram",
+    "protein": 0.077,
+    "carbs": 0.021,
+    "fat": 0.091
+  },
+  {
+    "name": "Bun, currant",
+    "portion": "1 gram",
+    "protein": 0.076,
+    "carbs": 0.493,
+    "fat": 0.075
+  },
+  {
+    "name": "Garlic bread, made with butter, La Famiglia & Signature Range",
+    "portion": "1 gram",
+    "protein": 0.076,
+    "carbs": 0.415,
+    "fat": 0.196
+  },
+  {
+    "name": "Garlic bread, made with margarine, Pams & Mamma Fiorelli's",
+    "portion": "1 gram",
+    "protein": 0.076,
+    "carbs": 0.415,
+    "fat": 0.215
+  },
+  {
+    "name": "Yoghurt dessert, Greek style, chocolate flavoured, sweetened, premium",
+    "portion": "1 gram",
+    "protein": 0.076,
+    "carbs": 0.088,
+    "fat": 0.064
+  },
+  {
+    "name": "1 egg (size 7, 66.0 g)",
+    "portion": "1 gram",
+    "protein": 0.1277,
+    "carbs": 0.005,
+    "fat": 0.0958
+  },
+  {
+    "name": "Savoury, mince, heated",
+    "portion": "1 gram",
+    "protein": 0.076,
+    "carbs": 0.229,
+    "fat": 0.156
+  },
+  {
+    "name": "Biscuit, Malt",
+    "portion": "1 gram",
+    "protein": 0.075,
+    "carbs": 0.711,
+    "fat": 0.135
+  },
+  {
+    "name": "Bread roll, currant, commercial",
+    "portion": "1 gram",
+    "protein": 0.075,
+    "carbs": 0.573,
+    "fat": 0.014
+  },
+  {
+    "name": "Skippy Cornflakes, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.075,
+    "carbs": 0.762,
+    "fat": 0.013
+  },
+  {
+    "name": "Light 'n' Tasty, Apricot, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.074,
+    "carbs": 0.699,
+    "fat": 0.029
+  },
+  {
+    "name": "Light 'n' Tasty, Berry, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.074,
+    "carbs": 0.696,
+    "fat": 0.026
+  },
+  {
+    "name": "Light 'n' Tasty, Peach & Raspberry, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.074,
+    "carbs": 0.676,
+    "fat": 0.038
+  },
+  {
+    "name": "Flour, rice, brown, dry",
+    "portion": "1 gram",
+    "protein": 0.074,
+    "carbs": 0.677,
+    "fat": 0.028
+  },
+  {
+    "name": "1 egg (size 7, 66.0 g)",
+    "portion": "1 gram",
+    "protein": 0.1305,
+    "carbs": 0.0071,
+    "fat": 0.0811
+  },
+  {
+    "name": "Noodle, chow mein, combination, Chinese",
+    "portion": "1 gram",
+    "protein": 0.073,
+    "carbs": 0.011,
+    "fat": 0.05
+  },
+  {
+    "name": "Cracker, wheat, Snax, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.072,
+    "carbs": 0.546,
+    "fat": 0.245
+  },
+  {
+    "name": "Biscuit, peanut brownie",
+    "portion": "1 gram",
+    "protein": 0.071,
+    "carbs": 0.644,
+    "fat": 0.216
+  },
+  {
+    "name": "Bread, naan, white, plain, restaurant",
+    "portion": "1 gram",
+    "protein": 0.071,
+    "carbs": 0.441,
+    "fat": 0.053
+  },
+  {
+    "name": "Scone, white, with dates",
+    "portion": "1 gram",
+    "protein": 0.071,
+    "carbs": 0.475,
+    "fat": 0.048
+  },
+  {
+    "name": "Frozen meal, macaroni cheese, baked",
+    "portion": "1 gram",
+    "protein": 0.071,
+    "carbs": 0.147,
+    "fat": 0.062
+  },
+  {
+    "name": "Taco shell, corn flour, baked, commercial",
+    "portion": "1 gram",
+    "protein": 0.071,
+    "carbs": 0.585,
+    "fat": 0.208
+  },
+  {
+    "name": "Milk, coffee flavour, reduced fat, high protein, sugar-sweetened",
+    "portion": "1 gram",
+    "protein": 0.071,
+    "carbs": 0.069,
+    "fat": 0.016
+  },
+  {
+    "name": "1 egg (size 7, 66.0 g)",
+    "portion": "1 gram",
+    "protein": 0.1218,
+    "carbs": 0.0051,
+    "fat": 0.0943
+  },
+  {
+    "name": "Biscuit, Arrowroot",
+    "portion": "1 gram",
+    "protein": 0.07,
+    "carbs": 0.761,
+    "fat": 0.105
+  },
+  {
+    "name": "Flour, rice, white, dry",
+    "portion": "1 gram",
+    "protein": 0.07,
+    "carbs": 0.743,
+    "fat": 0.011
+  },
+  {
+    "name": "Cracker, rice, barbecue flavoured",
+    "portion": "1 gram",
+    "protein": 0.069,
+    "carbs": 0.807,
+    "fat": 0.028
+  },
+  {
+    "name": "Pasta, fresh, assorted type, cooked",
+    "portion": "1 gram",
+    "protein": 0.069,
+    "carbs": 0.242,
+    "fat": 0.006
+  },
+  {
+    "name": "Chop suey, chicken, lean & fat, stir fried",
+    "portion": "1 gram",
+    "protein": 0.069,
+    "carbs": 0.057,
+    "fat": 0.06
+  },
+  {
+    "name": "Rice Bubbles, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.067,
+    "carbs": 0.821,
+    "fat": 0.011
+  },
+  {
+    "name": "Couscous, white wheat, cooked in water, not drained, no salt or fat added",
+    "portion": "1 gram",
+    "protein": 0.067,
+    "carbs": 0.327,
+    "fat": 0.01
+  },
+  {
+    "name": "Frozen meal, lasagne, beef, bake",
+    "portion": "1 gram",
+    "protein": 0.067,
+    "carbs": 0.149,
+    "fat": 0.044
+  },
+  {
+    "name": "1 egg (size 6, 59.7 g)",
+    "portion": "1 gram",
+    "protein": 0.1473,
+    "carbs": 0.0066,
+    "fat": 0.1824
+  },
+  {
+    "name": "1 egg (size 6, 59.7 g)",
+    "portion": "1 gram",
+    "protein": 0.1279,
+    "carbs": 0.0057,
+    "fat": 0.0954
+  },
+  {
+    "name": "1 egg (size 6, 59.7 g)",
+    "portion": "1 gram",
+    "protein": 0.1306,
+    "carbs": 0.0058,
+    "fat": 0.0819
+  },
+  {
+    "name": "Cracker, rice, plain",
+    "portion": "1 gram",
+    "protein": 0.066,
+    "carbs": 0.757,
+    "fat": 0.038
+  },
+  {
+    "name": "Crumpet, white, toasted",
+    "portion": "1 gram",
+    "protein": 0.066,
+    "carbs": 0.343,
+    "fat": 0.01
+  },
+  {
+    "name": "1 egg (size 7, 66.0 g)",
+    "portion": "1 gram",
+    "protein": 0.151,
+    "carbs": 0,
+    "fat": 0.167
+  },
+  {
+    "name": "1 egg (size 6, 59.7 g)",
+    "portion": "1 gram",
+    "protein": 0.1493,
+    "carbs": 0,
+    "fat": 0.1674
+  },
+  {
+    "name": "1 egg (size 6, 59.7 g)",
+    "portion": "1 gram",
+    "protein": 0.1215,
+    "carbs": 0.0056,
+    "fat": 0.0953
+  },
+  {
+    "name": "Biscuit, Chocolate Chip, Cookie Time",
+    "portion": "1 gram",
+    "protein": 0.064,
+    "carbs": 0.617,
+    "fat": 0.234
+  },
+  {
+    "name": "Biscuit, Dark Chocolate, Wheaten, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.064,
+    "carbs": 0.556,
+    "fat": 0.238
+  },
+  {
+    "name": "Cake, sponge, plain",
+    "portion": "1 gram",
+    "protein": 0.064,
+    "carbs": 0.562,
+    "fat": 0.043
+  },
+  {
+    "name": "Doughnut, chocolate iced",
+    "portion": "1 gram",
+    "protein": 0.064,
+    "carbs": 0.439,
+    "fat": 0.214
+  },
+  {
+    "name": "Frozen meal, spaghetti bolognaise, baked",
+    "portion": "1 gram",
+    "protein": 0.063,
+    "carbs": 0.133,
+    "fat": 0.044
+  },
+  {
+    "name": "Pasta, wholemeal wheat flour, assorted shapes, boiled, drained, no salt added",
+    "portion": "1 gram",
+    "protein": 0.063,
+    "carbs": 0.218,
+    "fat": 0.013
+  },
+  {
+    "name": "Beef, black bean, stir fry, Chinese",
+    "portion": "1 gram",
+    "protein": 0.063,
+    "carbs": 0.028,
+    "fat": 0.058
+  },
+  {
+    "name": "Biscuit, milk chocolate, Wheaten, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.062,
+    "carbs": 0.6,
+    "fat": 0.242
+  },
+  {
+    "name": "1 egg (size 5, 51.3 g)",
+    "portion": "1 gram",
+    "protein": 0.1505,
+    "carbs": 0,
+    "fat": 0.1675
+  },
+  {
+    "name": "Chow mein, chicken",
+    "portion": "1 gram",
+    "protein": 0.062,
+    "carbs": 0.135,
+    "fat": 0.01
+  },
+  {
+    "name": "Biscuit, Dark Chocolate, Digestive, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.061,
+    "carbs": 0.619,
+    "fat": 0.237
+  },
+  {
+    "name": "Bread, Gluten free 6 Seed, Vogel's",
+    "portion": "1 gram",
+    "protein": 0.061,
+    "carbs": 0.308,
+    "fat": 0.079
+  },
+  {
+    "name": "Muffin, bran",
+    "portion": "1 gram",
+    "protein": 0.061,
+    "carbs": 0.406,
+    "fat": 0.081
+  },
+  {
+    "name": "Biscuit, Milk Chocolate, Digestives, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.06,
+    "carbs": 0.651,
+    "fat": 0.224
+  },
+  {
+    "name": "Porridge, oats, prepared with trim milk (0.5 % fat), unsweetened, no salt added",
+    "portion": "1 gram",
+    "protein": 0.06,
+    "carbs": 0.171,
+    "fat": 0.018
+  },
+  {
+    "name": "Ricies, Sanitarium, fortified",
+    "portion": "1 gram",
+    "protein": 0.06,
+    "carbs": 0.779,
+    "fat": 0.011
+  },
+  {
+    "name": "1 egg (size 5, 51.3 g)",
+    "portion": "1 gram",
+    "protein": 0.1277,
+    "carbs": 0.0064,
+    "fat": 0.0957
+  },
+  {
+    "name": "Biscuit, Chocolate Chip Fudge, Farmbake, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.059,
+    "carbs": 0.689,
+    "fat": 0.201
+  },
+  {
+    "name": "Couscous, wholemeal wheat, cooked in water, not drained, no salt or fat added",
+    "portion": "1 gram",
+    "protein": 0.059,
+    "carbs": 0.246,
+    "fat": 0.012
+  },
+  {
+    "name": "1 egg (size 5, 51.3 g)",
+    "portion": "1 gram",
+    "protein": 0.1479,
+    "carbs": 0.005,
+    "fat": 0.183
+  },
+  {
+    "name": "1 egg (size 5, 51.3 g)",
+    "portion": "1 gram",
+    "protein": 0.1311,
+    "carbs": 0.0067,
+    "fat": 0.08
+  },
+  {
+    "name": "Savoury, potato top, heated",
+    "portion": "1 gram",
+    "protein": 0.059,
+    "carbs": 0.213,
+    "fat": 0.113
+  },
+  {
+    "name": "Pasta, wheat flour with egg, boiled, drained",
+    "portion": "1 gram",
+    "protein": 0.058,
+    "carbs": 0.29,
+    "fat": 0.003
+  },
+  {
+    "name": "Soup, chicken and sweet corn, Chinese, takeaway",
+    "portion": "1 gram",
+    "protein": 0.058,
+    "carbs": 0.047,
+    "fat": 0.017
+  },
+  {
+    "name": "Soup, tom yam gai, chicken, Thai, takeaway",
+    "portion": "1 gram",
+    "protein": 0.058,
+    "carbs": 0.013,
+    "fat": 0.013
+  },
+  {
+    "name": "Porridge, oats, assorted fruits flavoured, sugar-sweetened, prepared with trim milk (0.5% fat)",
+    "portion": "1 gram",
+    "protein": 0.057,
+    "carbs": 0.207,
+    "fat": 0.02
+  },
+  {
+    "name": "Pasta, fresh, fettuccine, herb & garlic, cooked",
+    "portion": "1 gram",
+    "protein": 0.057,
+    "carbs": 0.219,
+    "fat": 0.017
+  },
+  {
+    "name": "Yoghurt, Greek style, low fat , Fresh 'n Fruity",
+    "portion": "1 gram",
+    "protein": 0.057,
+    "carbs": 0.041,
+    "fat": 0.027
+  },
+  {
+    "name": "Biscuit, Afghan",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.649,
+    "fat": 0.217
+  },
+  {
+    "name": "Doughnut, non-chocolate iced",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.498,
+    "fat": 0.188
+  },
+  {
+    "name": "Breakfast cereals, rice puffed, cocoa coated, ready to eat, fortified",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.801,
+    "fat": 0.01
+  },
+  {
+    "name": "Coco Pops, Kellogg's, fortified",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.844,
+    "fat": 0.011
+  },
+  {
+    "name": "Porridge, oats, plain, sweetened with honey and/or sugar, prepared with trim milk (0.5% fat)",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.228,
+    "fat": 0.019
+  },
+  {
+    "name": "Porridge, oats, prepared with standard milk (3.3% fat), unsweetened, no salt added",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.167,
+    "fat": 0.043
+  },
+  {
+    "name": "Chow mein, prawn",
+    "portion": "1 gram",
+    "protein": 0.056,
+    "carbs": 0.061,
+    "fat": 0.109
+  },
+  {
+    "name": "Biscuit, Classic Dark, Tim Tam, Arnott's",
+    "portion": "1 gram",
+    "protein": 0.055,
+    "carbs": 0.637,
+    "fat": 0.269
+  },
+  {
+    "name": "Biscuit, Double Deck Dark Chocolate Delight, Chit Chat, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.055,
+    "carbs": 0.65,
+    "fat": 0.243
+  },
+  {
+    "name": "Biscuit, milk chocolate, Double Chocolate, Cookies, Ernest Adams",
+    "portion": "1 gram",
+    "protein": 0.055,
+    "carbs": 0.661,
+    "fat": 0.211
+  },
+  {
+    "name": "Biscuit, shortbread",
+    "portion": "1 gram",
+    "protein": 0.055,
+    "carbs": 0.597,
+    "fat": 0.239
+  },
+  {
+    "name": "Pasta, wheat flour with vegetable flavours, boiled, drained",
+    "portion": "1 gram",
+    "protein": 0.055,
+    "carbs": 0.301,
+    "fat": 0.003
+  },
+  {
+    "name": "Milk, sheep, whole, fresh, fluid",
+    "portion": "1 gram",
+    "protein": 0.055,
+    "carbs": 0.048,
+    "fat": 0.065
+  },
+  {
+    "name": "Biscuit, with coconut, Krispie, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.054,
+    "carbs": 0.654,
+    "fat": 0.17
+  },
+  {
+    "name": "1 egg (size 5, 51.3 g)",
+    "portion": "1 gram",
+    "protein": 0.1222,
+    "carbs": 0.0045,
+    "fat": 0.095
+  },
+  {
+    "name": "Spring roll, traditional, with meat, deep fried, Highmark",
+    "portion": "1 gram",
+    "protein": 0.054,
+    "carbs": 0.223,
+    "fat": 0.163
+  },
+  {
+    "name": "Biscuit, MallowPuffs, Griffin's",
+    "portion": "1 gram",
+    "protein": 0.053,
+    "carbs": 0.639,
+    "fat": 0.166
+  },
+  {
+    "name": "Muffin, chocolate",
+    "portion": "1 gram",
+    "protein": 0.053,
+    "carbs": 0.531,
+    "fat": 0.2
+  },
+  {
+    "name": "Fromage frais, assorted fruits & flavours, Fruche",
+    "portion": "1 gram",
+    "protein": 0.053,
+    "carbs": 0.147,
+    "fat": 0.007
+  },
+  {
+    "name": "Fromage frais, vanilla, Fruche",
+    "portion": "1 gram",
+    "protein": 0.053,
+    "carbs": 0.145,
+    "fat": 0.008
+  },
+  {
+    "name": "Milk, cow, high calcium 0.1% fat, fluid, fortified",
+    "portion": "1 gram",
+    "protein": 0.053,
+    "carbs": 0.049,
+    "fat": 0.001
+  },
+  {
+    "name": "Spring roll, traditional with meat, baked, Highmark",
+    "portion": "1 gram",
+    "protein": 0.053,
+    "carbs": 0.22,
+    "fat": 0.142
+  },
+  {
+    "name": "Doughnut, cinnamon & sugar dusted",
+    "portion": "1 gram",
+    "protein": 0.052,
+    "carbs": 0.511,
+    "fat": 0.186
+  },
+  {
+    "name": "Energy food drink, dry powder, Drinking Chocolate, Cadbury",
+    "portion": "1 gram",
+    "protein": 0.052,
+    "carbs": 0.851,
+    "fat": 0.025
+  },
+  {
+    "name": "Porridge, oats, assorted fruits flavoured, sugar-sweetened, prepared with standard milk (3.3% fat)",
+    "portion": "1 gram",
+    "protein": 0.052,
+    "carbs": 0.214,
+    "fat": 0.043
+  }
+]
