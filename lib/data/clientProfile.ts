@@ -27,11 +27,14 @@ export async function upsertClientProfile(
 
 // Narrow, coach-only update -- separate from upsertClientProfile (the client's own Setup
 // form) since this is a coach-configured setting the client doesn't edit themselves.
+// Goes through set_checkin_reminder_days (0011_coach_sets_checkin_reminder.sql) rather than
+// a raw update -- client_profiles' RLS update policy only covers is_self(client_id), so a
+// direct update from the coach's session silently matches zero rows.
 export async function updateCheckinReminderDays(clientId: string, days: number): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('client_profiles')
-    .update({ checkin_reminder_days: days })
-    .eq('client_id', clientId);
+  const { error } = await supabase.rpc('set_checkin_reminder_days', {
+    p_client_id: clientId,
+    p_days: days,
+  });
   if (error) throw error;
 }
