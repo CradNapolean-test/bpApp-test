@@ -9,6 +9,9 @@ import { MealPlannerTab } from './MealPlannerTab';
 import { ActivityTab } from './ActivityTab';
 import { InsightsTab } from './InsightsTab';
 import { OverviewTab } from './OverviewTab';
+import { ProgressTab } from './ProgressTab';
+import { HabitsTab } from './HabitsTab';
+import { NotificationBanner } from './NotificationBanner';
 import { ChatPopup } from './ChatPopup';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
@@ -22,8 +25,12 @@ import type {
   ClientProfileRow,
   DailyLogRow,
   FoodDiaryEntryRow,
+  HabitWithLogs,
   MealPlanEntryRow,
+  MeasurementLogRow,
   MembershipPackageRow,
+  NotificationRow,
+  ProgressPhoto,
   WorkoutLogRow,
   WorkoutProgramRow,
 } from '@/lib/data/types';
@@ -33,17 +40,21 @@ import type {
 type Screen =
   | 'Setup'
   | 'Weekly Log'
+  | 'Habits'
   | 'Food Tracking'
   | 'Meal Planner'
   | 'Activity'
   | 'Insights'
   | 'Overview'
+  | 'Progress & Photos'
   | 'Workout'
   | 'Credits';
 
-type Category = 'Nutrition' | 'Training' | 'Accountability' | 'Account Settings';
-const CATEGORY_ORDER: Category[] = ['Nutrition', 'Training', 'Accountability', 'Account Settings'];
+type Category = 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Account Settings';
+const CATEGORY_ORDER: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress', 'Account Settings'];
 
+// Accountability = did-you-do-the-thing (check-ins, habits, coach-flagged insights);
+// Progress = how-are-you-changing (trend lines, photos, measurements over time).
 function screensForCategory(category: Category, isCoachView: boolean): Screen[] {
   switch (category) {
     case 'Nutrition':
@@ -51,7 +62,9 @@ function screensForCategory(category: Category, isCoachView: boolean): Screen[] 
     case 'Training':
       return ['Activity', 'Workout'];
     case 'Accountability':
-      return ['Weekly Log', 'Insights', 'Overview'];
+      return ['Weekly Log', 'Habits', 'Insights'];
+    case 'Progress':
+      return ['Overview', 'Progress & Photos'];
     case 'Account Settings':
       return isCoachView ? ['Setup', 'Credits'] : ['Setup'];
   }
@@ -81,6 +94,10 @@ export function DashboardShell({
   workoutLogs,
   membership,
   packages,
+  photos,
+  measurementLogs,
+  habits,
+  notifications,
 }: {
   clientId: string;
   clientLabel: string;
@@ -103,6 +120,10 @@ export function DashboardShell({
   workoutLogs: WorkoutLogRow[];
   membership: ClientMembershipRow | null;
   packages: MembershipPackageRow[];
+  photos: ProgressPhoto[];
+  measurementLogs: MeasurementLogRow[];
+  habits: HabitWithLogs[];
+  notifications: NotificationRow[];
 }) {
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Nutrition');
@@ -125,6 +146,8 @@ export function DashboardShell({
         </div>
         <SignOutButton />
       </div>
+
+      {!isCoachView && <NotificationBanner notifications={notifications} />}
 
       {!isCoachView && (
         <div className="mt-6 flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
@@ -192,6 +215,9 @@ export function DashboardShell({
                 readOnly={isCoachView}
               />
             )}
+            {screen === 'Habits' && (
+              <HabitsTab clientId={clientId} isCoachView={isCoachView} habits={habits} />
+            )}
             {screen === 'Food Tracking' && (
               <FoodTrackingTab dailyLogId={todayLogId} initialEntries={foodDiaryEntries} readOnly={isCoachView} />
             )}
@@ -203,6 +229,14 @@ export function DashboardShell({
             )}
             {screen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
             {screen === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
+            {screen === 'Progress & Photos' && (
+              <ProgressTab
+                clientId={clientId}
+                initialPhotos={photos}
+                initialMeasurements={measurementLogs}
+                readOnly={isCoachView}
+              />
+            )}
             {screen === 'Workout' && (
               <WorkoutTab clientId={clientId} isCoachView={isCoachView} programs={programs} workoutLogs={workoutLogs} />
             )}

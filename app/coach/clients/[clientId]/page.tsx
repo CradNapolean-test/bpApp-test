@@ -60,6 +60,10 @@ export default async function CoachClientPage({
         workoutLogs={bundle.workoutLogs}
         membership={bundle.membership}
         packages={bundle.packages}
+        photos={bundle.photos}
+        measurementLogs={bundle.measurementLogs}
+        habits={bundle.habits}
+        notifications={bundle.notifications}
       />
     </>
   );

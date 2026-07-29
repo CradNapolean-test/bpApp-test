@@ -42,6 +42,10 @@ export default async function DashboardPage() {
       workoutLogs={bundle.workoutLogs}
       membership={bundle.membership}
       packages={bundle.packages}
+      photos={bundle.photos}
+      measurementLogs={bundle.measurementLogs}
+      habits={bundle.habits}
+      notifications={bundle.notifications}
     />
   );
 }

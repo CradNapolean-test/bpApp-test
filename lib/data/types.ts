@@ -167,6 +167,65 @@ export interface WorkoutLogRow {
   logged_at: string;
 }
 
+export interface ProgressPhotoRow {
+  id: string;
+  client_id: string;
+  photo_date: string;
+  storage_path: string;
+  created_at: string;
+}
+
+export interface ProgressPhoto extends ProgressPhotoRow {
+  signedUrl: string | null;
+}
+
+export interface MeasurementLogRow {
+  id: string;
+  client_id: string;
+  log_date: string;
+  arm: number | null;
+  chest: number | null;
+  waist: number | null;
+  hips: number | null;
+  quad: number | null;
+  created_at: string;
+}
+
+export interface HabitRow {
+  id: string;
+  client_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface HabitLogRow {
+  id: string;
+  habit_id: string;
+  log_date: string;
+  completed: boolean;
+  created_at: string;
+}
+
+export interface HabitWithLogs extends HabitRow {
+  logs: HabitLogRow[];
+}
+
+export interface NotificationRow {
+  id: string;
+  client_id: string;
+  message: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface CoachReport {
+  attendanceRate: number | null; // 0-100, null if no data
+  totalBooked: number;
+  totalAttended: number;
+  noShows: { clientName: string; className: string; date: string }[];
+  classPopularity: { className: string; bookingCount: number }[];
+}
+
 export interface MembershipPackageRow {
   id: string;
   coach_id: string;
