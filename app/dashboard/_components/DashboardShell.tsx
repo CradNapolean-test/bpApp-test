@@ -12,6 +12,7 @@ import { OverviewTab } from './OverviewTab';
 import { ProgressTab } from './ProgressTab';
 import { HabitsTab } from './HabitsTab';
 import { FormsTab } from './FormsTab';
+import { TodayTab } from './TodayTab';
 import { NotificationBanner } from './NotificationBanner';
 import { ChatPopup } from './ChatPopup';
 import { ClassesArea } from './ClassesArea';
@@ -41,6 +42,7 @@ import type {
 // Screens are grouped into categories rather than one flat tab bar. Chat isn't a screen
 // at all anymore — it's a floating popup (ChatPopup) visible from anywhere in the shell.
 type Screen =
+  | 'Today'
   | 'Setup'
   | 'Weekly Log'
   | 'Habits'
@@ -54,13 +56,15 @@ type Screen =
   | 'Workout'
   | 'Credits';
 
-type Category = 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Account Settings';
-const CATEGORY_ORDER: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress', 'Account Settings'];
+type Category = 'Home' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Account Settings';
+const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Account Settings'];
 
 // Accountability = did-you-do-the-thing (check-ins, habits, coach-flagged insights);
 // Progress = how-are-you-changing (trend lines, photos, measurements over time).
 function screensForCategory(category: Category, isCoachView: boolean): Screen[] {
   switch (category) {
+    case 'Home':
+      return ['Today'];
     case 'Nutrition':
       return ['Food Tracking', 'Meal Planner'];
     case 'Training':
@@ -134,8 +138,8 @@ export function DashboardShell({
   formAssignments: FormAssignmentWithDetails[];
 }) {
   const [area, setArea] = useState<Area>('Coaching');
-  const [category, setCategory] = useState<Category>('Nutrition');
-  const [screen, setScreen] = useState<Screen>('Food Tracking');
+  const [category, setCategory] = useState<Category>('Home');
+  const [screen, setScreen] = useState<Screen>('Today');
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
@@ -193,23 +197,36 @@ export function DashboardShell({
             ))}
           </nav>
 
-          <nav className="mt-4 flex flex-wrap gap-1 border-b border-black/10 dark:border-white/10">
-            {screensForCategory(category, isCoachView).map((s) => (
-              <button
-                key={s}
-                onClick={() => setScreen(s)}
-                className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
-                  screen === s
-                    ? 'border-b-2 border-foreground text-black dark:text-zinc-50'
-                    : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </nav>
+          {screensForCategory(category, isCoachView).length > 1 && (
+            <nav className="mt-4 flex flex-wrap gap-1 border-b border-black/10 dark:border-white/10">
+              {screensForCategory(category, isCoachView).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setScreen(s)}
+                  className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
+                    screen === s
+                      ? 'border-b-2 border-foreground text-black dark:text-zinc-50'
+                      : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </nav>
+          )}
 
           <div className="mt-6">
+            {screen === 'Today' && (
+              <TodayTab
+                weekLogs={weekLogs}
+                historyLogs={historyLogs}
+                habits={habits}
+                formAssignments={formAssignments}
+                bookings={bookings}
+                creditsBalance={creditsBalance}
+                membership={membership}
+              />
+            )}
             {screen === 'Setup' && (
               <SetupTab clientId={clientId} initialProfile={profile} readOnly={isCoachView} />
             )}
