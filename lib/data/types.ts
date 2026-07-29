@@ -140,6 +140,7 @@ export interface WorkoutExerciseRow {
   load: number | null;
   rpe: number | null;
   notes: string | null;
+  video_url: string | null;
 }
 
 export interface WorkoutProgramDayRow {

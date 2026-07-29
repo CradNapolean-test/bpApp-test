@@ -20,6 +20,7 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
   const [reps, setReps] = useState('8-10');
   const [load, setLoad] = useState<number | ''>('');
   const [rpe, setRpe] = useState<number | ''>('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -33,8 +34,10 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
         load: load === '' ? null : load,
         rpe: rpe === '' ? null : rpe,
         notes: null,
+        video_url: videoUrl || null,
       });
       setName('');
+      setVideoUrl('');
       router.refresh();
     } finally {
       setSaving(false);
@@ -50,6 +53,7 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
       <input placeholder="Reps" className={`${inputCls} w-20`} value={reps} onChange={(e) => setReps(e.target.value)} />
       <input type="number" placeholder="Load" className={`${inputCls} w-16`} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
       <input type="number" placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
+      <input placeholder="Video URL (optional)" className={`${inputCls} w-40`} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
       <button type="submit" disabled={saving} className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background disabled:opacity-50">
         Add
       </button>
@@ -220,6 +224,16 @@ export function WorkoutTab({
                             </button>
                           )}
                         </div>
+                        {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
+                          <a
+                            href={ex.video_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-block text-xs text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            ▶ Watch demo
+                          </a>
+                        )}
                         {!isCoachView && (
                           <>
                             <LogSetForm clientId={clientId} exerciseId={ex.id} nextSetNumber={logs.length + 1} />
