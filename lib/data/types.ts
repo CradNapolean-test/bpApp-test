@@ -22,6 +22,8 @@ export interface ClientProfileRow {
   lift_pull_ups_start: number | null; lift_pull_ups_goal: number | null;
   lift_rdl_start: number | null; lift_rdl_goal: number | null;
   lift_hip_thrust_start: number | null; lift_hip_thrust_goal: number | null;
+  checkin_reminder_days: number;
+  last_checkin_reminder_at: string | null;
 }
 
 export interface DailyLogRow {

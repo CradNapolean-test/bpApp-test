@@ -241,7 +241,14 @@ export function DashboardShell({
               <WorkoutTab clientId={clientId} isCoachView={isCoachView} programs={programs} workoutLogs={workoutLogs} />
             )}
             {screen === 'Credits' && isCoachView && (
-              <CreditsTab clientId={clientId} creditsBalance={creditsBalance} membership={membership} packages={packages} />
+              <CreditsTab
+                clientId={clientId}
+                creditsBalance={creditsBalance}
+                membership={membership}
+                packages={packages}
+                checkinReminderDays={profile?.checkin_reminder_days ?? 3}
+                lastCheckinReminderAt={profile?.last_checkin_reminder_at ?? null}
+              />
             )}
           </div>
         </>

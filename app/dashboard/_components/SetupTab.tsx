@@ -6,7 +6,11 @@ import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import { upsertClientProfile } from '@/lib/data/clientProfile';
 import type { ClientProfileRow } from '@/lib/data/types';
 
-const BLANK: Omit<ClientProfileRow, 'client_id'> = {
+// Excludes the coach-only reminder settings (edited from CreditsTab, not this form) in
+// addition to client_id.
+type SetupFields = Omit<ClientProfileRow, 'client_id' | 'checkin_reminder_days' | 'last_checkin_reminder_at'>;
+
+const BLANK: SetupFields = {
   name: '',
   gender: 'Female',
   goal_description: '',
@@ -61,7 +65,7 @@ export function SetupTab({
   readOnly: boolean;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<Omit<ClientProfileRow, 'client_id'>>(
+  const [form, setForm] = useState<SetupFields>(
     initialProfile ?? BLANK
   );
   const [saving, setSaving] = useState(false);
