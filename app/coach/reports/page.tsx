@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCoachReport } from '@/lib/data/reports';
-import { SignOutButton } from '@/app/_components/SignOutButton';
+import { AppShell } from '@/app/_components/AppShell';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 
 export default async function CoachReportsPage() {
@@ -21,18 +21,25 @@ export default async function CoachReportsPage() {
   const report = await getCoachReport();
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-10">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Reports</h1>
-        <SignOutButton />
-      </div>
-      <div className="mt-4">
-        <CoachNav />
-      </div>
-
-      <p className="mt-6 text-sm text-zinc-500">Last 30 days, across all your classes.</p>
-
-      <div className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <AppShell
+      title="Reports"
+      subtitle="Last 30 days, across all your classes."
+      topBar={<CoachNav />}
+      sidebar={
+        <nav className="space-y-1 text-sm">
+          <a href="#attendance" className="block rounded-md px-3 py-1.5 text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300">
+            Attendance
+          </a>
+          <a href="#no-shows" className="block rounded-md px-3 py-1.5 text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300">
+            No-shows
+          </a>
+          <a href="#popularity" className="block rounded-md px-3 py-1.5 text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300">
+            Class popularity
+          </a>
+        </nav>
+      }
+    >
+      <div id="attendance" className="rounded-lg border border-black/10 p-4 dark:border-white/10">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Attendance</h2>
         {report.attendanceRate == null ? (
           <p className="mt-2 text-sm text-zinc-500">No completed bookings in this window yet.</p>
@@ -46,7 +53,7 @@ export default async function CoachReportsPage() {
         )}
       </div>
 
-      <div className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div id="no-shows" className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">No-shows</h2>
         <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/5">
           {report.noShows.map((n, i) => (
@@ -61,7 +68,7 @@ export default async function CoachReportsPage() {
         </ul>
       </div>
 
-      <div className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div id="popularity" className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Class popularity</h2>
         <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/5">
           {report.classPopularity.map((c) => (
@@ -73,6 +80,6 @@ export default async function CoachReportsPage() {
           {report.classPopularity.length === 0 && <li className="py-2 text-zinc-500">No bookings yet.</li>}
         </ul>
       </div>
-    </div>
+    </AppShell>
   );
 }

@@ -2,47 +2,48 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
-import { nextDateForWeekday, addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
-import type { BookingRow, ClassRow, ClientMembershipRow } from '@/lib/data/types';
-
-const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+import { addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
+import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@/lib/data/types';
 
 export function ClassesArea({
-  classes,
   bookings,
+  occurrences,
   creditsBalance,
   membership,
 }: {
-  classes: ClassRow[];
   bookings: BookingRow[];
+  occurrences: ScheduleOccurrence[];
   creditsBalance: number;
   membership: ClientMembershipRow | null;
 }) {
   const router = useRouter();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const todayIso = toIsoDate(new Date());
   const nextReset = toIsoDate(addDays(startOfWeek(new Date()), 7));
 
-  async function handleBook(classItem: ClassRow) {
-    if (classItem.day_of_week == null) return;
-    setBusyId(classItem.id);
+  const activeBookings = bookings.filter((b) => b.status !== 'cancelled');
+  const bookingByKey = new Map(activeBookings.map((b) => [`${b.class_id}|${b.booking_date}`, b]));
+
+  async function handleBook(occ: ScheduleOccurrence) {
+    setBusyKey(`${occ.classId}|${occ.date}`);
     setError(null);
     try {
-      const date = nextDateForWeekday(classItem.day_of_week);
-      await bookClass(classItem.id, date);
+      await bookClass(occ.classId, occ.date);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to book');
     } finally {
-      setBusyId(null);
+      setBusyKey(null);
     }
   }
 
   async function handleCancel(bookingId: string) {
-    setBusyId(bookingId);
+    setBusyKey(bookingId);
     setError(null);
     try {
       await cancelBooking(bookingId);
@@ -50,9 +51,11 @@ export function ClassesArea({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to cancel');
     } finally {
-      setBusyId(null);
+      setBusyKey(null);
     }
   }
+
+  const dayOccurrences = occurrences.filter((o) => o.date === selectedDate);
 
   return (
     <div className="space-y-6">
@@ -71,6 +74,49 @@ export function ClassesArea({
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <div>
+        <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Available classes</h3>
+        <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+
+        {selectedDate && (
+          <ul className="mt-3 divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+            {dayOccurrences.map((occ) => {
+              const key = `${occ.classId}|${occ.date}`;
+              const existingBooking = bookingByKey.get(key);
+              const full = occ.bookedCount >= occ.capacity;
+              return (
+                <li key={key} className="flex items-center justify-between p-3 text-sm">
+                  <span>
+                    {occ.className}
+                    {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}{' '}
+                    <span className="text-zinc-500">
+                      · {occ.bookedCount}/{occ.capacity} booked
+                    </span>
+                  </span>
+                  {existingBooking ? (
+                    <button
+                      onClick={() => handleCancel(existingBooking.id)}
+                      disabled={busyKey === existingBooking.id}
+                      className="rounded-md border border-black/10 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-white/10"
+                    >
+                      {existingBooking.status === 'waitlist' ? 'Leave waitlist' : 'Cancel'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleBook(occ)}
+                      disabled={busyKey === key || (full && occ.date < todayIso)}
+                      className="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
+                    >
+                      {full ? 'Join waitlist' : 'Book'}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div>
         <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Bookings</h3>
         <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
           {bookings.map((b) => {
@@ -87,7 +133,7 @@ export function ClassesArea({
                 {b.status !== 'cancelled' && !isPast && (
                   <button
                     onClick={() => handleCancel(b.id)}
-                    disabled={busyId === b.id}
+                    disabled={busyKey === b.id}
                     className="text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
                   >
                     Cancel
@@ -97,31 +143,6 @@ export function ClassesArea({
             );
           })}
           {bookings.length === 0 && <li className="p-3 text-sm text-zinc-500">No bookings yet.</li>}
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Available classes</h3>
-        <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {classes.map((c) => (
-            <li key={c.id} className="flex items-center justify-between p-3 text-sm">
-              <span>
-                {c.name} —{' '}
-                {c.day_of_week != null ? WEEKDAY_LABELS[c.day_of_week] : 'Unscheduled'}
-                {c.start_time ? ` ${c.start_time.slice(0, 5)}` : ''} · capacity {c.capacity}
-              </span>
-              {c.day_of_week != null && (
-                <button
-                  onClick={() => handleBook(c)}
-                  disabled={busyId === c.id}
-                  className="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
-                >
-                  Book next
-                </button>
-              )}
-            </li>
-          ))}
-          {classes.length === 0 && <li className="p-3 text-sm text-zinc-500">No classes scheduled.</li>}
         </ul>
       </div>
     </div>

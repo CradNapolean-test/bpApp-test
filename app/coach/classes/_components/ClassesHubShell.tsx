@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { AppShell } from '@/app/_components/AppShell';
+import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { ClassManager } from './ClassManager';
 import { AttendanceScheduler } from './AttendanceScheduler';
 import { PackageManager } from './PackageManager';
@@ -21,28 +23,30 @@ export function ClassesHubShell({
   const [tab, setTab] = useState<Tab>('Manage Classes');
 
   return (
-    <div>
-      <nav className="flex flex-wrap gap-1 border-b border-black/10 dark:border-white/10">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
-              tab === t
-                ? 'border-b-2 border-foreground text-black dark:text-zinc-50'
-                : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </nav>
-
-      <div className="mt-6">
-        {tab === 'Manage Classes' && <ClassManager initialClasses={initialClasses} />}
-        {tab === 'Take Attendance' && <AttendanceScheduler occurrences={occurrences} />}
-        {tab === 'Membership Packages' && <PackageManager initialPackages={initialPackages} />}
-      </div>
-    </div>
+    <AppShell
+      title="Classes"
+      topBar={<CoachNav />}
+      sidebar={
+        <nav className="space-y-1">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium transition-colors ${
+                tab === t
+                  ? 'bg-foreground text-background'
+                  : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </nav>
+      }
+    >
+      {tab === 'Manage Classes' && <ClassManager initialClasses={initialClasses} />}
+      {tab === 'Take Attendance' && <AttendanceScheduler occurrences={occurrences} />}
+      {tab === 'Membership Packages' && <PackageManager initialPackages={initialPackages} />}
+    </AppShell>
   );
 }

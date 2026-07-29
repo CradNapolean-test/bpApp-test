@@ -94,10 +94,12 @@ export async function grantCredits(clientId: string, delta: number, reason: stri
   if (error) throw error;
 }
 
-// Upcoming occurrences of the calling coach's own recurring classes (day_of_week-based,
-// not stored as individual rows), merged with how many are already booked. Filters to
-// the caller's own classes via coach_id — matches the authorization the mark_attendance
-// RPC itself enforces, rather than relying on that as the only guard.
+// Upcoming occurrences of every recurring class (day_of_week-based, not stored as
+// individual rows), merged with how many are already booked. Not scoped to the caller's
+// own classes -- `classes` already has an open read policy for all authenticated users
+// (same as membership_packages), and this is called by both the coach (Take Attendance)
+// and clients (booking calendar). Fine for a single-coach app; would need re-scoping by
+// the caller's own coach_id if this ever supports multiple coaches.
 export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
   const {
@@ -105,10 +107,7 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const { data: classes, error: classesError } = await supabase
-    .from('classes')
-    .select('*')
-    .eq('coach_id', user.id);
+  const { data: classes, error: classesError } = await supabase.from('classes').select('*');
   if (classesError) throw classesError;
 
   const occurrences: Omit<ScheduleOccurrence, 'bookedCount'>[] = [];

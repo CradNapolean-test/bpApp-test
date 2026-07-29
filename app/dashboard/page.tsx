@@ -35,8 +35,8 @@ export default async function DashboardPage() {
       activities={bundle.activities}
       programWeek={bundle.programWeek}
       messages={bundle.messages}
-      classes={bundle.classes}
       bookings={bundle.bookings}
+      occurrences={bundle.occurrences}
       creditsBalance={bundle.creditsBalance}
       programs={bundle.programs}
       workoutLogs={bundle.workoutLogs}

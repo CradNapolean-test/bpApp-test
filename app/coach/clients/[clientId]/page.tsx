@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
 import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
-import { CoachNav } from '@/app/coach/_components/CoachNav';
 
 export default async function CoachClientPage({
   params,
@@ -34,11 +33,7 @@ export default async function CoachClientPage({
   const bundle = await loadDashboardBundle(clientId, false);
 
   return (
-    <>
-      <div className="mx-auto w-full max-w-4xl px-6 pt-6">
-        <CoachNav />
-      </div>
-      <DashboardShell
+    <DashboardShell
         clientId={clientId}
         clientLabel={bundle.profile?.name ?? targetProfile.email}
         isCoachView={true}
@@ -53,8 +48,8 @@ export default async function CoachClientPage({
         activities={bundle.activities}
         programWeek={bundle.programWeek}
         messages={bundle.messages}
-        classes={bundle.classes}
         bookings={bundle.bookings}
+        occurrences={bundle.occurrences}
         creditsBalance={bundle.creditsBalance}
         programs={bundle.programs}
         workoutLogs={bundle.workoutLogs}
@@ -67,6 +62,5 @@ export default async function CoachClientPage({
         formTemplates={bundle.formTemplates}
         formAssignments={bundle.formAssignments}
       />
-    </>
   );
 }

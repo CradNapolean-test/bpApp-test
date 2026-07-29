@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { getRoster, markAttendance } from '@/lib/data/classes';
 import type { RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 
 export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selected, setSelected] = useState<ScheduleOccurrence | null>(null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,7 +41,13 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
   if (selected) {
     return (
       <div className="space-y-4">
-        <button onClick={() => setSelected(null)} className="text-sm text-zinc-500 hover:underline">
+        <button
+          onClick={() => {
+            setSelected(null);
+            setRoster(null);
+          }}
+          className="text-sm text-zinc-500 hover:underline"
+        >
           &larr; Back to schedule
         </button>
         <h3 className="text-lg font-medium text-black dark:text-zinc-50">
@@ -70,25 +78,32 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     );
   }
 
+  const dayOccurrences = occurrences.filter((o) => o.date === selectedDate);
+
   return (
-    <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-      {occurrences.map((occ) => (
-        <li key={`${occ.classId}-${occ.date}`}>
-          <button
-            onClick={() => openOccurrence(occ)}
-            className="flex w-full items-center justify-between p-3 text-left text-sm hover:bg-black/[.02] dark:hover:bg-white/[.03]"
-          >
-            <span>
-              {occ.className} — {occ.date}
-              {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
-            </span>
-            <span className="text-zinc-500">
-              {occ.bookedCount}/{occ.capacity} booked
-            </span>
-          </button>
-        </li>
-      ))}
-      {occurrences.length === 0 && <li className="p-3 text-sm text-zinc-500">No upcoming occurrences.</li>}
-    </ul>
+    <div className="space-y-4">
+      <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+
+      {selectedDate && (
+        <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+          {dayOccurrences.map((occ) => (
+            <li key={`${occ.classId}-${occ.date}`}>
+              <button
+                onClick={() => openOccurrence(occ)}
+                className="flex w-full items-center justify-between p-3 text-left text-sm hover:bg-black/[.02] dark:hover:bg-white/[.03]"
+              >
+                <span>
+                  {occ.className}
+                  {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
+                </span>
+                <span className="text-zinc-500">
+                  {occ.bookedCount}/{occ.capacity} booked
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

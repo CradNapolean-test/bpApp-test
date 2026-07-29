@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AppShell } from '@/app/_components/AppShell';
+import { CoachNav } from '@/app/coach/_components/CoachNav';
 import {
   createFormTemplate,
   deleteFormTemplate,
@@ -117,8 +119,44 @@ export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemp
     router.refresh();
   }
 
+  const sidebar = (
+    <nav className="space-y-1">
+      <button
+        onClick={resetForm}
+        className={`block w-full rounded-md px-3 py-1.5 text-left text-sm font-medium transition-colors ${
+          editingId === null
+            ? 'bg-foreground text-background'
+            : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
+        }`}
+      >
+        + New template
+      </button>
+      <div className="mt-2 space-y-0.5 border-t border-black/10 pt-2 dark:border-white/10">
+        {initialTemplates.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => handleEditClick(t.id)}
+            className={`flex w-full items-center justify-between gap-1 rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+              editingId === t.id
+                ? 'font-medium text-black dark:text-zinc-50'
+                : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+            }`}
+          >
+            <span className="truncate">{t.name}</span>
+            {t.is_default_onboarding && (
+              <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-400">
+                Default
+              </span>
+            )}
+          </button>
+        ))}
+        {initialTemplates.length === 0 && <p className="px-3 py-1.5 text-sm text-zinc-500">No templates yet.</p>}
+      </div>
+    </nav>
+  );
+
   return (
-    <div className="space-y-6">
+    <AppShell title="Forms" topBar={<CoachNav />} sidebar={sidebar}>
       <form onSubmit={handleSave} className="space-y-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           {editingId ? 'Edit template' : 'New template'}
@@ -199,44 +237,25 @@ export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemp
             {saving ? 'Saving…' : editingId ? 'Save changes' : 'Create template'}
           </button>
           {editingId && (
-            <button
-              type="button"
-              onClick={resetForm}
-              className="rounded-md border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
-
-      <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-        {initialTemplates.map((t) => (
-          <li key={t.id} className="flex items-center justify-between p-3 text-sm">
-            <span>
-              {t.name}
-              {t.is_default_onboarding && (
-                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-400">
-                  Default
-                </span>
-              )}
-              {t.description ? ` · ${t.description}` : ''}
-            </span>
-            <span className="flex gap-3">
-              <button onClick={() => handleEditClick(t.id)} className="text-xs text-zinc-500 hover:underline">
-                Edit
+            <>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-md border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10"
+              >
+                Cancel
               </button>
               <button
-                onClick={() => handleDelete(t.id)}
-                className="text-xs text-red-600 hover:underline dark:text-red-400"
+                type="button"
+                onClick={() => handleDelete(editingId)}
+                className="rounded-md px-4 py-2 text-sm font-medium text-red-600 hover:underline dark:text-red-400"
               >
                 Delete
               </button>
-            </span>
-          </li>
-        ))}
-        {initialTemplates.length === 0 && <li className="p-3 text-sm text-zinc-500">No templates yet.</li>}
-      </ul>
-    </div>
+            </>
+          )}
+        </div>
+      </form>
+    </AppShell>
   );
 }

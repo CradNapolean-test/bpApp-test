@@ -6,7 +6,7 @@ import { getFoodDiaryEntries } from './foodDiary';
 import { getMealPlanEntries } from './mealPlan';
 import { getActivities } from './foods';
 import { getMessages } from './chat';
-import { getClasses, getCreditsBalance, getUpcomingBookings } from './classes';
+import { getCreditsBalance, getScheduleOccurrences, getUpcomingBookings } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getMyMembership, getPackages } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
@@ -35,8 +35,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     activities,
     todayLog,
     messages,
-    classes,
     bookings,
+    occurrences,
     creditsBalance,
     programs,
     workoutLogs,
@@ -56,8 +56,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getActivities(),
     canWrite ? getOrCreateDailyLog(clientId, todayIso) : getDailyLog(clientId, todayIso),
     getMessages(clientId),
-    getClasses(),
     getUpcomingBookings(clientId),
+    getScheduleOccurrences(),
     getCreditsBalance(clientId),
     getPrograms(clientId),
     getWorkoutLogs(clientId),
@@ -89,8 +89,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     foodDiaryEntries,
     programWeek,
     messages,
-    classes,
     bookings,
+    occurrences,
     creditsBalance,
     programs,
     workoutLogs,
