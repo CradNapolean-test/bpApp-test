@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getMyClients } from '@/lib/data/coach';
+import { getClientHealthStatuses, getMyClients } from '@/lib/data/coach';
 import { AppShell } from '@/app/_components/AppShell';
 import { CoachNav } from './_components/CoachNav';
 import { AddClientForm } from './_components/AddClientForm';
+import { ProgramHealth } from './_components/ProgramHealth';
 
 export default async function CoachPage() {
   const supabase = await createClient();
@@ -20,7 +21,10 @@ export default async function CoachPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const clients = await getMyClients(supabase, user.id);
+  const [clients, healthStatuses] = await Promise.all([
+    getMyClients(supabase, user.id),
+    getClientHealthStatuses(supabase, user.id),
+  ]);
 
   return (
     <AppShell
@@ -41,8 +45,11 @@ export default async function CoachPage() {
         </nav>
       }
     >
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <AddClientForm />
+      <div className="space-y-4">
+        <ProgramHealth statuses={healthStatuses} />
+        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <AddClientForm />
+        </div>
       </div>
       {clients.length === 0 && (
         <p className="mt-4 text-sm text-zinc-500">

@@ -33,3 +33,12 @@ export function nextDateForWeekday(dayOfWeek: number, from: Date = new Date()): 
   const diff = (dayOfWeek - from.getUTCDay() + 7) % 7;
   return toIsoDate(addDays(from, diff));
 }
+
+// Whole-day difference between two ISO dates (b - a), UTC-anchored like every other helper
+// here so it isn't thrown off by server-timezone drift.
+export function daysBetween(a: string, b: string): number {
+  const msPerDay = 86400000;
+  return Math.round(
+    (new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / msPerDay
+  );
+}
