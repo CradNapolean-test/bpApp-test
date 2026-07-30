@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { dayCalories, cycleDayFor, CALORIE_FLOOR } from '@/lib/calculations';
 import { upsertDailyLog } from '@/lib/data/dailyLogs';
 import type { DailyLogRow } from '@/lib/data/types';
@@ -42,7 +42,7 @@ export function WeeklyLogTab({
   periodStartDates: string[];
   readOnly: boolean;
 }) {
-  const router = useRouter();
+  const { run } = useAction();
   const [days, setDays] = useState<Record<string, DayForm>>(() => {
     const map: Record<string, DayForm> = {};
     for (const date of weekDates) {
@@ -64,8 +64,7 @@ export function WeeklyLogTab({
   async function saveDay(date: string) {
     setSavingDate(date);
     try {
-      await upsertDailyLog(clientId, date, days[date]);
-      router.refresh();
+      await run(() => upsertDailyLog(clientId, date, days[date]), { success: 'Day saved' });
     } finally {
       setSavingDate(null);
     }

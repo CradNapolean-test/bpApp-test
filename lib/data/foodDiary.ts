@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { FoodDiaryEntryRow } from './types';
 
@@ -9,7 +10,7 @@ export async function getFoodDiaryEntries(dailyLogId: string): Promise<FoodDiary
     .from('food_diary_entries')
     .select('*, food:foods(*)')
     .eq('daily_log_id', dailyLogId);
-  if (error) throw error;
+  if (error) raise(error);
   return (data ?? []) as unknown as FoodDiaryEntryRow[];
 }
 
@@ -22,13 +23,13 @@ export async function addFoodDiaryEntry(
   const { error } = await supabase
     .from('food_diary_entries')
     .insert({ daily_log_id: dailyLogId, food_id: foodId, portions });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function removeFoodDiaryEntry(id: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('food_diary_entries').delete().eq('id', id);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 // Writes the food diary's running totals into today's Weekly Log row, so downstream
@@ -55,5 +56,5 @@ export async function syncFoodDiaryToLog(dailyLogId: string): Promise<void> {
       fat: Math.round(totals.fat * 10) / 10,
     })
     .eq('id', dailyLogId);
-  if (error) throw error;
+  if (error) raise(error);
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import { upsertClientProfile } from '@/lib/data/clientProfile';
 import type { ClientProfileRow } from '@/lib/data/types';
@@ -64,11 +64,10 @@ export function SetupTab({
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
 }) {
-  const router = useRouter();
+  const { run, busy: saving } = useAction();
   const [form, setForm] = useState<SetupFields>(
     initialProfile ?? BLANK
   );
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const engine = useMemo(() => {
@@ -106,20 +105,14 @@ export function SetupTab({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Field-level validation stays inline next to the form; only the save failure itself
+    // goes to a toast.
     if (!form.goal_weight) {
       setError('Goal Weight is required.');
       return;
     }
-    setSaving(true);
     setError(null);
-    try {
-      await upsertClientProfile(clientId, form);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
+    await run(() => upsertClientProfile(clientId, form), { success: 'Setup saved' });
   }
 
   const inputCls =
@@ -129,7 +122,7 @@ export function SetupTab({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <fieldset disabled={readOnly} className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <label className={labelCls}>Name</label>
             <input

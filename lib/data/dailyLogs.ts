@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { DailyLogRow } from './types';
 
@@ -16,7 +17,7 @@ export async function getDailyLogs(
     .gte('log_date', fromDate)
     .lte('log_date', toDate)
     .order('log_date', { ascending: true });
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -28,7 +29,7 @@ export async function getDailyLog(clientId: string, logDate: string): Promise<Da
     .eq('client_id', clientId)
     .eq('log_date', logDate)
     .maybeSingle();
-  if (error) throw error;
+  if (error) raise(error);
   return data;
 }
 
@@ -42,7 +43,7 @@ export async function getOrCreateDailyLog(clientId: string, logDate: string): Pr
     )
     .select('*')
     .single();
-  if (error) throw error;
+  if (error) raise(error);
   return data;
 }
 
@@ -58,5 +59,5 @@ export async function upsertDailyLog(
       { client_id: clientId, log_date: logDate, ...fields },
       { onConflict: 'client_id,log_date' }
     );
-  if (error) throw error;
+  if (error) raise(error);
 }

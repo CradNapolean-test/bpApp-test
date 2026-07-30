@@ -50,7 +50,7 @@ export function TodayTab({
     .sort((a, b) => (a.booking_date + (a.class?.start_time ?? '')).localeCompare(b.booking_date + (b.class?.start_time ?? '')))[0];
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div className={cardCls}>
         <p className={labelCls}>Today&apos;s nutrition</p>
         <p className={valueCls}>{todayCalories != null ? `${Math.round(todayCalories)} kcal` : 'Not logged'}</p>

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
 import { toIsoDate } from '@/lib/utils/dates';
 import type { MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
@@ -25,49 +26,50 @@ export function ProgressTab({
   initialMeasurements: MeasurementLogRow[];
   readOnly: boolean;
 }) {
-  const router = useRouter();
+  const confirm = useConfirm();
+  const { run: runUpload, busy: uploading } = useAction();
+  const { run: runDelete } = useAction();
+  const { run: runMeasurement, busy: savingMeasurement } = useAction();
   const today = toIsoDate(new Date());
   const [photoDate, setPhotoDate] = useState(today);
-  const [uploading, setUploading] = useState(false);
   const [measurementDate, setMeasurementDate] = useState(today);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
-  const [savingMeasurement, setSavingMeasurement] = useState(false);
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    // Capture the form element up front -- e.currentTarget is nulled out once the handler
+    // yields at the first await, so resetting it afterwards would throw.
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     formData.set('clientId', clientId);
     formData.set('date', photoDate);
-    setUploading(true);
-    try {
-      await uploadProgressPhoto(formData);
-      e.currentTarget.reset();
-      router.refresh();
-    } finally {
-      setUploading(false);
-    }
+    await runUpload(() => uploadProgressPhoto(formData), {
+      success: 'Photo uploaded',
+      onDone: () => form.reset(),
+    });
   }
 
-  async function handleDeletePhoto(id: string) {
-    await deletePhoto(id);
-    router.refresh();
+  async function handleDeletePhoto(id: string, date: string) {
+    const ok = await confirm({
+      title: `Delete the photo from ${date}?`,
+      body: 'This cannot be undone.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runDelete(() => deletePhoto(id), { success: 'Photo deleted' });
   }
 
   async function handleSaveMeasurement(e: React.FormEvent) {
     e.preventDefault();
-    setSavingMeasurement(true);
-    try {
-      const fields = Object.fromEntries(
-        Object.entries(measurements)
-          .filter(([, v]) => v !== '')
-          .map(([k, v]) => [k, Number(v)])
-      );
-      await addMeasurementLog(clientId, measurementDate, fields);
-      setMeasurements({});
-      router.refresh();
-    } finally {
-      setSavingMeasurement(false);
-    }
+    const fields = Object.fromEntries(
+      Object.entries(measurements)
+        .filter(([, v]) => v !== '')
+        .map(([k, v]) => [k, Number(v)])
+    );
+    await runMeasurement(() => addMeasurementLog(clientId, measurementDate, fields), {
+      success: 'Measurements saved',
+      onDone: () => setMeasurements({}),
+    });
   }
 
   const inputCls = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
@@ -92,7 +94,7 @@ export function ProgressTab({
             <button
               type="submit"
               disabled={uploading}
-              className="rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-50"
+              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
             >
               {uploading ? 'Uploading…' : 'Upload'}
             </button>
@@ -115,7 +117,7 @@ export function ProgressTab({
               <div className="flex items-center justify-between text-xs text-zinc-500">
                 <span>{photo.photo_date}</span>
                 {!readOnly && (
-                  <button onClick={() => handleDeletePhoto(photo.id)} className="text-red-600 hover:underline dark:text-red-400">
+                  <button onClick={() => handleDeletePhoto(photo.id, photo.photo_date)} className="text-red-600 hover:underline dark:text-red-400">
                     Delete
                   </button>
                 )}
@@ -140,7 +142,7 @@ export function ProgressTab({
                 className={inputCls}
               />
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               {MEASUREMENT_FIELDS.map(({ key, label }) => (
                 <div key={key} className="space-y-1">
                   <label className="text-xs font-medium text-zinc-500">{label}</label>
@@ -157,7 +159,7 @@ export function ProgressTab({
             <button
               type="submit"
               disabled={savingMeasurement}
-              className="rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-50"
+              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
             >
               {savingMeasurement ? 'Saving…' : 'Save measurements'}
             </button>

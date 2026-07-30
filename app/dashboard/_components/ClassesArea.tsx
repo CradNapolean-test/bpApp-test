@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
 import { addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
@@ -18,10 +18,9 @@ export function ClassesArea({
   creditsBalance: number;
   membership: ClientMembershipRow | null;
 }) {
-  const router = useRouter();
+  const { run } = useAction();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const todayIso = toIsoDate(new Date());
   const nextReset = toIsoDate(addDays(startOfWeek(new Date()), 7));
@@ -31,12 +30,11 @@ export function ClassesArea({
 
   async function handleBook(occ: ScheduleOccurrence) {
     setBusyKey(`${occ.classId}|${occ.date}`);
-    setError(null);
     try {
-      await bookClass(occ.classId, occ.date);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to book');
+      const full = occ.bookedCount >= occ.capacity;
+      await run(() => bookClass(occ.classId, occ.date), {
+        success: full ? `Added to the waitlist for ${occ.className}` : `Booked ${occ.className}`,
+      });
     } finally {
       setBusyKey(null);
     }
@@ -44,12 +42,8 @@ export function ClassesArea({
 
   async function handleCancel(bookingId: string) {
     setBusyKey(bookingId);
-    setError(null);
     try {
-      await cancelBooking(bookingId);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to cancel');
+      await run(() => cancelBooking(bookingId), { success: 'Booking cancelled' });
     } finally {
       setBusyKey(null);
     }
@@ -70,8 +64,6 @@ export function ClassesArea({
           <p className="mt-1 text-sm text-zinc-500">No membership package assigned yet.</p>
         )}
       </div>
-
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Available classes</h3>
@@ -104,7 +96,7 @@ export function ClassesArea({
                     <button
                       onClick={() => handleBook(occ)}
                       disabled={busyKey === key || (full && occ.date < todayIso)}
-                      className="rounded-md bg-foreground px-3 py-1 text-xs font-medium text-background disabled:opacity-50"
+                      className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50"
                     >
                       {full ? 'Join waitlist' : 'Book'}
                     </button>

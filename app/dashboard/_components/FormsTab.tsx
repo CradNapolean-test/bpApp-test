@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
 import type { FormAssignmentWithDetails, FormTemplateRow } from '@/lib/data/types';
 
 const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
 
-function FillableForm({ assignment, onSubmitted }: { assignment: FormAssignmentWithDetails; onSubmitted: () => void }) {
+function FillableForm({ assignment }: { assignment: FormAssignmentWithDetails }) {
+  const { run, busy: submitting } = useAction();
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
-  const [submitting, setSubmitting] = useState(false);
 
   function setAnswer(questionId: string, value: unknown) {
     setAnswers((a) => ({ ...a, [questionId]: value }));
@@ -17,17 +17,11 @@ function FillableForm({ assignment, onSubmitted }: { assignment: FormAssignmentW
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    try {
-      const payload = assignment.template.questions.map((q) => ({
-        question_id: q.id,
-        answer: answers[q.id] ?? (q.question_type === 'multi_choice' ? [] : null),
-      }));
-      await submitFormResponses(assignment.id, payload);
-      onSubmitted();
-    } finally {
-      setSubmitting(false);
-    }
+    const payload = assignment.template.questions.map((q) => ({
+      question_id: q.id,
+      answer: answers[q.id] ?? (q.question_type === 'multi_choice' ? [] : null),
+    }));
+    await run(() => submitFormResponses(assignment.id, payload), { success: 'Form submitted' });
   }
 
   return (
@@ -96,7 +90,7 @@ function FillableForm({ assignment, onSubmitted }: { assignment: FormAssignmentW
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
       >
         {submitting ? 'Submitting…' : 'Submit'}
       </button>
@@ -140,21 +134,16 @@ export function FormsTab({
   templates: FormTemplateRow[];
   assignments: FormAssignmentWithDetails[];
 }) {
-  const router = useRouter();
+  const { run, busy: assigning } = useAction();
   const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [assigning, setAssigning] = useState(false);
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedTemplate) return;
-    setAssigning(true);
-    try {
-      await assignForm(selectedTemplate, clientId);
-      setSelectedTemplate('');
-      router.refresh();
-    } finally {
-      setAssigning(false);
-    }
+    await run(() => assignForm(selectedTemplate, clientId), {
+      success: 'Form assigned',
+      onDone: () => setSelectedTemplate(''),
+    });
   }
 
   const pending = assignments.filter((a) => !a.completed_at);
@@ -200,7 +189,7 @@ export function FormsTab({
                 </div>
               ))
             : pending.map((a) => (
-                <FillableForm key={a.id} assignment={a} onSubmitted={() => router.refresh()} />
+                <FillableForm key={a.id} assignment={a} />
               ))}
         </div>
       )}

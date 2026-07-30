@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientMembershipRow, MembershipPackageRow } from './types';
 
@@ -9,7 +10,7 @@ export async function getPackages(): Promise<MembershipPackageRow[]> {
     .from('membership_packages')
     .select('*')
     .order('credits_per_week');
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -21,13 +22,13 @@ export async function createPackage(fields: Omit<MembershipPackageRow, 'id' | 'c
   if (!user) throw new Error('Not authenticated');
 
   const { error } = await supabase.from('membership_packages').insert({ ...fields, coach_id: user.id });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function deletePackage(packageId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('membership_packages').delete().eq('id', packageId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function getMyMembership(clientId: string): Promise<ClientMembershipRow | null> {
@@ -38,7 +39,7 @@ export async function getMyMembership(clientId: string): Promise<ClientMembershi
     .eq('client_id', clientId)
     .is('ended_at', null)
     .maybeSingle();
-  if (error) throw error;
+  if (error) raise(error);
   return data as unknown as ClientMembershipRow | null;
 }
 
@@ -48,5 +49,5 @@ export async function assignMembership(clientId: string, packageId: string): Pro
     p_client_id: clientId,
     p_package_id: packageId,
   });
-  if (error) throw error;
+  if (error) raise(error);
 }

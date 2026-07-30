@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientProfileRow } from './types';
 
@@ -10,7 +11,7 @@ export async function getClientProfile(clientId: string): Promise<ClientProfileR
     .select('*')
     .eq('client_id', clientId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) raise(error);
   return data;
 }
 
@@ -22,7 +23,7 @@ export async function upsertClientProfile(
   const { error } = await supabase
     .from('client_profiles')
     .upsert({ client_id: clientId, ...fields, updated_at: new Date().toISOString() });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 // Narrow, coach-only update -- separate from upsertClientProfile (the client's own Setup
@@ -36,5 +37,5 @@ export async function updateCheckinReminderDays(clientId: string, days: number):
     p_client_id: clientId,
     p_days: days,
   });
-  if (error) throw error;
+  if (error) raise(error);
 }

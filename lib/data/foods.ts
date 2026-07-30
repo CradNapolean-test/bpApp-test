@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { ActivityRow, FoodRow } from './types';
 
@@ -10,7 +11,7 @@ export async function searchFoods(query: string): Promise<FoodRow[]> {
     request = request.ilike('name', `%${query.trim()}%`);
   }
   const { data, error } = await request;
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -21,7 +22,7 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null>
     .select('*')
     .eq('barcode', barcode)
     .maybeSingle();
-  if (error) throw error;
+  if (error) raise(error);
   return data;
 }
 
@@ -41,7 +42,7 @@ export async function upsertFoodFromBarcode(
     .maybeSingle();
   // Conflict on the unique barcode column is expected/harmless when another session (or a
   // prior scan) already cached this barcode — fall through to the select below either way.
-  if (insertError && insertError.code !== '23505') throw insertError;
+  if (insertError && insertError.code !== '23505') raise(insertError);
 
   const existing = await getFoodByBarcode(barcode);
   if (!existing) throw new Error('Failed to cache scanned food');
@@ -51,6 +52,6 @@ export async function upsertFoodFromBarcode(
 export async function getActivities(): Promise<ActivityRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from('activities').select('*').order('name');
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }

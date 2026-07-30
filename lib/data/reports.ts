@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { CoachReport } from './types';
 
@@ -16,7 +17,7 @@ export async function getCoachReport(): Promise<CoachReport> {
     .from('classes')
     .select('id, name')
     .eq('coach_id', user.id);
-  if (classesError) throw classesError;
+  if (classesError) raise(classesError);
   if (!classes || classes.length === 0) {
     return { attendanceRate: null, totalBooked: 0, totalAttended: 0, noShows: [], classPopularity: [] };
   }
@@ -36,7 +37,7 @@ export async function getCoachReport(): Promise<CoachReport> {
     )
     .gte('booking_date', sinceIso)
     .neq('status', 'cancelled');
-  if (bookingsError) throw bookingsError;
+  if (bookingsError) raise(bookingsError);
 
   const rows = bookings ?? [];
   const pastBooked = rows.filter((b) => b.status === 'booked' && b.booking_date <= todayIso);

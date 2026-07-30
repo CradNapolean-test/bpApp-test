@@ -1,44 +1,48 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { createClass, deleteClass } from '@/lib/data/classes';
 import type { ClassRow } from '@/lib/data/types';
 
 const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] }) {
-  const router = useRouter();
+  const confirm = useConfirm();
+  const { run: runCreate, busy: saving } = useAction();
+  const { run: runDelete } = useAction();
   const [name, setName] = useState('');
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [startTime, setStartTime] = useState('06:00');
   const [capacity, setCapacity] = useState(10);
   const [cutoffHours, setCutoffHours] = useState(12);
   const [note, setNote] = useState('');
-  const [saving, setSaving] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-    try {
-      await createClass({
-        name,
-        day_of_week: dayOfWeek,
-        start_time: startTime,
-        capacity,
-        cutoff_hours: cutoffHours,
-        coach_note: note || null,
-      });
-      setName('');
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    await runCreate(
+      () =>
+        createClass({
+          name,
+          day_of_week: dayOfWeek,
+          start_time: startTime,
+          capacity,
+          cutoff_hours: cutoffHours,
+          coach_note: note || null,
+        }),
+      { success: 'Class added', onDone: () => setName('') }
+    );
   }
 
-  async function handleDelete(id: string) {
-    await deleteClass(id);
-    router.refresh();
+  async function handleDelete(id: string, className: string) {
+    const ok = await confirm({
+      title: `Delete “${className}”?`,
+      body: 'Every booking for this class is removed too. This cannot be undone.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runDelete(() => deleteClass(id), { success: 'Class deleted' });
   }
 
   const inputCls =
@@ -78,7 +82,7 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
         <button
           type="submit"
           disabled={saving}
-          className="col-span-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50 sm:col-span-3"
+          className="col-span-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50 sm:col-span-3"
         >
           {saving ? 'Adding…' : 'Add class'}
         </button>
@@ -92,7 +96,7 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
               {c.start_time?.slice(0, 5)} · capacity {c.capacity} · {c.cutoff_hours}h cutoff
             </span>
             <button
-              onClick={() => handleDelete(c.id)}
+              onClick={() => handleDelete(c.id, c.name)}
               className="text-xs text-red-600 hover:underline dark:text-red-400"
             >
               Delete

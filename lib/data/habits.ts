@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { HabitWithLogs } from './types';
 
@@ -12,7 +13,7 @@ export async function getHabitsWithLogs(clientId: string): Promise<HabitWithLogs
     .select('*')
     .eq('client_id', clientId)
     .order('created_at');
-  if (habitsError) throw habitsError;
+  if (habitsError) raise(habitsError);
   if (!habits || habits.length === 0) return [];
 
   const since = new Date();
@@ -27,7 +28,7 @@ export async function getHabitsWithLogs(clientId: string): Promise<HabitWithLogs
       habits.map((h) => h.id)
     )
     .gte('log_date', sinceIso);
-  if (logsError) throw logsError;
+  if (logsError) raise(logsError);
 
   return habits.map((habit) => ({
     ...habit,
@@ -38,13 +39,13 @@ export async function getHabitsWithLogs(clientId: string): Promise<HabitWithLogs
 export async function createHabit(clientId: string, name: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('habits').insert({ client_id: clientId, name });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function deleteHabit(habitId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('habits').delete().eq('id', habitId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function toggleHabitLog(habitId: string, logDate: string, completed: boolean): Promise<void> {
@@ -52,5 +53,5 @@ export async function toggleHabitLog(habitId: string, logDate: string, completed
   const { error } = await supabase
     .from('habit_logs')
     .upsert({ habit_id: habitId, log_date: logDate, completed }, { onConflict: 'habit_id,log_date' });
-  if (error) throw error;
+  if (error) raise(error);
 }

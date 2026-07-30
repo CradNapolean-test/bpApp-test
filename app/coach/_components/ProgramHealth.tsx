@@ -10,7 +10,11 @@ const BUCKET_META: Record<Exclude<ClientHealthBucket, 'unmonitored'>, { label: s
   red: { label: 'Action required', dot: 'bg-red-500' },
 };
 
-const BUCKET_ORDER: Exclude<ClientHealthBucket, 'unmonitored'>[] = ['green', 'amber', 'red'];
+const BUCKET_ORDER: Exclude<ClientHealthBucket, 'unmonitored'>[] = ['red', 'amber', 'green'];
+
+// At roster scale a bucket can hold dozens of clients; dumping them all inline buries the
+// widget. Show a handful and defer the rest to the sortable client table below.
+const PREVIEW_LIMIT = 8;
 
 export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) {
   const [expanded, setExpanded] = useState<ClientHealthBucket | null>(null);
@@ -49,7 +53,7 @@ export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) 
               {isOpen && (
                 <ul className="pb-2 pl-5 text-sm">
                   {clients.length === 0 && <li className="py-1 text-zinc-500">No clients here.</li>}
-                  {clients.map((c) => (
+                  {clients.slice(0, PREVIEW_LIMIT).map((c) => (
                     <li key={c.clientId} className="py-1">
                       <Link
                         href={`/coach/clients/${c.clientId}`}
@@ -62,6 +66,11 @@ export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) 
                       </Link>
                     </li>
                   ))}
+                  {clients.length > PREVIEW_LIMIT && (
+                    <li className="py-1 text-xs text-zinc-400">
+                      +{clients.length - PREVIEW_LIMIT} more — see the full list below.
+                    </li>
+                  )}
                 </ul>
               )}
             </div>

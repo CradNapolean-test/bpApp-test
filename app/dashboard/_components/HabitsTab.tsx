@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { createHabit, deleteHabit, toggleHabitLog } from '@/lib/data/habits';
 import { adherencePercent } from '@/lib/utils/habitStats';
 import { toIsoDate } from '@/lib/utils/dates';
@@ -16,35 +17,36 @@ export function HabitsTab({
   isCoachView: boolean;
   habits: HabitWithLogs[];
 }) {
-  const router = useRouter();
+  const confirm = useConfirm();
+  const { run: runCreate, busy: creating } = useAction();
+  const { run: runMutate } = useAction();
   const today = toIsoDate(new Date());
   const [newHabitName, setNewHabitName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    setCreating(true);
-    try {
-      await createHabit(clientId, newHabitName);
-      setNewHabitName('');
-      router.refresh();
-    } finally {
-      setCreating(false);
-    }
+    await runCreate(() => createHabit(clientId, newHabitName), {
+      success: 'Habit added',
+      onDone: () => setNewHabitName(''),
+    });
   }
 
-  async function handleDelete(habitId: string) {
-    await deleteHabit(habitId);
-    router.refresh();
+  async function handleDelete(habitId: string, name: string) {
+    const ok = await confirm({
+      title: `Delete “${name}”?`,
+      body: 'The habit and its whole completion history are removed.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runMutate(() => deleteHabit(habitId), { success: 'Habit deleted' });
   }
 
   async function handleToggleToday(habit: HabitWithLogs) {
     const todaysLog = habit.logs.find((l) => l.log_date === today);
     setBusyId(habit.id);
     try {
-      await toggleHabitLog(habit.id, today, !(todaysLog?.completed ?? false));
-      router.refresh();
+      await runMutate(() => toggleHabitLog(habit.id, today, !(todaysLog?.completed ?? false)));
     } finally {
       setBusyId(null);
     }
@@ -67,7 +69,7 @@ export function HabitsTab({
           <button
             type="submit"
             disabled={creating}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
           >
             {creating ? 'Adding…' : 'Add habit'}
           </button>
@@ -95,7 +97,7 @@ export function HabitsTab({
                 <span className="text-zinc-500">{adherencePercent(habit.logs)}% (30d)</span>
                 {isCoachView && (
                   <button
-                    onClick={() => handleDelete(habit.id)}
+                    onClick={() => handleDelete(habit.id, habit.name)}
                     className="text-xs text-red-600 hover:underline dark:text-red-400"
                   >
                     Delete

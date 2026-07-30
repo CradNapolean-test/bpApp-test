@@ -1,25 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { markRead } from '@/lib/data/notifications';
 import type { NotificationRow } from '@/lib/data/types';
 
 export function NotificationBanner({ notifications }: { notifications: NotificationRow[] }) {
-  const router = useRouter();
+  const { run } = useAction();
   const [dismissing, setDismissing] = useState<string | null>(null);
-
-  if (notifications.length === 0) return null;
 
   async function handleDismiss(id: string) {
     setDismissing(id);
     try {
-      await markRead(id);
-      router.refresh();
+      await run(() => markRead(id));
     } finally {
       setDismissing(null);
     }
   }
+
+  if (notifications.length === 0) return null;
 
   return (
     <div className="mt-6 space-y-2">

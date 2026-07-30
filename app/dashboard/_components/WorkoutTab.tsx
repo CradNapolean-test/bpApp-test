@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import {
   addExercise,
   addProgramDay,
@@ -14,34 +15,35 @@ import {
 import type { WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 function AddExerciseForm({ programDayId }: { programDayId: string }) {
-  const router = useRouter();
+  const { run, busy } = useAction();
   const [name, setName] = useState('');
   const [sets, setSets] = useState(3);
   const [reps, setReps] = useState('8-10');
   const [load, setLoad] = useState<number | ''>('');
   const [rpe, setRpe] = useState<number | ''>('');
   const [videoUrl, setVideoUrl] = useState('');
-  const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-    try {
-      await addExercise(programDayId, {
-        name,
-        sets,
-        reps,
-        load: load === '' ? null : load,
-        rpe: rpe === '' ? null : rpe,
-        notes: null,
-        video_url: videoUrl || null,
-      });
-      setName('');
-      setVideoUrl('');
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    await run(
+      () =>
+        addExercise(programDayId, {
+          name,
+          sets,
+          reps,
+          load: load === '' ? null : load,
+          rpe: rpe === '' ? null : rpe,
+          notes: null,
+          video_url: videoUrl || null,
+        }),
+      {
+        success: 'Exercise added',
+        onDone: () => {
+          setName('');
+          setVideoUrl('');
+        },
+      }
+    );
   }
 
   const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
@@ -54,7 +56,7 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
       <input type="number" placeholder="Load" className={`${inputCls} w-16`} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
       <input type="number" placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
       <input placeholder="Video URL (optional)" className={`${inputCls} w-40`} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-      <button type="submit" disabled={saving} className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background disabled:opacity-50">
+      <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
         Add
       </button>
     </form>
@@ -62,29 +64,30 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
 }
 
 function LogSetForm({ clientId, exerciseId, nextSetNumber }: { clientId: string; exerciseId: string; nextSetNumber: number }) {
-  const router = useRouter();
+  const { run, busy } = useAction();
   const [reps, setReps] = useState<number | ''>('');
   const [load, setLoad] = useState<number | ''>('');
   const [rpe, setRpe] = useState<number | ''>('');
-  const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-    try {
-      await logSet(clientId, exerciseId, {
-        set_number: nextSetNumber,
-        actual_reps: reps === '' ? null : reps,
-        actual_load: load === '' ? null : load,
-        actual_rpe: rpe === '' ? null : rpe,
-      });
-      setReps('');
-      setLoad('');
-      setRpe('');
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    await run(
+      () =>
+        logSet(clientId, exerciseId, {
+          set_number: nextSetNumber,
+          actual_reps: reps === '' ? null : reps,
+          actual_load: load === '' ? null : load,
+          actual_rpe: rpe === '' ? null : rpe,
+        }),
+      {
+        success: `Set ${nextSetNumber} logged`,
+        onDone: () => {
+          setReps('');
+          setLoad('');
+          setRpe('');
+        },
+      }
+    );
   }
 
   const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
@@ -95,7 +98,7 @@ function LogSetForm({ clientId, exerciseId, nextSetNumber }: { clientId: string;
       <input type="number" placeholder="Reps" className={`${inputCls} w-16`} value={reps} onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))} />
       <input type="number" placeholder="Load" className={`${inputCls} w-16`} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
       <input type="number" placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-      <button type="submit" disabled={saving} className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background disabled:opacity-50">
+      <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
         Log
       </button>
     </form>
@@ -113,27 +116,49 @@ export function WorkoutTab({
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
 }) {
-  const router = useRouter();
+  const confirm = useConfirm();
+  const { run: runCreate, busy: creating } = useAction();
+  const { run: runMutate } = useAction();
   const [newProgramName, setNewProgramName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string }>>({});
 
   async function handleCreateProgram(e: React.FormEvent) {
     e.preventDefault();
-    setCreating(true);
-    try {
-      await createProgram(clientId, newProgramName);
-      setNewProgramName('');
-      router.refresh();
-    } finally {
-      setCreating(false);
-    }
+    await runCreate(() => createProgram(clientId, newProgramName), {
+      success: 'Program created',
+      onDone: () => setNewProgramName(''),
+    });
   }
 
   async function handleAddDay(programId: string) {
     const form = dayForms[programId] ?? { weekNum: 1, dayLabel: 'Day 1' };
-    await addProgramDay(programId, form.weekNum, form.dayLabel);
-    router.refresh();
+    await runMutate(() => addProgramDay(programId, form.weekNum, form.dayLabel), { success: 'Day added' });
+  }
+
+  async function handleDeleteProgram(programId: string, name: string) {
+    const ok = await confirm({
+      title: `Delete “${name}”?`,
+      body: 'This removes every week, day and exercise in the program. This cannot be undone.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runMutate(() => deleteProgram(programId), { success: 'Program deleted' });
+  }
+
+  async function handleDeleteDay(dayId: string, label: string) {
+    const ok = await confirm({
+      title: `Delete “${label}”?`,
+      body: 'This removes the day and all its exercises.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runMutate(() => deleteProgramDay(dayId), { success: 'Day deleted' });
+  }
+
+  async function handleDeleteExercise(exerciseId: string, name: string) {
+    const ok = await confirm({ title: `Delete “${name}”?`, destructive: true });
+    if (!ok) return;
+    await runMutate(() => deleteExercise(exerciseId), { success: 'Exercise deleted' });
   }
 
   const logsByExercise = workoutLogs.reduce<Record<string, WorkoutLogRow[]>>((acc, log) => {
@@ -155,7 +180,7 @@ export function WorkoutTab({
               onChange={(e) => setNewProgramName(e.target.value)}
             />
           </div>
-          <button type="submit" disabled={creating} className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50">
+          <button type="submit" disabled={creating} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50">
             {creating ? 'Creating…' : 'Create program'}
           </button>
         </form>
@@ -169,10 +194,7 @@ export function WorkoutTab({
             <h3 className="font-medium text-black dark:text-zinc-50">{program.name}</h3>
             {isCoachView && (
               <button
-                onClick={async () => {
-                  await deleteProgram(program.id);
-                  router.refresh();
-                }}
+                onClick={() => handleDeleteProgram(program.id, program.name)}
                 className="text-xs text-red-600 hover:underline dark:text-red-400"
               >
                 Delete program
@@ -190,10 +212,7 @@ export function WorkoutTab({
                   </p>
                   {isCoachView && (
                     <button
-                      onClick={async () => {
-                        await deleteProgramDay(day.id);
-                        router.refresh();
-                      }}
+                      onClick={() => handleDeleteDay(day.id, `Week ${day.week_num} — ${day.day_label}`)}
                       className="text-xs text-red-600 hover:underline dark:text-red-400"
                     >
                       Delete day
@@ -214,10 +233,7 @@ export function WorkoutTab({
                           </span>
                           {isCoachView && (
                             <button
-                              onClick={async () => {
-                                await deleteExercise(ex.id);
-                                router.refresh();
-                              }}
+                              onClick={() => handleDeleteExercise(ex.id, ex.name)}
                               className="text-xs text-red-600 hover:underline dark:text-red-400"
                             >
                               Delete
@@ -229,7 +245,7 @@ export function WorkoutTab({
                             href={ex.video_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-1 inline-block text-xs text-blue-600 hover:underline dark:text-blue-400"
+                            className="mt-1 inline-block text-xs text-accent hover:underline"
                           >
                             ▶ Watch demo
                           </a>

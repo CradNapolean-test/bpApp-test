@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { AppShell } from '@/app/_components/AppShell';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useToast } from '@/app/_components/ToastProvider';
 import {
   createFormTemplate,
   deleteFormTemplate,
@@ -32,13 +34,15 @@ type QuestionDraft = {
 const BLANK_QUESTION: QuestionDraft = { question_text: '', question_type: 'short_text', optionsRaw: '', required: true };
 
 export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemplateRow[] }) {
-  const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const { run: runSave, busy: saving } = useAction();
+  const { run: runDelete } = useAction();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [questions, setQuestions] = useState<QuestionDraft[]>([{ ...BLANK_QUESTION }]);
-  const [saving, setSaving] = useState(false);
 
   const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
 
@@ -51,8 +55,17 @@ export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemp
   }
 
   async function handleEditClick(id: string) {
-    const full = await getFormTemplateWithQuestions(id);
-    if (!full) return;
+    let full;
+    try {
+      full = await getFormTemplateWithQuestions(id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not load that template');
+      return;
+    }
+    if (!full) {
+      toast.error('That template no longer exists');
+      return;
+    }
     setEditingId(id);
     setName(full.name);
     setDescription(full.description ?? '');
@@ -83,40 +96,46 @@ export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemp
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-    try {
-      const fields = { name, description: description || null, is_default_onboarding: isDefault };
-      const preparedQuestions = questions
-        .filter((q) => q.question_text.trim().length > 0)
-        .map((q, i) => ({
-          order_index: i,
-          question_text: q.question_text,
-          question_type: q.question_type,
-          options: CHOICE_TYPES.includes(q.question_type)
-            ? q.optionsRaw
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : null,
-          required: q.required,
-        }));
+    const fields = { name, description: description || null, is_default_onboarding: isDefault };
+    const preparedQuestions = questions
+      .filter((q) => q.question_text.trim().length > 0)
+      .map((q, i) => ({
+        order_index: i,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        options: CHOICE_TYPES.includes(q.question_type)
+          ? q.optionsRaw
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : null,
+        required: q.required,
+      }));
 
-      if (editingId) {
-        await updateFormTemplate(editingId, fields, preparedQuestions);
-      } else {
-        await createFormTemplate(fields, preparedQuestions);
-      }
-      resetForm();
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    const wasEditing = editingId;
+    await runSave(
+      () =>
+        wasEditing
+          ? updateFormTemplate(wasEditing, fields, preparedQuestions)
+          : createFormTemplate(fields, preparedQuestions),
+      { success: wasEditing ? 'Template saved' : 'Template created', onDone: resetForm }
+    );
   }
 
   async function handleDelete(id: string) {
-    await deleteFormTemplate(id);
-    if (editingId === id) resetForm();
-    router.refresh();
+    const template = initialTemplates.find((t) => t.id === id);
+    const ok = await confirm({
+      title: `Delete “${template?.name ?? 'this template'}”?`,
+      body: 'Every assignment of this form and the answers clients already submitted are deleted too. This cannot be undone.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runDelete(() => deleteFormTemplate(id), {
+      success: 'Template deleted',
+      onDone: () => {
+        if (editingId === id) resetForm();
+      },
+    });
   }
 
   const sidebar = (
@@ -232,7 +251,7 @@ export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemp
           <button
             type="submit"
             disabled={saving}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
           >
             {saving ? 'Saving…' : editingId ? 'Save changes' : 'Create template'}
           </button>

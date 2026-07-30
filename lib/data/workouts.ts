@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramRow } from './types';
 
@@ -10,20 +11,20 @@ export async function getPrograms(clientId: string): Promise<WorkoutProgramRow[]
     .select('*, workout_program_days(*, workout_exercises(*))')
     .eq('client_id', clientId)
     .order('created_at');
-  if (error) throw error;
+  if (error) raise(error);
   return (data ?? []) as unknown as WorkoutProgramRow[];
 }
 
 export async function createProgram(clientId: string, name: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_programs').insert({ client_id: clientId, name });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function deleteProgram(programId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_programs').delete().eq('id', programId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function addProgramDay(programId: string, weekNum: number, dayLabel: string): Promise<void> {
@@ -31,13 +32,13 @@ export async function addProgramDay(programId: string, weekNum: number, dayLabel
   const { error } = await supabase
     .from('workout_program_days')
     .insert({ program_id: programId, week_num: weekNum, day_label: dayLabel });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function deleteProgramDay(dayId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_program_days').delete().eq('id', dayId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function addExercise(
@@ -48,13 +49,13 @@ export async function addExercise(
   const { error } = await supabase
     .from('workout_exercises')
     .insert({ program_day_id: programDayId, ...fields });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function deleteExercise(exerciseId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_exercises').delete().eq('id', exerciseId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function getWorkoutLogs(clientId: string): Promise<WorkoutLogRow[]> {
@@ -64,7 +65,7 @@ export async function getWorkoutLogs(clientId: string): Promise<WorkoutLogRow[]>
     .select('*')
     .eq('client_id', clientId)
     .order('logged_at', { ascending: false });
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -77,5 +78,5 @@ export async function logSet(
   const { error } = await supabase
     .from('workout_logs')
     .insert({ client_id: clientId, exercise_id: exerciseId, ...fields });
-  if (error) throw error;
+  if (error) raise(error);
 }

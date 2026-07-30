@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { MeasurementLogRow, ProgressPhoto, ProgressPhotoRow } from './types';
 
@@ -12,7 +13,7 @@ export async function getPhotos(clientId: string): Promise<ProgressPhoto[]> {
     .select('*')
     .eq('client_id', clientId)
     .order('photo_date', { ascending: false });
-  if (error) throw error;
+  if (error) raise(error);
 
   const photos = (data ?? []) as ProgressPhotoRow[];
   return Promise.all(
@@ -38,14 +39,14 @@ export async function uploadProgressPhoto(formData: FormData): Promise<ProgressP
   const path = `${clientId}/${date}-${crypto.randomUUID()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage.from('progress-photos').upload(path, file);
-  if (uploadError) throw uploadError;
+  if (uploadError) raise(uploadError);
 
   const { data, error } = await supabase
     .from('progress_photos')
     .insert({ client_id: clientId, photo_date: date, storage_path: path })
     .select()
     .single();
-  if (error) throw error;
+  if (error) raise(error);
   return data;
 }
 
@@ -56,15 +57,15 @@ export async function deletePhoto(id: string): Promise<void> {
     .select('storage_path')
     .eq('id', id)
     .single();
-  if (fetchError) throw fetchError;
+  if (fetchError) raise(fetchError);
 
   const { error: removeError } = await supabase.storage
     .from('progress-photos')
     .remove([photo.storage_path]);
-  if (removeError) throw removeError;
+  if (removeError) raise(removeError);
 
   const { error } = await supabase.from('progress_photos').delete().eq('id', id);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function getMeasurementLogs(clientId: string): Promise<MeasurementLogRow[]> {
@@ -74,7 +75,7 @@ export async function getMeasurementLogs(clientId: string): Promise<MeasurementL
     .select('*')
     .eq('client_id', clientId)
     .order('log_date', { ascending: false });
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -87,5 +88,5 @@ export async function addMeasurementLog(
   const { error } = await supabase
     .from('measurement_logs')
     .upsert({ client_id: clientId, log_date: logDate, ...fields }, { onConflict: 'client_id,log_date' });
-  if (error) throw error;
+  if (error) raise(error);
 }

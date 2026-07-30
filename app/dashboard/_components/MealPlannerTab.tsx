@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { addMealPlanEntry, removeMealPlanEntry } from '@/lib/data/mealPlan';
 import { formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
@@ -25,18 +25,18 @@ export function MealPlannerTab({
   initialEntries: MealPlanEntryRow[];
   readOnly: boolean;
 }) {
-  const router = useRouter();
+  const { run } = useAction();
   const [openSection, setOpenSection] = useState<MealPlanSection | null>(null);
 
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
-    await addMealPlanEntry(clientId, section, food.id, portions);
-    setOpenSection(null);
-    router.refresh();
+    await run(() => addMealPlanEntry(clientId, section, food.id, portions), {
+      success: `${food.name} added`,
+      onDone: () => setOpenSection(null),
+    });
   }
 
   async function handleRemove(id: string) {
-    await removeMealPlanEntry(id);
-    router.refresh();
+    await run(() => removeMealPlanEntry(id), { success: 'Removed' });
   }
 
   const dayTotals = totalMacros(initialEntries);

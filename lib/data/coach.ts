@@ -1,3 +1,4 @@
+import { raise } from './errors';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { daysBetween, toIsoDate } from '@/lib/utils/dates';
 
@@ -23,7 +24,7 @@ export async function getMyClients(
     .eq('role', 'client')
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) raise(error);
 
   return (data ?? []).map((row) => {
     const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
@@ -63,11 +64,11 @@ export async function getClientHealthStatuses(
     .select('id, email, created_at, client_profiles(name, checkin_reminder_days)')
     .eq('coach_id', coachId)
     .eq('role', 'client');
-  if (clientsError) throw clientsError;
+  if (clientsError) raise(clientsError);
   if (!clients || clients.length === 0) return [];
 
   const { data: lastActiveRows, error: lastActiveError } = await supabase.rpc('get_client_last_active');
-  if (lastActiveError) throw lastActiveError;
+  if (lastActiveError) raise(lastActiveError);
   const lastActiveMap = new Map(
     ((lastActiveRows ?? []) as { client_id: string; last_active: string }[]).map((r) => [r.client_id, r.last_active])
   );

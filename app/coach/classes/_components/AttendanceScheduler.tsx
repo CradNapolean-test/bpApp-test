@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
+import { useToast } from '@/app/_components/ToastProvider';
 import { getRoster, markAttendance } from '@/lib/data/classes';
 import type { RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 
 export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
+  const toast = useToast();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selected, setSelected] = useState<ScheduleOccurrence | null>(null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
@@ -17,6 +19,9 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     try {
       const r = await getRoster(occ.classId, occ.date);
       setRoster(r);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not load the roster');
+      setSelected(null);
     } finally {
       setLoading(false);
     }
@@ -30,11 +35,12 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     );
     try {
       await markAttendance(entry.bookingId, nextAttended);
-    } catch {
-      // Revert on failure.
+    } catch (err) {
+      // Revert the optimistic tick and say why, rather than silently snapping back.
       setRoster((prev) =>
         prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: entry.attended } : r)) : prev
       );
+      toast.error(err instanceof Error ? err.message : 'Could not update attendance');
     }
   }
 

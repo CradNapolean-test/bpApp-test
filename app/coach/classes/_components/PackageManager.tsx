@@ -1,33 +1,41 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { createPackage, deletePackage } from '@/lib/data/memberships';
 import type { MembershipPackageRow } from '@/lib/data/types';
 
 export function PackageManager({ initialPackages }: { initialPackages: MembershipPackageRow[] }) {
-  const router = useRouter();
+  const confirm = useConfirm();
+  const { run: runCreate, busy: saving } = useAction();
+  const { run: runDelete } = useAction();
   const [name, setName] = useState('');
   const [creditsPerWeek, setCreditsPerWeek] = useState(4);
   const [description, setDescription] = useState('');
-  const [saving, setSaving] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-    try {
-      await createPackage({ name, credits_per_week: creditsPerWeek, description: description || null });
-      setName('');
-      setDescription('');
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
+    await runCreate(
+      () => createPackage({ name, credits_per_week: creditsPerWeek, description: description || null }),
+      {
+        success: 'Package added',
+        onDone: () => {
+          setName('');
+          setDescription('');
+        },
+      }
+    );
   }
 
-  async function handleDelete(id: string) {
-    await deletePackage(id);
-    router.refresh();
+  async function handleDelete(id: string, packageName: string) {
+    const ok = await confirm({
+      title: `Delete “${packageName}”?`,
+      body: 'Clients currently on this package keep their credits, but lose their weekly top-up.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runDelete(() => deletePackage(id), { success: 'Package deleted' });
   }
 
   const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
@@ -56,7 +64,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
         <button
           type="submit"
           disabled={saving}
-          className="col-span-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+          className="col-span-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
         >
           {saving ? 'Adding…' : 'Add package'}
         </button>
@@ -69,7 +77,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
               {p.name} — {p.credits_per_week}/week
               {p.description ? ` · ${p.description}` : ''}
             </span>
-            <button onClick={() => handleDelete(p.id)} className="text-xs text-red-600 hover:underline dark:text-red-400">
+            <button onClick={() => handleDelete(p.id, p.name)} className="text-xs text-red-600 hover:underline dark:text-red-400">
               Delete
             </button>
           </li>

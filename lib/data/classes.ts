@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type { BookingRow, ClassRow, CreditsLedgerRow, RosterEntry, ScheduleOccurrence } from './types';
@@ -11,7 +12,7 @@ export async function getClasses(): Promise<ClassRow[]> {
     .select('*')
     .order('day_of_week')
     .order('start_time');
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -23,13 +24,13 @@ export async function createClass(fields: Omit<ClassRow, 'id' | 'coach_id'>): Pr
   if (!user) throw new Error('Not authenticated');
 
   const { error } = await supabase.from('classes').insert({ ...fields, coach_id: user.id });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function deleteClass(classId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').delete().eq('id', classId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function getUpcomingBookings(clientId: string): Promise<BookingRow[]> {
@@ -40,7 +41,7 @@ export async function getUpcomingBookings(clientId: string): Promise<BookingRow[
     .eq('client_id', clientId)
     .neq('status', 'cancelled')
     .order('booking_date');
-  if (error) throw error;
+  if (error) raise(error);
   return (data ?? []) as unknown as BookingRow[];
 }
 
@@ -50,13 +51,13 @@ export async function bookClass(classId: string, bookingDate: string): Promise<v
     p_class_id: classId,
     p_booking_date: bookingDate,
   });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function cancelBooking(bookingId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('cancel_booking', { p_booking_id: bookingId });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function getCreditsBalance(clientId: string): Promise<number> {
@@ -66,7 +67,7 @@ export async function getCreditsBalance(clientId: string): Promise<number> {
     .select('balance')
     .eq('client_id', clientId)
     .maybeSingle();
-  if (error) throw error;
+  if (error) raise(error);
   return data?.balance ?? 0;
 }
 
@@ -77,7 +78,7 @@ export async function getCreditsLedger(clientId: string): Promise<CreditsLedgerR
     .select('*')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -91,7 +92,7 @@ export async function grantCredits(clientId: string, delta: number, reason: stri
   const { error } = await supabase
     .from('credits_ledger')
     .insert({ client_id: clientId, delta, reason, granted_by: user.id });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 // Upcoming occurrences of every recurring class (day_of_week-based, not stored as
@@ -108,7 +109,7 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
   if (!user) throw new Error('Not authenticated');
 
   const { data: classes, error: classesError } = await supabase.from('classes').select('*');
-  if (classesError) throw classesError;
+  if (classesError) raise(classesError);
 
   const occurrences: Omit<ScheduleOccurrence, 'bookedCount'>[] = [];
   for (const c of classes ?? []) {
@@ -134,7 +135,7 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
     .in('class_id', classIds)
     .in('booking_date', dates)
     .eq('status', 'booked');
-  if (bookingsError) throw bookingsError;
+  if (bookingsError) raise(bookingsError);
 
   const countMap = new Map<string, number>();
   for (const b of bookings ?? []) {
@@ -158,7 +159,7 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     .eq('booking_date', date)
     .neq('status', 'cancelled')
     .order('created_at');
-  if (error) throw error;
+  if (error) raise(error);
   if (!bookings || bookings.length === 0) return [];
 
   const clientIds = bookings.map((b) => b.client_id);
@@ -166,7 +167,7 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     .from('client_profiles')
     .select('client_id, name')
     .in('client_id', clientIds);
-  if (profilesError) throw profilesError;
+  if (profilesError) raise(profilesError);
 
   const nameMap = new Map((profiles ?? []).map((p) => [p.client_id, p.name]));
 
@@ -185,5 +186,5 @@ export async function markAttendance(bookingId: string, attended: boolean): Prom
     p_booking_id: bookingId,
     p_attended: attended,
   });
-  if (error) throw error;
+  if (error) raise(error);
 }

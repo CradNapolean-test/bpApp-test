@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/app/_components/ToastProvider';
 
 export function AddClientForm() {
   const router = useRouter();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,23 +17,34 @@ export function AddClientForm() {
     setSubmitting(true);
     setError(null);
 
-    const res = await fetch('/api/coach/create-client', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const body = await res.json();
+    try {
+      const res = await fetch('/api/coach/create-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const body = await res.json();
 
-    if (!res.ok) {
-      setError(body.error ?? 'Failed to create client');
+      if (!res.ok) {
+        const message = body.error ?? 'Failed to create client';
+        setError(message);
+        toast.error(message);
+        return;
+      }
+
+      setCreated({ email: body.email, password: body.password });
+      setEmail('');
+      toast.success('Client created');
+      router.refresh();
+    } catch {
+      // A network failure never reached the JSON parse above, so it had no path to the
+      // user at all before this.
+      const message = 'Could not reach the server. Check your connection and try again.';
+      setError(message);
+      toast.error(message);
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    setCreated({ email: body.email, password: body.password });
-    setEmail('');
-    setSubmitting(false);
-    router.refresh();
   }
 
   if (created) {
@@ -74,7 +87,7 @@ export function AddClientForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
       >
         {submitting ? 'Adding…' : 'Add client'}
       </button>

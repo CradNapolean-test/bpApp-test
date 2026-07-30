@@ -1,7 +1,17 @@
 'use client';
 
+import { Apple, CheckSquare, Dumbbell, House, Settings, TrendingUp } from 'lucide-react';
 import { CATEGORY_ORDER, screensForCategory } from './categories';
 import type { Category, Screen } from './categories';
+
+const CATEGORY_ICON: Record<Category, typeof House> = {
+  Home: House,
+  Nutrition: Apple,
+  Training: Dumbbell,
+  Accountability: CheckSquare,
+  Progress: TrendingUp,
+  'Account Settings': Settings,
+};
 
 export function CategoryNav({
   category,
@@ -21,16 +31,18 @@ export function CategoryNav({
       {CATEGORY_ORDER.map((c) => {
         const screens = screensForCategory(c, isCoachView);
         const active = category === c;
+        const Icon = CATEGORY_ICON[c];
         return (
           <div key={c}>
             <button
               onClick={() => onSelectCategory(c)}
-              className={`w-full rounded-md px-3 py-1.5 text-left text-sm font-medium transition-colors ${
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-foreground text-background'
+                  ? 'bg-accent text-accent-foreground'
                   : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
               }`}
             >
+              <Icon className="h-4 w-4 shrink-0" />
               {c}
             </button>
             {active && screens.length > 1 && (

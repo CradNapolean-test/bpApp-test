@@ -1,5 +1,6 @@
 'use server';
 
+import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
 
@@ -9,7 +10,7 @@ type TemplateFields = { name: string; description: string | null; is_default_onb
 export async function getFormTemplates(): Promise<FormTemplateRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from('form_templates').select('*').order('created_at');
-  if (error) throw error;
+  if (error) raise(error);
   return data ?? [];
 }
 
@@ -21,7 +22,7 @@ export async function getFormTemplateWithQuestions(templateId: string): Promise<
     .eq('id', templateId)
     .order('order_index', { foreignTable: 'form_questions', ascending: true })
     .maybeSingle();
-  if (error) throw error;
+  if (error) raise(error);
   return data as unknown as FormTemplateWithQuestions | null;
 }
 
@@ -38,7 +39,7 @@ export async function createFormTemplate(fields: TemplateFields, questions: Ques
       .update({ is_default_onboarding: false })
       .eq('coach_id', user.id)
       .eq('is_default_onboarding', true);
-    if (clearError) throw clearError;
+    if (clearError) raise(clearError);
   }
 
   const { data: template, error } = await supabase
@@ -46,13 +47,13 @@ export async function createFormTemplate(fields: TemplateFields, questions: Ques
     .insert({ ...fields, coach_id: user.id })
     .select()
     .single();
-  if (error) throw error;
+  if (error) raise(error);
 
   if (questions.length > 0) {
     const { error: qError } = await supabase
       .from('form_questions')
       .insert(questions.map((q) => ({ ...q, template_id: template.id })));
-    if (qError) throw qError;
+    if (qError) raise(qError);
   }
 }
 
@@ -74,29 +75,29 @@ export async function updateFormTemplate(
       .eq('coach_id', user.id)
       .eq('is_default_onboarding', true)
       .neq('id', templateId);
-    if (clearError) throw clearError;
+    if (clearError) raise(clearError);
   }
 
   const { error } = await supabase.from('form_templates').update(fields).eq('id', templateId);
-  if (error) throw error;
+  if (error) raise(error);
 
   // Questions are replaced wholesale on every edit -- simplest correct approach for a
   // low-frequency solo-coach admin action, not a concurrency-sensitive path.
   const { error: deleteError } = await supabase.from('form_questions').delete().eq('template_id', templateId);
-  if (deleteError) throw deleteError;
+  if (deleteError) raise(deleteError);
 
   if (questions.length > 0) {
     const { error: qError } = await supabase
       .from('form_questions')
       .insert(questions.map((q) => ({ ...q, template_id: templateId })));
-    if (qError) throw qError;
+    if (qError) raise(qError);
   }
 }
 
 export async function deleteFormTemplate(templateId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('form_templates').delete().eq('id', templateId);
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function getClientFormAssignments(clientId: string): Promise<FormAssignmentWithDetails[]> {
@@ -106,7 +107,7 @@ export async function getClientFormAssignments(clientId: string): Promise<FormAs
     .select('*, template:form_templates(*, questions:form_questions(*)), responses:form_responses(*)')
     .eq('client_id', clientId)
     .order('assigned_at', { ascending: false });
-  if (error) throw error;
+  if (error) raise(error);
 
   // form_questions is a grandchild of form_assignments (via form_templates), and PostgREST's
   // order(..., { foreignTable }) only reaches directly embedded resources -- sort here instead.
@@ -120,7 +121,7 @@ export async function getClientFormAssignments(clientId: string): Promise<FormAs
 export async function assignForm(templateId: string, clientId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('assign_form', { p_template_id: templateId, p_client_id: clientId });
-  if (error) throw error;
+  if (error) raise(error);
 }
 
 export async function submitFormResponses(
@@ -132,5 +133,5 @@ export async function submitFormResponses(
     p_assignment_id: assignmentId,
     p_answers: answers,
   });
-  if (error) throw error;
+  if (error) raise(error);
 }

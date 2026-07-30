@@ -125,7 +125,7 @@ export function DashboardShell({
           onClick={() => setArea(a)}
           className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
             area === a
-              ? 'bg-foreground text-background'
+              ? 'bg-accent text-accent-foreground'
               : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
           }`}
         >

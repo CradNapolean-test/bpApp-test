@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { addFoodDiaryEntry, removeFoodDiaryEntry, syncFoodDiaryToLog } from '@/lib/data/foodDiary';
 import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { lookupBarcode } from '@/lib/openFoodFacts';
@@ -19,16 +19,15 @@ export function FoodTrackingTab({
   initialEntries: FoodDiaryEntryRow[];
   readOnly: boolean;
 }) {
-  const router = useRouter();
-  const [syncing, setSyncing] = useState(false);
+  const { run } = useAction();
+  const { run: runSync, busy: syncing } = useAction();
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   const totals = totalMacros(initialEntries);
 
   async function handleAdd(food: FoodRow, portions: number) {
     if (!dailyLogId) return;
-    await addFoodDiaryEntry(dailyLogId, food.id, portions);
-    router.refresh();
+    await run(() => addFoodDiaryEntry(dailyLogId, food.id, portions), { success: `${food.name} added` });
   }
 
   async function handleBarcodeDetected(barcode: string) {
@@ -52,19 +51,12 @@ export function FoodTrackingTab({
   }
 
   async function handleRemove(id: string) {
-    await removeFoodDiaryEntry(id);
-    router.refresh();
+    await run(() => removeFoodDiaryEntry(id), { success: 'Removed' });
   }
 
   async function handleSync() {
     if (!dailyLogId) return;
-    setSyncing(true);
-    try {
-      await syncFoodDiaryToLog(dailyLogId);
-      router.refresh();
-    } finally {
-      setSyncing(false);
-    }
+    await runSync(() => syncFoodDiaryToLog(dailyLogId), { success: "Synced to today's Weekly Log" });
   }
 
   return (

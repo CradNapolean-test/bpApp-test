@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAction } from '@/app/_components/useAction';
 import { grantCredits } from '@/lib/data/classes';
 import { assignMembership } from '@/lib/data/memberships';
 import { updateCheckinReminderDays } from '@/lib/data/clientProfile';
@@ -22,47 +22,32 @@ export function CreditsTab({
   checkinReminderDays: number;
   lastCheckinReminderAt: string | null;
 }) {
-  const router = useRouter();
+  const { run: runGrant, busy: granting } = useAction();
+  const { run: runAssign, busy: assigning } = useAction();
+  const { run: runReminder, busy: savingReminder } = useAction();
   const [grantAmount, setGrantAmount] = useState(1);
   const [grantReason, setGrantReason] = useState('manual grant');
-  const [granting, setGranting] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState(membership?.package_id ?? '');
-  const [assigning, setAssigning] = useState(false);
   const [reminderDays, setReminderDays] = useState(checkinReminderDays);
-  const [savingReminder, setSavingReminder] = useState(false);
 
   async function handleGrant(e: React.FormEvent) {
     e.preventDefault();
-    setGranting(true);
-    try {
-      await grantCredits(clientId, grantAmount, grantReason);
-      router.refresh();
-    } finally {
-      setGranting(false);
-    }
+    await runGrant(() => grantCredits(clientId, grantAmount, grantReason), {
+      success: `${grantAmount > 0 ? '+' : ''}${grantAmount} credits applied`,
+    });
   }
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedPackage) return;
-    setAssigning(true);
-    try {
-      await assignMembership(clientId, selectedPackage);
-      router.refresh();
-    } finally {
-      setAssigning(false);
-    }
+    await runAssign(() => assignMembership(clientId, selectedPackage), { success: 'Package assigned' });
   }
 
   async function handleSaveReminder(e: React.FormEvent) {
     e.preventDefault();
-    setSavingReminder(true);
-    try {
-      await updateCheckinReminderDays(clientId, reminderDays);
-      router.refresh();
-    } finally {
-      setSavingReminder(false);
-    }
+    await runReminder(() => updateCheckinReminderDays(clientId, reminderDays), {
+      success: reminderDays === 0 ? 'Check-in reminders turned off' : `Reminders set to ${reminderDays} days`,
+    });
   }
 
   const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
@@ -95,7 +80,7 @@ export function CreditsTab({
           <button
             type="submit"
             disabled={granting}
-            className="rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background disabled:opacity-50"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
           >
             {granting ? 'Granting…' : 'Grant credits'}
           </button>
