@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientProfileRow } from './types';
 
@@ -31,11 +32,11 @@ export async function upsertClientProfile(
 // Goes through set_checkin_reminder_days (0011_coach_sets_checkin_reminder.sql) rather than
 // a raw update -- client_profiles' RLS update policy only covers is_self(client_id), so a
 // direct update from the coach's session silently matches zero rows.
-export async function updateCheckinReminderDays(clientId: string, days: number): Promise<void> {
+export async function updateCheckinReminderDays(clientId: string, days: number): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('set_checkin_reminder_days', {
     p_client_id: clientId,
     p_days: days,
   });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not save the reminder setting') : ok();
 }

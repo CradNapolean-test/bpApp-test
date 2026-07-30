@@ -33,14 +33,19 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     setRoster((prev) =>
       prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: nextAttended } : r)) : prev
     );
-    try {
-      await markAttendance(entry.bookingId, nextAttended);
-    } catch (err) {
-      // Revert the optimistic tick and say why, rather than silently snapping back.
+    // Revert the optimistic tick and say why, rather than silently snapping back.
+    const revert = (message: string) => {
       setRoster((prev) =>
         prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: entry.attended } : r)) : prev
       );
-      toast.error(err instanceof Error ? err.message : 'Could not update attendance');
+      toast.error(message);
+    };
+
+    try {
+      const result = await markAttendance(entry.bookingId, nextAttended);
+      if (!result.ok) revert(result.error);
+    } catch (err) {
+      revert(err instanceof Error ? err.message : 'Could not update attendance');
     }
   }
 

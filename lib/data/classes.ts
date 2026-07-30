@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type { BookingRow, ClassRow, CreditsLedgerRow, RosterEntry, ScheduleOccurrence } from './types';
@@ -45,19 +46,21 @@ export async function getUpcomingBookings(clientId: string): Promise<BookingRow[
   return (data ?? []) as unknown as BookingRow[];
 }
 
-export async function bookClass(classId: string, bookingDate: string): Promise<void> {
+// Returns rather than throws -- book_class raises user-facing domain errors ("Not enough
+// credits") that Next.js would redact out of a thrown error in production. See result.ts.
+export async function bookClass(classId: string, bookingDate: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('book_class', {
     p_class_id: classId,
     p_booking_date: bookingDate,
   });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not book that class') : ok();
 }
 
-export async function cancelBooking(bookingId: string): Promise<void> {
+export async function cancelBooking(bookingId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('cancel_booking', { p_booking_id: bookingId });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not cancel that booking') : ok();
 }
 
 export async function getCreditsBalance(clientId: string): Promise<number> {
@@ -180,11 +183,11 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
   }));
 }
 
-export async function markAttendance(bookingId: string, attended: boolean): Promise<void> {
+export async function markAttendance(bookingId: string, attended: boolean): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('mark_attendance', {
     p_booking_id: bookingId,
     p_attended: attended,
   });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not update attendance') : ok();
 }

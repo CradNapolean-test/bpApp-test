@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
 
@@ -118,20 +119,22 @@ export async function getClientFormAssignments(clientId: string): Promise<FormAs
   return assignments;
 }
 
-export async function assignForm(templateId: string, clientId: string): Promise<void> {
+export async function assignForm(templateId: string, clientId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('assign_form', { p_template_id: templateId, p_client_id: clientId });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not assign that form') : ok();
 }
 
+// submit_form_response raises "Form already submitted" -- a domain error the client needs
+// to read, so this returns rather than throws (see result.ts).
 export async function submitFormResponses(
   assignmentId: string,
   answers: { question_id: string; answer: unknown }[]
-): Promise<void> {
+): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('submit_form_response', {
     p_assignment_id: assignmentId,
     p_answers: answers,
   });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not submit that form') : ok();
 }

@@ -30,7 +30,13 @@ export function useAction() {
     async (fn: () => Promise<unknown>, opts?: { success?: string; onDone?: () => void }): Promise<boolean> => {
       setBusy(true);
       try {
-        await fn();
+        const result = await fn();
+        // Domain errors come back as a value rather than a throw, because Next.js redacts
+        // thrown Server Action messages in production builds. See lib/data/result.ts.
+        if (result && typeof result === 'object' && (result as { ok?: unknown }).ok === false) {
+          toast.error((result as { error?: string }).error ?? 'Something went wrong. Please try again.');
+          return false;
+        }
         if (opts?.success) toast.success(opts.success);
         opts?.onDone?.();
         router.refresh();

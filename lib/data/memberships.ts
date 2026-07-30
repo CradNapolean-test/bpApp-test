@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientMembershipRow, MembershipPackageRow } from './types';
 
@@ -43,11 +44,11 @@ export async function getMyMembership(clientId: string): Promise<ClientMembershi
   return data as unknown as ClientMembershipRow | null;
 }
 
-export async function assignMembership(clientId: string, packageId: string): Promise<void> {
+export async function assignMembership(clientId: string, packageId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('assign_membership', {
     p_client_id: clientId,
     p_package_id: packageId,
   });
-  if (error) raise(error);
+  return error ? fail(error, 'Could not assign that package') : ok();
 }
