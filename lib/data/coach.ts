@@ -2,6 +2,26 @@ import { raise } from './errors';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { daysBetween, toIsoDate } from '@/lib/utils/dates';
 
+// The "coach-global" tables (classes, membership_packages, form_templates) are scoped to a
+// specific coach, but the caller could be that coach themself or one of their clients --
+// this resolves which coach_id to filter by either way, so callers don't have to know which
+// role they're running as.
+export async function resolveScopingCoachId(supabase: SupabaseClient): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role, coach_id')
+    .eq('id', user.id)
+    .single();
+  if (error) raise(error);
+
+  return profile.role === 'coach' ? user.id : (profile.coach_id as string);
+}
+
 export interface CoachClientRow {
   id: string;
   email: string;

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
+import { getClientHealthStatuses } from '@/lib/data/coach';
 import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
 
 export default async function CoachClientPage({
@@ -30,13 +31,18 @@ export default async function CoachClientPage({
     .maybeSingle();
   if (!targetProfile) redirect('/coach');
 
-  const bundle = await loadDashboardBundle(clientId, false);
+  const [bundle, healthStatuses] = await Promise.all([
+    loadDashboardBundle(clientId, false),
+    getClientHealthStatuses(supabase, user.id),
+  ]);
+  const healthStatus = healthStatuses.find((s) => s.clientId === clientId) ?? null;
 
   return (
     <DashboardShell
         clientId={clientId}
         clientLabel={bundle.profile?.name ?? targetProfile.email}
         isCoachView={true}
+        healthStatus={healthStatus}
         currentUserId={user.id}
         profile={bundle.profile}
         weekDates={bundle.weekDates}
@@ -61,6 +67,8 @@ export default async function CoachClientPage({
         notifications={bundle.notifications}
         formTemplates={bundle.formTemplates}
         formAssignments={bundle.formAssignments}
+        exerciseLibrary={bundle.exerciseLibrary}
+        programTemplates={bundle.programTemplates}
       />
   );
 }

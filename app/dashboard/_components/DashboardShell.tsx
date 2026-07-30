@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { Settings } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { BottomTabBar } from './BottomTabBar';
 import { SetupTab } from './SetupTab';
 import { WeeklyLogTab } from './WeeklyLogTab';
 import { FoodTrackingTab } from './FoodTrackingTab';
@@ -23,6 +25,7 @@ import { ChatPopup } from './ChatPopup';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
 import { WorkoutTab } from './WorkoutTab';
+import type { ClientHealthStatus } from '@/lib/data/coach';
 import type {
   ActivityRow,
   BookingRow,
@@ -30,6 +33,7 @@ import type {
   ClientMembershipRow,
   ClientProfileRow,
   DailyLogRow,
+  ExerciseLibraryRow,
   FoodDiaryEntryRow,
   FormAssignmentWithDetails,
   FormTemplateRow,
@@ -38,6 +42,7 @@ import type {
   MeasurementLogRow,
   MembershipPackageRow,
   NotificationRow,
+  ProgramTemplateRow,
   ProgressPhoto,
   ScheduleOccurrence,
   WorkoutLogRow,
@@ -74,6 +79,9 @@ export function DashboardShell({
   notifications,
   formTemplates,
   formAssignments,
+  exerciseLibrary,
+  programTemplates,
+  healthStatus = null,
 }: {
   clientId: string;
   clientLabel: string;
@@ -102,6 +110,10 @@ export function DashboardShell({
   notifications: NotificationRow[];
   formTemplates: FormTemplateRow[];
   formAssignments: FormAssignmentWithDetails[];
+  exerciseLibrary: ExerciseLibraryRow[];
+  programTemplates: ProgramTemplateRow[];
+  // Only set when isCoachView -- the client's own dashboard load never computes this.
+  healthStatus?: ClientHealthStatus | null;
 }) {
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
@@ -138,32 +150,60 @@ export function DashboardShell({
   const showCoaching = isCoachView || area === 'Coaching';
 
   const sidebar = showCoaching ? (
-    <>
-      {isCoachView && (
-        <Link
-          href="/coach"
-          className="mb-2 block rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300"
-        >
-          &larr; All clients
-        </Link>
-      )}
-      <CategoryNav
-        category={category}
-        screen={screen}
-        isCoachView={isCoachView}
-        onSelectCategory={handleCategoryClick}
-        onSelectScreen={setScreen}
-      />
-    </>
+    <CategoryNav
+      category={category}
+      screen={screen}
+      isCoachView={isCoachView}
+      onSelectCategory={handleCategoryClick}
+      onSelectScreen={setScreen}
+    />
   ) : undefined;
+
+  const STATUS_META: Record<ClientHealthStatus['status'], { dot: string; label: string }> = {
+    red: { dot: 'bg-red-500', label: 'Action required' },
+    amber: { dot: 'bg-amber-500', label: 'Keep watch' },
+    green: { dot: 'bg-emerald-500', label: 'Running okay' },
+    unmonitored: { dot: 'bg-zinc-300 dark:bg-zinc-600', label: 'Not monitored' },
+  };
+
+  const coachSummary = isCoachView && (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
+      <Link
+        href="/coach"
+        className="flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
+      >
+        &larr; All clients
+      </Link>
+      {healthStatus && (
+        <span className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+          <span className={`h-2 w-2 rounded-full ${STATUS_META[healthStatus.status].dot}`} />
+          {STATUS_META[healthStatus.status].label}
+          {healthStatus.status !== 'unmonitored' && ` · last active ${healthStatus.daysSinceActive}d ago`}
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <AppShell
       title={clientLabel}
-      subtitle={isCoachView ? 'Viewing as coach' : undefined}
+      isCoachView={isCoachView}
       topBar={topBar}
+      coachSummary={coachSummary}
       banner={!isCoachView && <NotificationBanner notifications={notifications} />}
       sidebar={sidebar}
+      headerAction={
+        !isCoachView && (
+          <button
+            onClick={() => handleCategoryClick('Account Settings')}
+            aria-label="Account Settings"
+            className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+        )
+      }
+      bottomBar={!isCoachView && <BottomTabBar category={category} onSelectCategory={handleCategoryClick} />}
     >
       {showCoaching && (
         <>
@@ -222,7 +262,14 @@ export function DashboardShell({
             />
           )}
           {screen === 'Workout' && (
-            <WorkoutTab clientId={clientId} isCoachView={isCoachView} programs={programs} workoutLogs={workoutLogs} />
+            <WorkoutTab
+              clientId={clientId}
+              isCoachView={isCoachView}
+              programs={programs}
+              workoutLogs={workoutLogs}
+              exerciseLibrary={exerciseLibrary}
+              programTemplates={programTemplates}
+            />
           )}
           {screen === 'Credits' && isCoachView && (
             <CreditsTab

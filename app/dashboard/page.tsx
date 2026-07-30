@@ -48,6 +48,8 @@ export default async function DashboardPage() {
       notifications={bundle.notifications}
       formTemplates={bundle.formTemplates}
       formAssignments={bundle.formAssignments}
+      exerciseLibrary={bundle.exerciseLibrary}
+      programTemplates={bundle.programTemplates}
     />
   );
 }

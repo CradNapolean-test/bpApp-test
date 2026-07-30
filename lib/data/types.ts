@@ -170,6 +170,50 @@ export interface WorkoutLogRow {
   logged_at: string;
 }
 
+export interface ExerciseLibraryRow {
+  id: string;
+  name: string;
+  default_sets: number | null;
+  default_reps: string | null;
+  default_rpe: number | null;
+  video_url: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ProgramTemplateExerciseRow {
+  id: string;
+  template_day_id: string;
+  exercise_library_id: string | null;
+  name: string;
+  sets: number | null;
+  reps: string | null;
+  load: number | null;
+  rpe: number | null;
+  notes: string | null;
+  video_url: string | null;
+}
+
+export interface ProgramTemplateDayRow {
+  id: string;
+  template_id: string;
+  week_num: number;
+  day_label: string;
+  program_template_exercises: ProgramTemplateExerciseRow[];
+}
+
+export interface ProgramTemplateRow {
+  id: string;
+  coach_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface ProgramTemplateWithDays extends ProgramTemplateRow {
+  program_template_days: ProgramTemplateDayRow[];
+}
+
 export interface ProgressPhotoRow {
   id: string;
   client_id: string;

@@ -2,6 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
+import { resolveScopingCoachId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
 
@@ -10,7 +11,12 @@ type TemplateFields = { name: string; description: string | null; is_default_onb
 
 export async function getFormTemplates(): Promise<FormTemplateRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from('form_templates').select('*').order('created_at');
+  const coachId = await resolveScopingCoachId(supabase);
+  const { data, error } = await supabase
+    .from('form_templates')
+    .select('*')
+    .eq('coach_id', coachId)
+    .order('created_at');
   if (error) raise(error);
   return data ?? [];
 }

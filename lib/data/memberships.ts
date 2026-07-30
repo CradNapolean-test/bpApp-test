@@ -2,14 +2,17 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
+import { resolveScopingCoachId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientMembershipRow, MembershipPackageRow } from './types';
 
 export async function getPackages(): Promise<MembershipPackageRow[]> {
   const supabase = await createClient();
+  const coachId = await resolveScopingCoachId(supabase);
   const { data, error } = await supabase
     .from('membership_packages')
     .select('*')
+    .eq('coach_id', coachId)
     .order('credits_per_week');
   if (error) raise(error);
   return data ?? [];

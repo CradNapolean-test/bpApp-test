@@ -15,6 +15,10 @@ export function AppShell({
   topBar,
   banner,
   sidebar,
+  bottomBar,
+  headerAction,
+  coachSummary,
+  isCoachView,
   children,
 }: {
   title: string;
@@ -22,15 +26,31 @@ export function AppShell({
   topBar?: ReactNode;
   banner?: ReactNode;
   sidebar?: ReactNode;
+  // Mobile-only bottom tab bar (client dashboard). When present it replaces the hamburger
+  // drawer as the primary mobile nav instead of stacking both -- coach hub pages that don't
+  // pass this keep the drawer unchanged.
+  bottomBar?: ReactNode;
+  // Small header-row icon button, e.g. the Account Settings shortcut that isn't one of the
+  // bottom tab bar's 5 tabs.
+  headerAction?: ReactNode;
+  // A coach viewing a specific client's dashboard gets a distinct strip here instead of a
+  // generic "Viewing as coach" subtitle string.
+  coachSummary?: ReactNode;
+  // Stamps data-view="coach" on the root element so globals.css can shift the accent tone
+  // for this view without forking any component structure.
+  isCoachView?: boolean;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+    <div
+      data-view={isCoachView ? 'coach' : undefined}
+      className={`mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 ${bottomBar ? 'pb-20 md:pb-10' : ''}`}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          {sidebar && (
+          {sidebar && !bottomBar && (
             <button
               onClick={() => setDrawerOpen(true)}
               aria-label="Open menu"
@@ -44,10 +64,14 @@ export function AppShell({
             {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
           </div>
         </div>
-        <SignOutButton />
+        <div className="flex items-center gap-1">
+          {headerAction}
+          <SignOutButton />
+        </div>
       </div>
 
       {topBar && <div className="mt-4 overflow-x-auto">{topBar}</div>}
+      {coachSummary}
       {banner}
 
       <div className="mt-6 flex gap-6">
@@ -55,7 +79,7 @@ export function AppShell({
         <div className="min-w-0 flex-1">{children}</div>
       </div>
 
-      {sidebar && drawerOpen && (
+      {sidebar && !bottomBar && drawerOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
           <aside className="absolute inset-y-0 left-0 w-64 overflow-y-auto border-r border-black/10 bg-[var(--background)] p-4 shadow-xl dark:border-white/10">
@@ -75,6 +99,8 @@ export function AppShell({
           </aside>
         </div>
       )}
+
+      {bottomBar}
     </div>
   );
 }

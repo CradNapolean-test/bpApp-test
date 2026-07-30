@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, FileText, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, Dumbbell, FileText, Users } from 'lucide-react';
 
 const LINKS = [
   { href: '/coach', label: 'Coaching', Icon: Users },
   { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
   { href: '/coach/forms', label: 'Forms', Icon: FileText },
+  { href: '/coach/library', label: 'Library', Icon: Dumbbell },
   { href: '/coach/reports', label: 'Reports', Icon: BarChart3 },
 ] as const;
 

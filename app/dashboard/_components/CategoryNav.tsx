@@ -1,17 +1,7 @@
 'use client';
 
-import { Apple, CheckSquare, Dumbbell, House, Settings, TrendingUp } from 'lucide-react';
-import { CATEGORY_ORDER, screensForCategory } from './categories';
+import { CATEGORY_ICON, CATEGORY_ORDER, screensForCategory } from './categories';
 import type { Category, Screen } from './categories';
-
-const CATEGORY_ICON: Record<Category, typeof House> = {
-  Home: House,
-  Nutrition: Apple,
-  Training: Dumbbell,
-  Accountability: CheckSquare,
-  Progress: TrendingUp,
-  'Account Settings': Settings,
-};
 
 export function CategoryNav({
   category,

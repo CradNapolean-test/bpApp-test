@@ -14,16 +14,29 @@ import {
   deleteProgramDay,
   logSet,
 } from '@/lib/data/workouts';
-import type { WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
+import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
+import type { ExerciseLibraryRow, ProgramTemplateRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
-function AddExerciseForm({ programDayId }: { programDayId: string }) {
+function AddExerciseForm({ programDayId, library }: { programDayId: string; library: ExerciseLibraryRow[] }) {
   const { run, busy } = useAction();
+  const [libraryId, setLibraryId] = useState('');
   const [name, setName] = useState('');
   const [sets, setSets] = useState(3);
   const [reps, setReps] = useState('8-10');
   const [load, setLoad] = useState<number | ''>('');
   const [rpe, setRpe] = useState<number | ''>('');
   const [videoUrl, setVideoUrl] = useState('');
+
+  function handlePickLibrary(id: string) {
+    setLibraryId(id);
+    const entry = library.find((e) => e.id === id);
+    if (!entry) return;
+    setName(entry.name);
+    if (entry.default_sets != null) setSets(entry.default_sets);
+    if (entry.default_reps != null) setReps(entry.default_reps);
+    if (entry.default_rpe != null) setRpe(entry.default_rpe);
+    if (entry.video_url != null) setVideoUrl(entry.video_url);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +54,7 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
       {
         success: 'Exercise added',
         onDone: () => {
+          setLibraryId('');
           setName('');
           setVideoUrl('');
         },
@@ -52,6 +66,16 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-2 flex flex-wrap items-center gap-1.5">
+      {library.length > 0 && (
+        <select className={`${inputCls} w-32`} value={libraryId} onChange={(e) => handlePickLibrary(e.target.value)}>
+          <option value="">From library…</option>
+          {library.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
+            </option>
+          ))}
+        </select>
+      )}
       <input required placeholder="Exercise" className={`${inputCls} w-32`} value={name} onChange={(e) => setName(e.target.value)} />
       <input type="number" placeholder="Sets" className={`${inputCls} w-16`} value={sets} onChange={(e) => setSets(Number(e.target.value))} />
       <input placeholder="Reps" className={`${inputCls} w-20`} value={reps} onChange={(e) => setReps(e.target.value)} />
@@ -60,6 +84,49 @@ function AddExerciseForm({ programDayId }: { programDayId: string }) {
       <input placeholder="Video URL (optional)" className={`${inputCls} w-40`} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
       <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
         Add
+      </button>
+    </form>
+  );
+}
+
+function StartFromTemplateForm({ clientId, templates }: { clientId: string; templates: ProgramTemplateRow[] }) {
+  const { run, busy } = useAction();
+  const [templateId, setTemplateId] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!templateId) return;
+    const template = templates.find((t) => t.id === templateId);
+    await run(() => instantiateProgramTemplate(templateId, clientId, template?.name ?? ''), {
+      success: 'Programme started from template',
+      onDone: () => setTemplateId(''),
+    });
+  }
+
+  if (templates.length === 0) return null;
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="flex-1 space-y-1">
+        <label className="text-xs font-medium text-zinc-500">Start from a programme template</label>
+        <select
+          required
+          className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          value={templateId}
+          onChange={(e) => setTemplateId(e.target.value)}
+        >
+          <option value="" disabled>
+            Choose a template…
+          </option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button type="submit" disabled={busy} className="rounded-md border border-black/10 px-4 py-2 text-sm font-medium disabled:opacity-50 dark:border-white/10">
+        {busy ? 'Starting…' : 'Start programme'}
       </button>
     </form>
   );
@@ -112,11 +179,15 @@ export function WorkoutTab({
   isCoachView,
   programs,
   workoutLogs,
+  exerciseLibrary,
+  programTemplates,
 }: {
   clientId: string;
   isCoachView: boolean;
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
+  exerciseLibrary: ExerciseLibraryRow[];
+  programTemplates: ProgramTemplateRow[];
 }) {
   const confirm = useConfirm();
   const { run: runCreate, busy: creating } = useAction();
@@ -187,6 +258,8 @@ export function WorkoutTab({
           </button>
         </form>
       )}
+
+      {isCoachView && <StartFromTemplateForm clientId={clientId} templates={programTemplates} />}
 
       {programs.length === 0 && (
         <EmptyState
@@ -277,7 +350,7 @@ export function WorkoutTab({
                   })}
                 </ul>
 
-                {isCoachView && <AddExerciseForm programDayId={day.id} />}
+                {isCoachView && <AddExerciseForm programDayId={day.id} library={exerciseLibrary} />}
               </div>
             ))}
 

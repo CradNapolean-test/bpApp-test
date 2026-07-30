@@ -20,7 +20,7 @@ export function ChatPopup({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? 'Close chat' : 'Open chat'}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-2xl text-background shadow-lg transition-transform hover:scale-105"
+        className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-2xl text-background shadow-lg transition-transform hover:scale-105 md:bottom-6 md:right-6"
       >
         {open ? '✕' : '💬'}
       </button>

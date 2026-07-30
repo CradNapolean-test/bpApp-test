@@ -2,15 +2,18 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
+import { resolveScopingCoachId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type { BookingRow, ClassRow, CreditsLedgerRow, RosterEntry, ScheduleOccurrence } from './types';
 
 export async function getClasses(): Promise<ClassRow[]> {
   const supabase = await createClient();
+  const coachId = await resolveScopingCoachId(supabase);
   const { data, error } = await supabase
     .from('classes')
     .select('*')
+    .eq('coach_id', coachId)
     .order('day_of_week')
     .order('start_time');
   if (error) raise(error);
@@ -99,19 +102,17 @@ export async function grantCredits(clientId: string, delta: number, reason: stri
 }
 
 // Upcoming occurrences of every recurring class (day_of_week-based, not stored as
-// individual rows), merged with how many are already booked. Not scoped to the caller's
-// own classes -- `classes` already has an open read policy for all authenticated users
-// (same as membership_packages), and this is called by both the coach (Take Attendance)
-// and clients (booking calendar). Fine for a single-coach app; would need re-scoping by
-// the caller's own coach_id if this ever supports multiple coaches.
+// individual rows), merged with how many are already booked. Called by both the coach
+// (Take Attendance) and clients (booking calendar) -- resolveScopingCoachId figures out
+// which coach's classes apply either way.
 export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const coachId = await resolveScopingCoachId(supabase);
 
-  const { data: classes, error: classesError } = await supabase.from('classes').select('*');
+  const { data: classes, error: classesError } = await supabase
+    .from('classes')
+    .select('*')
+    .eq('coach_id', coachId);
   if (classesError) raise(classesError);
 
   const occurrences: Omit<ScheduleOccurrence, 'bookedCount'>[] = [];

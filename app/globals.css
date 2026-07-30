@@ -51,6 +51,23 @@
   }
 }
 
+/* A coach viewing a client's dashboard (AppShell's data-view="coach") gets a distinct
+   accent tone -- purely a CSS-variable override, no component fork -- so the admin view
+   reads differently from the client's own dashboard at a glance. */
+[data-view="coach"] {
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+  --accent-soft: #eef2ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-view="coach"] {
+    --accent: #818cf8;
+    --accent-foreground: #1e1b4b;
+    --accent-soft: rgb(129 140 248 / 0.1);
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
