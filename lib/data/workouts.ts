@@ -58,6 +58,19 @@ export async function deleteExercise(exerciseId: string): Promise<void> {
   if (error) raise(error);
 }
 
+// Swaps two exercises' sort_order (used by the ▲▼ reorder buttons) -- two plain updates
+// rather than a dedicated RPC, since there's no invariant here RLS can't already enforce.
+export async function swapExerciseOrder(
+  a: { id: string; sort_order: number },
+  b: { id: string; sort_order: number }
+): Promise<void> {
+  const supabase = await createClient();
+  const { error: err1 } = await supabase.from('workout_exercises').update({ sort_order: b.sort_order }).eq('id', a.id);
+  if (err1) raise(err1);
+  const { error: err2 } = await supabase.from('workout_exercises').update({ sort_order: a.sort_order }).eq('id', b.id);
+  if (err2) raise(err2);
+}
+
 export async function getWorkoutLogs(clientId: string): Promise<WorkoutLogRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

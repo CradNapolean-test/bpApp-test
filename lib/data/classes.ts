@@ -31,6 +31,23 @@ export async function createClass(fields: Omit<ClassRow, 'id' | 'coach_id'>): Pr
   if (error) raise(error);
 }
 
+// Creates one class row per {day_of_week, start_time} occurrence, sharing every other
+// field -- lets a coach set up "Yoga, Mon/Wed/Fri 6am" in one submit instead of three.
+export async function createClasses(
+  shared: Omit<ClassRow, 'id' | 'coach_id' | 'day_of_week' | 'start_time'>,
+  occurrences: { day_of_week: number; start_time: string }[]
+): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const rows = occurrences.map((occ) => ({ ...shared, ...occ, coach_id: user.id }));
+  const { error } = await supabase.from('classes').insert(rows);
+  if (error) raise(error);
+}
+
 export async function deleteClass(classId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').delete().eq('id', classId);
@@ -126,6 +143,7 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
         date: toIsoDate(addDays(firstDate, w * 7)),
         startTime: c.start_time,
         capacity: c.capacity,
+        creditCost: c.credit_cost,
       });
     }
   }

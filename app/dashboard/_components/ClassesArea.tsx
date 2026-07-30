@@ -97,7 +97,7 @@ export function ClassesArea({
                     {occ.className}
                     {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}{' '}
                     <span className="text-zinc-500">
-                      · {occ.bookedCount}/{occ.capacity} booked
+                      · {occ.bookedCount}/{occ.capacity} booked · {occ.creditCost} credit{occ.creditCost === 1 ? '' : 's'}
                     </span>
                   </span>
                   {existingBooking ? (

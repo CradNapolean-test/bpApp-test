@@ -3,12 +3,28 @@
 import { useState, useTransition } from 'react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { searchFoods } from '@/lib/data/foods';
-import type { FoodRow } from '@/lib/data/types';
+import { dayCalories } from '@/lib/calculations';
+import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
-export function FoodSearchPicker({ onAdd }: { onAdd: (food: FoodRow, grams: number) => void }) {
+const GRAM_PRESETS = [50, 100, 150, 200];
+const UNIT_PRESETS = [0.5, 1, 2, 3];
+
+export function FoodSearchPicker({
+  onAdd,
+  recipes,
+  onAddRecipe,
+}: {
+  onAdd: (food: FoodRow, grams: number) => void;
+  // When provided (even empty), a "Foods / Recipes" toggle appears so the same picker can
+  // fan a saved recipe out into diary/meal-plan entries instead of one food at a time.
+  recipes?: RecipeRow[];
+  onAddRecipe?: (recipeId: string, servings: number) => void;
+}) {
+  const [mode, setMode] = useState<'foods' | 'recipes'>('foods');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodRow[]>([]);
   const [grams, setGrams] = useState<Record<string, number>>({});
+  const [servings, setServings] = useState<Record<string, number>>({});
   const [isPending, startTransition] = useTransition();
 
   function handleQueryChange(value: string) {
@@ -19,8 +35,72 @@ export function FoodSearchPicker({ onAdd }: { onAdd: (food: FoodRow, grams: numb
     });
   }
 
+  if (recipes && mode === 'recipes') {
+    return (
+      <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+        <div className="flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+          {(['foods', 'recipes'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                mode === m ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <ul className="mt-2 max-h-64 divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
+          {recipes.map((recipe) => {
+            const s = servings[recipe.id] ?? 1;
+            return (
+              <li key={recipe.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                <span className="font-medium text-black dark:text-zinc-50">{recipe.name}</span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0.25}
+                    step={0.25}
+                    value={s}
+                    onChange={(e) => setServings((v) => ({ ...v, [recipe.id]: Number(e.target.value) }))}
+                    aria-label="Servings"
+                    className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
+                  />
+                  <span className="text-xs text-zinc-500">servings</span>
+                  <button
+                    onClick={() => onAddRecipe?.(recipe.id, s)}
+                    className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background"
+                  >
+                    Add
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+          {recipes.length === 0 && <EmptyState compact title="No recipes yet — build one under Recipes." />}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+      {recipes && (
+        <div className="mb-2 flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+          {(['foods', 'recipes'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                mode === m ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      )}
       <input
         type="text"
         placeholder="Search foods…"
@@ -30,7 +110,7 @@ export function FoodSearchPicker({ onAdd }: { onAdd: (food: FoodRow, grams: numb
         onFocus={() => query === '' && handleQueryChange('')}
       />
       {isPending && <p className="mt-2 text-xs text-zinc-500">Searching…</p>}
-      <ul className="mt-2 max-h-64 divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
+      <ul className="mt-2 max-h-80 divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
         {results.map((food) => {
           // Most foods are stored per-1g (see docs/PROJECT_SPEC.md food data notes), so the
           // quantity field means grams and defaults to a plausible serving. A handful of
@@ -38,31 +118,79 @@ export function FoodSearchPicker({ onAdd }: { onAdd: (food: FoodRow, grams: numb
           // values, so the field means a count of that unit instead.
           const isPerGram = food.portion === '1 gram';
           const defaultQty = isPerGram ? 100 : 1;
+          const step = isPerGram ? 5 : 0.25;
+          const min = isPerGram ? 5 : 0.25;
+          const qty = grams[food.id] ?? defaultQty;
+          const presets = isPerGram ? GRAM_PRESETS : UNIT_PRESETS;
+
+          function setQty(value: number) {
+            setGrams((g) => ({ ...g, [food.id]: Math.max(min, value) }));
+          }
+
+          const protein = food.protein * qty;
+          const carbs = food.carbs * qty;
+          const fat = food.fat * qty;
+          const calories = dayCalories(protein, carbs, fat);
+
           return (
-            <li key={food.id} className="flex items-center justify-between gap-2 py-2">
-              <div className="text-sm">
-                <p className="font-medium text-black dark:text-zinc-50">{food.name}</p>
-                <p className="text-xs text-zinc-500">
-                  per {food.portion} · {food.protein}P / {food.carbs}C / {food.fat}F
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min={isPerGram ? 1 : 0.25}
-                  step={isPerGram ? 5 : 0.25}
-                  value={grams[food.id] ?? defaultQty}
-                  onChange={(e) => setGrams({ ...grams, [food.id]: Number(e.target.value) })}
-                  aria-label={isPerGram ? 'Grams' : 'Quantity'}
-                  className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
-                />
-                {isPerGram && <span className="text-xs text-zinc-500">g</span>}
+            <li key={food.id} className="space-y-2 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm">
+                  <p className="font-medium text-black dark:text-zinc-50">{food.name}</p>
+                  <p className="text-xs text-zinc-500">per {food.portion}</p>
+                </div>
                 <button
-                  onClick={() => onAdd(food, grams[food.id] ?? defaultQty)}
+                  onClick={() => onAdd(food, qty)}
                   className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background"
                 >
                   Add
                 </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {presets.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setQty(p)}
+                    className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                      qty === p
+                        ? 'border-accent bg-accent-soft text-accent'
+                        : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    {isPerGram ? `${p}g` : `${p}×`}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setQty(qty - step)}
+                  aria-label="Decrease quantity"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-black/10 text-sm dark:border-white/10"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={min}
+                  step={step}
+                  value={qty}
+                  onChange={(e) => setQty(Number(e.target.value))}
+                  aria-label={isPerGram ? 'Grams' : 'Quantity'}
+                  className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
+                />
+                <button
+                  onClick={() => setQty(qty + step)}
+                  aria-label="Increase quantity"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-black/10 text-sm dark:border-white/10"
+                >
+                  +
+                </button>
+                {isPerGram && <span className="text-xs text-zinc-500">g</span>}
+                <span className="ml-1 text-xs text-zinc-500">
+                  {Math.round(calories)} kcal · {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F
+                </span>
               </div>
             </li>
           );

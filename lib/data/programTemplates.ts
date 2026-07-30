@@ -89,6 +89,34 @@ export async function deleteTemplateExercise(exerciseId: string): Promise<void> 
   if (error) raise(error);
 }
 
+export async function swapTemplateExerciseOrder(
+  a: { id: string; sort_order: number },
+  b: { id: string; sort_order: number }
+): Promise<void> {
+  const supabase = await createClient();
+  const { error: err1 } = await supabase
+    .from('program_template_exercises')
+    .update({ sort_order: b.sort_order })
+    .eq('id', a.id);
+  if (err1) raise(err1);
+  const { error: err2 } = await supabase
+    .from('program_template_exercises')
+    .update({ sort_order: a.sort_order })
+    .eq('id', b.id);
+  if (err2) raise(err2);
+}
+
+// Copies a template (name, days, exercises) into a brand new template for the same coach --
+// not a client, so an edit afterward never touches anything already assigned to clients.
+export async function duplicateProgramTemplate(templateId: string, newName: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('duplicate_program_template', {
+    p_template_id: templateId,
+    p_new_name: newName,
+  });
+  return error ? fail(error, 'Could not duplicate that template') : ok();
+}
+
 // Copies the template into a real program for this client (snapshot, not a live reference --
 // see 0013_exercise_library_and_program_templates.sql). Returns rather than throws since this
 // is a user-facing domain error path ("Programme template not found") that Next.js would

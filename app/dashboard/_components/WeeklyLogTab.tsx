@@ -1,10 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { CheckSquare } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { dayCalories, cycleDayFor, CALORIE_FLOOR } from '@/lib/calculations';
 import { upsertDailyLog } from '@/lib/data/dailyLogs';
-import type { DailyLogRow } from '@/lib/data/types';
+import { createHabit, deleteHabit, toggleHabitLog } from '@/lib/data/habits';
+import { adherencePercent } from '@/lib/utils/habitStats';
+import type { DailyLogRow, HabitWithLogs } from '@/lib/data/types';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
 
@@ -27,6 +32,79 @@ const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label:
   { key: 'stress', label: 'Stress' },
 ];
 
+function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWithLogs[] }) {
+  const confirm = useConfirm();
+  const { run: runCreate, busy: creating } = useAction();
+  const { run: runDelete } = useAction();
+  const [newHabitName, setNewHabitName] = useState('');
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    await runCreate(() => createHabit(clientId, newHabitName), {
+      success: 'Habit added',
+      onDone: () => setNewHabitName(''),
+    });
+  }
+
+  async function handleDelete(habitId: string, name: string) {
+    const ok = await confirm({
+      title: `Delete “${name}”?`,
+      body: 'The habit and its whole completion history are removed.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runDelete(() => deleteHabit(habitId), { success: 'Habit deleted' });
+  }
+
+  return (
+    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Manage habits</h3>
+      <form onSubmit={handleCreate} className="mt-2 flex items-end gap-2">
+        <div className="flex-1 space-y-1">
+          <label className="text-xs font-medium text-zinc-500">New habit</label>
+          <input
+            required
+            value={newHabitName}
+            onChange={(e) => setNewHabitName(e.target.value)}
+            placeholder="e.g. 10,000 steps"
+            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={creating}
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+        >
+          {creating ? 'Adding…' : 'Add habit'}
+        </button>
+      </form>
+
+      {habits.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState compact title="No habits yet — add one above, it'll show up as a checkbox on each day below." />
+        </div>
+      ) : (
+        <ul className="mt-3 divide-y divide-black/10 dark:divide-white/10">
+          {habits.map((habit) => (
+            <li key={habit.id} className="flex items-center justify-between py-2 text-sm">
+              <span>{habit.name}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-500">{adherencePercent(habit.logs)}% (30d)</span>
+                <button
+                  onClick={() => handleDelete(habit.id, habit.name)}
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function WeeklyLogTab({
   clientId,
   weekDates,
@@ -34,6 +112,8 @@ export function WeeklyLogTab({
   gender,
   periodStartDates,
   readOnly,
+  isCoachView,
+  habits,
 }: {
   clientId: string;
   weekDates: string[];
@@ -41,8 +121,21 @@ export function WeeklyLogTab({
   gender: string | null;
   periodStartDates: string[];
   readOnly: boolean;
+  isCoachView: boolean;
+  habits: HabitWithLogs[];
 }) {
   const { run } = useAction();
+  const { run: runHabitToggle } = useAction();
+  const [busyHabitKey, setBusyHabitKey] = useState<string | null>(null);
+
+  async function toggleHabit(habitId: string, date: string, completed: boolean) {
+    setBusyHabitKey(`${habitId}|${date}`);
+    try {
+      await runHabitToggle(() => toggleHabitLog(habitId, date, completed));
+    } finally {
+      setBusyHabitKey(null);
+    }
+  }
   const [days, setDays] = useState<Record<string, DayForm>>(() => {
     const map: Record<string, DayForm> = {};
     for (const date of weekDates) {
@@ -98,6 +191,8 @@ export function WeeklyLogTab({
 
   return (
     <div className="space-y-6">
+      {isCoachView && <HabitManager clientId={clientId} habits={habits} />}
+
       <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           Weekly totals / averages ({loggedDays.length} logged days)
@@ -137,6 +232,30 @@ export function WeeklyLogTab({
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                 Below {CALORIE_FLOOR} kcal — worth a coach review.
               </p>
+            )}
+
+            {habits.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-black/5 pb-3 text-sm dark:border-white/5">
+                <span className="flex items-center gap-1 text-xs font-medium text-zinc-500">
+                  <CheckSquare className="h-3.5 w-3.5" /> Habits
+                </span>
+                {habits.map((habit) => {
+                  const habitLog = habit.logs.find((l) => l.log_date === date);
+                  const done = habitLog?.completed ?? false;
+                  const key = `${habit.id}|${date}`;
+                  return (
+                    <label key={habit.id} className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={done}
+                        disabled={isCoachView || busyHabitKey === key}
+                        onChange={() => toggleHabit(habit.id, date, !done)}
+                      />
+                      {habit.name}
+                    </label>
+                  );
+                })}
+              </div>
             )}
 
             <fieldset disabled={readOnly} className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">

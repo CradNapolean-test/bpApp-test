@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMealPlanEntry, removeMealPlanEntry } from '@/lib/data/mealPlan';
-import { formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
+import { addRecipeToMealPlan } from '@/lib/data/recipes';
+import { entryMacros, formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
-import type { MealPlanEntryRow, MealPlanSection, FoodRow } from '@/lib/data/types';
+import type { MealPlanEntryRow, MealPlanSection, FoodRow, RecipeRow } from '@/lib/data/types';
 
 const SECTIONS: { key: MealPlanSection; label: string }[] = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -20,18 +21,29 @@ const SECTIONS: { key: MealPlanSection; label: string }[] = [
 export function MealPlannerTab({
   clientId,
   initialEntries,
+  recipes,
   readOnly,
 }: {
   clientId: string;
   initialEntries: MealPlanEntryRow[];
+  recipes: RecipeRow[];
   readOnly: boolean;
 }) {
   const { run } = useAction();
+  const { run: runRecipe } = useAction();
   const [openSection, setOpenSection] = useState<MealPlanSection | null>(null);
 
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
     await run(() => addMealPlanEntry(clientId, section, food.id, portions), {
       success: `${food.name} added`,
+      onDone: () => setOpenSection(null),
+    });
+  }
+
+  async function handleAddRecipe(section: MealPlanSection, recipeId: string, servings: number) {
+    const recipe = recipes.find((r) => r.id === recipeId);
+    await runRecipe(() => addRecipeToMealPlan(clientId, section, recipeId, servings), {
+      success: recipe ? `${recipe.name} added` : 'Recipe added',
       onDone: () => setOpenSection(null),
     });
   }
@@ -70,10 +82,15 @@ export function MealPlannerTab({
               )}
             </div>
             <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
-              {entries.map((entry) => (
+              {entries.map((entry) => {
+                const macros = entryMacros(entry);
+                return (
                 <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
                   <span>
-                    {entry.food?.name} <span className="text-zinc-500">{formatQuantity(entry)}</span>
+                    {entry.food?.name}{' '}
+                    <span className="text-zinc-500">
+                      {formatQuantity(entry)} · {Math.round(macros.calories)} kcal
+                    </span>
                   </span>
                   {!readOnly && (
                     <button
@@ -84,7 +101,8 @@ export function MealPlannerTab({
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
               {entries.length === 0 && (
                 <li>
                   <EmptyState compact title="Nothing planned yet" />
@@ -93,7 +111,11 @@ export function MealPlannerTab({
             </ul>
             {openSection === key && (
               <div className="mt-3">
-                <FoodSearchPicker onAdd={(food, portions) => handleAdd(key, food, portions)} />
+                <FoodSearchPicker
+                  onAdd={(food, portions) => handleAdd(key, food, portions)}
+                  recipes={recipes}
+                  onAddRecipe={(recipeId, servings) => handleAddRecipe(key, recipeId, servings)}
+                />
               </div>
             )}
           </div>

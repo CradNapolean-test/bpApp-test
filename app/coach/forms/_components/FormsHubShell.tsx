@@ -33,7 +33,13 @@ type QuestionDraft = {
 
 const BLANK_QUESTION: QuestionDraft = { question_text: '', question_type: 'short_text', optionsRaw: '', required: true };
 
-export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemplateRow[] }) {
+export function FormsHubShell({
+  initialTemplates,
+  unreadCount,
+}: {
+  initialTemplates: FormTemplateRow[];
+  unreadCount: number;
+}) {
   const confirm = useConfirm();
   const toast = useToast();
   const { run: runSave, busy: saving } = useAction();
@@ -175,7 +181,7 @@ export function FormsHubShell({ initialTemplates }: { initialTemplates: FormTemp
   );
 
   return (
-    <AppShell title="Forms" topBar={<CoachNav />} sidebar={sidebar}>
+    <AppShell title="Forms" topBar={<CoachNav unreadCount={unreadCount} />} sidebar={sidebar}>
       <form onSubmit={handleSave} className="space-y-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
           {editingId ? 'Edit template' : 'New template'}

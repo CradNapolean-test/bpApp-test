@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getClasses, getScheduleOccurrences } from '@/lib/data/classes';
 import { getPackages } from '@/lib/data/memberships';
+import { getCoachChatOverview } from '@/lib/data/chat';
 import { ClassesHubShell } from './_components/ClassesHubShell';
 
 export default async function CoachClassesPage() {
@@ -18,11 +19,20 @@ export default async function CoachClassesPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [classes, occurrences, packages] = await Promise.all([
+  const [classes, occurrences, packages, chatOverview] = await Promise.all([
     getClasses(),
     getScheduleOccurrences(),
     getPackages(),
+    getCoachChatOverview(),
   ]);
+  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
-  return <ClassesHubShell initialClasses={classes} occurrences={occurrences} initialPackages={packages} />;
+  return (
+    <ClassesHubShell
+      initialClasses={classes}
+      occurrences={occurrences}
+      initialPackages={packages}
+      unreadCount={unreadCount}
+    />
+  );
 }

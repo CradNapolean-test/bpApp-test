@@ -50,6 +50,9 @@ export default async function DashboardPage() {
       formAssignments={bundle.formAssignments}
       exerciseLibrary={bundle.exerciseLibrary}
       programTemplates={bundle.programTemplates}
+      recipes={bundle.recipes}
+      educationContent={bundle.educationContent}
+      educationAssignments={bundle.educationAssignments}
     />
   );
 }

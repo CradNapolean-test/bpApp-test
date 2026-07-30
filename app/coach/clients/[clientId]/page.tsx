@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
 import { getClientHealthStatuses } from '@/lib/data/coach';
+import { getCoachChatOverview } from '@/lib/data/chat';
 import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
 
 export default async function CoachClientPage({
@@ -31,11 +32,13 @@ export default async function CoachClientPage({
     .maybeSingle();
   if (!targetProfile) redirect('/coach');
 
-  const [bundle, healthStatuses] = await Promise.all([
+  const [bundle, healthStatuses, chatOverview] = await Promise.all([
     loadDashboardBundle(clientId, false),
     getClientHealthStatuses(supabase, user.id),
+    getCoachChatOverview(),
   ]);
   const healthStatus = healthStatuses.find((s) => s.clientId === clientId) ?? null;
+  const coachUnreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <DashboardShell
@@ -43,6 +46,7 @@ export default async function CoachClientPage({
         clientLabel={bundle.profile?.name ?? targetProfile.email}
         isCoachView={true}
         healthStatus={healthStatus}
+        coachUnreadCount={coachUnreadCount}
         currentUserId={user.id}
         profile={bundle.profile}
         weekDates={bundle.weekDates}
@@ -69,6 +73,9 @@ export default async function CoachClientPage({
         formAssignments={bundle.formAssignments}
         exerciseLibrary={bundle.exerciseLibrary}
         programTemplates={bundle.programTemplates}
+        recipes={bundle.recipes}
+        educationContent={bundle.educationContent}
+        educationAssignments={bundle.educationAssignments}
       />
   );
 }

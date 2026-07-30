@@ -7,7 +7,8 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
 import { toIsoDate } from '@/lib/utils/dates';
-import type { MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
+import { formatDelta, measurementDelta } from '@/lib/utils/measurementDeltas';
+import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
 
 const MEASUREMENT_FIELDS: { key: keyof Omit<MeasurementLogRow, 'id' | 'client_id' | 'log_date' | 'created_at'>; label: string }[] = [
   { key: 'arm', label: 'Arm' },
@@ -21,11 +22,13 @@ export function ProgressTab({
   clientId,
   initialPhotos,
   initialMeasurements,
+  profile,
   readOnly,
 }: {
   clientId: string;
   initialPhotos: ProgressPhoto[];
   initialMeasurements: MeasurementLogRow[];
+  profile: ClientProfileRow | null;
   readOnly: boolean;
 }) {
   const confirm = useConfirm();
@@ -188,12 +191,28 @@ export function ProgressTab({
               </tr>
             </thead>
             <tbody>
-              {initialMeasurements.map((m) => (
+              {initialMeasurements.map((m, i) => (
                 <tr key={m.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
                   <td className="p-2">{m.log_date}</td>
-                  {MEASUREMENT_FIELDS.map(({ key }) => (
-                    <td key={key} className="p-2">{m[key] ?? '—'}</td>
-                  ))}
+                  {MEASUREMENT_FIELDS.map(({ key }) => {
+                    if (i !== 0 || m[key] == null) {
+                      return <td key={key} className="p-2">{m[key] ?? '—'}</td>;
+                    }
+                    const { vsStart, vsPrevious } = measurementDelta(initialMeasurements, profile, key);
+                    const startLabel = formatDelta(vsStart);
+                    const weekLabel = formatDelta(vsPrevious);
+                    return (
+                      <td key={key} className="p-2">
+                        {m[key]}
+                        {(startLabel || weekLabel) && (
+                          <div className="mt-0.5 space-x-1.5 text-[10px] text-zinc-500">
+                            {startLabel && <span>{startLabel} vs start</span>}
+                            {weekLabel && <span>{weekLabel} vs last</span>}
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
               {initialMeasurements.length === 0 && (

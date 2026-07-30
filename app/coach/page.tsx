@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getClientHealthStatuses, getMyClients } from '@/lib/data/coach';
+import { getCoachChatOverview } from '@/lib/data/chat';
 import { AppShell } from '@/app/_components/AppShell';
 import { CoachNav } from './_components/CoachNav';
 import { AddClientForm } from './_components/AddClientForm';
@@ -22,15 +23,17 @@ export default async function CoachPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [clients, healthStatuses] = await Promise.all([
+  const [clients, healthStatuses, chatOverview] = await Promise.all([
     getMyClients(supabase, user.id),
     getClientHealthStatuses(supabase, user.id),
+    getCoachChatOverview(),
   ]);
+  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <AppShell
       title="Clients"
-      topBar={<CoachNav />}
+      topBar={<CoachNav unreadCount={unreadCount} />}
       sidebar={<ClientSidebar clients={clients} statuses={healthStatuses} />}
     >
       <div className="space-y-4">

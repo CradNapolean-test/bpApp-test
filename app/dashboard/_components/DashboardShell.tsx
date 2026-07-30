@@ -14,8 +14,9 @@ import { ActivityTab } from './ActivityTab';
 import { InsightsTab } from './InsightsTab';
 import { OverviewTab } from './OverviewTab';
 import { ProgressTab } from './ProgressTab';
-import { HabitsTab } from './HabitsTab';
 import { FormsTab } from './FormsTab';
+import { EducationTab } from './EducationTab';
+import { RecipesTab } from './RecipesTab';
 import { TodayTab } from './TodayTab';
 import { CategoryNav } from './CategoryNav';
 import type { Category, Screen } from './categories';
@@ -33,6 +34,8 @@ import type {
   ClientMembershipRow,
   ClientProfileRow,
   DailyLogRow,
+  EducationAssignmentWithContent,
+  EducationContentRow,
   ExerciseLibraryRow,
   FoodDiaryEntryRow,
   FormAssignmentWithDetails,
@@ -44,6 +47,7 @@ import type {
   NotificationRow,
   ProgramTemplateRow,
   ProgressPhoto,
+  RecipeWithIngredients,
   ScheduleOccurrence,
   WorkoutLogRow,
   WorkoutProgramRow,
@@ -81,7 +85,11 @@ export function DashboardShell({
   formAssignments,
   exerciseLibrary,
   programTemplates,
+  recipes,
+  educationContent,
+  educationAssignments,
   healthStatus = null,
+  coachUnreadCount = 0,
 }: {
   clientId: string;
   clientLabel: string;
@@ -112,8 +120,12 @@ export function DashboardShell({
   formAssignments: FormAssignmentWithDetails[];
   exerciseLibrary: ExerciseLibraryRow[];
   programTemplates: ProgramTemplateRow[];
+  recipes: RecipeWithIngredients[];
+  educationContent: EducationContentRow[];
+  educationAssignments: EducationAssignmentWithContent[];
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
+  coachUnreadCount?: number;
 }) {
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
@@ -128,7 +140,7 @@ export function DashboardShell({
   }
 
   const topBar = isCoachView ? (
-    <CoachNav />
+    <CoachNav unreadCount={coachUnreadCount} />
   ) : (
     <div className="flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
       {(['Coaching', 'Classes'] as Area[]).map((a) => (
@@ -229,10 +241,9 @@ export function DashboardShell({
               gender={profile?.gender ?? null}
               periodStartDates={periodStartDates}
               readOnly={isCoachView}
+              isCoachView={isCoachView}
+              habits={habits}
             />
-          )}
-          {screen === 'Habits' && (
-            <HabitsTab clientId={clientId} isCoachView={isCoachView} habits={habits} />
           )}
           {screen === 'Forms' && (
             <FormsTab
@@ -242,11 +253,27 @@ export function DashboardShell({
               assignments={formAssignments}
             />
           )}
+          {screen === 'Education' && (
+            <EducationTab
+              clientId={clientId}
+              isCoachView={isCoachView}
+              content={educationContent}
+              assignments={educationAssignments}
+            />
+          )}
           {screen === 'Food Tracking' && (
-            <FoodTrackingTab dailyLogId={todayLogId} initialEntries={foodDiaryEntries} readOnly={isCoachView} />
+            <FoodTrackingTab
+              dailyLogId={todayLogId}
+              initialEntries={foodDiaryEntries}
+              recipes={recipes}
+              readOnly={isCoachView}
+            />
           )}
           {screen === 'Meal Planner' && (
-            <MealPlannerTab clientId={clientId} initialEntries={mealPlanEntries} readOnly={isCoachView} />
+            <MealPlannerTab clientId={clientId} initialEntries={mealPlanEntries} recipes={recipes} readOnly={isCoachView} />
+          )}
+          {screen === 'Recipes' && (
+            <RecipesTab clientId={clientId} initialRecipes={recipes} readOnly={isCoachView} />
           )}
           {screen === 'Activity' && (
             <ActivityTab activities={activities} bodyWeightKg={todayBodyweight} programWeek={programWeek} />
@@ -258,6 +285,7 @@ export function DashboardShell({
               clientId={clientId}
               initialPhotos={photos}
               initialMeasurements={measurementLogs}
+              profile={profile}
               readOnly={isCoachView}
             />
           )}

@@ -15,17 +15,19 @@ export function ClassesHubShell({
   initialClasses,
   occurrences,
   initialPackages,
+  unreadCount,
 }: {
   initialClasses: ClassRow[];
   occurrences: ScheduleOccurrence[];
   initialPackages: MembershipPackageRow[];
+  unreadCount: number;
 }) {
   const [tab, setTab] = useState<Tab>('Manage Classes');
 
   return (
     <AppShell
       title="Classes"
-      topBar={<CoachNav />}
+      topBar={<CoachNav unreadCount={unreadCount} />}
       sidebar={
         <nav className="space-y-1">
           {TABS.map((t) => (

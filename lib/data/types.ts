@@ -58,6 +58,25 @@ export interface FoodRow {
   barcode: string | null;
 }
 
+export interface RecipeIngredientRow {
+  id: string;
+  recipe_id: string;
+  food_id: string | null;
+  portions: number;
+  food: FoodRow | null;
+}
+
+export interface RecipeRow {
+  id: string;
+  client_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface RecipeWithIngredients extends RecipeRow {
+  recipe_ingredients: RecipeIngredientRow[];
+}
+
 export interface FoodDiaryEntryRow {
   id: string;
   daily_log_id: string;
@@ -97,6 +116,15 @@ export interface ChatMessageRow {
   created_at: string;
 }
 
+export interface ChatOverviewRow {
+  client_id: string;
+  client_name: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  last_sender_id: string | null;
+  unread_count: number;
+}
+
 export interface ClassRow {
   id: string;
   coach_id: string;
@@ -106,6 +134,7 @@ export interface ClassRow {
   capacity: number;
   coach_note: string | null;
   cutoff_hours: number;
+  credit_cost: number;
 }
 
 export type BookingStatus = 'booked' | 'waitlist' | 'cancelled';
@@ -141,6 +170,9 @@ export interface WorkoutExerciseRow {
   rpe: number | null;
   notes: string | null;
   video_url: string | null;
+  superset_group: string | null;
+  rest_seconds: number | null;
+  sort_order: number;
 }
 
 export interface WorkoutProgramDayRow {
@@ -148,6 +180,7 @@ export interface WorkoutProgramDayRow {
   program_id: string;
   week_num: number;
   day_label: string;
+  sort_order: number;
   workout_exercises: WorkoutExerciseRow[];
 }
 
@@ -178,6 +211,11 @@ export interface ExerciseLibraryRow {
   default_rpe: number | null;
   video_url: string | null;
   notes: string | null;
+  muscle_group: string | null;
+  equipment: string | null;
+  instructions: string | null;
+  image_url: string | null;
+  default_rest_seconds: number | null;
   created_by: string | null;
   created_at: string;
 }
@@ -193,6 +231,9 @@ export interface ProgramTemplateExerciseRow {
   rpe: number | null;
   notes: string | null;
   video_url: string | null;
+  superset_group: string | null;
+  rest_seconds: number | null;
+  sort_order: number;
 }
 
 export interface ProgramTemplateDayRow {
@@ -200,6 +241,7 @@ export interface ProgramTemplateDayRow {
   template_id: string;
   week_num: number;
   day_label: string;
+  sort_order: number;
   program_template_exercises: ProgramTemplateExerciseRow[];
 }
 
@@ -299,6 +341,7 @@ export interface ScheduleOccurrence {
   date: string;
   startTime: string | null;
   capacity: number;
+  creditCost: number;
   bookedCount: number;
 }
 
@@ -353,4 +396,25 @@ export interface FormResponseRow {
 export interface FormAssignmentWithDetails extends FormAssignmentRow {
   template: FormTemplateWithQuestions;
   responses: FormResponseRow[];
+}
+
+export interface EducationContentRow {
+  id: string;
+  coach_id: string;
+  title: string;
+  body: string | null;
+  link_url: string | null;
+  created_at: string;
+}
+
+export interface EducationAssignmentRow {
+  id: string;
+  content_id: string;
+  client_id: string;
+  assigned_at: string;
+  completed_at: string | null;
+}
+
+export interface EducationAssignmentWithContent extends EducationAssignmentRow {
+  content: EducationContentRow;
 }

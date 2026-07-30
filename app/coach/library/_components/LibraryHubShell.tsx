@@ -13,16 +13,18 @@ type Tab = (typeof TABS)[number];
 export function LibraryHubShell({
   initialExercises,
   initialTemplates,
+  unreadCount,
 }: {
   initialExercises: ExerciseLibraryRow[];
   initialTemplates: ProgramTemplateWithDays[];
+  unreadCount: number;
 }) {
   const [tab, setTab] = useState<Tab>('Exercises');
 
   return (
     <AppShell
       title="Library"
-      topBar={<CoachNav />}
+      topBar={<CoachNav unreadCount={unreadCount} />}
       sidebar={
         <nav className="space-y-1">
           {TABS.map((t) => (

@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getFormTemplates } from '@/lib/data/forms';
+import { getEducationContent } from '@/lib/data/education';
 import { getCoachChatOverview } from '@/lib/data/chat';
-import { FormsHubShell } from './_components/FormsHubShell';
+import { EducationHubShell } from './_components/EducationHubShell';
 
-export default async function CoachFormsPage() {
+export default async function CoachEducationPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,8 +18,8 @@ export default async function CoachFormsPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [templates, chatOverview] = await Promise.all([getFormTemplates(), getCoachChatOverview()]);
+  const [content, chatOverview] = await Promise.all([getEducationContent(), getCoachChatOverview()]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
-  return <FormsHubShell initialTemplates={templates} unreadCount={unreadCount} />;
+  return <EducationHubShell initialContent={content} unreadCount={unreadCount} />;
 }

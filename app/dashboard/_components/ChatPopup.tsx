@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ChatTab } from './ChatTab';
+import { markChatRead } from '@/lib/data/chat';
 import type { ChatMessageRow } from '@/lib/data/types';
 
 export function ChatPopup({
@@ -15,10 +16,16 @@ export function ChatPopup({
 }) {
   const [open, setOpen] = useState(false);
 
+  function handleToggle() {
+    const willOpen = !open;
+    setOpen(willOpen);
+    if (willOpen) markChatRead(clientId).catch(() => {});
+  }
+
   return (
     <>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleToggle}
         aria-label={open ? 'Close chat' : 'Open chat'}
         className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-2xl text-background shadow-lg transition-transform hover:scale-105 md:bottom-6 md:right-6"
       >

@@ -6,10 +6,11 @@ export type Screen =
   | 'Today'
   | 'Setup'
   | 'Weekly Log'
-  | 'Habits'
   | 'Forms'
+  | 'Education'
   | 'Food Tracking'
   | 'Meal Planner'
+  | 'Recipes'
   | 'Activity'
   | 'Insights'
   | 'Overview'
@@ -40,11 +41,11 @@ export function screensForCategory(category: Category, isCoachView: boolean): Sc
     case 'Home':
       return ['Today'];
     case 'Nutrition':
-      return ['Food Tracking', 'Meal Planner'];
+      return ['Food Tracking', 'Meal Planner', 'Recipes'];
     case 'Training':
-      return ['Activity', 'Workout'];
+      return ['Workout', 'Activity'];
     case 'Accountability':
-      return ['Weekly Log', 'Habits', 'Forms', 'Insights'];
+      return ['Weekly Log', 'Forms', 'Education', 'Insights'];
     case 'Progress':
       return ['Overview', 'Progress & Photos'];
     case 'Account Settings':

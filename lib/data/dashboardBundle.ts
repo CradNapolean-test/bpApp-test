@@ -15,6 +15,8 @@ import { getUnreadNotifications } from './notifications';
 import { getFormTemplates, getClientFormAssignments } from './forms';
 import { getExerciseLibrary } from './exerciseLibrary';
 import { getProgramTemplates } from './programTemplates';
+import { getRecipesWithIngredients } from './recipes';
+import { getEducationContent, getClientEducationAssignments } from './education';
 import { toIsoDate, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 
 const HISTORY_DAYS = 84;
@@ -52,6 +54,9 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     formAssignments,
     exerciseLibrary,
     programTemplates,
+    recipes,
+    educationContent,
+    educationAssignments,
   ] = await Promise.all([
     getClientProfile(clientId),
     getDailyLogs(clientId, dates[0], dates[6]),
@@ -75,6 +80,9 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getClientFormAssignments(clientId),
     getExerciseLibrary(),
     getProgramTemplates(),
+    getRecipesWithIngredients(clientId),
+    getEducationContent(),
+    getClientEducationAssignments(clientId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
@@ -110,5 +118,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     formAssignments,
     exerciseLibrary,
     programTemplates,
+    recipes,
+    educationContent,
+    educationAssignments,
   };
 }

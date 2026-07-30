@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getFormTemplates } from '@/lib/data/forms';
 import { getCoachChatOverview } from '@/lib/data/chat';
-import { FormsHubShell } from './_components/FormsHubShell';
+import { MessagesHubShell } from './_components/MessagesHubShell';
 
-export default async function CoachFormsPage() {
+export default async function CoachMessagesPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,8 +17,7 @@ export default async function CoachFormsPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [templates, chatOverview] = await Promise.all([getFormTemplates(), getCoachChatOverview()]);
-  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
+  const overview = await getCoachChatOverview();
 
-  return <FormsHubShell initialTemplates={templates} unreadCount={unreadCount} />;
+  return <MessagesHubShell overview={overview} currentUserId={user.id} />;
 }

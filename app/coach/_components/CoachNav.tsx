@@ -2,17 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, Dumbbell, FileText, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, Dumbbell, FileText, GraduationCap, MessageSquare, Users } from 'lucide-react';
 
 const LINKS = [
   { href: '/coach', label: 'Coaching', Icon: Users },
   { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
+  { href: '/coach/messages', label: 'Messages', Icon: MessageSquare },
   { href: '/coach/forms', label: 'Forms', Icon: FileText },
   { href: '/coach/library', label: 'Library', Icon: Dumbbell },
+  { href: '/coach/education', label: 'Education', Icon: GraduationCap },
   { href: '/coach/reports', label: 'Reports', Icon: BarChart3 },
 ] as const;
 
-export function CoachNav() {
+export function CoachNav({ unreadCount = 0 }: { unreadCount?: number }) {
   const pathname = usePathname();
 
   const linkCls = (active: boolean) =>
@@ -31,6 +33,11 @@ export function CoachNav() {
           <Link key={href} href={href} className={linkCls(Boolean(active))}>
             <Icon className="h-4 w-4" />
             {label}
+            {href === '/coach/messages' && unreadCount > 0 && (
+              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </Link>
         );
       })}

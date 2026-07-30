@@ -13,11 +13,43 @@ import {
   deleteProgram,
   deleteProgramDay,
   logSet,
+  swapExerciseOrder,
 } from '@/lib/data/workouts';
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
-import type { ExerciseLibraryRow, ProgramTemplateRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
+import type {
+  ExerciseLibraryRow,
+  ProgramTemplateRow,
+  WorkoutExerciseRow,
+  WorkoutLogRow,
+  WorkoutProgramRow,
+} from '@/lib/data/types';
 
-function AddExerciseForm({ programDayId, library }: { programDayId: string; library: ExerciseLibraryRow[] }) {
+const MUSCLE_GROUPS = ['Push', 'Pull', 'Legs', 'Core', 'Cardio', 'Full Body', 'Mobility'];
+
+// Groups a sorted exercise list into runs sharing the same non-null superset_group, so
+// e.g. two exercises marked group "A" render together under one "Superset A" label.
+function groupBySuperset(exercises: WorkoutExerciseRow[]): { group: string | null; exercises: WorkoutExerciseRow[] }[] {
+  const groups: { group: string | null; exercises: WorkoutExerciseRow[] }[] = [];
+  for (const ex of exercises) {
+    const last = groups[groups.length - 1];
+    if (last && last.group === ex.superset_group && ex.superset_group != null) {
+      last.exercises.push(ex);
+    } else {
+      groups.push({ group: ex.superset_group, exercises: [ex] });
+    }
+  }
+  return groups;
+}
+
+function AddExerciseForm({
+  programDayId,
+  library,
+  nextSortOrder,
+}: {
+  programDayId: string;
+  library: ExerciseLibraryRow[];
+  nextSortOrder: number;
+}) {
   const { run, busy } = useAction();
   const [libraryId, setLibraryId] = useState('');
   const [name, setName] = useState('');
@@ -26,6 +58,9 @@ function AddExerciseForm({ programDayId, library }: { programDayId: string; libr
   const [load, setLoad] = useState<number | ''>('');
   const [rpe, setRpe] = useState<number | ''>('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [supersetGroup, setSupersetGroup] = useState('');
+  const [restSeconds, setRestSeconds] = useState<number | ''>('');
+  const [filterGroup, setFilterGroup] = useState('');
 
   function handlePickLibrary(id: string) {
     setLibraryId(id);
@@ -36,6 +71,7 @@ function AddExerciseForm({ programDayId, library }: { programDayId: string; libr
     if (entry.default_reps != null) setReps(entry.default_reps);
     if (entry.default_rpe != null) setRpe(entry.default_rpe);
     if (entry.video_url != null) setVideoUrl(entry.video_url);
+    if (entry.default_rest_seconds != null) setRestSeconds(entry.default_rest_seconds);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -50,6 +86,9 @@ function AddExerciseForm({ programDayId, library }: { programDayId: string; libr
           rpe: rpe === '' ? null : rpe,
           notes: null,
           video_url: videoUrl || null,
+          superset_group: supersetGroup || null,
+          rest_seconds: restSeconds === '' ? null : restSeconds,
+          sort_order: nextSortOrder,
         }),
       {
         success: 'Exercise added',
@@ -57,30 +96,43 @@ function AddExerciseForm({ programDayId, library }: { programDayId: string; libr
           setLibraryId('');
           setName('');
           setVideoUrl('');
+          setSupersetGroup('');
+          setRestSeconds('');
         },
       }
     );
   }
 
+  const filteredLibrary = filterGroup ? library.filter((e) => e.muscle_group === filterGroup) : library;
   const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
 
   return (
     <form onSubmit={handleSubmit} className="mt-2 flex flex-wrap items-center gap-1.5">
       {library.length > 0 && (
-        <select className={`${inputCls} w-32`} value={libraryId} onChange={(e) => handlePickLibrary(e.target.value)}>
-          <option value="">From library…</option>
-          {library.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
+        <>
+          <select className={`${inputCls} w-24`} value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}>
+            <option value="">All groups</option>
+            {MUSCLE_GROUPS.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          <select className={`${inputCls} w-32`} value={libraryId} onChange={(e) => handlePickLibrary(e.target.value)}>
+            <option value="">From library…</option>
+            {filteredLibrary.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+          </select>
+        </>
       )}
       <input required placeholder="Exercise" className={`${inputCls} w-32`} value={name} onChange={(e) => setName(e.target.value)} />
       <input type="number" placeholder="Sets" className={`${inputCls} w-16`} value={sets} onChange={(e) => setSets(Number(e.target.value))} />
       <input placeholder="Reps" className={`${inputCls} w-20`} value={reps} onChange={(e) => setReps(e.target.value)} />
       <input type="number" placeholder="Load" className={`${inputCls} w-16`} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
       <input type="number" placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
+      <input placeholder="Superset (e.g. A)" className={`${inputCls} w-24`} value={supersetGroup} onChange={(e) => setSupersetGroup(e.target.value)} />
+      <input type="number" placeholder="Rest (s)" className={`${inputCls} w-20`} value={restSeconds} onChange={(e) => setRestSeconds(e.target.value === '' ? '' : Number(e.target.value))} />
       <input placeholder="Video URL (optional)" className={`${inputCls} w-40`} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
       <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
         Add
@@ -234,6 +286,13 @@ export function WorkoutTab({
     await runMutate(() => deleteExercise(exerciseId), { success: 'Exercise deleted' });
   }
 
+  async function handleMoveExercise(exercises: WorkoutExerciseRow[], index: number, direction: -1 | 1) {
+    const other = exercises[index + direction];
+    if (!other) return;
+    const current = exercises[index];
+    await runMutate(() => swapExerciseOrder(current, other));
+  }
+
   const logsByExercise = workoutLogs.reduce<Record<string, WorkoutLogRow[]>>((acc, log) => {
     if (!log.exercise_id) return acc;
     (acc[log.exercise_id] ??= []).push(log);
@@ -289,7 +348,10 @@ export function WorkoutTab({
 
           {[...program.workout_program_days]
             .sort((a, b) => a.week_num - b.week_num)
-            .map((day) => (
+            .map((day) => {
+              const sortedExercises = [...day.workout_exercises].sort((a, b) => a.sort_order - b.sort_order);
+              const supersetGroups = groupBySuperset(sortedExercises);
+              return (
               <div key={day.id} className="mt-3 rounded-md border border-black/5 p-3 dark:border-white/5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">
@@ -306,53 +368,84 @@ export function WorkoutTab({
                 </div>
 
                 <ul className="mt-2 space-y-2">
-                  {day.workout_exercises.map((ex) => {
-                    const logs = logsByExercise[ex.id] ?? [];
-                    return (
-                      <li key={ex.id} className="rounded-md bg-black/[.02] p-2 text-sm dark:bg-white/[.03]">
-                        <div className="flex items-center justify-between">
-                          <span>
-                            {ex.name} — {ex.sets}×{ex.reps}
-                            {ex.load != null ? ` @ ${ex.load}` : ''}
-                            {ex.rpe != null ? ` RPE ${ex.rpe}` : ''}
-                          </span>
-                          {isCoachView && (
-                            <button
-                              onClick={() => handleDeleteExercise(ex.id, ex.name)}
-                              className="text-xs text-red-600 hover:underline dark:text-red-400"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                        {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
-                          <a
-                            href={ex.video_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 inline-block text-xs text-accent hover:underline"
-                          >
-                            ▶ Watch demo
-                          </a>
-                        )}
-                        {!isCoachView && (
-                          <>
-                            <LogSetForm clientId={clientId} exerciseId={ex.id} nextSetNumber={logs.length + 1} />
-                            {logs.length > 0 && (
-                              <p className="mt-1 text-xs text-zinc-500">
-                                Logged: {logs.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(', ')}
-                              </p>
+                  {supersetGroups.map((sg, sgIndex) => (
+                    <li
+                      key={sgIndex}
+                      className={sg.group ? 'space-y-1 rounded-md border border-accent/30 p-1.5' : 'space-y-1'}
+                    >
+                      {sg.group && <p className="px-1 text-[10px] font-semibold text-accent">Superset {sg.group}</p>}
+                      {sg.exercises.map((ex) => {
+                        const logs = logsByExercise[ex.id] ?? [];
+                        const indexInDay = sortedExercises.findIndex((e) => e.id === ex.id);
+                        return (
+                          <div key={ex.id} className="rounded-md bg-black/[.02] p-2 text-sm dark:bg-white/[.03]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span>
+                                {ex.name} — {ex.sets}×{ex.reps}
+                                {ex.load != null ? ` @ ${ex.load}` : ''}
+                                {ex.rpe != null ? ` RPE ${ex.rpe}` : ''}
+                                {ex.rest_seconds != null ? ` · ${ex.rest_seconds}s rest` : ''}
+                              </span>
+                              {isCoachView && (
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <button
+                                    onClick={() => handleMoveExercise(sortedExercises, indexInDay, -1)}
+                                    disabled={indexInDay === 0}
+                                    aria-label="Move up"
+                                    className="text-xs text-zinc-500 hover:text-black disabled:opacity-30 dark:hover:text-zinc-200"
+                                  >
+                                    ▲
+                                  </button>
+                                  <button
+                                    onClick={() => handleMoveExercise(sortedExercises, indexInDay, 1)}
+                                    disabled={indexInDay === sortedExercises.length - 1}
+                                    aria-label="Move down"
+                                    className="text-xs text-zinc-500 hover:text-black disabled:opacity-30 dark:hover:text-zinc-200"
+                                  >
+                                    ▼
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteExercise(ex.id, ex.name)}
+                                    className="text-xs text-red-600 hover:underline dark:text-red-400"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
+                              <a
+                                href={ex.video_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-1 inline-block text-xs text-accent hover:underline"
+                              >
+                                ▶ Watch demo
+                              </a>
                             )}
-                          </>
-                        )}
-                      </li>
-                    );
-                  })}
+                            {!isCoachView && (
+                              <>
+                                <LogSetForm clientId={clientId} exerciseId={ex.id} nextSetNumber={logs.length + 1} />
+                                {logs.length > 0 && (
+                                  <p className="mt-1 text-xs text-zinc-500">
+                                    Logged: {logs.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(', ')}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </li>
+                  ))}
                 </ul>
 
-                {isCoachView && <AddExerciseForm programDayId={day.id} library={exerciseLibrary} />}
+                {isCoachView && (
+                  <AddExerciseForm programDayId={day.id} library={exerciseLibrary} nextSortOrder={sortedExercises.length} />
+                )}
               </div>
-            ))}
+              );
+            })}
 
           {isCoachView && (
             <div className="mt-3 flex items-center gap-1.5">

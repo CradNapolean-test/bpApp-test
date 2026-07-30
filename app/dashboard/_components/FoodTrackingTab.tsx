@@ -6,22 +6,26 @@ import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addFoodDiaryEntry, removeFoodDiaryEntry, syncFoodDiaryToLog } from '@/lib/data/foodDiary';
 import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { logRecipeToDiary } from '@/lib/data/recipes';
 import { lookupBarcode } from '@/lib/openFoodFacts';
-import { formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
+import { entryMacros, formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import { BarcodeScanner } from './BarcodeScanner';
-import type { FoodDiaryEntryRow, FoodRow } from '@/lib/data/types';
+import type { FoodDiaryEntryRow, FoodRow, RecipeRow } from '@/lib/data/types';
 
 export function FoodTrackingTab({
   dailyLogId,
   initialEntries,
+  recipes,
   readOnly,
 }: {
   dailyLogId: string | null;
   initialEntries: FoodDiaryEntryRow[];
+  recipes: RecipeRow[];
   readOnly: boolean;
 }) {
   const { run } = useAction();
+  const { run: runRecipe } = useAction();
   const { run: runSync, busy: syncing } = useAction();
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
@@ -30,6 +34,14 @@ export function FoodTrackingTab({
   async function handleAdd(food: FoodRow, portions: number) {
     if (!dailyLogId) return;
     await run(() => addFoodDiaryEntry(dailyLogId, food.id, portions), { success: `${food.name} added` });
+  }
+
+  async function handleAddRecipe(recipeId: string, servings: number) {
+    if (!dailyLogId) return;
+    const recipe = recipes.find((r) => r.id === recipeId);
+    await runRecipe(() => logRecipeToDiary(dailyLogId, recipeId, servings), {
+      success: recipe ? `${recipe.name} added` : 'Recipe added',
+    });
   }
 
   async function handleBarcodeDetected(barcode: string) {
@@ -83,11 +95,16 @@ export function FoodTrackingTab({
       </div>
 
       <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-        {initialEntries.map((entry) => (
+        {initialEntries.map((entry) => {
+          const macros = entryMacros(entry);
+          return (
           <li key={entry.id} className="flex items-center justify-between p-3">
             <div className="text-sm">
               <p className="font-medium text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
-              <p className="text-xs text-zinc-500">{formatQuantity(entry)}</p>
+              <p className="text-xs text-zinc-500">
+                {formatQuantity(entry)} · {Math.round(macros.calories)} kcal · {Math.round(macros.protein)}P /{' '}
+                {Math.round(macros.carbs)}C / {Math.round(macros.fat)}F
+              </p>
             </div>
             {!readOnly && (
               <button
@@ -98,7 +115,8 @@ export function FoodTrackingTab({
               </button>
             )}
           </li>
-        ))}
+          );
+        })}
         {initialEntries.length === 0 && (
           <li>
             <EmptyState
@@ -127,7 +145,7 @@ export function FoodTrackingTab({
             <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
-          <FoodSearchPicker onAdd={handleAdd} />
+          <FoodSearchPicker onAdd={handleAdd} recipes={recipes} onAddRecipe={handleAddRecipe} />
         </div>
       )}
     </div>

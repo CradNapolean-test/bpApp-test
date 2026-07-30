@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCoachReport } from '@/lib/data/reports';
+import { getCoachChatOverview } from '@/lib/data/chat';
 import { AppShell } from '@/app/_components/AppShell';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 
@@ -18,13 +19,14 @@ export default async function CoachReportsPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const report = await getCoachReport();
+  const [report, chatOverview] = await Promise.all([getCoachReport(), getCoachChatOverview()]);
+  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <AppShell
       title="Reports"
       subtitle="Last 30 days, across all your classes."
-      topBar={<CoachNav />}
+      topBar={<CoachNav unreadCount={unreadCount} />}
       sidebar={
         <nav className="space-y-1 text-sm">
           <a href="#attendance" className="block rounded-md px-3 py-1.5 text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300">
