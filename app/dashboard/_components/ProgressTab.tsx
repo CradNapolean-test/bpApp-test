@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { ImageIcon } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
 import { toIsoDate } from '@/lib/utils/dates';
 import type { MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
@@ -101,6 +103,15 @@ export function ProgressTab({
           </form>
         )}
 
+        {initialPhotos.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState
+              icon={ImageIcon}
+              title="No progress photos yet"
+              hint={readOnly ? 'Nothing uploaded yet.' : 'Upload one above to start tracking visual progress over time.'}
+            />
+          </div>
+        ) : (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {initialPhotos.map((photo) => (
             <div key={photo.id} className="space-y-1">
@@ -124,8 +135,8 @@ export function ProgressTab({
               </div>
             </div>
           ))}
-          {initialPhotos.length === 0 && <p className="text-sm text-zinc-500">No photos yet.</p>}
         </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
@@ -187,7 +198,7 @@ export function ProgressTab({
               ))}
               {initialMeasurements.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-2 text-zinc-500">No measurements logged yet.</td>
+                  <td colSpan={6} className="p-3 text-center text-zinc-500">No measurements logged yet.</td>
                 </tr>
               )}
             </tbody>

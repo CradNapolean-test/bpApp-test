@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { MessageSquare } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/app/_components/ToastProvider';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { sendMessage } from '@/lib/data/chat';
 import type { ChatMessageRow } from '@/lib/data/types';
 
@@ -18,6 +21,7 @@ export function ChatTab({
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
 
   useEffect(() => {
     const supabase = createClient();
@@ -49,6 +53,8 @@ export function ChatTab({
     try {
       await sendMessage(clientId, text.trim());
       setText('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -57,7 +63,7 @@ export function ChatTab({
   return (
     <div className="flex h-[60vh] flex-col rounded-lg border border-black/10 dark:border-white/10">
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
-        {messages.length === 0 && <p className="text-sm text-zinc-500">No messages yet.</p>}
+        {messages.length === 0 && <EmptyState icon={MessageSquare} title="No messages yet" hint="Say hello to get the conversation started." />}
         {messages.map((m) => {
           const isMine = m.sender_id === currentUserId;
           return (

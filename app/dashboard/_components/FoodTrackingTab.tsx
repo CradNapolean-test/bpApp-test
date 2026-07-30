@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { Utensils } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { addFoodDiaryEntry, removeFoodDiaryEntry, syncFoodDiaryToLog } from '@/lib/data/foodDiary';
 import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { lookupBarcode } from '@/lib/openFoodFacts';
@@ -98,7 +100,13 @@ export function FoodTrackingTab({
           </li>
         ))}
         {initialEntries.length === 0 && (
-          <li className="p-3 text-sm text-zinc-500">Nothing logged yet today.</li>
+          <li>
+            <EmptyState
+              icon={Utensils}
+              title="Nothing logged yet today"
+              hint={readOnly ? 'No food entries for this day.' : 'Scan a barcode or search below to add the first one.'}
+            />
+          </li>
         )}
       </ul>
 

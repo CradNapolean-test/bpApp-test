@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { CalendarDays, UserX } from 'lucide-react';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
 import { getRoster, markAttendance } from '@/lib/data/classes';
 import type { RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
@@ -65,7 +67,10 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
           {selected.className} — {selected.date}
         </h3>
         {loading && <p className="text-sm text-zinc-500">Loading roster…</p>}
-        {!loading && (
+        {!loading && (roster ?? []).length === 0 && (
+          <EmptyState icon={UserX} title="Nobody booked in" hint="No clients have booked this class occurrence." />
+        )}
+        {!loading && (roster ?? []).length > 0 && (
           <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
             {(roster ?? []).map((entry) => (
               <li key={entry.bookingId} className="flex items-center justify-between p-3 text-sm">
@@ -82,7 +87,6 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
                 </label>
               </li>
             ))}
-            {(roster ?? []).length === 0 && <li className="p-3 text-sm text-zinc-500">No bookings for this occurrence.</li>}
           </ul>
         )}
       </div>
@@ -94,6 +98,18 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
   return (
     <div className="space-y-4">
       <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+
+      {!selectedDate && (
+        <EmptyState
+          icon={CalendarDays}
+          title={occurrences.length === 0 ? 'No upcoming classes' : 'Pick a day to take attendance'}
+          hint={
+            occurrences.length === 0
+              ? 'Add a class under Manage Classes and its occurrences will appear here.'
+              : 'Marked days have a class scheduled. Select one to see who booked in.'
+          }
+        />
+      )}
 
       {selectedDate && (
         <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">

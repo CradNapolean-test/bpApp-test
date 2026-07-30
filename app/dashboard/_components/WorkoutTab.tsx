@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { Dumbbell } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { EmptyState } from '@/app/_components/EmptyState';
 import {
   addExercise,
   addProgramDay,
@@ -186,7 +188,17 @@ export function WorkoutTab({
         </form>
       )}
 
-      {programs.length === 0 && <p className="text-sm text-zinc-500">No workout program yet.</p>}
+      {programs.length === 0 && (
+        <EmptyState
+          icon={Dumbbell}
+          title="No workout program yet"
+          hint={
+            isCoachView
+              ? 'Create a program above, then add weeks, days and exercises to it.'
+              : "Your coach hasn't built your program yet — it'll show up here once they do."
+          }
+        />
+      )}
 
       {programs.map((program) => (
         <div key={program.id} className="rounded-lg border border-black/10 p-4 dark:border-white/10">

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { createPackage, deletePackage } from '@/lib/data/memberships';
 import type { MembershipPackageRow } from '@/lib/data/types';
 
@@ -70,6 +72,13 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
         </button>
       </form>
 
+      {initialPackages.length === 0 ? (
+        <EmptyState
+          icon={Ticket}
+          title="No membership packages yet"
+          hint="Packages set how many class credits a client is topped up with each week."
+        />
+      ) : (
       <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
         {initialPackages.map((p) => (
           <li key={p.id} className="flex items-center justify-between p-3 text-sm">
@@ -82,8 +91,8 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
             </button>
           </li>
         ))}
-        {initialPackages.length === 0 && <li className="p-3 text-sm text-zinc-500">No packages yet.</li>}
       </ul>
+      )}
     </div>
   );
 }

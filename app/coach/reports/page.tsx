@@ -64,7 +64,9 @@ export default async function CoachReportsPage() {
               </span>
             </li>
           ))}
-          {report.noShows.length === 0 && <li className="py-2 text-zinc-500">No no-shows in this window.</li>}
+          {report.noShows.length === 0 && (
+            <li className="py-2 text-zinc-500">No no-shows in the last 30 days — everyone who booked turned up.</li>
+          )}
         </ul>
       </div>
 
@@ -77,7 +79,9 @@ export default async function CoachReportsPage() {
               <span className="text-zinc-500">{c.bookingCount} bookings</span>
             </li>
           ))}
-          {report.classPopularity.length === 0 && <li className="py-2 text-zinc-500">No bookings yet.</li>}
+          {report.classPopularity.length === 0 && (
+            <li className="py-2 text-zinc-500">No bookings in the last 30 days yet.</li>
+          )}
         </ul>
       </div>
     </AppShell>

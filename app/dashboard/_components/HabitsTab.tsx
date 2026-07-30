@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { CheckSquare } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { createHabit, deleteHabit, toggleHabitLog } from '@/lib/data/habits';
 import { adherencePercent } from '@/lib/utils/habitStats';
 import { toIsoDate } from '@/lib/utils/dates';
@@ -76,6 +78,13 @@ export function HabitsTab({
         </form>
       )}
 
+      {habits.length === 0 ? (
+        <EmptyState
+          icon={CheckSquare}
+          title="No habits assigned yet"
+          hint={isCoachView ? 'Add one above — clients tick it off from their own dashboard.' : 'Check back once your coach adds some.'}
+        />
+      ) : (
       <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
         {habits.map((habit) => {
           const todaysLog = habit.logs.find((l) => l.log_date === today);
@@ -107,12 +116,8 @@ export function HabitsTab({
             </li>
           );
         })}
-        {habits.length === 0 && (
-          <li className="p-3 text-sm text-zinc-500">
-            {isCoachView ? 'No habits assigned yet.' : 'No habits assigned yet — check back once your coach adds some.'}
-          </li>
-        )}
       </ul>
+      )}
     </div>
   );
 }

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { CalendarDays } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { createClass, deleteClass } from '@/lib/data/classes';
 import type { ClassRow } from '@/lib/data/types';
 
@@ -88,6 +90,13 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
         </button>
       </form>
 
+      {initialClasses.length === 0 ? (
+        <EmptyState
+          icon={CalendarDays}
+          title="No classes yet"
+          hint="Add your first recurring class above — it'll then show up on the schedule for clients to book."
+        />
+      ) : (
       <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
         {initialClasses.map((c) => (
           <li key={c.id} className="flex items-center justify-between p-3 text-sm">
@@ -103,8 +112,8 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
             </button>
           </li>
         ))}
-        {initialClasses.length === 0 && <li className="p-3 text-sm text-zinc-500">No classes yet.</li>}
       </ul>
+      )}
     </div>
   );
 }

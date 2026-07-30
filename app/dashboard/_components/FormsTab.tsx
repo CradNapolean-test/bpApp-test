@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { FileText } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
 import type { FormAssignmentWithDetails, FormTemplateRow } from '@/lib/data/types';
 
@@ -203,7 +205,13 @@ export function FormsTab({
         </div>
       )}
 
-      {assignments.length === 0 && <p className="text-sm text-zinc-500">No forms assigned yet.</p>}
+      {assignments.length === 0 && (
+        <EmptyState
+          icon={FileText}
+          title="No forms assigned yet"
+          hint={isCoachView ? 'Assign a template above, or build one under Forms.' : "Your coach hasn't sent you a form to fill out."}
+        />
+      )}
     </div>
   );
 }

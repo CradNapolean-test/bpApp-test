@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { CalendarDays, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
 import { addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@/lib/data/types';
@@ -69,6 +71,20 @@ export function ClassesArea({
         <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Available classes</h3>
         <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
+        {!selectedDate && (
+          <div className="mt-3">
+            <EmptyState
+              icon={CalendarDays}
+              title={occurrences.length === 0 ? 'No classes scheduled' : 'Pick a day to book'}
+              hint={
+                occurrences.length === 0
+                  ? 'Check back once your coach schedules some.'
+                  : 'Marked days have a class available. Select one to book or join the waitlist.'
+              }
+            />
+          </div>
+        )}
+
         {selectedDate && (
           <ul className="mt-3 divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
             {dayOccurrences.map((occ) => {
@@ -110,6 +126,9 @@ export function ClassesArea({
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Bookings</h3>
+        {bookings.length === 0 ? (
+          <EmptyState icon={Ticket} title="No bookings yet" hint="Book a class above and it'll show up here." />
+        ) : (
         <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
           {bookings.map((b) => {
             const isPast = b.booking_date < todayIso;
@@ -134,8 +153,8 @@ export function ClassesArea({
               </li>
             );
           })}
-          {bookings.length === 0 && <li className="p-3 text-sm text-zinc-500">No bookings yet.</li>}
         </ul>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { searchFoods } from '@/lib/data/foods';
 import type { FoodRow } from '@/lib/data/types';
 
@@ -67,7 +68,9 @@ export function FoodSearchPicker({ onAdd }: { onAdd: (food: FoodRow, grams: numb
           );
         })}
         {!isPending && results.length === 0 && (
-          <li className="py-2 text-sm text-zinc-500">No results.</li>
+          <li>
+            <EmptyState compact title={query ? `No results for "${query}"` : 'Start typing to search foods'} />
+          </li>
         )}
       </ul>
     </div>

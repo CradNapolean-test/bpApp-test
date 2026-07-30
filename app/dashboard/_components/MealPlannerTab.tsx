@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { addMealPlanEntry, removeMealPlanEntry } from '@/lib/data/mealPlan';
 import { formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
@@ -84,7 +85,11 @@ export function MealPlannerTab({
                   )}
                 </li>
               ))}
-              {entries.length === 0 && <li className="py-2 text-sm text-zinc-500">Nothing planned.</li>}
+              {entries.length === 0 && (
+                <li>
+                  <EmptyState compact title="Nothing planned yet" />
+                </li>
+              )}
             </ul>
             {openSection === key && (
               <div className="mt-3">

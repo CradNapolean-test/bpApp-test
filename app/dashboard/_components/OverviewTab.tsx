@@ -1,6 +1,8 @@
 'use client';
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { TrendingUp } from 'lucide-react';
+import { EmptyState } from '@/app/_components/EmptyState';
 import { isoWeekKey } from '@/lib/utils/dates';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { dayCalories } from '@/lib/calculations';
@@ -113,7 +115,13 @@ export function OverviewTab({ historyLogs }: { historyLogs: DailyLogRow[] }) {
   const weeks = buildWeeklyTrend(historyLogs);
 
   if (weeks.length === 0) {
-    return <p className="text-sm text-zinc-500">No logged days yet — trends will appear once you log some.</p>;
+    return (
+      <EmptyState
+        icon={TrendingUp}
+        title="No trends yet"
+        hint="Log a few days in Weekly Log and your bodyweight, calorie and step trends will build up here."
+      />
+    );
   }
 
   return (
