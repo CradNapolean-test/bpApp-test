@@ -53,6 +53,7 @@ export default async function DashboardPage() {
       recipes={bundle.recipes}
       educationContent={bundle.educationContent}
       educationAssignments={bundle.educationAssignments}
+      unreadMessageCount={bundle.unreadMessageCount}
     />
   );
 }

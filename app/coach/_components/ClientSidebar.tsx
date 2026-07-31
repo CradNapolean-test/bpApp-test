@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search } from 'lucide-react';
+import { Avatar } from '@/app/_components/Avatar';
 import type { CoachClientRow } from '@/lib/data/coach';
 import type { ClientHealthStatus } from '@/lib/data/coach';
 
@@ -85,10 +86,11 @@ export function ClientSidebar({
             <Link
               key={client.id}
               href={`/coach/clients/${client.id}`}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300"
+              className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300"
             >
-              <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
+              <Avatar name={client.name ?? client.email} size="sm" />
               <span className="truncate">{client.name ?? client.email}</span>
+              <span className={`ml-auto h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
             </Link>
           );
         })}

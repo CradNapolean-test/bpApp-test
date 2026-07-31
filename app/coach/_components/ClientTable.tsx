@@ -3,16 +3,13 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpDown, Users } from 'lucide-react';
+import { Avatar } from '@/app/_components/Avatar';
+import { StatusBadge } from '@/app/_components/StatusBadge';
 import type { ClientHealthStatus, CoachClientRow } from '@/lib/data/coach';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 
-const STATUS_META: Record<string, { dot: string; label: string; rank: number }> = {
-  red: { dot: 'bg-red-500', label: 'Action required', rank: 0 },
-  amber: { dot: 'bg-amber-500', label: 'Keep watch', rank: 1 },
-  green: { dot: 'bg-emerald-500', label: 'Running okay', rank: 2 },
-  unmonitored: { dot: 'bg-zinc-300 dark:bg-zinc-600', label: 'Not monitored', rank: 3 },
-};
+const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
 
 export function ClientTable({
   clients,
@@ -36,8 +33,8 @@ export function ClientTable({
         cmp = a.client.balance - b.client.balance;
       } else if (sortKey === 'status') {
         cmp =
-          (STATUS_META[a.health?.status ?? 'unmonitored']?.rank ?? 9) -
-          (STATUS_META[b.health?.status ?? 'unmonitored']?.rank ?? 9);
+          (STATUS_RANK[a.health?.status ?? 'unmonitored'] ?? 9) -
+          (STATUS_RANK[b.health?.status ?? 'unmonitored'] ?? 9);
       } else {
         // Never-logged sorts as most stale rather than silently landing at one end.
         cmp = (b.health?.daysSinceActive ?? Infinity) - (a.health?.daysSinceActive ?? Infinity);
@@ -57,7 +54,7 @@ export function ClientTable({
 
   if (clients.length === 0) {
     return (
-      <div className="rounded-lg border border-black/10 p-8 text-center dark:border-white/10">
+      <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
         <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
         <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients yet</p>
         <p className="mt-1 text-sm text-zinc-500">Add your first client above to get started.</p>
@@ -69,7 +66,7 @@ export function ClientTable({
   const sortBtn = 'inline-flex items-center gap-1 hover:text-black dark:hover:text-zinc-300';
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
+    <div className="overflow-x-auto rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
       <table className="w-full min-w-[34rem] text-sm">
         <thead>
           <tr className="border-b border-black/10 text-zinc-500 dark:border-white/10">
@@ -97,26 +94,27 @@ export function ClientTable({
         </thead>
         <tbody>
           {rows.map(({ client, health }) => {
-            const meta = STATUS_META[health?.status ?? 'unmonitored'];
             return (
               <tr
                 key={client.id}
                 className="border-b border-black/5 last:border-0 hover:bg-black/[.02] dark:border-white/5 dark:hover:bg-white/[.03]"
               >
                 <td className="p-3">
-                  <Link
-                    href={`/coach/clients/${client.id}`}
-                    className="font-medium text-black hover:underline dark:text-zinc-50"
-                  >
-                    {client.name ?? client.email}
-                  </Link>
-                  <p className="truncate text-xs text-zinc-500">{client.email}</p>
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={client.name ?? client.email} size="sm" />
+                    <div className="min-w-0">
+                      <Link
+                        href={`/coach/clients/${client.id}`}
+                        className="font-medium text-black hover:underline dark:text-zinc-50"
+                      >
+                        {client.name ?? client.email}
+                      </Link>
+                      <p className="truncate text-xs text-zinc-500">{client.email}</p>
+                    </div>
+                  </div>
                 </td>
                 <td className="p-3">
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-zinc-500">
-                    <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
-                    {meta.label}
-                  </span>
+                  <StatusBadge status={health?.status ?? 'unmonitored'} />
                 </td>
                 <td className="whitespace-nowrap p-3 text-zinc-500">
                   {health?.lastActiveDate

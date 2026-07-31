@@ -18,14 +18,14 @@ export function CoachNav({ unreadCount = 0 }: { unreadCount?: number }) {
   const pathname = usePathname();
 
   const linkCls = (active: boolean) =>
-    `flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+    `flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
       active
-        ? 'bg-accent text-accent-foreground'
+        ? 'bg-accent text-accent-foreground shadow-sm'
         : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
     }`;
 
   return (
-    <div className="flex w-max gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+    <div className="flex w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 dark:bg-white/[.03]">
       {LINKS.map(({ href, label, Icon }) => {
         const active =
           href === '/coach' ? pathname === '/coach' || pathname?.startsWith('/coach/clients') : pathname?.startsWith(href);

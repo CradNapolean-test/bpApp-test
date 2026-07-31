@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Settings } from 'lucide-react';
+import { MessageSquare, Settings } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
+import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { BottomTabBar } from './BottomTabBar';
 import { SetupTab } from './SetupTab';
@@ -18,11 +19,11 @@ import { FormsTab } from './FormsTab';
 import { EducationTab } from './EducationTab';
 import { RecipesTab } from './RecipesTab';
 import { TodayTab } from './TodayTab';
+import { ChatTab } from './ChatTab';
 import { CategoryNav } from './CategoryNav';
 import type { Category, Screen } from './categories';
 import { screensForCategory } from './categories';
 import { NotificationBanner } from './NotificationBanner';
-import { ChatPopup } from './ChatPopup';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
 import { WorkoutTab } from './WorkoutTab';
@@ -88,6 +89,7 @@ export function DashboardShell({
   recipes,
   educationContent,
   educationAssignments,
+  unreadMessageCount = 0,
   healthStatus = null,
   coachUnreadCount = 0,
 }: {
@@ -123,6 +125,7 @@ export function DashboardShell({
   recipes: RecipeWithIngredients[];
   educationContent: EducationContentRow[];
   educationAssignments: EducationAssignmentWithContent[];
+  unreadMessageCount?: number;
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
   coachUnreadCount?: number;
@@ -135,6 +138,10 @@ export function DashboardShell({
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
 
   function handleCategoryClick(c: Category) {
+    // Categories only render while area === 'Coaching' (see showCoaching below) -- without
+    // this, selecting a category while the client's Classes area is active would set
+    // category/screen but never actually show anything.
+    setArea('Coaching');
     setCategory(c);
     setScreen(screensForCategory(c, isCoachView)[0]);
   }
@@ -171,15 +178,8 @@ export function DashboardShell({
     />
   ) : undefined;
 
-  const STATUS_META: Record<ClientHealthStatus['status'], { dot: string; label: string }> = {
-    red: { dot: 'bg-red-500', label: 'Action required' },
-    amber: { dot: 'bg-amber-500', label: 'Keep watch' },
-    green: { dot: 'bg-emerald-500', label: 'Running okay' },
-    unmonitored: { dot: 'bg-zinc-300 dark:bg-zinc-600', label: 'Not monitored' },
-  };
-
   const coachSummary = isCoachView && (
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
       <Link
         href="/coach"
         className="flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -187,10 +187,9 @@ export function DashboardShell({
         &larr; All clients
       </Link>
       {healthStatus && (
-        <span className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
-          <span className={`h-2 w-2 rounded-full ${STATUS_META[healthStatus.status].dot}`} />
-          {STATUS_META[healthStatus.status].label}
-          {healthStatus.status !== 'unmonitored' && ` · last active ${healthStatus.daysSinceActive}d ago`}
+        <span className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <StatusBadge status={healthStatus.status} />
+          {healthStatus.status !== 'unmonitored' && `last active ${healthStatus.daysSinceActive}d ago`}
         </span>
       )}
     </div>
@@ -206,13 +205,25 @@ export function DashboardShell({
       sidebar={sidebar}
       headerAction={
         !isCoachView && (
-          <button
-            onClick={() => handleCategoryClick('Account Settings')}
-            aria-label="Account Settings"
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
-          >
-            <Settings className="h-5 w-5" />
-          </button>
+          <>
+            <button
+              onClick={() => handleCategoryClick('Messages')}
+              aria-label="Messages"
+              className="relative rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
+            >
+              <MessageSquare className="h-5 w-5" />
+              {unreadMessageCount > 0 && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-danger" />
+              )}
+            </button>
+            <button
+              onClick={() => handleCategoryClick('Account Settings')}
+              aria-label="Account Settings"
+              className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
+          </>
         )
       }
       bottomBar={!isCoachView && <BottomTabBar category={category} onSelectCategory={handleCategoryClick} />}
@@ -309,6 +320,14 @@ export function DashboardShell({
               lastCheckinReminderAt={profile?.last_checkin_reminder_at ?? null}
             />
           )}
+          {screen === 'Messages' && (
+            <ChatTab
+              clientId={clientId}
+              initialMessages={messages}
+              currentUserId={currentUserId}
+              otherPartyName={isCoachView ? clientLabel : 'Your coach'}
+            />
+          )}
         </>
       )}
 
@@ -321,7 +340,6 @@ export function DashboardShell({
         />
       )}
 
-      <ChatPopup clientId={clientId} initialMessages={messages} currentUserId={currentUserId} />
     </AppShell>
   );
 }

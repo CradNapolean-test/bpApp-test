@@ -1,7 +1,6 @@
-import { Apple, CheckSquare, Dumbbell, House, Settings, TrendingUp } from 'lucide-react';
+import { Apple, CheckSquare, Dumbbell, House, MessageSquare, Settings, TrendingUp } from 'lucide-react';
 
-// Screens are grouped into categories rather than one flat tab bar. Chat isn't a screen
-// at all — it's a floating popup (ChatPopup) visible from anywhere in the shell.
+// Screens are grouped into categories rather than one flat tab bar.
 export type Screen =
   | 'Today'
   | 'Setup'
@@ -16,13 +15,15 @@ export type Screen =
   | 'Overview'
   | 'Progress & Photos'
   | 'Workout'
-  | 'Credits';
+  | 'Credits'
+  | 'Messages';
 
-export type Category = 'Home' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Account Settings';
-export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Account Settings'];
+export type Category = 'Home' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings';
+export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Messages', 'Account Settings'];
 
-// The mobile bottom tab bar shows only these 5 -- Account Settings moves to a header icon
-// instead (see BottomTabBar.tsx / AppShell.tsx), a typical tab bar can't comfortably fit 6.
+// The mobile bottom tab bar shows only these 5 -- Messages and Account Settings move to
+// header icons instead (see BottomTabBar.tsx / DashboardShell.tsx), a tab bar can't
+// comfortably fit 7.
 export const BOTTOM_TAB_CATEGORIES: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress'];
 
 export const CATEGORY_ICON: Record<Category, typeof House> = {
@@ -31,6 +32,7 @@ export const CATEGORY_ICON: Record<Category, typeof House> = {
   Training: Dumbbell,
   Accountability: CheckSquare,
   Progress: TrendingUp,
+  Messages: MessageSquare,
   'Account Settings': Settings,
 };
 
@@ -48,6 +50,8 @@ export function screensForCategory(category: Category, isCoachView: boolean): Sc
       return ['Weekly Log', 'Forms', 'Education', 'Insights'];
     case 'Progress':
       return ['Overview', 'Progress & Photos'];
+    case 'Messages':
+      return ['Messages'];
     case 'Account Settings':
       return isCoachView ? ['Setup', 'Credits'] : ['Setup'];
   }

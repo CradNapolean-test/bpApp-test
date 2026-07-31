@@ -26,17 +26,23 @@ export function CategoryNav({
           <div key={c}>
             <button
               onClick={() => onSelectCategory(c)}
-              className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm font-medium transition-colors ${
+              className={`flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
+                  ? 'bg-accent text-accent-foreground shadow-sm'
+                  : 'text-zinc-600 hover:bg-black/5 hover:text-black dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-300'
               }`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                  active ? 'bg-white/20' : 'bg-black/5 dark:bg-white/10'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+              </span>
               {c}
             </button>
             {active && screens.length > 1 && (
-              <div className="ml-3 mt-1 space-y-0.5 border-l border-black/10 pl-3 dark:border-white/10">
+              <div className="ml-3 mt-2 space-y-0.5 border-l-2 border-accent/30 pl-3.5">
                 {screens.map((s) => (
                   <button
                     key={s}

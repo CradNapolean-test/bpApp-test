@@ -7,8 +7,7 @@ import { SignOutButton } from './SignOutButton';
 
 // Shared layout for every page: header (title + sign out), a top-level section bar, then
 // a left sidebar (content depends on which section is active) beside the main content.
-// Below md the sidebar collapses into a slide-over drawer -- same fixed-overlay pattern
-// ChatPopup already uses, rather than introducing a second drawer idiom.
+// Below md the sidebar collapses into a slide-over drawer.
 export function AppShell({
   title,
   subtitle,
@@ -75,14 +74,18 @@ export function AppShell({
       {banner}
 
       <div className="mt-6 flex gap-6">
-        {sidebar && <aside className="hidden w-48 shrink-0 space-y-1 md:block">{sidebar}</aside>}
+        {sidebar && (
+          <aside className="hidden w-52 shrink-0 space-y-1 rounded-2xl bg-black/[.02] p-3 md:block dark:bg-white/[.03]">
+            {sidebar}
+          </aside>
+        )}
         <div className="min-w-0 flex-1">{children}</div>
       </div>
 
       {sidebar && !bottomBar && drawerOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-64 overflow-y-auto border-r border-black/10 bg-[var(--background)] p-4 shadow-xl dark:border-white/10">
+          <aside className="absolute inset-y-0 left-0 w-64 overflow-y-auto rounded-r-2xl border-r border-black/10 bg-[var(--background)] p-4 shadow-xl dark:border-white/10">
             <div className="mb-3 flex justify-end">
               <button
                 onClick={() => setDrawerOpen(false)}

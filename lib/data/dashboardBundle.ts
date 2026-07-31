@@ -5,7 +5,7 @@ import { getDailyLog, getDailyLogs, getOrCreateDailyLog } from './dailyLogs';
 import { getFoodDiaryEntries } from './foodDiary';
 import { getMealPlanEntries } from './mealPlan';
 import { getActivities } from './foods';
-import { getMessages } from './chat';
+import { getClientUnreadCount, getMessages } from './chat';
 import { getCreditsBalance, getScheduleOccurrences, getUpcomingBookings } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getMyMembership, getPackages } from './memberships';
@@ -57,6 +57,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     recipes,
     educationContent,
     educationAssignments,
+    unreadMessageCount,
   ] = await Promise.all([
     getClientProfile(clientId),
     getDailyLogs(clientId, dates[0], dates[6]),
@@ -83,6 +84,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getRecipesWithIngredients(clientId),
     getEducationContent(),
     getClientEducationAssignments(clientId),
+    getClientUnreadCount(clientId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
@@ -121,5 +123,6 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     recipes,
     educationContent,
     educationAssignments,
+    unreadMessageCount,
   };
 }

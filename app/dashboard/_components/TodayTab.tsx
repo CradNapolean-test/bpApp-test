@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+import { CalendarDays, CheckSquare, Flame, Utensils, Wallet, FileText } from 'lucide-react';
 import { dayCalories } from '@/lib/calculations';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { toIsoDate, addDays } from '@/lib/utils/dates';
@@ -14,9 +16,17 @@ function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
   return streak;
 }
 
-const cardCls = 'rounded-lg border border-black/10 p-4 dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/10 p-4 shadow-sm dark:border-white/10';
 const labelCls = 'text-xs font-medium text-zinc-500';
 const valueCls = 'mt-1 text-xl font-semibold text-black dark:text-zinc-50';
+
+function IconChip({ icon: Icon, color }: { icon: LucideIcon; color: string }) {
+  return (
+    <span className={`mb-2 flex h-8 w-8 items-center justify-center rounded-lg text-white ${color}`}>
+      <Icon className="h-4 w-4" />
+    </span>
+  );
+}
 
 export function TodayTab({
   weekLogs,
@@ -52,16 +62,19 @@ export function TodayTab({
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div className={cardCls}>
+        <IconChip icon={Utensils} color="bg-orange-500" />
         <p className={labelCls}>Today&apos;s nutrition</p>
         <p className={valueCls}>{todayCalories != null ? `${Math.round(todayCalories)} kcal` : 'Not logged'}</p>
       </div>
 
       <div className={cardCls}>
+        <IconChip icon={Flame} color="bg-rose-500" />
         <p className={labelCls}>Current streak</p>
         <p className={valueCls}>{streak} {streak === 1 ? 'day' : 'days'}</p>
       </div>
 
       <div className={cardCls}>
+        <IconChip icon={CheckSquare} color="bg-emerald-500" />
         <p className={labelCls}>Habits today</p>
         <p className={valueCls}>
           {habits.length === 0 ? '—' : `${habitsDoneToday} of ${habits.length}`}
@@ -69,11 +82,13 @@ export function TodayTab({
       </div>
 
       <div className={cardCls}>
+        <IconChip icon={FileText} color="bg-sky-500" />
         <p className={labelCls}>Pending forms</p>
         <p className={valueCls}>{pendingForms}</p>
       </div>
 
       <div className={cardCls}>
+        <IconChip icon={CalendarDays} color="bg-violet-500" />
         <p className={labelCls}>Next class</p>
         <p className={valueCls}>
           {nextClass ? `${nextClass.class?.name} — ${nextClass.booking_date}` : 'None booked'}
@@ -81,6 +96,7 @@ export function TodayTab({
       </div>
 
       <div className={cardCls}>
+        <IconChip icon={Wallet} color="bg-accent-strong" />
         <p className={labelCls}>Credits</p>
         <p className={valueCls}>
           {creditsBalance}

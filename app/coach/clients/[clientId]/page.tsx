@@ -76,6 +76,7 @@ export default async function CoachClientPage({
         recipes={bundle.recipes}
         educationContent={bundle.educationContent}
         educationAssignments={bundle.educationAssignments}
+        unreadMessageCount={bundle.unreadMessageCount}
       />
   );
 }
