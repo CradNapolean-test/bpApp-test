@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Central Hub",
+  title: "Ballistic Performance",
   description: "Coaching platform",
 };
 

@@ -1,4 +1,4 @@
-# Central Hub
+# Ballistic Performance
 
 Coaching platform (fat-loss/coaching client management) — see [CLAUDE.md](./CLAUDE.md) for
 stack decisions and build order, [docs/PROJECT_SPEC.md](./docs/PROJECT_SPEC.md) for feature

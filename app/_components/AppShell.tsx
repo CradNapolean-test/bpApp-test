@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
+import { Logo } from './Logo';
 import { SignOutButton } from './SignOutButton';
 
 // Shared layout for every page: header (title + sign out), a top-level section bar, then
@@ -58,6 +59,7 @@ export function AppShell({
               <Menu className="h-5 w-5" />
             </button>
           )}
+          <Logo size={28} className="hidden shrink-0 sm:block" />
           <div className="min-w-0">
             <h1 className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</h1>
             {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}

@@ -1,4 +1,4 @@
--- Central Hub — initial schema
+-- Ballistic Performance — initial schema
 -- Assumes Supabase Auth is handling users; this extends with a profiles/roles table.
 -- Run RLS policies carefully — client data privacy depends entirely on these, not the app UI.
 

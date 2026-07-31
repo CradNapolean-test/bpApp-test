@@ -6,8 +6,9 @@
 
   /* Semantic palette. Deliberately small -- one accent plus status colours, so active
      states and primary actions read as intentional instead of the plain black-on-white
-     the app used before. Standard Tailwind palette values, not invented hues. */
-  --accent: #0d9488;
+     the app used before. Teal is the Ballistic Performance brand colour (matches the
+     logo mark); the client view uses it directly. */
+  --accent: #14b8a6;
   --accent-strong: #0f766e;
   --accent-foreground: #ffffff;
   --accent-soft: #f0fdfa;
@@ -56,20 +57,23 @@
 
 /* A coach viewing a client's dashboard (AppShell's data-view="coach") gets a distinct
    accent tone -- purely a CSS-variable override, no component fork -- so the admin view
-   reads differently from the client's own dashboard at a glance. */
+   reads differently from the client's own dashboard at a glance. Rather than an
+   off-brand hue, this maps to the logo's own black/white half instead of its teal half:
+   near-black in light mode, near-white in dark mode -- so the two roles read as the
+   two colours actually in the brand mark, not brand teal vs. an invented one. */
 [data-view="coach"] {
-  --accent: #4f46e5;
-  --accent-strong: #4338ca;
+  --accent: #18181b;
+  --accent-strong: #000000;
   --accent-foreground: #ffffff;
-  --accent-soft: #eef2ff;
+  --accent-soft: #f4f4f5;
 }
 
 @media (prefers-color-scheme: dark) {
   [data-view="coach"] {
-    --accent: #818cf8;
-    --accent-strong: #a5b4fc;
-    --accent-foreground: #1e1b4b;
-    --accent-soft: rgb(129 140 248 / 0.1);
+    --accent: #e4e4e7;
+    --accent-strong: #ffffff;
+    --accent-foreground: #18181b;
+    --accent-soft: rgb(255 255 255 / 0.08);
   }
 }
 

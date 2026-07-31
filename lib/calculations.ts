@@ -1,4 +1,4 @@
-// Central Hub — calculation engine
+// Ballistic Performance — calculation engine
 // Ported verbatim from a validated prototype (cross-checked against a real coaching
 // spreadsheet already in use with real clients). Treat as source of truth — see
 // docs/PROJECT_SPEC.md section 3 for the reasoning behind each formula.

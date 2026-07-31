@@ -1,4 +1,4 @@
-# Central Hub — Coaching Platform
+# Ballistic Performance — Coaching Platform
 
 Real hosted rebuild of a fat-loss/coaching prototype (validated in a Claude.ai artifact). The
 calculation logic below is already correct and tested against a real spreadsheet — port it,

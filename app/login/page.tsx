@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { Logo } from '@/app/_components/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,7 +36,10 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900"
       >
-        <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Central Hub</h1>
+        <div className="flex flex-col items-center gap-2 text-center">
+          <Logo variant="full" size={88} />
+          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Ballistic Performance</h1>
+        </div>
 
         <div className="space-y-1">
           <label htmlFor="email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">

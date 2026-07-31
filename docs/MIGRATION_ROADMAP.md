@@ -1,4 +1,4 @@
-# Central Hub — Migration Roadmap (Prototype → Real Hosted App)
+# Ballistic Performance — Migration Roadmap (Prototype → Real Hosted App)
 
 ## Recommended stack
 
