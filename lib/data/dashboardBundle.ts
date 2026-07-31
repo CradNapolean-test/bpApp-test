@@ -8,6 +8,8 @@ import { getActivities } from './foods';
 import { getClientUnreadCount, getMessages } from './chat';
 import { getCreditsBalance, getScheduleOccurrences, getUpcomingBookings } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
+import { getClientExerciseMaxes } from './clientExerciseMaxes';
+import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getMyMembership, getPackages } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getHabitsWithLogs } from './habits';
@@ -44,6 +46,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     creditsBalance,
     programs,
     workoutLogs,
+    clientExerciseMaxes,
+    workoutDayFeedback,
     membership,
     packages,
     photos,
@@ -71,6 +75,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getCreditsBalance(clientId),
     getPrograms(clientId),
     getWorkoutLogs(clientId),
+    getClientExerciseMaxes(clientId),
+    getWorkoutDayFeedback(clientId),
     getMyMembership(clientId),
     getPackages(),
     getPhotos(clientId),
@@ -110,6 +116,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     creditsBalance,
     programs,
     workoutLogs,
+    clientExerciseMaxes,
+    workoutDayFeedback,
     membership,
     packages,
     photos,

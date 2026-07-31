@@ -160,9 +160,15 @@ export interface CreditsLedgerRow {
   created_at: string;
 }
 
-export interface WorkoutExerciseRow {
-  id: string;
-  program_day_id: string;
+export type BlockType = 'exercise' | 'circuit';
+export type PrescriptionType = 'absolute' | 'percent_1rm';
+export type SetType = 'working' | 'warmup' | 'failure' | 'drop';
+
+// Shared shape between a live workout_exercises row and a program_template_exercises row --
+// identical except for the parent-day FK name and the two progression fields, which are
+// template-only (a live program's per-week rows are already materialized, no ongoing rule).
+export interface ExerciseCoreFields {
+  exercise_library_id: string | null;
   name: string;
   sets: number | null;
   reps: string | null;
@@ -173,6 +179,14 @@ export interface WorkoutExerciseRow {
   superset_group: string | null;
   rest_seconds: number | null;
   sort_order: number;
+  block_type: BlockType;
+  prescription_type: PrescriptionType;
+  percent_1rm: number | null;
+}
+
+export interface WorkoutExerciseRow extends ExerciseCoreFields {
+  id: string;
+  program_day_id: string;
 }
 
 export interface WorkoutProgramDayRow {
@@ -181,6 +195,7 @@ export interface WorkoutProgramDayRow {
   week_num: number;
   day_label: string;
   sort_order: number;
+  phase_label: string | null;
   workout_exercises: WorkoutExerciseRow[];
 }
 
@@ -196,11 +211,34 @@ export interface WorkoutLogRow {
   id: string;
   client_id: string;
   exercise_id: string | null;
+  exercise_library_id: string | null;
   set_number: number | null;
   actual_reps: number | null;
   actual_load: number | null;
   actual_rpe: number | null;
+  set_type: SetType;
   logged_at: string;
+}
+
+export interface ClientExerciseMaxRow {
+  id: string;
+  client_id: string;
+  exercise_library_id: string;
+  tested_max: number;
+  is_estimated: boolean;
+  tested_date: string;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+export interface WorkoutDayFeedbackRow {
+  id: string;
+  client_id: string;
+  program_day_id: string;
+  feedback_date: string;
+  session_rpe: number | null;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface ExerciseLibraryRow {
@@ -220,20 +258,11 @@ export interface ExerciseLibraryRow {
   created_at: string;
 }
 
-export interface ProgramTemplateExerciseRow {
+export interface ProgramTemplateExerciseRow extends ExerciseCoreFields {
   id: string;
   template_day_id: string;
-  exercise_library_id: string | null;
-  name: string;
-  sets: number | null;
-  reps: string | null;
-  load: number | null;
-  rpe: number | null;
-  notes: string | null;
-  video_url: string | null;
-  superset_group: string | null;
-  rest_seconds: number | null;
-  sort_order: number;
+  progression_load_increment: number | null;
+  progression_every_weeks: number;
 }
 
 export interface ProgramTemplateDayRow {
@@ -242,6 +271,7 @@ export interface ProgramTemplateDayRow {
   week_num: number;
   day_label: string;
   sort_order: number;
+  phase_label: string | null;
   program_template_exercises: ProgramTemplateExerciseRow[];
 }
 

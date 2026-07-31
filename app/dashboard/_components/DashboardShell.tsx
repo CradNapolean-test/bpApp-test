@@ -32,6 +32,7 @@ import type {
   ActivityRow,
   BookingRow,
   ChatMessageRow,
+  ClientExerciseMaxRow,
   ClientMembershipRow,
   ClientProfileRow,
   DailyLogRow,
@@ -50,6 +51,7 @@ import type {
   ProgressPhoto,
   RecipeWithIngredients,
   ScheduleOccurrence,
+  WorkoutDayFeedbackRow,
   WorkoutLogRow,
   WorkoutProgramRow,
 } from '@/lib/data/types';
@@ -76,6 +78,8 @@ export function DashboardShell({
   creditsBalance,
   programs,
   workoutLogs,
+  clientExerciseMaxes,
+  workoutDayFeedback,
   membership,
   packages,
   photos,
@@ -112,6 +116,8 @@ export function DashboardShell({
   creditsBalance: number;
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
+  clientExerciseMaxes: ClientExerciseMaxRow[];
+  workoutDayFeedback: WorkoutDayFeedbackRow[];
   membership: ClientMembershipRow | null;
   packages: MembershipPackageRow[];
   photos: ProgressPhoto[];
@@ -306,6 +312,8 @@ export function DashboardShell({
               isCoachView={isCoachView}
               programs={programs}
               workoutLogs={workoutLogs}
+              clientExerciseMaxes={clientExerciseMaxes}
+              workoutDayFeedback={workoutDayFeedback}
               exerciseLibrary={exerciseLibrary}
               programTemplates={programTemplates}
             />

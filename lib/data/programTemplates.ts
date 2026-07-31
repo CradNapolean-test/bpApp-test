@@ -4,7 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingCoachId } from './coach';
 import { createClient } from '@/lib/supabase/server';
-import type { ProgramTemplateExerciseRow, ProgramTemplateRow, ProgramTemplateWithDays } from './types';
+import type { ProgramTemplateDayRow, ProgramTemplateExerciseRow, ProgramTemplateRow, ProgramTemplateWithDays } from './types';
 
 export async function getProgramTemplates(): Promise<ProgramTemplateRow[]> {
   const supabase = await createClient();
@@ -89,21 +89,44 @@ export async function deleteTemplateExercise(exerciseId: string): Promise<void> 
   if (error) raise(error);
 }
 
-export async function swapTemplateExerciseOrder(
-  a: { id: string; sort_order: number },
-  b: { id: string; sort_order: number }
+// Persists a full drag-and-drop reorder: one update per row rather than a dedicated RPC,
+// since there's no invariant here RLS can't already enforce and day-sized lists are small.
+export async function reorderTemplateExercises(orderedIds: string[]): Promise<void> {
+  const supabase = await createClient();
+  const results = await Promise.all(
+    orderedIds.map((id, index) => supabase.from('program_template_exercises').update({ sort_order: index }).eq('id', id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) raise(failed.error);
+}
+
+export async function updateTemplateExercise(
+  exerciseId: string,
+  fields: Partial<Omit<ProgramTemplateExerciseRow, 'id' | 'template_day_id'>>
 ): Promise<void> {
   const supabase = await createClient();
-  const { error: err1 } = await supabase
-    .from('program_template_exercises')
-    .update({ sort_order: b.sort_order })
-    .eq('id', a.id);
-  if (err1) raise(err1);
-  const { error: err2 } = await supabase
-    .from('program_template_exercises')
-    .update({ sort_order: a.sort_order })
-    .eq('id', b.id);
-  if (err2) raise(err2);
+  const { error } = await supabase.from('program_template_exercises').update(fields).eq('id', exerciseId);
+  if (error) raise(error);
+}
+
+export async function updateTemplateDay(
+  dayId: string,
+  fields: Partial<Pick<ProgramTemplateDayRow, 'week_num' | 'day_label' | 'phase_label'>>
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('program_template_days').update(fields).eq('id', dayId);
+  if (error) raise(error);
+}
+
+// Bulk-applies the same field values across every exercise in a template day in one round
+// trip, mirroring workouts.ts's applyFieldsToDay.
+export async function applyFieldsToTemplateDay(
+  dayId: string,
+  fields: Partial<Pick<ProgramTemplateExerciseRow, 'rest_seconds' | 'rpe'>>
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('program_template_exercises').update(fields).eq('template_day_id', dayId);
+  if (error) raise(error);
 }
 
 // Copies a template (name, days, exercises) into a brand new template for the same coach --

@@ -2,7 +2,7 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import type { WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramRow } from './types';
+import type { SetType, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramDayRow, WorkoutProgramRow } from './types';
 
 export async function getPrograms(clientId: string): Promise<WorkoutProgramRow[]> {
   const supabase = await createClient();
@@ -58,17 +58,45 @@ export async function deleteExercise(exerciseId: string): Promise<void> {
   if (error) raise(error);
 }
 
-// Swaps two exercises' sort_order (used by the ▲▼ reorder buttons) -- two plain updates
-// rather than a dedicated RPC, since there's no invariant here RLS can't already enforce.
-export async function swapExerciseOrder(
-  a: { id: string; sort_order: number },
-  b: { id: string; sort_order: number }
+// Persists a full drag-and-drop reorder: one update per row rather than a dedicated RPC,
+// since there's no invariant here RLS can't already enforce and day-sized lists are small.
+export async function reorderExercises(orderedIds: string[]): Promise<void> {
+  const supabase = await createClient();
+  const results = await Promise.all(
+    orderedIds.map((id, index) => supabase.from('workout_exercises').update({ sort_order: index }).eq('id', id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) raise(failed.error);
+}
+
+export async function updateExercise(
+  exerciseId: string,
+  fields: Partial<Omit<WorkoutExerciseRow, 'id' | 'program_day_id'>>
 ): Promise<void> {
   const supabase = await createClient();
-  const { error: err1 } = await supabase.from('workout_exercises').update({ sort_order: b.sort_order }).eq('id', a.id);
-  if (err1) raise(err1);
-  const { error: err2 } = await supabase.from('workout_exercises').update({ sort_order: a.sort_order }).eq('id', b.id);
-  if (err2) raise(err2);
+  const { error } = await supabase.from('workout_exercises').update(fields).eq('id', exerciseId);
+  if (error) raise(error);
+}
+
+export async function updateProgramDay(
+  dayId: string,
+  fields: Partial<Pick<WorkoutProgramDayRow, 'week_num' | 'day_label' | 'phase_label'>>
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('workout_program_days').update(fields).eq('id', dayId);
+  if (error) raise(error);
+}
+
+// Bulk-applies the same field values across every exercise in a day in one round trip --
+// used by the "apply to all exercises in this day" batch control, rather than looping N
+// individual updateExercise calls from the client.
+export async function applyFieldsToDay(
+  dayId: string,
+  fields: Partial<Pick<WorkoutExerciseRow, 'rest_seconds' | 'rpe'>>
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('workout_exercises').update(fields).eq('program_day_id', dayId);
+  if (error) raise(error);
 }
 
 export async function getWorkoutLogs(clientId: string): Promise<WorkoutLogRow[]> {
@@ -85,11 +113,30 @@ export async function getWorkoutLogs(clientId: string): Promise<WorkoutLogRow[]>
 export async function logSet(
   clientId: string,
   exerciseId: string,
-  fields: { set_number: number; actual_reps: number | null; actual_load: number | null; actual_rpe: number | null }
+  fields: {
+    set_number: number;
+    actual_reps: number | null;
+    actual_load: number | null;
+    actual_rpe: number | null;
+    set_type: SetType;
+  }
 ): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('workout_logs')
-    .insert({ client_id: clientId, exercise_id: exerciseId, ...fields });
+  // Denormalizes exercise_library_id onto the log row at write time (rather than resolving
+  // it via a join through workout_exercises later) so cross-program exercise history
+  // survives a coach subsequently deleting or restructuring the exercise/program.
+  const { data: exercise, error: exerciseError } = await supabase
+    .from('workout_exercises')
+    .select('exercise_library_id')
+    .eq('id', exerciseId)
+    .maybeSingle();
+  if (exerciseError) raise(exerciseError);
+
+  const { error } = await supabase.from('workout_logs').insert({
+    client_id: clientId,
+    exercise_id: exerciseId,
+    exercise_library_id: exercise?.exercise_library_id ?? null,
+    ...fields,
+  });
   if (error) raise(error);
 }
