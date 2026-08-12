@@ -1,5 +1,5 @@
 import { dayCalories } from '@/lib/calculations';
-import type { FoodDiaryEntryRow, MealPlanEntryRow } from '@/lib/data/types';
+import type { FoodDiaryEntryRow, MealPlanEntryRow, RecipeIngredientRow } from '@/lib/data/types';
 
 export function entryMacros(entry: { food: { protein: number; carbs: number; fat: number } | null; portions: number }) {
   if (!entry.food) return { protein: 0, carbs: 0, fat: 0, calories: 0 };
@@ -21,6 +21,23 @@ export function totalMacros(entries: (FoodDiaryEntryRow | MealPlanEntryRow)[]) {
   return entries.reduce(
     (acc, entry) => {
       const m = entryMacros(entry);
+      acc.protein += m.protein;
+      acc.carbs += m.carbs;
+      acc.fat += m.fat;
+      acc.calories += m.calories;
+      return acc;
+    },
+    { protein: 0, carbs: 0, fat: 0, calories: 0 }
+  );
+}
+
+// Same {food, portions} shape as totalMacros, just for recipe_ingredients -- kept as its own
+// small function rather than widening totalMacros' union, since recipe ingredients aren't
+// interchangeable with a logged diary/meal-plan entry anywhere else in the app.
+export function totalRecipeMacros(ingredients: RecipeIngredientRow[]) {
+  return ingredients.reduce(
+    (acc, ingredient) => {
+      const m = entryMacros(ingredient);
       acc.protein += m.protein;
       acc.carbs += m.carbs;
       acc.fat += m.fat;

@@ -12,7 +12,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, email')
+    .select('role, email, theme_preference')
     .eq('id', user.id)
     .single();
   if (profile?.role !== 'client') redirect('/coach');
@@ -25,13 +25,18 @@ export default async function DashboardPage() {
       clientLabel={bundle.profile?.name ?? profile.email}
       isCoachView={false}
       currentUserId={user.id}
+      currentUserEmail={user.email ?? ''}
+      themePreference={(profile.theme_preference as 'light' | 'dark' | 'system') ?? 'system'}
       profile={bundle.profile}
       weekDates={bundle.weekDates}
       weekLogs={bundle.weekLogs}
       historyLogs={bundle.historyLogs}
       todayLogId={bundle.todayLogId}
       foodDiaryEntries={bundle.foodDiaryEntries}
+      foodPhotos={bundle.foodPhotos}
+      manualMacroEntries={bundle.manualMacroEntries}
       mealPlanEntries={bundle.mealPlanEntries}
+      mealSections={bundle.mealSections}
       activities={bundle.activities}
       programWeek={bundle.programWeek}
       messages={bundle.messages}
@@ -53,8 +58,9 @@ export default async function DashboardPage() {
       exerciseLibrary={bundle.exerciseLibrary}
       programTemplates={bundle.programTemplates}
       recipes={bundle.recipes}
-      educationContent={bundle.educationContent}
+      educationCourses={bundle.educationCourses}
       educationAssignments={bundle.educationAssignments}
+      disabledScreens={bundle.disabledScreens}
       unreadMessageCount={bundle.unreadMessageCount}
     />
   );

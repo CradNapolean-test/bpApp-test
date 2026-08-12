@@ -81,7 +81,7 @@ export function ProgressTab({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progress photos</h3>
 
         {!readOnly && (
@@ -123,10 +123,10 @@ export function ProgressTab({
                 <img
                   src={photo.signedUrl}
                   alt={`Progress photo ${photo.photo_date}`}
-                  className="aspect-square w-full rounded-md object-cover"
+                  className="aspect-square w-full rounded-xl object-cover"
                 />
               ) : (
-                <div className="aspect-square w-full rounded-md bg-black/5 dark:bg-white/5" />
+                <div className="aspect-square w-full rounded-xl bg-black/5 dark:bg-white/5" />
               )}
               <div className="flex items-center justify-between text-xs text-zinc-500">
                 <span>{photo.photo_date}</span>
@@ -142,7 +142,7 @@ export function ProgressTab({
         )}
       </div>
 
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements</h3>
 
         {!readOnly && (
@@ -205,9 +205,9 @@ export function ProgressTab({
                       <td key={key} className="p-2">
                         {m[key]}
                         {(startLabel || weekLabel) && (
-                          <div className="mt-0.5 space-x-1.5 text-[10px] text-zinc-500">
-                            {startLabel && <span>{startLabel} vs start</span>}
-                            {weekLabel && <span>{weekLabel} vs last</span>}
+                          <div className="mt-0.5 space-x-1.5 text-[10px]">
+                            {startLabel && <span className="text-success">{startLabel} vs start</span>}
+                            {weekLabel && <span className="text-zinc-500">{weekLabel} vs last</span>}
                           </div>
                         )}
                       </td>

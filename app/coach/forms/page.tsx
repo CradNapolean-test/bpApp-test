@@ -1,25 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { getFormTemplates } from '@/lib/data/forms';
-import { getCoachChatOverview } from '@/lib/data/chat';
-import { FormsHubShell } from './_components/FormsHubShell';
 
-export default async function CoachFormsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (profile?.role !== 'coach') redirect('/dashboard');
-
-  const [templates, chatOverview] = await Promise.all([getFormTemplates(), getCoachChatOverview()]);
-  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
-
-  return <FormsHubShell initialTemplates={templates} unreadCount={unreadCount} />;
+// Forms folded into Library (see LibraryHubShell) -- keep old bookmarks/links working.
+export default function CoachFormsPage() {
+  redirect('/coach/library?tab=forms');
 }

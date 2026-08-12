@@ -1,9 +1,23 @@
+import { useMemo } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { CalendarDays, CheckSquare, Flame, Utensils, Wallet, FileText } from 'lucide-react';
-import { dayCalories } from '@/lib/calculations';
+import { CalendarDays, CheckSquare, FileText, Flame, Wallet } from 'lucide-react';
+import { dayCalories, weeklyTarget } from '@/lib/calculations';
+import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { toIsoDate, addDays } from '@/lib/utils/dates';
-import type { BookingRow, ClientMembershipRow, DailyLogRow, FormAssignmentWithDetails, HabitWithLogs } from '@/lib/data/types';
+import { ProgressRing } from '@/app/_components/ProgressRing';
+import type {
+  BookingRow,
+  ClientMembershipRow,
+  ClientProfileRow,
+  DailyLogRow,
+  FormAssignmentWithDetails,
+  HabitWithLogs,
+  WorkoutLogRow,
+  WorkoutProgramRow,
+} from '@/lib/data/types';
+import type { Category, Screen } from './categories';
+import { CheckInButton } from './CheckInButton';
 
 function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
   const loggedDates = new Set(historyLogs.filter(hasLoggedData).map((l) => l.log_date));
@@ -16,7 +30,8 @@ function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
   return streak;
 }
 
-const cardCls = 'rounded-2xl border border-black/10 p-4 shadow-sm dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.05] bg-[var(--background)] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const clickableCardCls = `${cardCls} w-full text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`;
 const labelCls = 'text-xs font-medium text-zinc-500';
 const valueCls = 'mt-1 text-xl font-semibold text-black dark:text-zinc-50';
 
@@ -28,7 +43,24 @@ function IconChip({ icon: Icon, color }: { icon: LucideIcon; color: string }) {
   );
 }
 
+function MacroBar({ label, value, target }: { label: string; value: number; target: number }) {
+  const pct = target > 0 ? Math.min(100, Math.max(0, (value / target) * 100)) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-[11px] text-white/80">
+        <span>{label}</span>
+        <span>{Math.round(value)}/{Math.round(target)}g</span>
+      </div>
+      <div className="mt-1 h-1.5 w-full rounded-full bg-white/20">
+        <div className="h-1.5 rounded-full bg-white" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function TodayTab({
+  profile,
+  programWeek,
   weekLogs,
   historyLogs,
   habits,
@@ -36,7 +68,14 @@ export function TodayTab({
   bookings,
   creditsBalance,
   membership,
+  programs,
+  workoutLogs,
+  onCheckIn,
+  onNavigate,
+  onNavigateClasses,
 }: {
+  profile: ClientProfileRow | null;
+  programWeek: number;
   weekLogs: DailyLogRow[];
   historyLogs: DailyLogRow[];
   habits: HabitWithLogs[];
@@ -44,10 +83,20 @@ export function TodayTab({
   bookings: BookingRow[];
   creditsBalance: number;
   membership: ClientMembershipRow | null;
+  programs: WorkoutProgramRow[];
+  workoutLogs: WorkoutLogRow[];
+  onCheckIn: (dayId: string) => void;
+  onNavigate: (category: Category, screen?: Screen) => void;
+  onNavigateClasses?: () => void;
 }) {
   const todayIso = toIsoDate(new Date());
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
-  const todayCalories = todayLog ? dayCalories(todayLog.protein ?? 0, todayLog.carbs ?? 0, todayLog.fat ?? 0) : null;
+  const todayCalories = todayLog ? dayCalories(todayLog.protein ?? 0, todayLog.carbs ?? 0, todayLog.fat ?? 0) : 0;
+
+  const dayTarget = useMemo(() => {
+    const engineProfile = toEngineProfile(profile);
+    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
+  }, [profile, programWeek]);
 
   const streak = currentStreak(historyLogs, todayIso);
 
@@ -59,49 +108,118 @@ export function TodayTab({
     .filter((b) => b.status === 'booked' && b.booking_date >= todayIso)
     .sort((a, b) => (a.booking_date + (a.class?.start_time ?? '')).localeCompare(b.booking_date + (b.class?.start_time ?? '')))[0];
 
+  const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
+
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div className={cardCls}>
-        <IconChip icon={Utensils} color="bg-orange-500" />
-        <p className={labelCls}>Today&apos;s nutrition</p>
-        <p className={valueCls}>{todayCalories != null ? `${Math.round(todayCalories)} kcal` : 'Not logged'}</p>
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-zinc-500">Hey, {firstName}</p>
+
+      <button
+        type="button"
+        onClick={() => onNavigate('Nutrition', 'Food Tracking')}
+        className="block w-full overflow-hidden rounded-2xl p-5 text-left text-white shadow-[0_1px_2px_rgba(0,0,0,.02)]"
+        style={{ background: 'linear-gradient(155deg, #19adb1, #0e6266)' }}
+      >
+        <div className="flex items-center gap-4">
+          {dayTarget ? (
+            <ProgressRing
+              value={todayCalories}
+              target={dayTarget.calories}
+              label="kcal"
+              size={88}
+              strokeWidth={8}
+              color="#8fe3e6"
+              trackClassName="stroke-white/20"
+              valueClassName="text-white"
+              labelClassName="text-white/70"
+            />
+          ) : (
+            <div className="flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full border-2 border-white/20 text-xs text-white/70">
+              No target
+            </div>
+          )}
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-white/70">Today&apos;s nutrition</p>
+            {dayTarget ? (
+              <div className="space-y-1.5">
+                <MacroBar label="Protein" value={todayLog?.protein ?? 0} target={dayTarget.protein} />
+                <MacroBar label="Carbs" value={todayLog?.carbs ?? 0} target={dayTarget.carbs} />
+                <MacroBar label="Fat" value={todayLog?.fat ?? 0} target={dayTarget.fat} />
+              </div>
+            ) : (
+              <p className="text-sm text-white/80">Finish setup to see your targets.</p>
+            )}
+          </div>
+        </div>
+      </button>
+
+      <div className="grid grid-cols-2 gap-3">
+        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className={clickableCardCls}>
+          <IconChip icon={Flame} color="bg-rose-500" />
+          <p className={labelCls}>Current streak</p>
+          <p className={valueCls}>{streak} {streak === 1 ? 'day' : 'days'}</p>
+        </button>
+
+        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className={clickableCardCls}>
+          <IconChip icon={CheckSquare} color="bg-emerald-500" />
+          <p className={labelCls}>Habits today</p>
+          <p className={valueCls}>
+            {habits.length === 0 ? '—' : `${habitsDoneToday} of ${habits.length}`}
+          </p>
+        </button>
       </div>
 
       <div className={cardCls}>
-        <IconChip icon={Flame} color="bg-rose-500" />
-        <p className={labelCls}>Current streak</p>
-        <p className={valueCls}>{streak} {streak === 1 ? 'day' : 'days'}</p>
+        {onNavigateClasses ? (
+          <button type="button" onClick={onNavigateClasses} className="w-full text-left">
+            <IconChip icon={CalendarDays} color="bg-violet-500" />
+            <p className={labelCls}>Next class</p>
+            <p className={valueCls}>
+              {nextClass ? `${nextClass.class?.name} — ${nextClass.booking_date}` : 'None booked'}
+            </p>
+          </button>
+        ) : (
+          <>
+            <IconChip icon={CalendarDays} color="bg-violet-500" />
+            <p className={labelCls}>Next class</p>
+            <p className={valueCls}>
+              {nextClass ? `${nextClass.class?.name} — ${nextClass.booking_date}` : 'None booked'}
+            </p>
+          </>
+        )}
+        {nextClass && nextClass.booking_date === todayIso && (
+          <div className="mt-2">
+            <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} />
+          </div>
+        )}
       </div>
 
-      <div className={cardCls}>
-        <IconChip icon={CheckSquare} color="bg-emerald-500" />
-        <p className={labelCls}>Habits today</p>
-        <p className={valueCls}>
-          {habits.length === 0 ? '—' : `${habitsDoneToday} of ${habits.length}`}
-        </p>
-      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {onNavigateClasses ? (
+          <button type="button" onClick={onNavigateClasses} className={clickableCardCls}>
+            <IconChip icon={Wallet} color="bg-accent-strong" />
+            <p className={labelCls}>Credits</p>
+            <p className={valueCls}>
+              {creditsBalance}
+              {membership?.package ? ` · ${membership.package.name}` : ''}
+            </p>
+          </button>
+        ) : (
+          <div className={cardCls}>
+            <IconChip icon={Wallet} color="bg-accent-strong" />
+            <p className={labelCls}>Credits</p>
+            <p className={valueCls}>
+              {creditsBalance}
+              {membership?.package ? ` · ${membership.package.name}` : ''}
+            </p>
+          </div>
+        )}
 
-      <div className={cardCls}>
-        <IconChip icon={FileText} color="bg-sky-500" />
-        <p className={labelCls}>Pending forms</p>
-        <p className={valueCls}>{pendingForms}</p>
-      </div>
-
-      <div className={cardCls}>
-        <IconChip icon={CalendarDays} color="bg-violet-500" />
-        <p className={labelCls}>Next class</p>
-        <p className={valueCls}>
-          {nextClass ? `${nextClass.class?.name} — ${nextClass.booking_date}` : 'None booked'}
-        </p>
-      </div>
-
-      <div className={cardCls}>
-        <IconChip icon={Wallet} color="bg-accent-strong" />
-        <p className={labelCls}>Credits</p>
-        <p className={valueCls}>
-          {creditsBalance}
-          {membership?.package ? ` · ${membership.package.name}` : ''}
-        </p>
+        <button type="button" onClick={() => onNavigate('Accountability', 'Forms')} className={clickableCardCls}>
+          <IconChip icon={FileText} color="bg-sky-500" />
+          <p className={labelCls}>Pending forms</p>
+          <p className={valueCls}>{pendingForms}</p>
+        </button>
       </div>
     </div>
   );

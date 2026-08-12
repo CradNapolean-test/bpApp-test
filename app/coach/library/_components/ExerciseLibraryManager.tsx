@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { Dumbbell } from 'lucide-react';
+import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
+import { DefaultMuscleGroupIcon, MUSCLE_GROUPS, MUSCLE_GROUP_ICONS } from '@/app/_components/workouts/muscleGroups';
 import { createLibraryExercise, deleteLibraryExercise } from '@/lib/data/exerciseLibrary';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
-
-const MUSCLE_GROUPS = ['Push', 'Pull', 'Legs', 'Core', 'Cardio', 'Full Body', 'Mobility'];
 
 export function ExerciseLibraryManager({ initialExercises }: { initialExercises: ExerciseLibraryRow[] }) {
   const confirm = useConfirm();
@@ -191,23 +191,33 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         />
       ) : (
         <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {filteredExercises.map((ex) => (
-            <li key={ex.id} className="flex items-center justify-between p-3 text-sm">
-              <span>
-                {ex.name}
-                {ex.muscle_group ? ` · ${ex.muscle_group}` : ''}
-                {ex.default_sets != null ? ` — ${ex.default_sets}×${ex.default_reps ?? '—'}` : ''}
-                {ex.default_rpe != null ? ` RPE ${ex.default_rpe}` : ''}
-                {ex.default_rest_seconds != null ? ` · ${ex.default_rest_seconds}s rest` : ''}
-              </span>
-              <button
-                onClick={() => handleDelete(ex.id, ex.name)}
-                className="text-xs text-red-600 hover:underline dark:text-red-400"
-              >
-                Delete
-              </button>
-            </li>
-          ))}
+          {filteredExercises.map((ex) => {
+            const Icon = MUSCLE_GROUP_ICONS[ex.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
+            return (
+              <li key={ex.id} className="flex items-center justify-between gap-2 p-3 text-sm">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black/5 dark:bg-white/10">
+                    {ex.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
+                      <img src={ex.image_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <Icon className="h-4 w-4 text-zinc-500" />
+                    )}
+                  </span>
+                  <span className="truncate">
+                    {ex.name}
+                    {ex.muscle_group ? ` · ${ex.muscle_group}` : ''}
+                    {ex.default_sets != null ? ` — ${ex.default_sets}×${ex.default_reps ?? '—'}` : ''}
+                    {ex.default_rpe != null ? ` RPE ${ex.default_rpe}` : ''}
+                    {ex.default_rest_seconds != null ? ` · ${ex.default_rest_seconds}s rest` : ''}
+                  </span>
+                </div>
+                <Button variant="danger" size="sm" onClick={() => handleDelete(ex.id, ex.name)} className="shrink-0">
+                  Delete
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

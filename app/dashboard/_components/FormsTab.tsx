@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText } from 'lucide-react';
+import { CheckCircle2, FileText } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
@@ -27,7 +27,7 @@ function FillableForm({ assignment }: { assignment: FormAssignmentWithDetails })
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
       <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{assignment.template.name}</h3>
       {assignment.template.description && (
         <p className="text-xs text-zinc-500">{assignment.template.description}</p>
@@ -102,11 +102,18 @@ function FillableForm({ assignment }: { assignment: FormAssignmentWithDetails })
 
 function ReadOnlyResponses({ assignment }: { assignment: FormAssignmentWithDetails }) {
   return (
-    <div className="space-y-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{assignment.template.name}</h3>
-      <p className="text-xs text-zinc-500">
-        Completed {assignment.completed_at ? new Date(assignment.completed_at).toLocaleDateString() : ''}
-      </p>
+    <div className="space-y-2 rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+          <CheckCircle2 className="h-4 w-4" />
+        </span>
+        <div>
+          <h3 className="text-sm font-semibold text-black dark:text-zinc-50">{assignment.template.name}</h3>
+          <p className="text-xs text-zinc-500">
+            Completed {assignment.completed_at ? new Date(assignment.completed_at).toLocaleDateString() : ''}
+          </p>
+        </div>
+      </div>
       <dl className="space-y-2 text-sm">
         {assignment.template.questions.map((q) => {
           const response = assignment.responses.find((r) => r.question_id === q.id);
@@ -156,7 +163,7 @@ export function FormsTab({
       {isCoachView && (
         <form
           onSubmit={handleAssign}
-          className="flex flex-wrap items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10"
+          className="flex flex-wrap items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10"
         >
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-500">Assign a form</label>
@@ -180,14 +187,21 @@ export function FormsTab({
       )}
 
       {pending.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="space-y-2.5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
             {isCoachView ? 'Pending' : 'To fill out'}
           </h3>
           {isCoachView
             ? pending.map((a) => (
-                <div key={a.id} className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/10">
-                  {a.template.name} — waiting on client
+                <div
+                  key={a.id}
+                  className="flex items-center gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+                    <FileText className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm font-medium text-black dark:text-zinc-50">{a.template.name}</span>
+                  <span className="ml-auto shrink-0 text-xs text-zinc-500">waiting on client</span>
                 </div>
               ))
             : pending.map((a) => (
@@ -197,8 +211,8 @@ export function FormsTab({
       )}
 
       {completed.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Completed</h3>
+        <div className="space-y-2.5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Completed</h3>
           {completed.map((a) => (
             <ReadOnlyResponses key={a.id} assignment={a} />
           ))}

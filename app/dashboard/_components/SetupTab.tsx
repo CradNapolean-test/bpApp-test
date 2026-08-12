@@ -1,14 +1,28 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
-import { upsertClientProfile } from '@/lib/data/clientProfile';
-import type { ClientProfileRow } from '@/lib/data/types';
+import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
+import type { ClientProfileRow, MeasurementLogRow } from '@/lib/data/types';
+
+const NUTRITION_MODES: { value: ClientProfileRow['nutrition_tracking_mode']; label: string; hint: string }[] = [
+  { value: 'full_tracking', label: 'Full tracking', hint: 'Per-food diary, barcode scan, recipes.' },
+  { value: 'manual_import', label: 'Manual import', hint: 'Client types macros per meal section, no food search.' },
+  { value: 'photo_diary', label: 'Photo diary', hint: 'Client photographs meals with a description.' },
+];
 
 // Excludes the coach-only reminder settings (edited from CreditsTab, not this form) in
 // addition to client_id.
-type SetupFields = Omit<ClientProfileRow, 'client_id' | 'checkin_reminder_days' | 'last_checkin_reminder_at'>;
+type SetupFields = Omit<
+  ClientProfileRow,
+  | 'client_id'
+  | 'checkin_reminder_days'
+  | 'last_checkin_reminder_at'
+  | 'notifications_enabled'
+  | 'nutrition_tracking_mode'
+>;
 
 const BLANK: SetupFields = {
   name: '',
@@ -59,16 +73,27 @@ export function SetupTab({
   clientId,
   initialProfile,
   readOnly,
+  measurementLogs,
 }: {
   clientId: string;
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
+  measurementLogs: MeasurementLogRow[];
 }) {
   const { run, busy: saving } = useAction();
+  const { run: runMode, busy: savingMode } = useAction();
   const [form, setForm] = useState<SetupFields>(
     initialProfile ?? BLANK
   );
   const [error, setError] = useState<string | null>(null);
+  const [nutritionMode, setNutritionMode] = useState(initialProfile?.nutrition_tracking_mode ?? 'full_tracking');
+
+  async function handleModeChange(mode: ClientProfileRow['nutrition_tracking_mode']) {
+    await runMode(() => updateNutritionTrackingMode(clientId, mode), {
+      success: 'Tracking mode updated',
+      onDone: () => setNutritionMode(mode),
+    });
+  }
 
   const engine = useMemo(() => {
     if (!form.age || !form.start_weight || !form.goal_weight || !form.body_fat_pct) return null;
@@ -121,6 +146,53 @@ export function SetupTab({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      {engine && week1Target && (
+        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Calculated targets</h3>
+          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            <div><dt className="text-zinc-500">BMR</dt><dd>{Math.round(engine.bmr)} kcal</dd></div>
+            <div><dt className="text-zinc-500">TDEE</dt><dd>{Math.round(engine.tdee)} kcal</dd></div>
+            <div><dt className="text-zinc-500">Protein/day</dt><dd>{Math.round(engine.protein)} g</dd></div>
+            <div><dt className="text-zinc-500">Fat/day</dt><dd>{Math.round(engine.fat)} g</dd></div>
+          </dl>
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            Week 1 daily target: {Math.round((week1Target.calories) / 7)} kcal ·{' '}
+            {Math.round(week1Target.protein / 7)}g protein ·{' '}
+            {Math.round(week1Target.carbs / 7)}g carbs ·{' '}
+            {Math.round(week1Target.fat / 7)}g fat
+          </p>
+          {week1Target.calories / 7 < CALORIE_FLOOR && (
+            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+              Daily target is below {CALORIE_FLOOR} kcal — worth a coach review.
+            </p>
+          )}
+        </div>
+      )}
+
+      {readOnly && (
+        <div className="space-y-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <label className={labelCls}>Nutrition tracking method</label>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {NUTRITION_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                disabled={savingMode}
+                onClick={() => handleModeChange(m.value)}
+                className={`rounded-md border p-2.5 text-left text-sm transition-colors disabled:opacity-50 ${
+                  nutritionMode === m.value
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+                }`}
+              >
+                <p className="font-medium text-black dark:text-zinc-50">{m.label}</p>
+                <p className="text-xs text-zinc-500">{m.hint}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <fieldset disabled={readOnly} className="space-y-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1">
@@ -249,11 +321,19 @@ export function SetupTab({
         </div>
 
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements (start / goal)</h3>
+          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements (current / start / goal)</h3>
+          <p className="mb-2 text-xs text-zinc-500">
+            Current comes from the latest entry logged under Progress &amp; Photos.
+          </p>
           <div className="space-y-2">
-            {MEASUREMENTS.map(({ key, label }) => (
-              <div key={key} className="grid grid-cols-3 items-center gap-2">
+            {MEASUREMENTS.map(({ key, label }) => {
+              const current = measurementLogs[0]?.[key] ?? null;
+              return (
+              <div key={key} className="grid grid-cols-4 items-center gap-2">
                 <span className="text-sm text-zinc-600 dark:text-zinc-400">{label}</span>
+                <span className="rounded-md border border-transparent px-3 py-2 text-sm text-zinc-500">
+                  {current ?? '—'}
+                </span>
                 <input
                   type="number"
                   className={inputCls}
@@ -273,7 +353,8 @@ export function SetupTab({
                   }
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -309,38 +390,11 @@ export function SetupTab({
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         {!readOnly && (
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={saving}>
             {saving ? 'Saving…' : 'Save Setup'}
-          </button>
+          </Button>
         )}
       </fieldset>
-
-      {engine && week1Target && (
-        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Calculated targets</h3>
-          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-            <div><dt className="text-zinc-500">BMR</dt><dd>{Math.round(engine.bmr)} kcal</dd></div>
-            <div><dt className="text-zinc-500">TDEE</dt><dd>{Math.round(engine.tdee)} kcal</dd></div>
-            <div><dt className="text-zinc-500">Protein/day</dt><dd>{Math.round(engine.protein)} g</dd></div>
-            <div><dt className="text-zinc-500">Fat/day</dt><dd>{Math.round(engine.fat)} g</dd></div>
-          </dl>
-          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-            Week 1 daily target: {Math.round((week1Target.calories) / 7)} kcal ·{' '}
-            {Math.round(week1Target.protein / 7)}g protein ·{' '}
-            {Math.round(week1Target.carbs / 7)}g carbs ·{' '}
-            {Math.round(week1Target.fat / 7)}g fat
-          </p>
-          {week1Target.calories / 7 < CALORIE_FLOOR && (
-            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-              Daily target is below {CALORIE_FLOOR} kcal — worth a coach review.
-            </p>
-          )}
-        </div>
-      )}
     </form>
   );
 }

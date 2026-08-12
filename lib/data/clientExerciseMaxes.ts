@@ -19,7 +19,8 @@ export async function recordExerciseMax(
   clientId: string,
   exerciseLibraryId: string,
   testedMax: number,
-  isEstimated: boolean
+  isEstimated: boolean,
+  reps: number = 1
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('client_exercise_maxes').insert({
@@ -27,6 +28,7 @@ export async function recordExerciseMax(
     exercise_library_id: exerciseLibraryId,
     tested_max: testedMax,
     is_estimated: isEstimated,
+    reps,
   });
   if (error) raise(error);
 }

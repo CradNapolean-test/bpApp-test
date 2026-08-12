@@ -24,6 +24,8 @@ export interface ClientProfileRow {
   lift_hip_thrust_start: number | null; lift_hip_thrust_goal: number | null;
   checkin_reminder_days: number;
   last_checkin_reminder_at: string | null;
+  notifications_enabled: boolean;
+  nutrition_tracking_mode: 'full_tracking' | 'manual_import' | 'photo_diary';
 }
 
 export interface DailyLogRow {
@@ -70,6 +72,7 @@ export interface RecipeRow {
   id: string;
   client_id: string;
   name: string;
+  servings: number;
   created_at: string;
 }
 
@@ -82,7 +85,18 @@ export interface FoodDiaryEntryRow {
   daily_log_id: string;
   food_id: string | null;
   portions: number;
+  meal_section_id: string | null;
   food: FoodRow | null;
+}
+
+// Customizable per-client tracking sections (MyFitnessPal-style) -- distinct from
+// MealPlanSection below, which is a fixed enum used only by the Meal Planner.
+export interface MealSectionRow {
+  id: string;
+  client_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface MealPlanEntryRow {
@@ -112,8 +126,14 @@ export interface ChatMessageRow {
   id: string;
   client_id: string;
   sender_id: string;
-  text: string;
+  text: string | null;
+  audio_path: string | null;
+  audio_duration_seconds: number | null;
   created_at: string;
+}
+
+export interface ChatMessage extends ChatMessageRow {
+  signedAudioUrl: string | null;
 }
 
 export interface ChatOverviewRow {
@@ -135,6 +155,9 @@ export interface ClassRow {
   coach_note: string | null;
   cutoff_hours: number;
   credit_cost: number;
+  // Not a foreign key -- a day-position number is only meaningful combined with whichever
+  // client's program is currently active (see lib/utils/checkin.ts), never a fixed row.
+  linked_day_position: number | null;
 }
 
 export type BookingStatus = 'booked' | 'waitlist' | 'cancelled';
@@ -196,6 +219,12 @@ export interface WorkoutProgramDayRow {
   day_label: string;
   sort_order: number;
   phase_label: string | null;
+  notes: string | null;
+  // Stable "slot" across every week of the block (e.g. every week's Monday shares the same
+  // day_position) -- what a class's linked_day_position resolves against. Null until a coach
+  // sets it; day_label (free text) and sort_order (defaults to 0 everywhere) aren't reliable
+  // ordinals for this.
+  day_position: number | null;
   workout_exercises: WorkoutExerciseRow[];
 }
 
@@ -204,6 +233,10 @@ export interface WorkoutProgramRow {
   client_id: string;
   name: string;
   created_at: string;
+  // Null = not yet assigned to a rolling block, so it can't resolve for check-in purposes
+  // (still fully usable for manual logging/editing). Block length is derived from
+  // max(week_num) across workout_program_days, not stored separately.
+  start_date: string | null;
   workout_program_days: WorkoutProgramDayRow[];
 }
 
@@ -225,6 +258,9 @@ export interface ClientExerciseMaxRow {
   client_id: string;
   exercise_library_id: string;
   tested_max: number;
+  // 1 = a true 1RM (the default, matching every pre-existing row's implicit behavior).
+  // >1 = a rep max (e.g. a 3RM) -- %1RM resolution estimates a true 1RM from this via Epley.
+  reps: number;
   is_estimated: boolean;
   tested_date: string;
   recorded_by: string | null;
@@ -272,6 +308,8 @@ export interface ProgramTemplateDayRow {
   day_label: string;
   sort_order: number;
   phase_label: string | null;
+  notes: string | null;
+  day_position: number | null;
   program_template_exercises: ProgramTemplateExerciseRow[];
 }
 
@@ -296,6 +334,33 @@ export interface ProgressPhotoRow {
 
 export interface ProgressPhoto extends ProgressPhotoRow {
   signedUrl: string | null;
+}
+
+export interface FoodPhotoEntryRow {
+  id: string;
+  daily_log_id: string;
+  storage_path: string;
+  description: string | null;
+  estimated_calories: number | null;
+  estimated_protein: number | null;
+  estimated_carbs: number | null;
+  estimated_fat: number | null;
+  created_at: string;
+}
+
+export interface FoodPhotoEntry extends FoodPhotoEntryRow {
+  signedUrl: string | null;
+}
+
+export interface ManualMacroEntryRow {
+  id: string;
+  daily_log_id: string;
+  meal_section_id: string | null;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  created_at: string;
 }
 
 export interface MeasurementLogRow {
@@ -373,6 +438,7 @@ export interface ScheduleOccurrence {
   capacity: number;
   creditCost: number;
   bookedCount: number;
+  linkedDayPosition: number | null;
 }
 
 export interface RosterEntry {
@@ -428,23 +494,100 @@ export interface FormAssignmentWithDetails extends FormAssignmentRow {
   responses: FormResponseRow[];
 }
 
-export interface EducationContentRow {
+export interface EducationLessonRow {
   id: string;
-  coach_id: string;
+  module_id: string;
   title: string;
   body: string | null;
   link_url: string | null;
+  sort_order: number;
+  // Nullable: null = available as soon as the course is assigned. A date in the future means
+  // the lesson renders locked until then.
+  unlock_at: string | null;
+}
+
+export interface EducationModuleRow {
+  id: string;
+  course_id: string;
+  title: string;
+  sort_order: number;
+}
+
+export interface EducationModuleWithLessons extends EducationModuleRow {
+  education_lessons: EducationLessonRow[];
+}
+
+export interface EducationCourseRow {
+  id: string;
+  coach_id: string;
+  title: string;
+  description: string | null;
   created_at: string;
 }
 
-export interface EducationAssignmentRow {
-  id: string;
-  content_id: string;
-  client_id: string;
-  assigned_at: string;
-  completed_at: string | null;
+export interface EducationCourseWithModules extends EducationCourseRow {
+  education_modules: EducationModuleWithLessons[];
 }
 
-export interface EducationAssignmentWithContent extends EducationAssignmentRow {
-  content: EducationContentRow;
+export interface EducationCourseAssignmentRow {
+  id: string;
+  course_id: string;
+  client_id: string;
+  assigned_at: string;
+}
+
+export interface EducationLessonCompletionRow {
+  id: string;
+  lesson_id: string;
+  client_id: string;
+  completed_at: string;
+}
+
+// One round trip for the whole client-facing library view: each assignment carries its full
+// course (with nested modules/lessons) plus this client's own completions across every
+// lesson in that course.
+export interface EducationCourseAssignmentWithDetails extends EducationCourseAssignmentRow {
+  course: EducationCourseWithModules;
+  completions: EducationLessonCompletionRow[];
+}
+
+export interface ClientJournalEntryRow {
+  id: string;
+  client_id: string;
+  coach_id: string;
+  kind: 'note' | 'goal' | 'injury';
+  body: string;
+  created_at: string;
+  related_date: string | null;
+}
+
+export interface ActivityEventRow {
+  client_id: string;
+  event_type: 'measurement' | 'habit' | 'workout' | 'photo' | 'booking' | 'food';
+  occurred_at: string;
+  detail: string | null;
+}
+
+export interface ClientGroupRow {
+  id: string;
+  coach_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface ClientGroupWithMembers extends ClientGroupRow {
+  memberIds: string[];
+}
+
+export interface ScheduledCommunicationRow {
+  id: string;
+  coach_id: string;
+  message: string;
+  target_type: 'group' | 'all_clients';
+  target_group_id: string | null;
+  send_at: string;
+  sent_at: string | null;
+  channel: 'message' | 'email' | 'both';
+  email_sent_at: string | null;
+  created_at: string;
 }

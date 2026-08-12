@@ -6,8 +6,11 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Avatar } from '@/app/_components/Avatar';
-import { sendMessage } from '@/lib/data/chat';
-import type { ChatMessageRow } from '@/lib/data/types';
+import { VoiceRecorder } from '@/app/_components/VoiceRecorder';
+import { markChatRead, sendMessage, sendVoiceNote } from '@/lib/data/chat';
+import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
+
+const AUDIO_SIGNED_URL_TTL_SECONDS = 60 * 10;
 
 export function ChatTab({
   clientId,
@@ -16,13 +19,13 @@ export function ChatTab({
   otherPartyName = 'Them',
 }: {
   clientId: string;
-  initialMessages: ChatMessageRow[];
+  initialMessages: ChatMessage[];
   currentUserId: string;
   // Shown on the other party's message avatars -- the client's name (coach's view) or
   // "Your coach" (client's own view), since this component doesn't otherwise know names.
   otherPartyName?: string;
 }) {
-  const [messages, setMessages] = useState<ChatMessageRow[]>(initialMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -44,8 +47,20 @@ export function ChatTab({
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `client_id=eq.${clientId}` },
-          (payload) => {
-            const newMessage = payload.new as ChatMessageRow;
+          async (payload) => {
+            const row = payload.new as ChatMessageRow;
+            // A postgres_changes payload is the raw row -- no signed URL. The voice-notes
+            // bucket's own select RLS policy (owns_client) already gates who can call this, so
+            // it can happen straight from the browser client with no extra server round-trip.
+            let signedAudioUrl: string | null = null;
+            if (row.audio_path) {
+              const { data: signed } = await supabase.storage
+                .from('voice-notes')
+                .createSignedUrl(row.audio_path, AUDIO_SIGNED_URL_TTL_SECONDS);
+              signedAudioUrl = signed?.signedUrl ?? null;
+            }
+            if (cancelled) return;
+            const newMessage: ChatMessage = { ...row, signedAudioUrl };
             setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
           }
         )
@@ -62,6 +77,12 @@ export function ChatTab({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    // Viewing the thread marks it read -- best-effort, a failure here just means the badge
+    // doesn't clear this time rather than blocking anything the user is doing.
+    markChatRead(clientId).catch(() => {});
+  }, [clientId]);
+
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!text.trim()) return;
@@ -76,8 +97,22 @@ export function ChatTab({
     }
   }
 
+  async function handleVoiceNote(blob: Blob, durationSeconds: number) {
+    setSending(true);
+    try {
+      const formData = new FormData();
+      formData.set('file', blob, 'voice-note.webm');
+      formData.set('duration', String(durationSeconds));
+      await sendVoiceNote(clientId, formData);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not send voice note. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
-    <div className="flex h-[75vh] flex-col rounded-2xl border border-black/10 dark:border-white/10">
+    <div className="flex h-[75vh] flex-col rounded-2xl border border-black/[.05] shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && <EmptyState icon={MessageSquare} title="No messages yet" hint="Say hello to get the conversation started." />}
         {messages.map((m) => {
@@ -92,7 +127,15 @@ export function ChatTab({
                     : 'bg-black/5 text-black dark:bg-white/10 dark:text-zinc-50'
                 }`}
               >
-                <p>{m.text}</p>
+                {m.audio_path ? (
+                  m.signedAudioUrl ? (
+                    <audio controls src={m.signedAudioUrl} className="h-9 w-48 max-w-full" />
+                  ) : (
+                    <p className="italic opacity-70">Voice note unavailable</p>
+                  )
+                ) : (
+                  <p>{m.text}</p>
+                )}
                 {/* suppressHydrationWarning: formatted in the viewer's own timezone/locale,
                     which the server can't know in advance — this text is expected to
                     differ between the SSR pass and the client, not a real mismatch. */}
@@ -105,13 +148,14 @@ export function ChatTab({
         })}
         <div ref={bottomRef} />
       </div>
-      <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-black/10 p-3 dark:border-white/10">
+      <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-black/[.05] p-3 dark:border-white/10">
+        <VoiceRecorder onRecorded={handleVoiceNote} disabled={sending} />
         <input
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Message…"
-          className="flex-1 rounded-full border border-black/10 bg-transparent px-4 py-2.5 text-sm dark:border-white/10"
+          className="flex-1 rounded-full border border-black/[.05] bg-black/[.02] px-4 py-2.5 text-sm dark:border-white/10 dark:bg-white/[.03]"
         />
         <button
           type="submit"

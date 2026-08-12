@@ -2,14 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { MessageSquare, Settings } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Settings } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
 import { BottomTabBar } from './BottomTabBar';
 import { SetupTab } from './SetupTab';
 import { WeeklyLogTab } from './WeeklyLogTab';
 import { FoodTrackingTab } from './FoodTrackingTab';
+import { PhotoDiaryTab } from './PhotoDiaryTab';
 import { MealPlannerTab } from './MealPlannerTab';
 import { ActivityTab } from './ActivityTab';
 import { InsightsTab } from './InsightsTab';
@@ -21,29 +23,35 @@ import { RecipesTab } from './RecipesTab';
 import { TodayTab } from './TodayTab';
 import { ChatTab } from './ChatTab';
 import { CategoryNav } from './CategoryNav';
+import { AccountTab } from './AccountTab';
+import { InfoTab } from '@/app/coach/_components/workspace/InfoTab';
 import type { Category, Screen } from './categories';
-import { screensForCategory } from './categories';
+import { BOTTOM_TAB_CATEGORIES, screensForCategory, toDisabledScreenSet } from './categories';
 import { NotificationBanner } from './NotificationBanner';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
 import { WorkoutTab } from './WorkoutTab';
 import type { ClientHealthStatus } from '@/lib/data/coach';
+import type { ThemePreference } from '@/app/_components/theme';
 import type {
   ActivityRow,
   BookingRow,
-  ChatMessageRow,
+  ChatMessage,
   ClientExerciseMaxRow,
   ClientMembershipRow,
   ClientProfileRow,
   DailyLogRow,
-  EducationAssignmentWithContent,
-  EducationContentRow,
+  EducationCourseAssignmentWithDetails,
+  EducationCourseWithModules,
   ExerciseLibraryRow,
   FoodDiaryEntryRow,
+  FoodPhotoEntry,
+  ManualMacroEntryRow,
   FormAssignmentWithDetails,
   FormTemplateRow,
   HabitWithLogs,
   MealPlanEntryRow,
+  MealSectionRow,
   MeasurementLogRow,
   MembershipPackageRow,
   NotificationRow,
@@ -54,6 +62,7 @@ import type {
   WorkoutDayFeedbackRow,
   WorkoutLogRow,
   WorkoutProgramRow,
+  ClientJournalEntryRow,
 } from '@/lib/data/types';
 
 type Area = 'Coaching' | 'Classes';
@@ -63,13 +72,18 @@ export function DashboardShell({
   clientLabel,
   isCoachView,
   currentUserId,
+  currentUserEmail,
+  themePreference,
   profile,
   weekDates,
   weekLogs,
   historyLogs,
   todayLogId,
   foodDiaryEntries,
+  foodPhotos,
+  manualMacroEntries,
   mealPlanEntries,
+  mealSections,
   activities,
   programWeek,
   messages,
@@ -91,26 +105,34 @@ export function DashboardShell({
   exerciseLibrary,
   programTemplates,
   recipes,
-  educationContent,
+  educationCourses,
   educationAssignments,
+  disabledScreens = [],
+  journalEntries = [],
   unreadMessageCount = 0,
   healthStatus = null,
   coachUnreadCount = 0,
+  perClientUnreadCount = 0,
 }: {
   clientId: string;
   clientLabel: string;
   isCoachView: boolean;
   currentUserId: string;
+  currentUserEmail: string;
+  themePreference: ThemePreference;
   profile: ClientProfileRow | null;
   weekDates: string[];
   weekLogs: DailyLogRow[];
   historyLogs: DailyLogRow[];
   todayLogId: string | null;
   foodDiaryEntries: FoodDiaryEntryRow[];
+  foodPhotos: FoodPhotoEntry[];
+  manualMacroEntries: ManualMacroEntryRow[];
   mealPlanEntries: MealPlanEntryRow[];
+  mealSections: MealSectionRow[];
   activities: ActivityRow[];
   programWeek: number;
-  messages: ChatMessageRow[];
+  messages: ChatMessage[];
   bookings: BookingRow[];
   occurrences: ScheduleOccurrence[];
   creditsBalance: number;
@@ -129,19 +151,35 @@ export function DashboardShell({
   exerciseLibrary: ExerciseLibraryRow[];
   programTemplates: ProgramTemplateRow[];
   recipes: RecipeWithIngredients[];
-  educationContent: EducationContentRow[];
-  educationAssignments: EducationAssignmentWithContent[];
+  educationCourses: EducationCourseWithModules[];
+  educationAssignments: EducationCourseAssignmentWithDetails[];
+  disabledScreens?: string[];
+  journalEntries?: ClientJournalEntryRow[];
   unreadMessageCount?: number;
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
   coachUnreadCount?: number;
+  perClientUnreadCount?: number;
 }) {
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
   const [screen, setScreen] = useState<Screen>('Today');
+  const [focusDay, setFocusDay] = useState<{ dayId: string; nonce: number } | null>(null);
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
+
+  const disabledScreenSet = toDisabledScreenSet(disabledScreens);
+  const nutritionMode = profile?.nutrition_tracking_mode ?? 'full_tracking';
+  // The single enforcement choke point: handleNavigate/handleCheckIn below set `screen`
+  // directly (for a home-card shortcut or the classes check-in flow), bypassing
+  // screensForCategory entirely -- patching each call site individually is fragile, since a
+  // coach could disable a screen a hardcoded shortcut still points at. Deriving one
+  // `effectiveScreen` and using it for every render check instead of raw `screen` closes that
+  // gap at a single point, regardless of how `screen` got set. Falls back to the category's
+  // first still-enabled screen, or 'Today' only if every screen in the category is disabled.
+  const categoryScreens = screensForCategory(category, isCoachView, disabledScreenSet, nutritionMode);
+  const effectiveScreen: Screen = categoryScreens.includes(screen) ? screen : (categoryScreens[0] ?? 'Today');
 
   function handleCategoryClick(c: Category) {
     // Categories only render while area === 'Coaching' (see showCoaching below) -- without
@@ -149,11 +187,30 @@ export function DashboardShell({
     // category/screen but never actually show anything.
     setArea('Coaching');
     setCategory(c);
-    setScreen(screensForCategory(c, isCoachView)[0]);
+    setScreen(screensForCategory(c, isCoachView, disabledScreenSet, nutritionMode)[0]);
+  }
+
+  // Home screen cards route here (and CheckInButton reuses handleCheckIn below) -- lets a
+  // card jump straight to a specific screen within a category, not just the category's
+  // default first screen the bottom tab bar/sidebar clicks land on.
+  function handleNavigate(c: Category, s?: Screen) {
+    setArea('Coaching');
+    setCategory(c);
+    setScreen(s ?? screensForCategory(c, isCoachView, disabledScreenSet, nutritionMode)[0]);
+  }
+
+  // From a classes check-in (Home or Classes tab) -- jumps straight into the Workout screen
+  // with the specific day expanded/scrolled to, rather than requiring the client to hunt for
+  // it. `nonce` lets re-checking-in on the same day re-trigger the scroll.
+  function handleCheckIn(dayId: string) {
+    setArea('Coaching');
+    setCategory('Training');
+    setScreen('Workout');
+    setFocusDay((prev) => ({ dayId, nonce: (prev?.nonce ?? 0) + 1 }));
   }
 
   const topBar = isCoachView ? (
-    <CoachNav unreadCount={coachUnreadCount} />
+    <CoachNav />
   ) : (
     <div className="flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
       {(['Coaching', 'Classes'] as Area[]).map((a) => (
@@ -177,8 +234,10 @@ export function DashboardShell({
   const sidebar = showCoaching ? (
     <CategoryNav
       category={category}
-      screen={screen}
+      screen={effectiveScreen}
       isCoachView={isCoachView}
+      disabledScreens={disabledScreenSet}
+      nutritionMode={nutritionMode}
       onSelectCategory={handleCategoryClick}
       onSelectScreen={setScreen}
     />
@@ -210,34 +269,61 @@ export function DashboardShell({
       banner={!isCoachView && <NotificationBanner notifications={notifications} />}
       sidebar={sidebar}
       headerAction={
-        !isCoachView && (
-          <>
-            <button
-              onClick={() => handleCategoryClick('Messages')}
-              aria-label="Messages"
-              className="relative rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
-            >
-              <MessageSquare className="h-5 w-5" />
-              {unreadMessageCount > 0 && (
-                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-danger" />
-              )}
-            </button>
-            <button
-              onClick={() => handleCategoryClick('Account Settings')}
-              aria-label="Account Settings"
-              className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
-            >
-              <Settings className="h-5 w-5" />
-            </button>
-          </>
-        )
+        <>
+          <button
+            onClick={() => handleCategoryClick('Messages')}
+            aria-label="Messages"
+            className="relative rounded-full bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+          >
+            <MessageSquare className="h-5 w-5" />
+            {(isCoachView ? perClientUnreadCount : unreadMessageCount) > 0 && (
+              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
+            )}
+          </button>
+          <button
+            onClick={() => handleCategoryClick('Account Settings')}
+            aria-label="Account Settings"
+            className="rounded-full bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+          {isCoachView && <CoachMessagesButton unreadCount={coachUnreadCount} />}
+        </>
       }
-      bottomBar={!isCoachView && <BottomTabBar category={category} onSelectCategory={handleCategoryClick} />}
+      bottomBar={<BottomTabBar category={category} onSelectCategory={handleCategoryClick} />}
     >
+      {showCoaching && !BOTTOM_TAB_CATEGORIES.includes(category) && (
+        <button
+          onClick={() => handleCategoryClick('Home')}
+          className="mb-3 flex items-center gap-1 text-sm font-medium text-zinc-500 hover:text-black md:hidden dark:hover:text-zinc-300"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+      )}
+      {showCoaching && categoryScreens.length > 1 && (
+        <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-black/10 p-1 md:hidden dark:border-white/10">
+          {categoryScreens.map((s) => (
+            <button
+              key={s}
+              onClick={() => setScreen(s)}
+              className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                effectiveScreen === s
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
       {showCoaching && (
         <>
-          {screen === 'Today' && (
+          {effectiveScreen === 'Today' && (
             <TodayTab
+              profile={profile}
+              programWeek={programWeek}
               weekLogs={weekLogs}
               historyLogs={historyLogs}
               habits={habits}
@@ -245,12 +331,31 @@ export function DashboardShell({
               bookings={bookings}
               creditsBalance={creditsBalance}
               membership={membership}
+              programs={programs}
+              workoutLogs={workoutLogs}
+              onCheckIn={handleCheckIn}
+              onNavigate={handleNavigate}
+              onNavigateClasses={isCoachView ? undefined : () => setArea('Classes')}
             />
           )}
-          {screen === 'Setup' && (
-            <SetupTab clientId={clientId} initialProfile={profile} readOnly={isCoachView} />
+          {effectiveScreen === 'Setup' && (
+            <SetupTab
+              clientId={clientId}
+              initialProfile={profile}
+              readOnly={isCoachView}
+              measurementLogs={measurementLogs}
+            />
           )}
-          {screen === 'Weekly Log' && (
+          {effectiveScreen === 'Account' && !isCoachView && (
+            <AccountTab
+              clientId={clientId}
+              name={profile?.name ?? 'You'}
+              email={currentUserEmail}
+              notificationsEnabled={profile?.notifications_enabled ?? true}
+              themePreference={themePreference}
+            />
+          )}
+          {effectiveScreen === 'Weekly Log' && (
             <WeeklyLogTab
               clientId={clientId}
               weekDates={weekDates}
@@ -260,9 +365,11 @@ export function DashboardShell({
               readOnly={isCoachView}
               isCoachView={isCoachView}
               habits={habits}
+              profile={profile}
+              programWeek={programWeek}
             />
           )}
-          {screen === 'Forms' && (
+          {effectiveScreen === 'Forms' && (
             <FormsTab
               clientId={clientId}
               isCoachView={isCoachView}
@@ -270,34 +377,50 @@ export function DashboardShell({
               assignments={formAssignments}
             />
           )}
-          {screen === 'Education' && (
+          {effectiveScreen === 'Education' && (
             <EducationTab
               clientId={clientId}
               isCoachView={isCoachView}
-              content={educationContent}
+              courses={educationCourses}
               assignments={educationAssignments}
             />
           )}
-          {screen === 'Food Tracking' && (
+          {effectiveScreen === 'Food Tracking' && (
             <FoodTrackingTab
+              clientId={clientId}
               dailyLogId={todayLogId}
               initialEntries={foodDiaryEntries}
+              initialManualMacroEntries={manualMacroEntries}
+              sections={mealSections}
               recipes={recipes}
               readOnly={isCoachView}
+              profile={profile}
+              programWeek={programWeek}
+              nutritionMode={nutritionMode}
             />
           )}
-          {screen === 'Meal Planner' && (
+          {effectiveScreen === 'Photo Diary' && (
+            <PhotoDiaryTab
+              clientId={clientId}
+              dailyLogId={todayLogId}
+              initialPhotos={foodPhotos}
+              readOnly={isCoachView}
+              profile={profile}
+              programWeek={programWeek}
+            />
+          )}
+          {effectiveScreen === 'Meal Planner' && (
             <MealPlannerTab clientId={clientId} initialEntries={mealPlanEntries} recipes={recipes} readOnly={isCoachView} />
           )}
-          {screen === 'Recipes' && (
+          {effectiveScreen === 'Recipes' && (
             <RecipesTab clientId={clientId} initialRecipes={recipes} readOnly={isCoachView} />
           )}
-          {screen === 'Activity' && (
+          {effectiveScreen === 'Activity' && (
             <ActivityTab activities={activities} bodyWeightKg={todayBodyweight} programWeek={programWeek} />
           )}
-          {screen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
-          {screen === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
-          {screen === 'Progress & Photos' && (
+          {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
+          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
+          {effectiveScreen === 'Progress & Photos' && (
             <ProgressTab
               clientId={clientId}
               initialPhotos={photos}
@@ -306,7 +429,7 @@ export function DashboardShell({
               readOnly={isCoachView}
             />
           )}
-          {screen === 'Workout' && (
+          {effectiveScreen === 'Workout' && (
             <WorkoutTab
               clientId={clientId}
               isCoachView={isCoachView}
@@ -316,9 +439,10 @@ export function DashboardShell({
               workoutDayFeedback={workoutDayFeedback}
               exerciseLibrary={exerciseLibrary}
               programTemplates={programTemplates}
+              focusDay={focusDay}
             />
           )}
-          {screen === 'Credits' && isCoachView && (
+          {effectiveScreen === 'Credits' && isCoachView && (
             <CreditsTab
               clientId={clientId}
               creditsBalance={creditsBalance}
@@ -328,7 +452,10 @@ export function DashboardShell({
               lastCheckinReminderAt={profile?.last_checkin_reminder_at ?? null}
             />
           )}
-          {screen === 'Messages' && (
+          {effectiveScreen === 'Info' && isCoachView && (
+            <InfoTab clientId={clientId} entries={journalEntries} />
+          )}
+          {effectiveScreen === 'Messages' && (
             <ChatTab
               clientId={clientId}
               initialMessages={messages}
@@ -345,6 +472,9 @@ export function DashboardShell({
           occurrences={occurrences}
           creditsBalance={creditsBalance}
           membership={membership}
+          programs={programs}
+          workoutLogs={workoutLogs}
+          onCheckIn={handleCheckIn}
         />
       )}
 

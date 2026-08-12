@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCoachChatOverview } from '@/lib/data/chat';
+import { getGroups } from '@/lib/data/clientGroups';
+import { getCommunications } from '@/lib/data/communications';
 import { MessagesHubShell } from './_components/MessagesHubShell';
 
 export default async function CoachMessagesPage() {
@@ -17,7 +19,18 @@ export default async function CoachMessagesPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const overview = await getCoachChatOverview();
+  const [overview, groups, communications] = await Promise.all([
+    getCoachChatOverview(),
+    getGroups(),
+    getCommunications(),
+  ]);
 
-  return <MessagesHubShell overview={overview} currentUserId={user.id} />;
+  return (
+    <MessagesHubShell
+      overview={overview}
+      currentUserId={user.id}
+      groups={groups}
+      communications={communications}
+    />
+  );
 }

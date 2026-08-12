@@ -2,7 +2,10 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getExerciseLibrary } from '@/lib/data/exerciseLibrary';
 import { getProgramTemplatesWithDays } from '@/lib/data/programTemplates';
+import { getFormTemplates } from '@/lib/data/forms';
+import { getCourses } from '@/lib/data/education';
 import { getCoachChatOverview } from '@/lib/data/chat';
+import { getGroups } from '@/lib/data/clientGroups';
 import { LibraryHubShell } from './_components/LibraryHubShell';
 
 export default async function CoachLibraryPage() {
@@ -19,12 +22,24 @@ export default async function CoachLibraryPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [exercises, templates, chatOverview] = await Promise.all([
+  const [exercises, templates, formTemplates, courses, chatOverview, groups] = await Promise.all([
     getExerciseLibrary(),
     getProgramTemplatesWithDays(),
+    getFormTemplates(),
+    getCourses(),
     getCoachChatOverview(),
+    getGroups(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
-  return <LibraryHubShell initialExercises={exercises} initialTemplates={templates} unreadCount={unreadCount} />;
+  return (
+    <LibraryHubShell
+      initialExercises={exercises}
+      initialTemplates={templates}
+      initialFormTemplates={formTemplates}
+      initialCourses={courses}
+      unreadCount={unreadCount}
+      groups={groups}
+    />
+  );
 }

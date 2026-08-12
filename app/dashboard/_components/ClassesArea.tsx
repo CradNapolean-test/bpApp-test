@@ -7,18 +7,25 @@ import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
 import { addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
-import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@/lib/data/types';
+import { CheckInButton } from './CheckInButton';
+import type { BookingRow, ClientMembershipRow, ScheduleOccurrence, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 export function ClassesArea({
   bookings,
   occurrences,
   creditsBalance,
   membership,
+  programs,
+  workoutLogs,
+  onCheckIn,
 }: {
   bookings: BookingRow[];
   occurrences: ScheduleOccurrence[];
   creditsBalance: number;
   membership: ClientMembershipRow | null;
+  programs: WorkoutProgramRow[];
+  workoutLogs: WorkoutLogRow[];
+  onCheckIn: (dayId: string) => void;
 }) {
   const { run } = useAction();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -55,7 +62,7 @@ export function ClassesArea({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">This week&apos;s credits</h3>
         <p className="mt-1 text-2xl font-semibold text-black dark:text-zinc-50">{creditsBalance}</p>
         {membership?.package ? (
@@ -86,25 +93,30 @@ export function ClassesArea({
         )}
 
         {selectedDate && (
-          <ul className="mt-3 divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+          <div className="mt-3 space-y-2.5">
             {dayOccurrences.map((occ) => {
               const key = `${occ.classId}|${occ.date}`;
               const existingBooking = bookingByKey.get(key);
               const full = occ.bookedCount >= occ.capacity;
               return (
-                <li key={key} className="flex items-center justify-between p-3 text-sm">
-                  <span>
-                    {occ.className}
-                    {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}{' '}
-                    <span className="text-zinc-500">
-                      · {occ.bookedCount}/{occ.capacity} booked · {occ.creditCost} credit{occ.creditCost === 1 ? '' : 's'}
-                    </span>
-                  </span>
+                <div
+                  key={key}
+                  className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-black dark:text-zinc-50">
+                      {occ.className}
+                      {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {occ.bookedCount}/{occ.capacity} booked · {occ.creditCost} credit{occ.creditCost === 1 ? '' : 's'}
+                    </p>
+                  </div>
                   {existingBooking ? (
                     <button
                       onClick={() => handleCancel(existingBooking.id)}
                       disabled={busyKey === existingBooking.id}
-                      className="rounded-md border border-black/10 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-white/10"
+                      className="shrink-0 rounded-lg border border-black/10 px-3 py-1.5 text-xs font-semibold disabled:opacity-50 dark:border-white/10"
                     >
                       {existingBooking.status === 'waitlist' ? 'Leave waitlist' : 'Cancel'}
                     </button>
@@ -112,15 +124,15 @@ export function ClassesArea({
                     <button
                       onClick={() => handleBook(occ)}
                       disabled={busyKey === key || (full && occ.date < todayIso)}
-                      className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50"
+                      className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
                     >
                       {full ? 'Join waitlist' : 'Book'}
                     </button>
                   )}
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         )}
       </div>
 
@@ -129,31 +141,49 @@ export function ClassesArea({
         {bookings.length === 0 ? (
           <EmptyState icon={Ticket} title="No bookings yet" hint="Book a class above and it'll show up here." />
         ) : (
-        <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+        <div className="space-y-2">
           {bookings.map((b) => {
             const isPast = b.booking_date < todayIso;
+            const badge =
+              b.status === 'cancelled'
+                ? { label: 'Cancelled', cls: 'bg-black/5 text-zinc-500 dark:bg-white/10' }
+                : b.status === 'waitlist'
+                  ? { label: 'Waitlist', cls: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' }
+                  : isPast
+                    ? b.attended
+                      ? { label: 'Attended', cls: 'bg-success/10 text-success' }
+                      : { label: 'No-show', cls: 'bg-danger/10 text-danger' }
+                    : { label: 'Booked', cls: 'bg-accent-soft text-accent' };
             return (
-              <li key={b.id} className="flex items-center justify-between p-3 text-sm">
-                <span>
-                  {b.class?.name} — {b.booking_date}{' '}
-                  <span className="text-zinc-500">
-                    ({b.status}
-                    {isPast && b.status === 'booked' ? `, ${b.attended ? 'attended' : 'no-show'}` : ''})
+              <div
+                key={b.id}
+                className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-black dark:text-zinc-50">{b.class?.name}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{b.booking_date}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {b.status === 'booked' && b.booking_date === todayIso && (
+                    <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} />
+                  )}
+                  {b.status !== 'cancelled' && !isPast && (
+                    <button
+                      onClick={() => handleCancel(b.id)}
+                      disabled={busyKey === b.id}
+                      className="text-xs font-medium text-danger hover:underline disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${badge.cls}`}>
+                    {badge.label}
                   </span>
-                </span>
-                {b.status !== 'cancelled' && !isPast && (
-                  <button
-                    onClick={() => handleCancel(b.id)}
-                    disabled={busyKey === b.id}
-                    className="text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </li>
+                </div>
+              </div>
             );
           })}
-        </ul>
+        </div>
         )}
       </div>
     </div>

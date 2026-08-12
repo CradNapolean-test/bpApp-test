@@ -5,7 +5,10 @@ import { Dumbbell } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
+import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
+import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
+import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workouts/ProgramDayList';
 import {
   addExercise,
   addProgramDay,
@@ -14,9 +17,11 @@ import {
   deleteExercise,
   deleteProgram,
   deleteProgramDay,
+  duplicateProgramDay,
   logSet,
   reorderExercises,
   updateExercise,
+  updateProgram,
   updateProgramDay,
 } from '@/lib/data/workouts';
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
@@ -81,16 +86,18 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
   const { run, busy } = useAction();
   const [libraryId, setLibraryId] = useState('');
   const [max, setMax] = useState<number | ''>('');
+  const [reps, setReps] = useState<number | ''>(1);
   const [estimated, setEstimated] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!libraryId || max === '') return;
-    await run(() => recordExerciseMax(clientId, libraryId, max, estimated), {
+    await run(() => recordExerciseMax(clientId, libraryId, max, estimated, reps === '' ? 1 : reps), {
       success: 'Tested max recorded',
       onDone: () => {
         setLibraryId('');
         setMax('');
+        setReps(1);
         setEstimated(false);
       },
     });
@@ -126,6 +133,18 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
         value={max}
         onChange={(e) => setMax(e.target.value === '' ? '' : Number(e.target.value))}
       />
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-zinc-500">Reps</label>
+        <input
+          type="number"
+          min={1}
+          required
+          title="1 = a true 1RM. More than 1 (e.g. a 3-rep or 5-rep max) gets converted to an estimated 1RM automatically."
+          className="w-16 rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          value={reps}
+          onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))}
+        />
+      </div>
       <label className="flex items-center gap-1.5 pb-2 text-xs text-zinc-500">
         <input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} />
         Estimated
@@ -198,21 +217,23 @@ function LogSetForm({
     );
   }
 
-  const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
+  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
 
   return (
-    <div>
-      <form onSubmit={handleSubmit} className="mt-1 flex items-center gap-1.5">
-        <span className="text-xs text-zinc-500">Set {nextSetNumber}:</span>
+    <div className="mt-2 rounded-md border border-black/5 p-2 dark:border-white/5">
+      <p className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+        Set {nextSetNumber}
+      </p>
+      <form onSubmit={handleSubmit} className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <select className={inputCls} value={setType} onChange={(e) => setSetType(e.target.value as SetType)}>
           {SET_TYPES.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
-        <input type="number" placeholder="Reps" className={`${inputCls} w-16`} value={reps} onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))} />
-        <input type="number" placeholder="Load" className={`${inputCls} w-16`} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
-        <input type="number" placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-        <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
+        <input type="number" placeholder="Reps" className={inputCls} value={reps} onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))} />
+        <input type="number" placeholder="Load" className={inputCls} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
+        <input type="number" placeholder="RPE" className={inputCls} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
+        <button type="submit" disabled={busy} className="col-span-2 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50 sm:col-span-4">
           Log
         </button>
       </form>
@@ -255,13 +276,30 @@ function DayFeedbackForm({
   const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
 
   return (
-    <form onSubmit={handleSubmit} className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-black/5 pt-2 dark:border-white/5">
-      <span className="text-xs text-zinc-500">{feedback ? 'Update rating:' : 'Rate this session:'}</span>
-      <input type="number" min={1} max={10} placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-      <input placeholder="Notes (optional)" className={`${inputCls} w-48`} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
-        Save
-      </button>
+    <form onSubmit={handleSubmit} className="mt-2 space-y-2 border-t border-black/5 pt-2 dark:border-white/5">
+      <p className="text-xs text-zinc-500">{feedback ? 'Update rating:' : 'Rate this session:'}</p>
+      <div className="flex flex-wrap gap-1">
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => setRpe(n)}
+            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+              rpe === n
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-black/5 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input placeholder="Notes (optional)" className={`${inputCls} w-48`} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
+          Save
+        </button>
+      </div>
     </form>
   );
 }
@@ -279,6 +317,77 @@ function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | 
     <input
       placeholder="Phase (optional)"
       className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+// Stable "slot" across every week of the block (Week 1's Monday and Week 2's Monday share
+// the same day_position) -- what a class's linked_day_position resolves against, see
+// lib/utils/checkin.ts. Editable after the fact, not just at Add-day time.
+function DayPositionInput({ dayId, initial }: { dayId: string; initial: number | null }) {
+  const { run } = useAction();
+  const [value, setValue] = useState(initial != null ? String(initial) : '');
+
+  async function handleBlur() {
+    const parsed = value === '' ? null : Number(value);
+    if (parsed === initial) return;
+    await run(() => updateProgramDay(dayId, { day_position: parsed }));
+  }
+
+  return (
+    <input
+      type="number"
+      placeholder="Day #"
+      title="Day position -- links a recurring class to this slot across every week"
+      className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+}
+
+// The rolling-block anchor: "current week" for check-in resolution is computed from this
+// date, not stored separately -- see lib/utils/checkin.ts.
+function ProgramStartDateInput({ programId, initial }: { programId: string; initial: string | null }) {
+  const { run } = useAction();
+  const [value, setValue] = useState(initial ?? '');
+
+  async function handleChange(next: string) {
+    setValue(next);
+    await run(() => updateProgram(programId, { start_date: next || null }));
+  }
+
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+      Start date
+      <input
+        type="date"
+        className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+function DayNotesField({ dayId, initial }: { dayId: string; initial: string | null }) {
+  const { run } = useAction();
+  const [value, setValue] = useState(initial ?? '');
+
+  async function handleBlur() {
+    if (value === (initial ?? '')) return;
+    await run(() => updateProgramDay(dayId, { notes: value || null }));
+  }
+
+  return (
+    <textarea
+      placeholder="Workout notes (optional)"
+      rows={2}
+      className="mt-2 w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
@@ -328,6 +437,7 @@ export function WorkoutTab({
   workoutDayFeedback,
   exerciseLibrary,
   programTemplates,
+  focusDay = null,
 }: {
   clientId: string;
   isCoachView: boolean;
@@ -337,12 +447,40 @@ export function WorkoutTab({
   workoutDayFeedback: WorkoutDayFeedbackRow[];
   exerciseLibrary: ExerciseLibraryRow[];
   programTemplates: ProgramTemplateRow[];
+  // Set by DashboardShell when the client arrives here via a classes check-in -- expands and
+  // scrolls to the specific day rather than requiring them to hunt for it manually. `nonce`
+  // makes re-clicking check-in on the same day re-trigger the scroll even if nothing else
+  // about the props changed.
+  focusDay?: { dayId: string; nonce: number } | null;
 }) {
   const confirm = useConfirm();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate } = useAction();
   const [newProgramName, setNewProgramName] = useState('');
-  const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string }>>({});
+  const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
+  const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
+  const { run: runDuplicateWeek, busy: duplicatingWeek } = useAction();
+  // Weeks collapsed by default -- with multiple weeks per program this was a lot of scroll.
+  // Days are no longer expand-in-place (see openDayId below) -- clicking one opens the
+  // fullscreen FocusOverlay instead, which is what actually solved the "congested" feeling
+  // multiple inline exercise editors caused, not the week-level grouping.
+  const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
+  const [openDayId, setOpenDayId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focusDay) return;
+    for (const program of programs) {
+      const day = program.workout_program_days.find((d) => d.id === focusDay.dayId);
+      if (!day) continue;
+      // Reacting to an external signal (a classes check-in click) by expanding local collapse
+      // state, not synchronizing with any external system -- the standard justified exception.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExpandedWeeks((s) => ({ ...s, [`${program.id}:${day.week_num}`]: true }));
+      setOpenDayId(day.id);
+      break;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on a genuinely new focus request, not on every programs re-render
+  }, [focusDay?.dayId, focusDay?.nonce]);
 
   async function handleCreateProgram(e: React.FormEvent) {
     e.preventDefault();
@@ -353,8 +491,28 @@ export function WorkoutTab({
   }
 
   async function handleAddDay(programId: string) {
-    const form = dayForms[programId] ?? { weekNum: 1, dayLabel: 'Day 1' };
-    await runMutate(() => addProgramDay(programId, form.weekNum, form.dayLabel), { success: 'Day added' });
+    const form = dayForms[programId] ?? { weekNum: 1, dayLabel: 'Day 1', dayPosition: '' };
+    const dayPosition = form.dayPosition === '' ? null : Number(form.dayPosition);
+    await runMutate(() => addProgramDay(programId, form.weekNum, form.dayLabel, dayPosition), { success: 'Day added' });
+  }
+
+  // Builds a full block by copying an already-built week's days (with their exercises --
+  // duplicateProgramDay copies both) into every remaining week, instead of generating blank
+  // numbered day shells. day_position carries over unchanged from the source day, so check-in
+  // resolution (lib/utils/checkin.ts) still works without retyping a day # per week.
+  async function handleDuplicateWeek(program: WorkoutProgramRow) {
+    const form = dupForms[program.id] ?? { sourceWeek: 1, totalWeeks: 4 };
+    const sourceDays = program.workout_program_days.filter((d) => d.week_num === form.sourceWeek);
+    if (sourceDays.length === 0) return;
+    const inserts: Promise<void>[] = [];
+    for (let week = form.sourceWeek + 1; week <= form.totalWeeks; week++) {
+      for (const day of sourceDays) {
+        inserts.push(duplicateProgramDay(day.id, week, day.day_label));
+      }
+    }
+    await runDuplicateWeek(() => Promise.all(inserts), {
+      success: `Week ${form.sourceWeek} copied through week ${form.totalWeeks}`,
+    });
   }
 
   async function handleDeleteProgram(programId: string, name: string) {
@@ -375,6 +533,10 @@ export function WorkoutTab({
     });
     if (!ok) return;
     await runMutate(() => deleteProgramDay(dayId), { success: 'Day deleted' });
+  }
+
+  async function handleCopyDay(dayId: string, weekNum: number, dayLabel: string) {
+    await runMutate(() => duplicateProgramDay(dayId, weekNum + 1, dayLabel), { success: 'Workout copied to next week' });
   }
 
   const logsByExercise = workoutLogs.reduce<Record<string, WorkoutLogRow[]>>((acc, log) => {
@@ -400,6 +562,10 @@ export function WorkoutTab({
     if (candidates.length === 0) return null;
     return [...candidates].sort((a, b) => b.logged_at.localeCompare(a.logged_at))[0];
   }
+
+  const openDay = openDayId
+    ? programs.flatMap((p) => p.workout_program_days).find((d) => d.id === openDayId)
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -437,123 +603,130 @@ export function WorkoutTab({
       )}
 
       {programs.map((program) => (
-        <div key={program.id} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-          <div className="flex items-center justify-between">
+        <div key={program.id} className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-medium text-black dark:text-zinc-50">{program.name}</h3>
-            {isCoachView && (
-              <button
-                onClick={() => handleDeleteProgram(program.id, program.name)}
-                className="text-xs text-red-600 hover:underline dark:text-red-400"
-              >
-                Delete program
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {isCoachView && <ProgramStartDateInput programId={program.id} initial={program.start_date} />}
+              {isCoachView && (
+                <button
+                  onClick={() => handleDeleteProgram(program.id, program.name)}
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                >
+                  Delete program
+                </button>
+              )}
+            </div>
           </div>
 
-          {[...program.workout_program_days]
-            .sort((a, b) => a.week_num - b.week_num)
-            .map((day) => (
-              <div key={day.id} className="mt-3 rounded-md border border-black/5 p-3 dark:border-white/5">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">
-                      Week {day.week_num} — {day.day_label}
-                    </p>
-                    {day.phase_label && !isCoachView && (
-                      <span className="mt-0.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
-                        {day.phase_label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {isCoachView && <PhaseLabelInput dayId={day.id} initial={day.phase_label} />}
-                    {isCoachView && (
-                      <button
-                        onClick={() => handleDeleteDay(day.id, `Week ${day.week_num} — ${day.day_label}`)}
-                        className="text-xs text-red-600 hover:underline dark:text-red-400"
-                      >
-                        Delete day
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <ExerciseEditor
-                  exercises={day.workout_exercises}
-                  library={exerciseLibrary}
-                  canEdit={isCoachView}
-                  clientExerciseMaxes={clientExerciseMaxes}
-                  onAdd={(fields) =>
-                    addExercise(day.id, {
-                      exercise_library_id: fields.exercise_library_id,
-                      name: fields.name,
-                      sets: fields.sets,
-                      reps: fields.reps,
-                      load: fields.load,
-                      rpe: fields.rpe,
-                      notes: fields.notes,
-                      video_url: fields.video_url,
-                      superset_group: fields.superset_group,
-                      rest_seconds: fields.rest_seconds,
-                      sort_order: fields.sort_order,
-                      block_type: fields.block_type,
-                      prescription_type: fields.prescription_type,
-                      percent_1rm: fields.percent_1rm,
-                    })
-                  }
-                  onUpdate={(id, fields) => updateExercise(id, fields)}
-                  onDelete={(id) => deleteExercise(id)}
-                  onReorder={reorderExercises}
-                  renderExtra={(ex) => {
-                    const logs = logsByExercise[ex.id] ?? [];
-                    const lastTime = !isCoachView ? lastTimeFor(ex.exercise_library_id, ex.id) : null;
+          <ProgramDayList
+            ownerId={program.id}
+            library={exerciseLibrary}
+            showPhaseLabel={!isCoachView}
+            onOpenDay={setOpenDayId}
+            expandedWeeks={expandedWeeks}
+            onToggleWeek={(weekKey) => setExpandedWeeks((s) => ({ ...s, [weekKey]: !s[weekKey] }))}
+            days={program.workout_program_days.map((day) => ({
+              id: day.id,
+              weekNum: day.week_num,
+              dayLabel: day.day_label,
+              phaseLabel: day.phase_label,
+              exerciseCount: day.workout_exercises.length,
+              exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
+              done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
+            }))}
+            renderDayControls={
+              isCoachView
+                ? (summary: ProgramDaySummary) => {
+                    const day = program.workout_program_days.find((d) => d.id === summary.id)!;
                     return (
                       <>
-                        {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
-                          <a
-                            href={ex.video_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 inline-block text-xs text-accent hover:underline"
-                          >
-                            ▶ Watch demo
-                          </a>
-                        )}
-                        {lastTime && (
-                          <p className="mt-1 text-xs text-zinc-500">
-                            Last time: {lastTime.actual_reps ?? '—'}×{lastTime.actual_load ?? '—'} ({new Date(lastTime.logged_at).toLocaleDateString()})
-                          </p>
-                        )}
-                        {!isCoachView && ex.block_type === 'exercise' && (
-                          <>
-                            <LogSetForm clientId={clientId} exerciseId={ex.id} nextSetNumber={logs.length + 1} restSeconds={ex.rest_seconds} />
-                            {logs.length > 0 && (
-                              <p className="mt-1 text-xs text-zinc-500">
-                                Logged: {logs.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(', ')}
-                              </p>
-                            )}
-                          </>
-                        )}
+                        <PhaseLabelInput dayId={day.id} initial={day.phase_label} />
+                        <DayPositionInput dayId={day.id} initial={day.day_position} />
+                        <DropdownMenu
+                          triggerLabel="Day actions"
+                          items={[
+                            { label: 'Copy Workout', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
+                            {
+                              label: 'Delete day',
+                              onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num} — ${day.day_label}`),
+                              destructive: true,
+                            },
+                          ]}
+                        />
                       </>
                     );
-                  }}
-                />
-
-                {isCoachView && <BatchApplyForm dayId={day.id} />}
-
-                <DayFeedbackForm clientId={clientId} programDayId={day.id} isCoachView={isCoachView} feedback={feedbackByDay[day.id]} />
-              </div>
-            ))}
+                  }
+                : undefined
+            }
+          />
 
           {isCoachView && (
-            <div className="mt-3 flex items-center gap-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-black/10 p-2.5 dark:border-white/10">
+              <span className="text-xs text-zinc-500">Duplicate week</span>
+              <input
+                type="number"
+                min={1}
+                title="Which week to copy from"
+                className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+                value={dupForms[program.id]?.sourceWeek ?? 1}
+                onChange={(e) =>
+                  setDupForms({
+                    ...dupForms,
+                    [program.id]: {
+                      sourceWeek: Math.max(1, Number(e.target.value) || 1),
+                      totalWeeks: dupForms[program.id]?.totalWeeks ?? 4,
+                    },
+                  })
+                }
+              />
+              <span className="text-xs text-zinc-500">through week</span>
+              <input
+                type="number"
+                min={1}
+                title="Total weeks in the block"
+                className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+                value={dupForms[program.id]?.totalWeeks ?? 4}
+                onChange={(e) =>
+                  setDupForms({
+                    ...dupForms,
+                    [program.id]: {
+                      sourceWeek: dupForms[program.id]?.sourceWeek ?? 1,
+                      totalWeeks: Math.max(1, Number(e.target.value) || 1),
+                    },
+                  })
+                }
+              />
+              <button
+                onClick={() => handleDuplicateWeek(program)}
+                disabled={duplicatingWeek}
+                className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium disabled:opacity-50 dark:border-white/10"
+              >
+                {duplicatingWeek ? 'Duplicating…' : 'Duplicate'}
+              </button>
+              <p className="w-full text-xs text-zinc-500">
+                Build one week fully, then copy it (with all its exercises) into every remaining
+                week of the block.
+              </p>
+            </div>
+          )}
+
+          {isCoachView && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <input
                 type="number"
                 placeholder="Week"
                 className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
                 value={dayForms[program.id]?.weekNum ?? 1}
                 onChange={(e) =>
-                  setDayForms({ ...dayForms, [program.id]: { weekNum: Number(e.target.value), dayLabel: dayForms[program.id]?.dayLabel ?? 'Day 1' } })
+                  setDayForms({
+                    ...dayForms,
+                    [program.id]: {
+                      weekNum: Number(e.target.value),
+                      dayLabel: dayForms[program.id]?.dayLabel ?? 'Day 1',
+                      dayPosition: dayForms[program.id]?.dayPosition ?? '',
+                    },
+                  })
                 }
               />
               <input
@@ -561,7 +734,31 @@ export function WorkoutTab({
                 className="w-32 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
                 value={dayForms[program.id]?.dayLabel ?? 'Day 1'}
                 onChange={(e) =>
-                  setDayForms({ ...dayForms, [program.id]: { weekNum: dayForms[program.id]?.weekNum ?? 1, dayLabel: e.target.value } })
+                  setDayForms({
+                    ...dayForms,
+                    [program.id]: {
+                      weekNum: dayForms[program.id]?.weekNum ?? 1,
+                      dayLabel: e.target.value,
+                      dayPosition: dayForms[program.id]?.dayPosition ?? '',
+                    },
+                  })
+                }
+              />
+              <input
+                type="number"
+                placeholder="Day #"
+                title="Day position -- links a recurring class to this slot across every week"
+                className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+                value={dayForms[program.id]?.dayPosition ?? ''}
+                onChange={(e) =>
+                  setDayForms({
+                    ...dayForms,
+                    [program.id]: {
+                      weekNum: dayForms[program.id]?.weekNum ?? 1,
+                      dayLabel: dayForms[program.id]?.dayLabel ?? 'Day 1',
+                      dayPosition: e.target.value,
+                    },
+                  })
                 }
               />
               <button
@@ -574,6 +771,84 @@ export function WorkoutTab({
           )}
         </div>
       ))}
+
+      {openDay && (
+        <FocusOverlay
+          title={openDay.day_label}
+          subtitle={`Week ${openDay.week_num}`}
+          onClose={() => setOpenDayId(null)}
+        >
+          {isCoachView && <DayNotesField dayId={openDay.id} initial={openDay.notes} />}
+          {!isCoachView && openDay.notes && (
+            <p className="mb-3 whitespace-pre-wrap text-sm text-zinc-500">{openDay.notes}</p>
+          )}
+
+          <ExerciseEditor
+            exercises={openDay.workout_exercises}
+            library={exerciseLibrary}
+            canEdit={isCoachView}
+            clientExerciseMaxes={clientExerciseMaxes}
+            onAdd={(fields) =>
+              addExercise(openDay.id, {
+                exercise_library_id: fields.exercise_library_id,
+                name: fields.name,
+                sets: fields.sets,
+                reps: fields.reps,
+                load: fields.load,
+                rpe: fields.rpe,
+                notes: fields.notes,
+                video_url: fields.video_url,
+                superset_group: fields.superset_group,
+                rest_seconds: fields.rest_seconds,
+                sort_order: fields.sort_order,
+                block_type: fields.block_type,
+                prescription_type: fields.prescription_type,
+                percent_1rm: fields.percent_1rm,
+              })
+            }
+            onUpdate={(id, fields) => updateExercise(id, fields)}
+            onDelete={(id) => deleteExercise(id)}
+            onReorder={reorderExercises}
+            renderExtra={(ex) => {
+              const logs = logsByExercise[ex.id] ?? [];
+              const lastTime = lastTimeFor(ex.exercise_library_id, ex.id);
+              return (
+                <>
+                  {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
+                    <a
+                      href={ex.video_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-block text-xs text-accent hover:underline"
+                    >
+                      ▶ Watch demo
+                    </a>
+                  )}
+                  {lastTime && (
+                    <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                      Last time: {lastTime.actual_reps ?? '—'}×{lastTime.actual_load ?? '—'} · {new Date(lastTime.logged_at).toLocaleDateString()}
+                    </p>
+                  )}
+                  {!isCoachView && ex.block_type === 'exercise' && (
+                    <>
+                      <LogSetForm clientId={clientId} exerciseId={ex.id} nextSetNumber={logs.length + 1} restSeconds={ex.rest_seconds} />
+                      {logs.length > 0 && (
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Logged: {logs.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(', ')}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </>
+              );
+            }}
+          />
+
+          {isCoachView && <BatchApplyForm dayId={openDay.id} />}
+
+          <DayFeedbackForm clientId={clientId} programDayId={openDay.id} isCoachView={isCoachView} feedback={feedbackByDay[openDay.id]} />
+        </FocusOverlay>
+      )}
     </div>
   );
 }

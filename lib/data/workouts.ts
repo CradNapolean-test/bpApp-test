@@ -21,17 +21,31 @@ export async function createProgram(clientId: string, name: string): Promise<voi
   if (error) raise(error);
 }
 
+export async function updateProgram(
+  programId: string,
+  fields: Partial<Pick<WorkoutProgramRow, 'name' | 'start_date'>>
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('workout_programs').update(fields).eq('id', programId);
+  if (error) raise(error);
+}
+
 export async function deleteProgram(programId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_programs').delete().eq('id', programId);
   if (error) raise(error);
 }
 
-export async function addProgramDay(programId: string, weekNum: number, dayLabel: string): Promise<void> {
+export async function addProgramDay(
+  programId: string,
+  weekNum: number,
+  dayLabel: string,
+  dayPosition: number | null = null
+): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('workout_program_days')
-    .insert({ program_id: programId, week_num: weekNum, day_label: dayLabel });
+    .insert({ program_id: programId, week_num: weekNum, day_label: dayLabel, day_position: dayPosition });
   if (error) raise(error);
 }
 
@@ -80,11 +94,67 @@ export async function updateExercise(
 
 export async function updateProgramDay(
   dayId: string,
-  fields: Partial<Pick<WorkoutProgramDayRow, 'week_num' | 'day_label' | 'phase_label'>>
+  fields: Partial<Pick<WorkoutProgramDayRow, 'week_num' | 'day_label' | 'phase_label' | 'notes' | 'day_position'>>
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_program_days').update(fields).eq('id', dayId);
   if (error) raise(error);
+}
+
+// Copies a day (and every one of its exercises, supersets intact) into a new day at the given
+// week/label -- "Copy Workout" from the day menu. Plain sequential inserts rather than an RPC,
+// matching reorderExercises' existing non-RPC style: no cross-row invariant here that RLS
+// doesn't already enforce, and day-sized exercise lists are small.
+export async function duplicateProgramDay(dayId: string, weekNum: number, dayLabel: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: sourceDay, error: dayError } = await supabase
+    .from('workout_program_days')
+    .select('program_id, phase_label, notes, day_position')
+    .eq('id', dayId)
+    .single();
+  if (dayError) raise(dayError);
+
+  const { data: exercises, error: exercisesError } = await supabase
+    .from('workout_exercises')
+    .select('*')
+    .eq('program_day_id', dayId);
+  if (exercisesError) raise(exercisesError);
+
+  const { data: newDay, error: insertDayError } = await supabase
+    .from('workout_program_days')
+    .insert({
+      program_id: sourceDay.program_id,
+      week_num: weekNum,
+      day_label: dayLabel,
+      phase_label: sourceDay.phase_label,
+      notes: sourceDay.notes,
+      day_position: sourceDay.day_position,
+    })
+    .select('id')
+    .single();
+  if (insertDayError) raise(insertDayError);
+
+  if (exercises && exercises.length > 0) {
+    const copies = exercises.map((ex) => ({
+      program_day_id: newDay.id,
+      exercise_library_id: ex.exercise_library_id,
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      load: ex.load,
+      rpe: ex.rpe,
+      notes: ex.notes,
+      video_url: ex.video_url,
+      superset_group: ex.superset_group,
+      rest_seconds: ex.rest_seconds,
+      sort_order: ex.sort_order,
+      block_type: ex.block_type,
+      prescription_type: ex.prescription_type,
+      percent_1rm: ex.percent_1rm,
+    }));
+    const { error: insertExercisesError } = await supabase.from('workout_exercises').insert(copies);
+    if (insertExercisesError) raise(insertExercisesError);
+  }
 }
 
 // Bulk-applies the same field values across every exercise in a day in one round trip --

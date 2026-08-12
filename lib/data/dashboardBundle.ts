@@ -3,7 +3,10 @@
 import { getClientProfile } from './clientProfile';
 import { getDailyLog, getDailyLogs, getOrCreateDailyLog } from './dailyLogs';
 import { getFoodDiaryEntries } from './foodDiary';
+import { getFoodPhotos } from './foodPhotos';
+import { getManualMacroEntries } from './manualMacros';
 import { getMealPlanEntries } from './mealPlan';
+import { getMealSections, getOrCreateMealSections } from './mealSections';
 import { getActivities } from './foods';
 import { getClientUnreadCount, getMessages } from './chat';
 import { getCreditsBalance, getScheduleOccurrences, getUpcomingBookings } from './classes';
@@ -18,7 +21,8 @@ import { getFormTemplates, getClientFormAssignments } from './forms';
 import { getExerciseLibrary } from './exerciseLibrary';
 import { getProgramTemplates } from './programTemplates';
 import { getRecipesWithIngredients } from './recipes';
-import { getEducationContent, getClientEducationAssignments } from './education';
+import { getCourses, getClientCourseAssignments } from './education';
+import { getDisabledScreens } from './clientScreenSettings';
 import { toIsoDate, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 
 const HISTORY_DAYS = 84;
@@ -59,9 +63,11 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     exerciseLibrary,
     programTemplates,
     recipes,
-    educationContent,
+    educationCourses,
     educationAssignments,
     unreadMessageCount,
+    mealSections,
+    disabledScreens,
   ] = await Promise.all([
     getClientProfile(clientId),
     getDailyLogs(clientId, dates[0], dates[6]),
@@ -88,12 +94,16 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getExerciseLibrary(),
     getProgramTemplates(),
     getRecipesWithIngredients(clientId),
-    getEducationContent(),
-    getClientEducationAssignments(clientId),
+    getCourses(),
+    getClientCourseAssignments(clientId),
     getClientUnreadCount(clientId),
+    canWrite ? getOrCreateMealSections(clientId) : getMealSections(clientId),
+    getDisabledScreens(clientId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
+  const foodPhotos = todayLog ? await getFoodPhotos(todayLog.id) : [];
+  const manualMacroEntries = todayLog ? await getManualMacroEntries(todayLog.id) : [];
 
   const firstLogDate = historyLogs[0]?.log_date;
   const programWeek = firstLogDate
@@ -109,6 +119,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     activities,
     todayLogId: todayLog?.id ?? null,
     foodDiaryEntries,
+    foodPhotos,
+    manualMacroEntries,
     programWeek,
     messages,
     bookings,
@@ -129,8 +141,10 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     exerciseLibrary,
     programTemplates,
     recipes,
-    educationContent,
+    educationCourses,
     educationAssignments,
     unreadMessageCount,
+    mealSections,
+    disabledScreens,
   };
 }

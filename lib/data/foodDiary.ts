@@ -2,7 +2,25 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
+import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
 import type { FoodDiaryEntryRow } from './types';
+
+// Resolves a given date's diary, for the date-nav in FoodTrackingTab (Phase 3: past-day
+// editing for clients, past-day viewing for coaches). `create: true` (client) backfills a
+// blank daily_logs row so a client can start logging a day that has no row yet -- same as
+// dashboardBundle already does for "today". `create: false` (coach) never creates one: a
+// coach viewing a day the client never opened should see "nothing logged", not silently
+// materialize a row.
+export async function getFoodDiaryForDate(
+  clientId: string,
+  date: string,
+  create: boolean
+): Promise<{ dailyLogId: string | null; entries: FoodDiaryEntryRow[] }> {
+  const dailyLog = create ? await getOrCreateDailyLog(clientId, date) : await getDailyLog(clientId, date);
+  if (!dailyLog) return { dailyLogId: null, entries: [] };
+  const entries = await getFoodDiaryEntries(dailyLog.id);
+  return { dailyLogId: dailyLog.id, entries };
+}
 
 export async function getFoodDiaryEntries(dailyLogId: string): Promise<FoodDiaryEntryRow[]> {
   const supabase = await createClient();
@@ -17,18 +35,32 @@ export async function getFoodDiaryEntries(dailyLogId: string): Promise<FoodDiary
 export async function addFoodDiaryEntry(
   dailyLogId: string,
   foodId: string,
-  portions: number
+  portions: number,
+  mealSectionId: string | null = null
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('food_diary_entries')
-    .insert({ daily_log_id: dailyLogId, food_id: foodId, portions });
+    .insert({ daily_log_id: dailyLogId, food_id: foodId, portions, meal_section_id: mealSectionId });
   if (error) raise(error);
+  await syncFoodDiaryToLog(dailyLogId);
 }
 
-export async function removeFoodDiaryEntry(id: string): Promise<void> {
+export async function removeFoodDiaryEntry(id: string, dailyLogId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('food_diary_entries').delete().eq('id', id);
+  if (error) raise(error);
+  await syncFoodDiaryToLog(dailyLogId);
+}
+
+// Re-files an entry into a different (or no) section -- covers legacy pre-migration rows
+// (meal_section_id starts null) and simple corrections.
+export async function updateFoodDiaryEntrySection(entryId: string, mealSectionId: string | null): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('food_diary_entries')
+    .update({ meal_section_id: mealSectionId })
+    .eq('id', entryId);
   if (error) raise(error);
 }
 

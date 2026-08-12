@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Ticket } from 'lucide-react';
+import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -44,7 +45,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Package name</label>
           <input required className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
@@ -79,19 +80,24 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
           hint="Packages set how many class credits a client is topped up with each week."
         />
       ) : (
-      <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+      <div className="space-y-2">
         {initialPackages.map((p) => (
-          <li key={p.id} className="flex items-center justify-between p-3 text-sm">
-            <span>
-              {p.name} — {p.credits_per_week}/week
-              {p.description ? ` · ${p.description}` : ''}
-            </span>
-            <button onClick={() => handleDelete(p.id, p.name)} className="text-xs text-red-600 hover:underline dark:text-red-400">
+          <div
+            key={p.id}
+            className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-black dark:text-zinc-50">{p.name}</p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                {p.credits_per_week} credits/week{p.description ? ` · ${p.description}` : ''}
+              </p>
+            </div>
+            <Button variant="danger" size="sm" onClick={() => handleDelete(p.id, p.name)}>
               Delete
-            </button>
-          </li>
+            </Button>
+          </div>
         ))}
-      </ul>
+      </div>
       )}
     </div>
   );

@@ -58,11 +58,16 @@ export async function deleteProgramTemplate(templateId: string): Promise<void> {
   if (error) raise(error);
 }
 
-export async function addTemplateDay(templateId: string, weekNum: number, dayLabel: string): Promise<void> {
+export async function addTemplateDay(
+  templateId: string,
+  weekNum: number,
+  dayLabel: string,
+  dayPosition: number | null = null
+): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('program_template_days')
-    .insert({ template_id: templateId, week_num: weekNum, day_label: dayLabel });
+    .insert({ template_id: templateId, week_num: weekNum, day_label: dayLabel, day_position: dayPosition });
   if (error) raise(error);
 }
 
@@ -111,11 +116,67 @@ export async function updateTemplateExercise(
 
 export async function updateTemplateDay(
   dayId: string,
-  fields: Partial<Pick<ProgramTemplateDayRow, 'week_num' | 'day_label' | 'phase_label'>>
+  fields: Partial<Pick<ProgramTemplateDayRow, 'week_num' | 'day_label' | 'phase_label' | 'notes' | 'day_position'>>
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('program_template_days').update(fields).eq('id', dayId);
   if (error) raise(error);
+}
+
+// Copies a template day (and every one of its exercises) into a new day at the given
+// week/label -- "Copy Workout" from the day menu, mirroring workouts.ts's duplicateProgramDay.
+export async function duplicateTemplateDay(dayId: string, weekNum: number, dayLabel: string): Promise<void> {
+  const supabase = await createClient();
+  const { data: sourceDay, error: dayError } = await supabase
+    .from('program_template_days')
+    .select('template_id, phase_label, notes, day_position')
+    .eq('id', dayId)
+    .single();
+  if (dayError) raise(dayError);
+
+  const { data: exercises, error: exercisesError } = await supabase
+    .from('program_template_exercises')
+    .select('*')
+    .eq('template_day_id', dayId);
+  if (exercisesError) raise(exercisesError);
+
+  const { data: newDay, error: insertDayError } = await supabase
+    .from('program_template_days')
+    .insert({
+      template_id: sourceDay.template_id,
+      week_num: weekNum,
+      day_label: dayLabel,
+      phase_label: sourceDay.phase_label,
+      notes: sourceDay.notes,
+      day_position: sourceDay.day_position,
+    })
+    .select('id')
+    .single();
+  if (insertDayError) raise(insertDayError);
+
+  if (exercises && exercises.length > 0) {
+    const copies = exercises.map((ex) => ({
+      template_day_id: newDay.id,
+      exercise_library_id: ex.exercise_library_id,
+      name: ex.name,
+      sets: ex.sets,
+      reps: ex.reps,
+      load: ex.load,
+      rpe: ex.rpe,
+      notes: ex.notes,
+      video_url: ex.video_url,
+      superset_group: ex.superset_group,
+      rest_seconds: ex.rest_seconds,
+      sort_order: ex.sort_order,
+      block_type: ex.block_type,
+      prescription_type: ex.prescription_type,
+      percent_1rm: ex.percent_1rm,
+      progression_load_increment: ex.progression_load_increment,
+      progression_every_weeks: ex.progression_every_weeks,
+    }));
+    const { error: insertExercisesError } = await supabase.from('program_template_exercises').insert(copies);
+    if (insertExercisesError) raise(insertExercisesError);
+  }
 }
 
 // Bulk-applies the same field values across every exercise in a template day in one round

@@ -1,17 +1,23 @@
 @import "tailwindcss";
 
+/* Manual light/dark override (Account Settings) -- every existing `dark:` utility class
+   across the app now keys off a `.dark` class on an ancestor instead of the OS media query.
+   The ThemeSync/inline-script pair in layout.tsx is what actually applies that class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
+  --background: #fdfcfb;
   --foreground: #171717;
 
   /* Semantic palette. Deliberately small -- one accent plus status colours, so active
      states and primary actions read as intentional instead of the plain black-on-white
      the app used before. Teal is the Ballistic Performance brand colour (matches the
-     logo mark); the client view uses it directly. */
-  --accent: #14b8a6;
-  --accent-strong: #0f766e;
+     logo mark); the client view uses it directly. Retuned to the brand mark's actual
+     sampled teal (rgb(25,173,177)) per the mobile redesign handoff. */
+  --accent: #19adb1;
+  --accent-strong: #0e6266;
   --accent-foreground: #ffffff;
-  --accent-soft: #f0fdfa;
+  --accent-soft: #eafcfc;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #dc2626;
@@ -41,18 +47,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --accent: #2dd4bf;
-    --accent-strong: #5eead4;
-    --accent-foreground: #042f2e;
-    --accent-soft: rgb(45 212 191 / 0.1);
-    --danger: #f87171;
-    --muted: #a1a1aa;
-    --border: rgb(255 255 255 / 0.1);
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --accent: #2dd4bf;
+  --accent-strong: #5eead4;
+  --accent-foreground: #042f2e;
+  --accent-soft: rgb(45 212 191 / 0.1);
+  --danger: #f87171;
+  --muted: #a1a1aa;
+  --border: rgb(255 255 255 / 0.1);
 }
 
 /* A coach viewing a client's dashboard (AppShell's data-view="coach") gets a distinct
@@ -68,13 +72,11 @@
   --accent-soft: #f4f4f5;
 }
 
-@media (prefers-color-scheme: dark) {
-  [data-view="coach"] {
-    --accent: #e4e4e7;
-    --accent-strong: #ffffff;
-    --accent-foreground: #18181b;
-    --accent-soft: rgb(255 255 255 / 0.08);
-  }
+.dark [data-view="coach"] {
+  --accent: #e4e4e7;
+  --accent-strong: #ffffff;
+  --accent-foreground: #18181b;
+  --accent-soft: rgb(255 255 255 / 0.08);
 }
 
 body {

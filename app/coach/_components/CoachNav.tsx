@@ -2,19 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, Dumbbell, FileText, GraduationCap, MessageSquare, Users } from 'lucide-react';
+import { CalendarDays, Dumbbell, Settings, Users } from 'lucide-react';
 
 const LINKS = [
   { href: '/coach', label: 'Coaching', Icon: Users },
   { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
-  { href: '/coach/messages', label: 'Messages', Icon: MessageSquare },
-  { href: '/coach/forms', label: 'Forms', Icon: FileText },
   { href: '/coach/library', label: 'Library', Icon: Dumbbell },
-  { href: '/coach/education', label: 'Education', Icon: GraduationCap },
-  { href: '/coach/reports', label: 'Reports', Icon: BarChart3 },
+  { href: '/coach/settings', label: 'Account Settings', Icon: Settings },
 ] as const;
 
-export function CoachNav({ unreadCount = 0 }: { unreadCount?: number }) {
+// Desktop-only -- CoachBottomTabBar is the mobile equivalent (see AppShell's bottomBar
+// prop). Messages, Forms, Education and Reports no longer live here: Messages moved to
+// CoachMessagesButton (a header icon, since it isn't one of the 4 primary destinations),
+// Forms/Education folded into Library, Reports folded into Classes.
+export function CoachNav() {
   const pathname = usePathname();
 
   const linkCls = (active: boolean) =>
@@ -25,7 +26,7 @@ export function CoachNav({ unreadCount = 0 }: { unreadCount?: number }) {
     }`;
 
   return (
-    <div className="flex w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 dark:bg-white/[.03]">
+    <div className="hidden w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 md:flex dark:bg-white/[.03]">
       {LINKS.map(({ href, label, Icon }) => {
         const active =
           href === '/coach' ? pathname === '/coach' || pathname?.startsWith('/coach/clients') : pathname?.startsWith(href);
@@ -33,11 +34,6 @@ export function CoachNav({ unreadCount = 0 }: { unreadCount?: number }) {
           <Link key={href} href={href} className={linkCls(Boolean(active))}>
             <Icon className="h-4 w-4" />
             {label}
-            {href === '/coach/messages' && unreadCount > 0 && (
-              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
           </Link>
         );
       })}

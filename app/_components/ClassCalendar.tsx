@@ -56,7 +56,7 @@ export function ClassCalendar({
   }
 
   return (
-    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -96,7 +96,7 @@ export function ClassCalendar({
                 count === 0
                   ? 'text-zinc-300 dark:text-zinc-700'
                   : 'text-black hover:bg-black/5 dark:text-zinc-50 dark:hover:bg-white/5'
-              } ${isSelected ? 'bg-foreground text-background hover:bg-foreground' : ''} ${
+              } ${isSelected ? 'bg-accent text-accent-foreground hover:bg-accent' : ''} ${
                 isToday && !isSelected ? 'font-semibold underline' : ''
               }`}
             >
@@ -104,7 +104,7 @@ export function ClassCalendar({
               {count > 0 && (
                 <span
                   className={`absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${
-                    isSelected ? 'bg-background' : 'bg-foreground'
+                    isSelected ? 'bg-accent-foreground' : 'bg-accent'
                   }`}
                 />
               )}

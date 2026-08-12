@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { Button } from '@/app/_components/Button';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { searchFoods } from '@/lib/data/foods';
 import { dayCalories } from '@/lib/calculations';
@@ -37,14 +38,14 @@ export function FoodSearchPicker({
 
   if (recipes && mode === 'recipes') {
     return (
-      <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
-        <div className="flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+        <div className="flex gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/5">
           {(['foods', 'recipes'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={`flex-1 rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                mode === m ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+                mode === m ? 'bg-[var(--background)] text-black shadow-[0_1px_3px_rgba(0,0,0,.1)] dark:text-zinc-50' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
               }`}
             >
               {m}
@@ -68,12 +69,9 @@ export function FoodSearchPicker({
                     className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
                   />
                   <span className="text-xs text-zinc-500">servings</span>
-                  <button
-                    onClick={() => onAddRecipe?.(recipe.id, s)}
-                    className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background"
-                  >
+                  <Button variant="primary" size="sm" onClick={() => onAddRecipe?.(recipe.id, s)}>
                     Add
-                  </button>
+                  </Button>
                 </div>
               </li>
             );
@@ -85,15 +83,15 @@ export function FoodSearchPicker({
   }
 
   return (
-    <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       {recipes && (
-        <div className="mb-2 flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+        <div className="mb-2 flex gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/5">
           {(['foods', 'recipes'] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={`flex-1 rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                mode === m ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+                mode === m ? 'bg-[var(--background)] text-black shadow-[0_1px_3px_rgba(0,0,0,.1)] dark:text-zinc-50' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
               }`}
             >
               {m}
@@ -139,12 +137,9 @@ export function FoodSearchPicker({
                   <p className="font-medium text-black dark:text-zinc-50">{food.name}</p>
                   <p className="text-xs text-zinc-500">per {food.portion}</p>
                 </div>
-                <button
-                  onClick={() => onAdd(food, qty)}
-                  className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background"
-                >
+                <Button variant="primary" size="sm" onClick={() => onAdd(food, qty)}>
                   Add
-                </button>
+                </Button>
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
@@ -164,13 +159,9 @@ export function FoodSearchPicker({
               </div>
 
               <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setQty(qty - step)}
-                  aria-label="Decrease quantity"
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-black/10 text-sm dark:border-white/10"
-                >
+                <Button variant="outline" size="sm" onClick={() => setQty(qty - step)} aria-label="Decrease quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
                   −
-                </button>
+                </Button>
                 <input
                   type="number"
                   min={min}
@@ -180,13 +171,9 @@ export function FoodSearchPicker({
                   aria-label={isPerGram ? 'Grams' : 'Quantity'}
                   className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
                 />
-                <button
-                  onClick={() => setQty(qty + step)}
-                  aria-label="Increase quantity"
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-black/10 text-sm dark:border-white/10"
-                >
+                <Button variant="outline" size="sm" onClick={() => setQty(qty + step)} aria-label="Increase quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
                   +
-                </button>
+                </Button>
                 {isPerGram && <span className="text-xs text-zinc-500">g</span>}
                 <span className="ml-1 text-xs text-zinc-500">
                   {Math.round(calories)} kcal · {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F

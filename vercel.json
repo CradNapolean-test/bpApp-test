@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/checkin-reminders",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/send-communications",
+      "schedule": "0 5 * * *"
     }
   ]
 }

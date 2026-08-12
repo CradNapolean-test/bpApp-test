@@ -2,9 +2,11 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import type { ChatMessageRow, ChatOverviewRow } from './types';
+import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from './types';
 
-export async function getMessages(clientId: string): Promise<ChatMessageRow[]> {
+const SIGNED_URL_TTL_SECONDS = 60 * 10;
+
+export async function getMessages(clientId: string): Promise<ChatMessage[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('chat_messages')
@@ -12,7 +14,17 @@ export async function getMessages(clientId: string): Promise<ChatMessageRow[]> {
     .eq('client_id', clientId)
     .order('created_at', { ascending: true });
   if (error) raise(error);
-  return data ?? [];
+
+  const rows = (data ?? []) as ChatMessageRow[];
+  return Promise.all(
+    rows.map(async (row) => {
+      if (!row.audio_path) return { ...row, signedAudioUrl: null };
+      const { data: signed } = await supabase.storage
+        .from('voice-notes')
+        .createSignedUrl(row.audio_path, SIGNED_URL_TTL_SECONDS);
+      return { ...row, signedAudioUrl: signed?.signedUrl ?? null };
+    })
+  );
 }
 
 export async function sendMessage(clientId: string, text: string): Promise<void> {
@@ -25,6 +37,36 @@ export async function sendMessage(clientId: string, text: string): Promise<void>
   const { error } = await supabase
     .from('chat_messages')
     .insert({ client_id: clientId, sender_id: user.id, text });
+  if (error) raise(error);
+}
+
+// Mirrors uploadProgressPhoto/uploadFoodPhoto's FormData-in convention -- the documented-safe
+// way to pass a File/Blob through a Next.js Server Action. Duration comes from the client
+// (VoiceRecorder's own timer) since there's no reliable way to read it server-side from a webm
+// Blob without a media-parsing dependency.
+export async function sendVoiceNote(clientId: string, formData: FormData): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const file = formData.get('file') as File | null;
+  const durationRaw = formData.get('duration');
+  if (!file) throw new Error('Missing audio file');
+  const duration = durationRaw ? Number(durationRaw) : null;
+
+  const path = `${clientId}/${crypto.randomUUID()}.webm`;
+  const { error: uploadError } = await supabase.storage.from('voice-notes').upload(path, file);
+  if (uploadError) raise(uploadError);
+
+  const { error } = await supabase.from('chat_messages').insert({
+    client_id: clientId,
+    sender_id: user.id,
+    text: null,
+    audio_path: path,
+    audio_duration_seconds: duration,
+  });
   if (error) raise(error);
 }
 

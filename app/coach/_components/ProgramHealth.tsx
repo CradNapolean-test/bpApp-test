@@ -27,7 +27,7 @@ export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) 
   }
 
   return (
-    <div className="rounded-2xl border border-black/10 p-4 shadow-sm dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Program health</h3>
       <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
         {BUCKET_ORDER.map((key) => {

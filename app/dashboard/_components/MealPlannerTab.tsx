@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMealPlanEntry, removeMealPlanEntry } from '@/lib/data/mealPlan';
@@ -56,7 +57,7 @@ export function MealPlannerTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Typical day totals</h3>
         <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
           <div><dt className="text-zinc-500">Calories</dt><dd>{Math.round(dayTotals.calories)} kcal</dd></div>
@@ -69,16 +70,13 @@ export function MealPlannerTab({
       {SECTIONS.map(({ key, label }) => {
         const entries = initialEntries.filter((e) => e.section === key);
         return (
-          <div key={key} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <div key={key} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
             <div className="flex items-center justify-between">
               <h4 className="font-medium text-black dark:text-zinc-50">{label}</h4>
               {!readOnly && (
-                <button
-                  onClick={() => setOpenSection(openSection === key ? null : key)}
-                  className="text-xs font-medium text-zinc-600 hover:underline dark:text-zinc-400"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setOpenSection(openSection === key ? null : key)}>
                   {openSection === key ? 'Close' : '+ Add food'}
-                </button>
+                </Button>
               )}
             </div>
             <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
@@ -93,12 +91,9 @@ export function MealPlannerTab({
                     </span>
                   </span>
                   {!readOnly && (
-                    <button
-                      onClick={() => handleRemove(entry.id)}
-                      className="text-xs text-red-600 hover:underline dark:text-red-400"
-                    >
+                    <Button variant="danger" size="sm" onClick={() => handleRemove(entry.id)}>
                       Remove
-                    </button>
+                    </Button>
                   )}
                 </li>
                 );

@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, UserX } from 'lucide-react';
+import { CalendarDays, Check, UserX } from 'lucide-react';
+import { Avatar } from '@/app/_components/Avatar';
+import { Button } from '@/app/_components/Button';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
@@ -54,15 +56,16 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
   if (selected) {
     return (
       <div className="space-y-4">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => {
             setSelected(null);
             setRoster(null);
           }}
-          className="text-sm text-zinc-500 hover:underline"
         >
           &larr; Back to schedule
-        </button>
+        </Button>
         <h3 className="text-lg font-medium text-black dark:text-zinc-50">
           {selected.className} — {selected.date}
         </h3>
@@ -71,23 +74,30 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
           <EmptyState icon={UserX} title="Nobody booked in" hint="No clients have booked this class occurrence." />
         )}
         {!loading && (roster ?? []).length > 0 && (
-          <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+          <div className="space-y-2">
             {(roster ?? []).map((entry) => (
-              <li key={entry.bookingId} className="flex items-center justify-between p-3 text-sm">
-                <span>
-                  {entry.clientName} <span className="text-zinc-500">({entry.status})</span>
-                </span>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={entry.attended}
-                    onChange={() => toggleAttended(entry)}
-                  />
-                  Attended
-                </label>
-              </li>
+              <div
+                key={entry.bookingId}
+                className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <Avatar name={entry.clientName} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.clientName}</p>
+                    <p className="text-xs text-zinc-500">{entry.status}</p>
+                  </div>
+                </div>
+                <Button
+                  variant={entry.attended ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => toggleAttended(entry)}
+                >
+                  <Check className="mr-1 inline h-3.5 w-3.5" />
+                  {entry.attended ? 'Attended' : 'Mark attended'}
+                </Button>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     );
@@ -112,24 +122,23 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
       )}
 
       {selectedDate && (
-        <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+        <div className="space-y-2">
           {dayOccurrences.map((occ) => (
-            <li key={`${occ.classId}-${occ.date}`}>
-              <button
-                onClick={() => openOccurrence(occ)}
-                className="flex w-full items-center justify-between p-3 text-left text-sm hover:bg-black/[.02] dark:hover:bg-white/[.03]"
-              >
-                <span>
-                  {occ.className}
-                  {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
-                </span>
-                <span className="text-zinc-500">
-                  {occ.bookedCount}/{occ.capacity} booked
-                </span>
-              </button>
-            </li>
+            <button
+              key={`${occ.classId}-${occ.date}`}
+              onClick={() => openOccurrence(occ)}
+              className="flex w-full items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] transition-colors hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+            >
+              <span className="text-sm font-semibold text-black dark:text-zinc-50">
+                {occ.className}
+                {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
+              </span>
+              <span className="text-xs text-zinc-500">
+                {occ.bookedCount}/{occ.capacity} booked
+              </span>
+            </button>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

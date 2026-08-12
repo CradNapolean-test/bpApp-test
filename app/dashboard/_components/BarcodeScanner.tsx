@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { useZxing } from 'react-zxing';
 
 export function BarcodeScanner({
@@ -26,19 +27,21 @@ export function BarcodeScanner({
   });
 
   return (
-    <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Scan a barcode</p>
-        <button onClick={onClose} className="text-xs text-zinc-500 hover:underline">
-          Close
+    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+      <div className="flex items-center justify-between p-4">
+        <p className="text-sm font-medium text-white">Scan a barcode</p>
+        <button
+          onClick={onClose}
+          aria-label="Close scanner"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+        >
+          <X className="h-5 w-5" />
         </button>
       </div>
       {cameraError ? (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-          {cameraError} — use search instead.
-        </p>
+        <p className="p-4 text-sm text-red-400">{cameraError} — use search instead.</p>
       ) : (
-        <video ref={ref} className="mt-2 w-full rounded-md" />
+        <video ref={ref} className="min-h-0 flex-1 w-full object-cover" />
       )}
     </div>
   );

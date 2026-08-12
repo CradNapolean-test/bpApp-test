@@ -1,5 +1,35 @@
+import { Activity, Gauge, Moon } from 'lucide-react';
 import { calcEngine, cycleDayFor, dayCalories, estimateAdaptiveTdee, isPlateaued } from '@/lib/calculations';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
+
+const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+
+function InsightCard({
+  icon: Icon, iconCls, title, children, flag,
+}: {
+  icon: typeof Gauge;
+  iconCls: string;
+  title: string;
+  children: React.ReactNode;
+  flag?: string;
+}) {
+  return (
+    <div className={cardCls}>
+      <div className="flex items-center gap-2.5">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconCls}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <h3 className="text-sm font-bold text-black dark:text-zinc-50">{title}</h3>
+      </div>
+      <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{children}</div>
+      {flag && (
+        <span className="mt-2 inline-block rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+          {flag}
+        </span>
+      )}
+    </div>
+  );
+}
 
 const ADAPTIVE_WINDOW_DAYS = 28;
 const DIVERGENCE_FLAG_KCAL = 150;
@@ -61,49 +91,42 @@ export function InsightsTab({
     if (day && day >= 18 && day <= 28) cycleNote = day;
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Adaptive maintenance check</h3>
-        {adaptiveInsight ? (
-          <>
-            <p className="mt-2 text-sm">
-              Formula TDEE: {Math.round(adaptiveInsight.formulaTdee)} kcal · Real-world estimate:{' '}
-              {Math.round(adaptiveInsight.adaptiveTdee)} kcal
-            </p>
-            {Math.abs(adaptiveInsight.divergence) > DIVERGENCE_FLAG_KCAL && (
-              <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
-                {Math.round(Math.abs(adaptiveInsight.divergence))} kcal divergence from formula — worth a coach review.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="mt-2 text-sm text-zinc-500">
-            Need at least 5 logged days with 2+ bodyweight entries to estimate.
-          </p>
-        )}
-      </div>
+  const divergenceFlag =
+    adaptiveInsight && Math.abs(adaptiveInsight.divergence) > DIVERGENCE_FLAG_KCAL
+      ? `${Math.round(Math.abs(adaptiveInsight.divergence))} kcal divergence — worth a review`
+      : undefined;
 
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Plateau check</h3>
-        <p className="mt-2 text-sm">
+  return (
+    <div className="space-y-3">
+      <InsightCard icon={Gauge} iconCls="bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400" title="Adaptive maintenance check" flag={divergenceFlag}>
+        {adaptiveInsight ? (
+          <p>
+            Formula TDEE: {Math.round(adaptiveInsight.formulaTdee)} kcal · Real-world estimate:{' '}
+            {Math.round(adaptiveInsight.adaptiveTdee)} kcal
+          </p>
+        ) : (
+          <p>Need at least 5 logged days with 2+ bodyweight entries to estimate.</p>
+        )}
+      </InsightCard>
+
+      <InsightCard icon={Activity} iconCls="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400" title="Plateau check">
+        <p>
           {bodyweightSeries.length < 6
             ? 'Not enough bodyweight entries yet.'
             : plateaued
               ? 'Bodyweight has moved less than 0.3kg over the recent window — possible plateau.'
               : 'Bodyweight is trending, no plateau detected.'}
         </p>
-      </div>
+      </InsightCard>
 
       {profile?.gender === 'Female' && (
-        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Cycle-aware note</h3>
-          <p className="mt-2 text-sm">
+        <InsightCard icon={Moon} iconCls="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400" title="Cycle-aware note">
+          <p>
             {cycleNote
               ? `Latest entry falls on cycle day ${cycleNote} — likely water retention, not fat gain.`
               : 'No cycle-related note for the latest entry.'}
           </p>
-        </div>
+        </InsightCard>
       )}
     </div>
   );

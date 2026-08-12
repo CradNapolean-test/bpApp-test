@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getClasses, getScheduleOccurrences } from '@/lib/data/classes';
 import { getPackages } from '@/lib/data/memberships';
 import { getCoachChatOverview } from '@/lib/data/chat';
+import { getCoachReport } from '@/lib/data/reports';
 import { ClassesHubShell } from './_components/ClassesHubShell';
 
 export default async function CoachClassesPage() {
@@ -19,11 +20,12 @@ export default async function CoachClassesPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [classes, occurrences, packages, chatOverview] = await Promise.all([
+  const [classes, occurrences, packages, chatOverview, report] = await Promise.all([
     getClasses(),
     getScheduleOccurrences(),
     getPackages(),
     getCoachChatOverview(),
+    getCoachReport(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
@@ -32,6 +34,7 @@ export default async function CoachClassesPage() {
       initialClasses={classes}
       occurrences={occurrences}
       initialPackages={packages}
+      report={report}
       unreadCount={unreadCount}
     />
   );

@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpDown, Users } from 'lucide-react';
+import { ArrowUpDown, Search, Users } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { StatusBadge } from '@/app/_components/StatusBadge';
+import { GroupsManager } from './GroupsManager';
 import type { ClientHealthStatus, CoachClientRow } from '@/lib/data/coach';
+import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 
@@ -14,17 +16,29 @@ const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmoni
 export function ClientTable({
   clients,
   statuses,
+  groups,
 }: {
   clients: CoachClientRow[];
   statuses: ClientHealthStatus[];
+  groups: ClientGroupWithMembers[];
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [asc, setAsc] = useState(true);
+  // Compensates for ClientSidebar's search box becoming unreachable on mobile once this
+  // page's AppShell also has a bottomBar (bottomBar suppresses the sidebar's hamburger).
+  const [query, setQuery] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [managingGroups, setManagingGroups] = useState(false);
 
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.clientId, s])), [statuses]);
 
   const rows = useMemo(() => {
-    const merged = clients.map((c) => ({ client: c, health: statusById.get(c.id) ?? null }));
+    const q = query.trim().toLowerCase();
+    const activeGroup = groupId ? groups.find((g) => g.id === groupId) : null;
+    const filteredClients = clients
+      .filter((c) => (q ? (c.name ?? '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) : true))
+      .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true));
+    const merged = filteredClients.map((c) => ({ client: c, health: statusById.get(c.id) ?? null }));
     merged.sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') {
@@ -42,7 +56,7 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [clients, statusById, sortKey, asc]);
+  }, [clients, statusById, sortKey, asc, query, groupId, groups]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setAsc((v) => !v);
@@ -66,8 +80,41 @@ export function ClientTable({
   const sortBtn = 'inline-flex items-center gap-1 hover:text-black dark:hover:text-zinc-300';
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
-      <table className="w-full min-w-[34rem] text-sm">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search clients"
+            className="w-full rounded-md border border-black/10 bg-transparent py-1.5 pl-8 pr-2 text-sm dark:border-white/10"
+          />
+        </div>
+        <select
+          value={groupId}
+          onChange={(e) => setGroupId(e.target.value)}
+          className="rounded-md border border-black/10 bg-transparent py-1.5 px-2 text-sm dark:border-white/10"
+        >
+          <option value="">All clients</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => setManagingGroups(true)}
+          className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          Manage groups
+        </button>
+      </div>
+      {managingGroups && (
+        <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
+      )}
+      <div className="overflow-x-auto rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
+        <table className="w-full min-w-[34rem] text-sm">
         <thead>
           <tr className="border-b border-black/10 text-zinc-500 dark:border-white/10">
             <th className={headerCls}>
@@ -125,8 +172,16 @@ export function ClientTable({
               </tr>
             );
           })}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={4} className="p-3 text-center text-zinc-500">
+                No clients match &quot;{query}&quot;.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

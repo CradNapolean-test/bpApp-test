@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Button } from './Button';
 
 interface ConfirmOptions {
   title: string;
@@ -54,21 +55,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <h2 className="text-base font-semibold text-black dark:text-zinc-50">{options.title}</h2>
             {options.body && <p className="mt-2 text-sm text-zinc-500">{options.body}</p>}
             <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={() => settle(false)}
-                className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-              >
+              <Button variant="outline" onClick={() => settle(false)}>
                 Cancel
-              </button>
-              <button
-                autoFocus
-                onClick={() => settle(true)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium text-white ${
-                  options.destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-accent hover:opacity-90'
-                }`}
-              >
+              </Button>
+              <Button variant={options.destructive ? 'danger-solid' : 'primary'} autoFocus onClick={() => settle(true)}>
                 {options.confirmLabel ?? (options.destructive ? 'Delete' : 'Confirm')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

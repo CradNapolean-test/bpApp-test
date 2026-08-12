@@ -1,47 +1,313 @@
 'use client';
 
-import { useState } from 'react';
-import { Utensils } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Utensils } from 'lucide-react';
+import { Button } from '@/app/_components/Button';
+import { ProgressRing } from '@/app/_components/ProgressRing';
 import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
-import { addFoodDiaryEntry, removeFoodDiaryEntry, syncFoodDiaryToLog } from '@/lib/data/foodDiary';
+import {
+  addFoodDiaryEntry,
+  getFoodDiaryForDate,
+  removeFoodDiaryEntry,
+  updateFoodDiaryEntrySection,
+} from '@/lib/data/foodDiary';
+import {
+  addManualMacroEntry,
+  getManualMacrosForDate,
+  removeManualMacroEntry,
+} from '@/lib/data/manualMacros';
+import {
+  createMealSection,
+  deleteMealSection,
+  renameMealSection,
+  reorderMealSections,
+} from '@/lib/data/mealSections';
 import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { logRecipeToDiary } from '@/lib/data/recipes';
+import { addJournalEntry } from '@/lib/data/clientJournal';
 import { lookupBarcode } from '@/lib/openFoodFacts';
+import { weeklyTarget } from '@/lib/calculations';
+import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { addDays, toIsoDate } from '@/lib/utils/dates';
 import { entryMacros, formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import { BarcodeScanner } from './BarcodeScanner';
-import type { FoodDiaryEntryRow, FoodRow, RecipeRow } from '@/lib/data/types';
+import type { NutritionTrackingMode } from './categories';
+import type {
+  ClientProfileRow,
+  FoodDiaryEntryRow,
+  FoodRow,
+  ManualMacroEntryRow,
+  MealSectionRow,
+  RecipeRow,
+} from '@/lib/data/types';
 
-export function FoodTrackingTab({
-  dailyLogId,
-  initialEntries,
-  recipes,
-  readOnly,
-}: {
-  dailyLogId: string | null;
-  initialEntries: FoodDiaryEntryRow[];
-  recipes: RecipeRow[];
-  readOnly: boolean;
-}) {
-  const { run } = useAction();
-  const { run: runRecipe } = useAction();
-  const { run: runSync, busy: syncing } = useAction();
-  const [scanning, setScanning] = useState(false);
-  const [scanStatus, setScanStatus] = useState<string | null>(null);
-  const totals = totalMacros(initialEntries);
+function ManualMacroForm({ onAdd }: { onAdd: (fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => void }) {
+  const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [carbs, setCarbs] = useState('');
+  const [fat, setFat] = useState('');
+  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
 
-  async function handleAdd(food: FoodRow, portions: number) {
-    if (!dailyLogId) return;
-    await run(() => addFoodDiaryEntry(dailyLogId, food.id, portions), { success: `${food.name} added` });
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!calories && !protein && !carbs && !fat) return;
+    onAdd({
+      calories: calories === '' ? null : Number(calories),
+      protein: protein === '' ? null : Number(protein),
+      carbs: carbs === '' ? null : Number(carbs),
+      fat: fat === '' ? null : Number(fat),
+    });
+    setCalories('');
+    setProtein('');
+    setCarbs('');
+    setFat('');
   }
 
-  async function handleAddRecipe(recipeId: string, servings: number) {
-    if (!dailyLogId) return;
-    const recipe = recipes.find((r) => r.id === recipeId);
-    await runRecipe(() => logRecipeToDiary(dailyLogId, recipeId, servings), {
-      success: recipe ? `${recipe.name} added` : 'Recipe added',
+  return (
+    <form onSubmit={handleSubmit} className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+      <input type="number" placeholder="kcal" value={calories} onChange={(e) => setCalories(e.target.value)} className={inputCls} />
+      <input type="number" placeholder="protein g" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
+      <input type="number" placeholder="carbs g" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
+      <input type="number" placeholder="fat g" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
+      <Button type="submit" variant="ghost" size="sm" className="col-span-2 sm:col-span-1">
+        Add
+      </Button>
+    </form>
+  );
+}
+
+function ManualMacroRow({ entry, readOnly, onRemove }: { entry: ManualMacroEntryRow; readOnly: boolean; onRemove: (id: string) => void }) {
+  return (
+    <li className="flex items-center justify-between gap-2 p-3">
+      <p className="text-sm text-zinc-700 dark:text-zinc-300">
+        {entry.calories != null ? `${Math.round(entry.calories)} kcal` : '—'} ·{' '}
+        {Math.round(entry.protein ?? 0)}P / {Math.round(entry.carbs ?? 0)}C / {Math.round(entry.fat ?? 0)}F
+      </p>
+      {!readOnly && (
+        <Button variant="danger" size="sm" onClick={() => onRemove(entry.id)}>
+          Remove
+        </Button>
+      )}
+    </li>
+  );
+}
+
+function SectionNameInput({ sectionId, initial }: { sectionId: string; initial: string }) {
+  const { run } = useAction();
+  const [value, setValue] = useState(initial);
+
+  async function handleBlur() {
+    if (!value.trim() || value === initial) {
+      setValue(initial);
+      return;
+    }
+    await run(() => renameMealSection(sectionId, value));
+  }
+
+  return (
+    <input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={handleBlur}
+      className="rounded-md border border-transparent bg-transparent px-1 py-0.5 font-medium text-black hover:border-black/10 focus:border-black/10 dark:text-zinc-50 dark:hover:border-white/10 dark:focus:border-white/10"
+    />
+  );
+}
+
+function EntryRow({
+  entry,
+  readOnly,
+  sections,
+  onRemove,
+  onRefile,
+}: {
+  entry: FoodDiaryEntryRow;
+  readOnly: boolean;
+  sections: MealSectionRow[];
+  onRemove: (id: string) => void;
+  onRefile: (id: string, sectionId: string | null) => void;
+}) {
+  const macros = entryMacros(entry);
+  return (
+    <li className="flex items-center justify-between gap-2 p-3">
+      <div className="text-sm">
+        <p className="font-medium text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
+        <p className="text-xs text-zinc-500">
+          {formatQuantity(entry)} · {Math.round(macros.calories)} kcal · {Math.round(macros.protein)}P /{' '}
+          {Math.round(macros.carbs)}C / {Math.round(macros.fat)}F
+        </p>
+      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          {entry.meal_section_id === null && sections.length > 0 && (
+            <select
+              defaultValue=""
+              onChange={(e) => e.target.value && onRefile(entry.id, e.target.value)}
+              className="rounded-md border border-black/10 bg-transparent px-1.5 py-1 text-xs dark:border-white/10"
+            >
+              <option value="" disabled>
+                File under…
+              </option>
+              {sections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <Button variant="danger" size="sm" onClick={() => onRemove(entry.id)}>
+            Remove
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+export function FoodTrackingTab({
+  clientId,
+  dailyLogId,
+  initialEntries,
+  initialManualMacroEntries,
+  sections,
+  recipes,
+  readOnly,
+  profile,
+  programWeek,
+  nutritionMode,
+}: {
+  clientId: string;
+  dailyLogId: string | null;
+  initialEntries: FoodDiaryEntryRow[];
+  initialManualMacroEntries: ManualMacroEntryRow[];
+  sections: MealSectionRow[];
+  recipes: RecipeRow[];
+  readOnly: boolean;
+  profile: ClientProfileRow | null;
+  programWeek: number;
+  nutritionMode: NutritionTrackingMode;
+}) {
+  const confirm = useConfirm();
+  const { run } = useAction();
+  const { run: runRecipe } = useAction();
+  const { run: runSection, busy: addingSection } = useAction();
+  const { run: runFeedback, busy: sendingFeedback } = useAction();
+  const { run: runManual } = useAction();
+  const [scanning, setScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
+  const [openSectionId, setOpenSectionId] = useState<string | null>(null);
+  const [newSectionLabel, setNewSectionLabel] = useState('');
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackBody, setFeedbackBody] = useState('');
+  const isManual = nutritionMode === 'manual_import';
+
+  const todayIso = useMemo(() => toIsoDate(new Date()), []);
+  const [viewingDate, setViewingDate] = useState(todayIso);
+  const [currentDailyLogId, setCurrentDailyLogId] = useState(dailyLogId);
+  const [entries, setEntries] = useState(initialEntries);
+  const [manualEntries, setManualEntries] = useState(initialManualMacroEntries);
+  const [dateLoading, setDateLoading] = useState(false);
+  const isToday = viewingDate === todayIso;
+
+  const totals = isManual
+    ? manualEntries.reduce(
+        (acc, e) => {
+          acc.calories += e.calories ?? 0;
+          acc.protein += e.protein ?? 0;
+          acc.carbs += e.carbs ?? 0;
+          acc.fat += e.fat ?? 0;
+          return acc;
+        },
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      )
+    : totalMacros(entries);
+  // Uses the flat (non-cycling-aware) daily target -- this tab has no per-day day_type
+  // context the way Weekly Log does, and threading that through here would be
+  // disproportionate to a simple live comparison line.
+  const dayTarget = useMemo(() => {
+    const engineProfile = toEngineProfile(profile);
+    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
+  }, [profile, programWeek]);
+
+  async function loadDate(date: string) {
+    setDateLoading(true);
+    try {
+      if (isManual) {
+        const result = await getManualMacrosForDate(clientId, date, !readOnly);
+        setViewingDate(date);
+        setCurrentDailyLogId(result.dailyLogId);
+        setManualEntries(result.entries);
+      } else {
+        const result = await getFoodDiaryForDate(clientId, date, !readOnly);
+        setViewingDate(date);
+        setCurrentDailyLogId(result.dailyLogId);
+        setEntries(result.entries);
+      }
+    } finally {
+      setDateLoading(false);
+    }
+  }
+
+  async function handleAddManual(
+    sectionId: string | null,
+    fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+  ) {
+    if (!currentDailyLogId) return;
+    await runManual(async () => {
+      await addManualMacroEntry(currentDailyLogId, sectionId, fields);
+      await loadDate(viewingDate);
     });
+  }
+
+  async function handleRemoveManual(id: string) {
+    if (!currentDailyLogId) return;
+    await runManual(async () => {
+      await removeManualMacroEntry(id, currentDailyLogId);
+      await loadDate(viewingDate);
+    });
+  }
+
+  // Coach-only: leaves a note tagged to the day being viewed rather than granting edit
+  // access to the client's own logged food -- shows up under the client's Info tab.
+  async function handleSendFeedback(e: React.FormEvent) {
+    e.preventDefault();
+    if (!feedbackBody.trim()) return;
+    await runFeedback(() => addJournalEntry(clientId, 'note', feedbackBody.trim(), viewingDate), {
+      success: 'Feedback saved to Info tab',
+      onDone: () => {
+        setFeedbackBody('');
+        setFeedbackOpen(false);
+      },
+    });
+  }
+
+  async function handleAdd(food: FoodRow, portions: number, sectionId: string | null = null) {
+    if (!currentDailyLogId) return;
+    await run(
+      async () => {
+        await addFoodDiaryEntry(currentDailyLogId, food.id, portions, sectionId);
+        await loadDate(viewingDate);
+      },
+      { success: `${food.name} added` }
+    );
+  }
+
+  async function handleAddRecipe(recipeId: string, servings: number, sectionId: string | null = null) {
+    if (!currentDailyLogId) return;
+    const recipe = recipes.find((r) => r.id === recipeId);
+    await runRecipe(
+      async () => {
+        await logRecipeToDiary(currentDailyLogId, recipeId, servings, sectionId);
+        await loadDate(viewingDate);
+      },
+      {
+        success: recipe ? `${recipe.name} added` : 'Recipe added',
+        onDone: () => setOpenSectionId(null),
+      }
+    );
   }
 
   async function handleBarcodeDetected(barcode: string) {
@@ -65,88 +331,304 @@ export function FoodTrackingTab({
   }
 
   async function handleRemove(id: string) {
-    await run(() => removeFoodDiaryEntry(id), { success: 'Removed' });
+    if (!currentDailyLogId) return;
+    await run(
+      async () => {
+        await removeFoodDiaryEntry(id, currentDailyLogId);
+        await loadDate(viewingDate);
+      },
+      { success: 'Removed' }
+    );
   }
 
-  async function handleSync() {
-    if (!dailyLogId) return;
-    await runSync(() => syncFoodDiaryToLog(dailyLogId), { success: "Synced to today's Weekly Log" });
+  async function handleRefile(id: string, sectionId: string | null) {
+    await run(
+      async () => {
+        await updateFoodDiaryEntrySection(id, sectionId);
+        await loadDate(viewingDate);
+      },
+      { success: 'Moved' }
+    );
   }
+
+  async function handleAddSection(e: React.FormEvent) {
+    e.preventDefault();
+    const label = newSectionLabel.trim();
+    if (!label) return;
+    await runSection(() => createMealSection(clientId, label), {
+      success: 'Section added',
+      onDone: () => setNewSectionLabel(''),
+    });
+  }
+
+  async function handleDeleteSection(section: MealSectionRow) {
+    const ok = await confirm({
+      title: `Delete "${section.label}"?`,
+      body: 'Food already logged under this section moves to "Other" — nothing gets deleted.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await run(() => deleteMealSection(section.id));
+  }
+
+  async function handleMoveSection(index: number, direction: -1 | 1) {
+    const reordered = [...sections];
+    const target = index + direction;
+    if (target < 0 || target >= reordered.length) return;
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    await run(() => reorderMealSections(reordered.map((s) => s.id)));
+  }
+
+  const otherEntries = entries.filter((e) => e.meal_section_id === null);
+  const otherManualEntries = manualEntries.filter((e) => e.meal_section_id === null);
+  const dateLabel = new Date(viewingDate + 'T00:00:00Z').toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Today&apos;s totals</h3>
-        <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-          <div><dt className="text-zinc-500">Calories</dt><dd>{Math.round(totals.calories)} kcal</dd></div>
-          <div><dt className="text-zinc-500">Protein</dt><dd>{Math.round(totals.protein)} g</dd></div>
-          <div><dt className="text-zinc-500">Carbs</dt><dd>{Math.round(totals.carbs)} g</dd></div>
-          <div><dt className="text-zinc-500">Fat</dt><dd>{Math.round(totals.fat)} g</dd></div>
-        </dl>
-        {!readOnly && (
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="mt-3 rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="icon" aria-label="Previous day" onClick={() => loadDate(toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1)))} disabled={dateLoading}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="text-sm font-medium">{isToday ? 'Today' : dateLabel}</div>
+        <div className="flex items-center gap-1">
+          {!isToday && (
+            <Button variant="ghost" size="sm" onClick={() => loadDate(todayIso)} disabled={dateLoading}>
+              Today
+            </Button>
+          )}
+          <Button
+            variant="icon"
+            aria-label="Next day"
+            onClick={() => loadDate(toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), 1)))}
+            disabled={dateLoading || isToday}
           >
-            {syncing ? 'Syncing…' : "Sync to today's Weekly Log"}
-          </button>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {readOnly && (
+        <div>
+          {!feedbackOpen ? (
+            <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)}>
+              Leave feedback on this day
+            </Button>
+          ) : (
+            <form onSubmit={handleSendFeedback} className="space-y-2 rounded-2xl border border-black/[.05] p-3 dark:border-white/10">
+              <textarea
+                value={feedbackBody}
+                onChange={(e) => setFeedbackBody(e.target.value)}
+                placeholder={`Feedback on ${isToday ? "today's" : dateLabel} nutrition…`}
+                rows={2}
+                autoFocus
+                className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+              />
+              <div className="flex gap-2">
+                <Button type="submit" variant="primary" size="sm" disabled={sendingFeedback || !feedbackBody.trim()}>
+                  Save to Info tab
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setFeedbackOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+          {isToday ? "Today's totals" : `${dateLabel} totals`}
+        </h3>
+        <div className="mt-3 flex items-center gap-3">
+          {dayTarget && (
+            <>
+              <ProgressRing value={totals.calories} target={dayTarget.calories} label="kcal" />
+              <ProgressRing value={totals.protein} target={dayTarget.protein} label="protein" />
+            </>
+          )}
+          <dl className="grid flex-1 grid-cols-2 gap-2 text-sm">
+            <div><dt className="text-zinc-500">Calories</dt><dd>{Math.round(totals.calories)} kcal</dd></div>
+            <div><dt className="text-zinc-500">Protein</dt><dd>{Math.round(totals.protein)} g</dd></div>
+            <div><dt className="text-zinc-500">Carbs</dt><dd>{Math.round(totals.carbs)} g</dd></div>
+            <div><dt className="text-zinc-500">Fat</dt><dd>{Math.round(totals.fat)} g</dd></div>
+          </dl>
+        </div>
+        {dayTarget && (
+          <p className="mt-2 text-xs text-zinc-500">
+            {Math.round(totals.calories)} / {Math.round(dayTarget.calories)} kcal ·{' '}
+            {Math.round(totals.protein)} / {Math.round(dayTarget.protein)}g protein
+          </p>
         )}
       </div>
 
-      <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-        {initialEntries.map((entry) => {
-          const macros = entryMacros(entry);
-          return (
-          <li key={entry.id} className="flex items-center justify-between p-3">
-            <div className="text-sm">
-              <p className="font-medium text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
-              <p className="text-xs text-zinc-500">
-                {formatQuantity(entry)} · {Math.round(macros.calories)} kcal · {Math.round(macros.protein)}P /{' '}
-                {Math.round(macros.carbs)}C / {Math.round(macros.fat)}F
-              </p>
-            </div>
-            {!readOnly && (
-              <button
-                onClick={() => handleRemove(entry.id)}
-                className="text-xs text-red-600 hover:underline dark:text-red-400"
-              >
-                Remove
-              </button>
-            )}
-          </li>
-          );
-        })}
-        {initialEntries.length === 0 && (
-          <li>
-            <EmptyState
-              icon={Utensils}
-              title="Nothing logged yet today"
-              hint={readOnly ? 'No food entries for this day.' : 'Scan a barcode or search below to add the first one.'}
-            />
-          </li>
-        )}
-      </ul>
-
-      {!readOnly && (
+      {!readOnly && !isManual && (
         <div className="space-y-2">
           {!scanning && (
-            <button
+            <Button
+              variant="outline"
               onClick={() => {
                 setScanning(true);
                 setScanStatus(null);
               }}
-              className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium dark:border-white/10"
             >
               Scan barcode
-            </button>
+            </Button>
           )}
           {scanning && (
             <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
-          <FoodSearchPicker onAdd={handleAdd} recipes={recipes} onAddRecipe={handleAddRecipe} />
+          <p className="text-xs text-zinc-500">Scanned or quick-searched items land in &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;+ Add food&quot; to file directly, or re-file afterward.</p>
+          <FoodSearchPicker onAdd={(food, portions) => handleAdd(food, portions)} recipes={recipes} onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings)} />
         </div>
+      )}
+
+      {sections.map((section, index) => {
+        const sectionEntries = entries.filter((e) => e.meal_section_id === section.id);
+        const sectionTotals = totalMacros(sectionEntries);
+        const sectionManualEntries = manualEntries.filter((e) => e.meal_section_id === section.id);
+        const sectionManualCalories = sectionManualEntries.reduce((sum, e) => sum + (e.calories ?? 0), 0);
+        const open = openSectionId === section.id;
+        return (
+          <div key={section.id} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1">
+                {!readOnly ? (
+                  <SectionNameInput sectionId={section.id} initial={section.label} />
+                ) : (
+                  <h4 className="font-medium text-black dark:text-zinc-50">{section.label}</h4>
+                )}
+                <span className="shrink-0 text-xs text-zinc-500">
+                  {Math.round(isManual ? sectionManualCalories : sectionTotals.calories)} kcal
+                </span>
+              </div>
+              {!readOnly && (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="icon"
+                    onClick={() => handleMoveSection(index, -1)}
+                    disabled={index === 0}
+                    aria-label="Move section up"
+                    className="h-7 w-7"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="icon"
+                    onClick={() => handleMoveSection(index, 1)}
+                    disabled={index === sections.length - 1}
+                    aria-label="Move section down"
+                    className="h-7 w-7"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => handleDeleteSection(section)}>
+                    Delete
+                  </Button>
+                  {!isManual && (
+                    <Button variant="ghost" size="sm" onClick={() => setOpenSectionId(open ? null : section.id)}>
+                      {open ? 'Close' : '+ Add food'}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            {isManual ? (
+              <>
+                <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+                  {sectionManualEntries.map((entry) => (
+                    <ManualMacroRow key={entry.id} entry={entry} readOnly={readOnly} onRemove={handleRemoveManual} />
+                  ))}
+                  {sectionManualEntries.length === 0 && (
+                    <li>
+                      <EmptyState compact title="Nothing logged here yet" />
+                    </li>
+                  )}
+                </ul>
+                {!readOnly && <ManualMacroForm onAdd={(fields) => handleAddManual(section.id, fields)} />}
+              </>
+            ) : (
+              <>
+                <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+                  {sectionEntries.map((entry) => (
+                    <EntryRow key={entry.id} entry={entry} readOnly={readOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} />
+                  ))}
+                  {sectionEntries.length === 0 && (
+                    <li>
+                      <EmptyState compact title="Nothing logged here yet" />
+                    </li>
+                  )}
+                </ul>
+                {open && (
+                  <div className="mt-3">
+                    <FoodSearchPicker
+                      onAdd={(food, portions) => handleAdd(food, portions, section.id)}
+                      recipes={recipes}
+                      onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings, section.id)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {!readOnly && (
+        <form onSubmit={handleAddSection} className="flex items-center gap-2">
+          <input
+            value={newSectionLabel}
+            onChange={(e) => setNewSectionLabel(e.target.value)}
+            placeholder="e.g. Meal 5, Pre-workout…"
+            className="flex-1 rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/10"
+          />
+          <Button type="submit" variant="outline" disabled={addingSection}>
+            + Add section
+          </Button>
+        </form>
+      )}
+
+      {isManual
+        ? otherManualEntries.length > 0 && (
+            <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+              <h4 className="font-medium text-black dark:text-zinc-50">Other</h4>
+              <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
+              <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+                {otherManualEntries.map((entry) => (
+                  <ManualMacroRow key={entry.id} entry={entry} readOnly={readOnly} onRemove={handleRemoveManual} />
+                ))}
+              </ul>
+            </div>
+          )
+        : otherEntries.length > 0 && (
+            <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+              <h4 className="font-medium text-black dark:text-zinc-50">Other</h4>
+              <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
+              <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+                {otherEntries.map((entry) => (
+                  <EntryRow key={entry.id} entry={entry} readOnly={readOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} />
+                ))}
+              </ul>
+            </div>
+          )}
+
+      {(isManual ? manualEntries.length === 0 : entries.length === 0) && sections.length === 0 && (
+        <EmptyState
+          icon={Utensils}
+          title={isToday ? 'Nothing logged yet today' : 'Nothing logged this day'}
+          hint={
+            readOnly
+              ? 'No food entries for this day.'
+              : isManual
+                ? 'Add a section above, then log macros against it.'
+                : 'Scan a barcode or search below to add the first one.'
+          }
+        />
       )}
     </div>
   );

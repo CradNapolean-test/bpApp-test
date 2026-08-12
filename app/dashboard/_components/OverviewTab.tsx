@@ -1,7 +1,6 @@
 'use client';
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { isoWeekKey } from '@/lib/utils/dates';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
@@ -43,35 +42,34 @@ function buildWeeklyTrend(logs: DailyLogRow[]): WeekPoint[] {
     });
 }
 
-function formatWeekLabel(weekStart: string): string {
-  return new Date(weekStart + 'T00:00:00Z').toLocaleDateString(undefined, {
-    month: 'short', day: 'numeric', timeZone: 'UTC',
-  });
-}
+const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
-function CustomTooltip({
-  active, payload, label, dataKey, unit, formatter,
-}: {
-  active?: boolean;
-  payload?: { payload: WeekPoint }[];
-  label?: string;
-  dataKey: 'avgBodyweight' | 'avgCalories' | 'avgSteps';
-  unit: string;
-  formatter: (v: number) => string;
-}) {
-  if (!active || !payload?.length || !label) return null;
-  const point = payload[0].payload;
-  const value = point[dataKey];
+// Plain inline SVG instead of a full Recharts axis/tooltip chart -- a compact "how's the trend
+// looking" glance, same custom-SVG-over-a-charting-library precedent as ProgressRing.
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  if (values.length < 2) {
+    return <div className="flex h-12 items-center text-xs text-zinc-400">Not enough data yet</div>;
+  }
+  const width = 280;
+  const height = 48;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = height - ((v - min) / range) * (height - 6) - 3;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
   return (
-    <div className="rounded-md border border-black/10 bg-[var(--background)] p-2 text-xs shadow-sm dark:border-white/10">
-      <p className="font-medium text-black dark:text-zinc-50">{formatWeekLabel(label)}</p>
-      <p className="text-zinc-500">{value != null ? `${formatter(value)} ${unit}` : 'No data'}</p>
-      <p className="text-zinc-500">{point.loggedDays} logged days</p>
-    </div>
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-12 w-full">
+      <polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-function TrendChart({
+function TrendCard({
   weeks, title, dataKey, color, unit, formatter,
 }: {
   weeks: WeekPoint[];
@@ -81,31 +79,28 @@ function TrendChart({
   unit: string;
   formatter: (v: number) => string;
 }) {
+  const points = weeks.map((w) => w[dataKey]).filter((v): v is number => v != null);
+  const current = points.length ? points[points.length - 1] : null;
+  const prev = points.length >= 2 ? points[points.length - 2] : null;
+  const delta = current != null && prev != null ? current - prev : null;
+
   return (
-    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className={cardCls}>
       <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{title}</h3>
-      <div className="mt-2 h-44 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={weeks} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="currentColor" strokeOpacity={0.1} vertical={false} />
-            <XAxis
-              dataKey="weekStart"
-              tickFormatter={formatWeekLabel}
-              tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.5 }}
-              axisLine={{ opacity: 0.1 }}
-              tickLine={false}
-            />
-            <YAxis
-              width={40}
-              tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.5 }}
-              axisLine={{ opacity: 0.1 }}
-              tickLine={false}
-              domain={['auto', 'auto']}
-            />
-            <Tooltip content={<CustomTooltip dataKey={dataKey} unit={unit} formatter={formatter} />} />
-            <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={{ r: 3, fill: color }} />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="mt-1 flex items-baseline gap-2">
+        <p className="text-2xl font-semibold text-black dark:text-zinc-50">
+          {current != null ? formatter(current) : '—'}
+          {unit && current != null ? <span className="ml-1 text-sm font-normal text-zinc-500">{unit}</span> : null}
+        </p>
+        {delta != null && Math.abs(delta) > 0.001 && (
+          <span className="flex items-center gap-0.5 text-xs font-medium text-zinc-500">
+            {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+            {formatter(Math.abs(delta))} {unit} vs last week
+          </span>
+        )}
+      </div>
+      <div className="mt-3">
+        <Sparkline values={points} color={color} />
       </div>
     </div>
   );
@@ -126,7 +121,7 @@ export function OverviewTab({ historyLogs }: { historyLogs: DailyLogRow[] }) {
 
   return (
     <div className="space-y-4">
-      <TrendChart
+      <TrendCard
         weeks={weeks}
         title="Bodyweight"
         dataKey="avgBodyweight"
@@ -134,7 +129,7 @@ export function OverviewTab({ historyLogs }: { historyLogs: DailyLogRow[] }) {
         unit="kg"
         formatter={(v) => v.toFixed(1)}
       />
-      <TrendChart
+      <TrendCard
         weeks={weeks}
         title="Calories"
         dataKey="avgCalories"
@@ -142,7 +137,7 @@ export function OverviewTab({ historyLogs }: { historyLogs: DailyLogRow[] }) {
         unit="kcal"
         formatter={(v) => Math.round(v).toString()}
       />
-      <TrendChart
+      <TrendCard
         weeks={weeks}
         title="Steps"
         dataKey="avgSteps"

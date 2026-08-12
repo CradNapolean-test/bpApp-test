@@ -1,25 +1,29 @@
 'use client';
 
 import { CATEGORY_ICON, CATEGORY_ORDER, screensForCategory } from './categories';
-import type { Category, Screen } from './categories';
+import type { Category, NutritionTrackingMode, Screen } from './categories';
 
 export function CategoryNav({
   category,
   screen,
   isCoachView,
+  disabledScreens,
+  nutritionMode,
   onSelectCategory,
   onSelectScreen,
 }: {
   category: Category;
   screen: Screen;
   isCoachView: boolean;
+  disabledScreens: Set<Screen>;
+  nutritionMode?: NutritionTrackingMode;
   onSelectCategory: (c: Category) => void;
   onSelectScreen: (s: Screen) => void;
 }) {
   return (
     <nav className="space-y-1">
       {CATEGORY_ORDER.map((c) => {
-        const screens = screensForCategory(c, isCoachView);
+        const screens = screensForCategory(c, isCoachView, disabledScreens, nutritionMode);
         const active = category === c;
         const Icon = CATEGORY_ICON[c];
         return (
