@@ -27,6 +27,8 @@ import {
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
+import { resolveActiveProgram } from '@/lib/utils/checkin';
+import { toIsoDate } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
   ExerciseLibraryRow,
@@ -460,11 +462,22 @@ export function WorkoutTab({
   const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
   const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
   const { run: runDuplicateWeek, busy: duplicatingWeek } = useAction();
-  // Weeks collapsed by default -- with multiple weeks per program this was a lot of scroll.
-  // Days are no longer expand-in-place (see openDayId below) -- clicking one opens the
-  // fullscreen FocusOverlay instead, which is what actually solved the "congested" feeling
-  // multiple inline exercise editors caused, not the week-level grouping.
-  const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>({});
+  // Weeks collapsed by default -- with multiple weeks per program this was a lot of scroll --
+  // except each program's current week (by start_date), pre-expanded so the day list (icon
+  // chips, exercise counts, phase badges) is visible on load instead of requiring a tap to
+  // reveal anything. Days are no longer expand-in-place (see openDayId below) -- clicking one
+  // opens the fullscreen FocusOverlay instead, which is what actually solved the "congested"
+  // feeling multiple inline exercise editors caused, not the week-level grouping.
+  const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>(() => {
+    const todayIso = toIsoDate(new Date());
+    const initial: Record<string, boolean> = {};
+    for (const program of programs) {
+      const active = resolveActiveProgram([program], todayIso);
+      const weekNum = active?.weekNum ?? 1;
+      initial[`${program.id}:${weekNum}`] = true;
+    }
+    return initial;
+  });
   const [openDayId, setOpenDayId] = useState<string | null>(null);
 
   useEffect(() => {

@@ -451,19 +451,21 @@ export function FoodTrackingTab({
               <ProgressRing value={totals.protein} target={dayTarget.protein} label="protein" />
             </>
           )}
+          {/* Calories/Protein already shown by the rings above (each rendering "value/target"
+              inline) when a target exists -- repeating them here as plain text too was the
+              same number shown three times over (rings + this grid + a since-removed summary
+              line). Carbs/Fat have no ring, so they always need this text form. */}
           <dl className="grid flex-1 grid-cols-2 gap-2 text-sm">
-            <div><dt className="text-zinc-500">Calories</dt><dd>{Math.round(totals.calories)} kcal</dd></div>
-            <div><dt className="text-zinc-500">Protein</dt><dd>{Math.round(totals.protein)} g</dd></div>
+            {!dayTarget && (
+              <>
+                <div><dt className="text-zinc-500">Calories</dt><dd>{Math.round(totals.calories)} kcal</dd></div>
+                <div><dt className="text-zinc-500">Protein</dt><dd>{Math.round(totals.protein)} g</dd></div>
+              </>
+            )}
             <div><dt className="text-zinc-500">Carbs</dt><dd>{Math.round(totals.carbs)} g</dd></div>
             <div><dt className="text-zinc-500">Fat</dt><dd>{Math.round(totals.fat)} g</dd></div>
           </dl>
         </div>
-        {dayTarget && (
-          <p className="mt-2 text-xs text-zinc-500">
-            {Math.round(totals.calories)} / {Math.round(dayTarget.calories)} kcal ·{' '}
-            {Math.round(totals.protein)} / {Math.round(dayTarget.protein)}g protein
-          </p>
-        )}
       </div>
 
       {!readOnly && !isManual && (
