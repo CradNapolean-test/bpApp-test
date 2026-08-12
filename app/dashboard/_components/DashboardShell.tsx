@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, MessageSquare, Settings } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
+import { Avatar } from '@/app/_components/Avatar';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
@@ -243,6 +244,30 @@ export function DashboardShell({
     />
   ) : undefined;
 
+  // Compact per-screen header shown on mobile only (AppShell hides it at md+ and keeps the
+  // logo+title bar there instead) -- avatar chip + date + greeting on Home, matching the
+  // mobile redesign's Today screen; a plain category title on every other screen, since the
+  // prototype's Nutrition/Training/Accountability/Progress screens never repeat the greeting.
+  const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
+  const mobileHeader = (
+    <div className="flex items-center gap-2.5">
+      <Avatar name={profile?.name ?? clientLabel} size="md" />
+      <div className="min-w-0">
+        {!isCoachView && category === 'Home' ? (
+          <>
+            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">{todayLabel}</p>
+            <p className="truncate text-lg font-bold text-black dark:text-zinc-50">Hey, {firstName}</p>
+          </>
+        ) : (
+          <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
+            {isCoachView ? clientLabel : category}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
   const coachSummary = isCoachView && (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
       <Link
@@ -265,6 +290,7 @@ export function DashboardShell({
       title={clientLabel}
       isCoachView={isCoachView}
       topBar={topBar}
+      mobileHeader={mobileHeader}
       coachSummary={coachSummary}
       banner={!isCoachView && <NotificationBanner notifications={notifications} />}
       sidebar={sidebar}

@@ -7,6 +7,7 @@ import { Checkbox } from '@/app/_components/Checkbox';
 import { ChangePasswordForm } from '@/app/_components/ChangePasswordForm';
 import { ChangeEmailForm } from '@/app/_components/ChangeEmailForm';
 import { ThemeToggle } from '@/app/_components/ThemeToggle';
+import { SignOutButton } from '@/app/_components/SignOutButton';
 import type { ThemePreference } from '@/app/_components/theme';
 import { updateNotificationsEnabled } from '@/lib/data/clientProfile';
 
@@ -66,6 +67,10 @@ export function AccountTab({
 
       <div className={cardCls}>
         <ThemeToggle initial={themePreference} />
+      </div>
+
+      <div className={`${cardCls} flex justify-end md:hidden`}>
+        <SignOutButton variant="danger-solid" />
       </div>
     </div>
   );

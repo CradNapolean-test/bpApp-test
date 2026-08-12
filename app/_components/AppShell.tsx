@@ -19,6 +19,7 @@ export function AppShell({
   headerAction,
   coachSummary,
   isCoachView,
+  mobileHeader,
   children,
 }: {
   title: string;
@@ -39,6 +40,11 @@ export function AppShell({
   // Stamps data-view="coach" on the root element so globals.css can shift the accent tone
   // for this view without forking any component structure.
   isCoachView?: boolean;
+  // Replaces the logo+title block on narrow viewports only (desktop keeps logo+title
+  // unchanged) -- the mobile redesign's per-screen header (avatar chip + greeting on Home,
+  // plain screen title elsewhere). Also hides SignOutButton on mobile when set, since the
+  // screens that pass this put Sign out inside Account instead of a persistent header button.
+  mobileHeader?: ReactNode;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -49,7 +55,7 @@ export function AppShell({
       className={`mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 ${bottomBar ? 'pb-20 md:pb-10' : ''}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {sidebar && !bottomBar && (
             <button
               onClick={() => setDrawerOpen(true)}
@@ -59,15 +65,20 @@ export function AppShell({
               <Menu className="h-5 w-5" />
             </button>
           )}
-          <Logo size={28} className="hidden shrink-0 sm:block" />
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</h1>
-            {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+          {mobileHeader && <div className="min-w-0 flex-1 md:hidden">{mobileHeader}</div>}
+          <div className={`min-w-0 items-center gap-2 ${mobileHeader ? 'hidden md:flex' : 'flex'}`}>
+            <Logo size={28} className="hidden shrink-0 sm:block" />
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</h1>
+              {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {headerAction}
-          <SignOutButton />
+          <span className={mobileHeader ? 'hidden md:inline-flex' : undefined}>
+            <SignOutButton />
+          </span>
         </div>
       </div>
 

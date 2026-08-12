@@ -112,7 +112,9 @@ export function TodayTab({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-zinc-500">Hey, {firstName}</p>
+      {/* Hidden on mobile -- DashboardShell's mobileHeader shows this same greeting there
+          (avatar chip + date), to match the redesign's compact per-screen mobile header. */}
+      <p className="hidden text-sm font-medium text-zinc-500 md:block">Hey, {firstName}</p>
 
       <button
         type="button"
