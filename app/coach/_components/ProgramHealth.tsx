@@ -48,7 +48,7 @@ export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) 
                   {clients.slice(0, PREVIEW_LIMIT).map((c) => (
                     <li key={c.clientId} className="py-1">
                       <Link
-                        href={`/coach/clients/${c.clientId}`}
+                        href={`/coach/clients/${c.clientId}/overview`}
                         className="flex items-center gap-2 text-zinc-500 hover:text-black dark:hover:text-zinc-300"
                       >
                         <Avatar name={c.name} size="sm" />
