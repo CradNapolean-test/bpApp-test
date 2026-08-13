@@ -5,7 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingCoachId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
-import type { BookingRow, ClassRow, CreditsLedgerRow, RosterEntry, ScheduleOccurrence } from './types';
+import type { AttendanceStatus, BookingRow, ClassRow, CreditsLedgerRow, RosterEntry, ScheduleOccurrence } from './types';
 
 export async function getClasses(): Promise<ClassRow[]> {
   const supabase = await createClient();
@@ -193,7 +193,7 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
   const supabase = await createClient();
   const { data: bookings, error } = await supabase
     .from('bookings')
-    .select('id, client_id, status, attended')
+    .select('id, client_id, status, attended, no_show')
     .eq('class_id', classId)
     .eq('booking_date', date)
     .neq('status', 'cancelled')
@@ -216,14 +216,18 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     clientName: nameMap.get(b.client_id) ?? 'Unknown',
     status: b.status,
     attended: b.attended,
+    noShow: b.no_show,
   }));
 }
 
-export async function markAttendance(bookingId: string, attended: boolean): Promise<ActionResult> {
+// Supersedes markAttendance's 2-state (attended/not) write -- the redesign's Take Attendance
+// screen cycles Unmarked -> Attended -> No-show, and collapsing "unmarked" into "no-show" was
+// also a real reporting bug (see migration 0041).
+export async function markAttendanceStatus(bookingId: string, status: AttendanceStatus): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc('mark_attendance', {
+  const { error } = await supabase.rpc('mark_attendance_status', {
     p_booking_id: bookingId,
-    p_attended: attended,
+    p_status: status,
   });
   return error ? fail(error, 'Could not update attendance') : ok();
 }

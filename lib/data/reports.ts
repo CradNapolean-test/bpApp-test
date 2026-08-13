@@ -30,7 +30,7 @@ export async function getCoachReport(): Promise<CoachReport> {
 
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('id, class_id, client_id, booking_date, status, attended')
+    .select('id, class_id, client_id, booking_date, status, attended, no_show')
     .in(
       'class_id',
       classes.map((c) => c.id)
@@ -45,7 +45,10 @@ export async function getCoachReport(): Promise<CoachReport> {
   const totalAttended = pastBooked.filter((b) => b.attended).length;
   const attendanceRate = totalBooked > 0 ? Math.round((totalAttended / totalBooked) * 100) : null;
 
-  const noShowRows = pastBooked.filter((b) => !b.attended);
+  // Genuinely marked no-show, not just "not yet marked" -- a past booking the coach hasn't
+  // gotten to yet used to count as a no-show here (`!b.attended` is true for both), inflating
+  // the count for any class the coach was simply behind on marking.
+  const noShowRows = pastBooked.filter((b) => b.no_show);
   const clientIds = [...new Set(noShowRows.map((b) => b.client_id))];
   let nameMap = new Map<string, string>();
   if (clientIds.length > 0) {

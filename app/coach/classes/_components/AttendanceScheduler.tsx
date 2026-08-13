@@ -1,14 +1,33 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Check, UserX } from 'lucide-react';
+import { CalendarDays, Check, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Button } from '@/app/_components/Button';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
-import { getRoster, markAttendance } from '@/lib/data/classes';
-import type { RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
+import { getRoster, markAttendanceStatus } from '@/lib/data/classes';
+import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
+
+function statusOf(entry: RosterEntry): AttendanceStatus {
+  if (entry.attended) return 'attended';
+  if (entry.noShow) return 'no_show';
+  return 'unmarked';
+}
+
+// Unmarked -> Attended -> No-show -> Unmarked, tap to advance.
+const NEXT_STATUS: Record<AttendanceStatus, AttendanceStatus> = {
+  unmarked: 'attended',
+  attended: 'no_show',
+  no_show: 'unmarked',
+};
+
+const STATUS_META: Record<AttendanceStatus, { label: string; variant: 'outline' | 'primary' | 'danger-solid' }> = {
+  unmarked: { label: 'Mark', variant: 'outline' },
+  attended: { label: 'Attended', variant: 'primary' },
+  no_show: { label: 'No-show', variant: 'danger-solid' },
+};
 
 export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
   const toast = useToast();
@@ -31,22 +50,26 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     }
   }
 
-  async function toggleAttended(entry: RosterEntry) {
+  async function cycleStatus(entry: RosterEntry) {
     if (!selected) return;
-    const nextAttended = !entry.attended;
+    const current = statusOf(entry);
+    const next = NEXT_STATUS[current];
+    const nextFields = { attended: next === 'attended', noShow: next === 'no_show' };
     setRoster((prev) =>
-      prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: nextAttended } : r)) : prev
+      prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, ...nextFields } : r)) : prev
     );
-    // Revert the optimistic tick and say why, rather than silently snapping back.
+    // Revert the optimistic update and say why, rather than silently snapping back.
     const revert = (message: string) => {
       setRoster((prev) =>
-        prev ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: entry.attended } : r)) : prev
+        prev
+          ? prev.map((r) => (r.bookingId === entry.bookingId ? { ...r, attended: entry.attended, noShow: entry.noShow } : r))
+          : prev
       );
       toast.error(message);
     };
 
     try {
-      const result = await markAttendance(entry.bookingId, nextAttended);
+      const result = await markAttendanceStatus(entry.bookingId, next);
       if (!result.ok) revert(result.error);
     } catch (err) {
       revert(err instanceof Error ? err.message : 'Could not update attendance');
@@ -87,13 +110,10 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
                     <p className="text-xs text-zinc-500">{entry.status}</p>
                   </div>
                 </div>
-                <Button
-                  variant={entry.attended ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => toggleAttended(entry)}
-                >
-                  <Check className="mr-1 inline h-3.5 w-3.5" />
-                  {entry.attended ? 'Attended' : 'Mark attended'}
+                <Button variant={STATUS_META[statusOf(entry)].variant} size="sm" onClick={() => cycleStatus(entry)}>
+                  {statusOf(entry) === 'attended' && <Check className="mr-1 inline h-3.5 w-3.5" />}
+                  {statusOf(entry) === 'no_show' && <X className="mr-1 inline h-3.5 w-3.5" />}
+                  {STATUS_META[statusOf(entry)].label}
                 </Button>
               </div>
             ))}

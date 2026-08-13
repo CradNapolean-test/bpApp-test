@@ -447,7 +447,10 @@ export interface RosterEntry {
   clientName: string;
   status: BookingStatus;
   attended: boolean;
+  noShow: boolean;
 }
+
+export type AttendanceStatus = 'unmarked' | 'attended' | 'no_show';
 
 export type FormQuestionType = 'short_text' | 'long_text' | 'number' | 'single_choice' | 'multi_choice';
 
