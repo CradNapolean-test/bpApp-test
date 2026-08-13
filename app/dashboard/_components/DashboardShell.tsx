@@ -254,19 +254,24 @@ export function DashboardShell({
   // prototype's Nutrition/Training/Accountability/Progress screens never repeat the greeting.
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
+  // Who the client is chatting with (coach sees the client's name; client sees a generic
+  // "Your coach" since the client-side bundle doesn't carry the coach's own profile).
+  const otherPartyName = isCoachView ? clientLabel : 'Your coach';
   const mobileHeader = (
     <button
       type="button"
       onClick={() => handleCategoryClick('Account Settings')}
       className="flex min-w-0 items-center gap-2.5 text-left"
     >
-      <Avatar name={profile?.name ?? clientLabel} size="md" />
+      <Avatar name={category === 'Messages' ? otherPartyName : (profile?.name ?? clientLabel)} size="md" />
       <div className="min-w-0">
         {!isCoachView && category === 'Home' ? (
           <>
             <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">{todayLabel}</p>
             <p className="truncate text-lg font-bold text-black dark:text-zinc-50">Hey, {firstName}</p>
           </>
+        ) : category === 'Messages' ? (
+          <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{otherPartyName}</p>
         ) : (
           <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
             {isCoachView ? clientLabel : category}
@@ -503,7 +508,7 @@ export function DashboardShell({
               clientId={clientId}
               initialMessages={messages}
               currentUserId={currentUserId}
-              otherPartyName={isCoachView ? clientLabel : 'Your coach'}
+              otherPartyName={otherPartyName}
             />
           )}
         </>

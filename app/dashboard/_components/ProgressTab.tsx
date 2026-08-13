@@ -180,49 +180,34 @@ export function ProgressTab({
           </form>
         )}
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-black/10 text-left text-zinc-500 dark:border-white/10">
-                <th className="p-2 font-medium">Date</th>
-                {MEASUREMENT_FIELDS.map(({ key, label }) => (
-                  <th key={key} className="p-2 font-medium">{label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {initialMeasurements.map((m, i) => (
-                <tr key={m.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                  <td className="p-2">{m.log_date}</td>
-                  {MEASUREMENT_FIELDS.map(({ key }) => {
-                    if (i !== 0 || m[key] == null) {
-                      return <td key={key} className="p-2">{m[key] ?? '—'}</td>;
-                    }
-                    const { vsStart, vsPrevious } = measurementDelta(initialMeasurements, profile, key);
-                    const startLabel = formatDelta(vsStart);
-                    const weekLabel = formatDelta(vsPrevious);
-                    return (
-                      <td key={key} className="p-2">
-                        {m[key]}
-                        {(startLabel || weekLabel) && (
-                          <div className="mt-0.5 space-x-1.5 text-[10px]">
-                            {startLabel && <span className="text-success">{startLabel} vs start</span>}
-                            {weekLabel && <span className="text-zinc-500">{weekLabel} vs last</span>}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {initialMeasurements.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-3 text-center text-zinc-500">No measurements logged yet.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {initialMeasurements.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-500">No measurements logged yet.</p>
+        ) : (
+          <>
+            <p className="mt-3 text-xs text-zinc-500">Last logged {initialMeasurements[0].log_date}</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {MEASUREMENT_FIELDS.map(({ key, label }) => {
+                const latest = initialMeasurements[0][key];
+                const { vsStart } = measurementDelta(initialMeasurements, profile, key);
+                const deltaLabel = formatDelta(vsStart);
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between rounded-xl border border-black/[.05] p-3 dark:border-white/10"
+                  >
+                    <span className="text-sm font-medium text-black dark:text-zinc-50">{label}</span>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-black dark:text-zinc-50">
+                        {latest != null ? `${latest}cm` : '—'}
+                      </p>
+                      {deltaLabel && <p className="text-[10px] font-medium text-success">{deltaLabel} vs start</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

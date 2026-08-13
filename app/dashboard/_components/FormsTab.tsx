@@ -9,7 +9,7 @@ import type { FormAssignmentWithDetails, FormTemplateRow } from '@/lib/data/type
 
 const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
 
-function FillableForm({ assignment }: { assignment: FormAssignmentWithDetails }) {
+function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithDetails; onClose: () => void }) {
   const { run, busy: submitting } = useAction();
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
 
@@ -23,12 +23,17 @@ function FillableForm({ assignment }: { assignment: FormAssignmentWithDetails })
       question_id: q.id,
       answer: answers[q.id] ?? (q.question_type === 'multi_choice' ? [] : null),
     }));
-    await run(() => submitFormResponses(assignment.id, payload), { success: 'Form submitted' });
+    await run(() => submitFormResponses(assignment.id, payload), { success: 'Form submitted', onDone: onClose });
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{assignment.template.name}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{assignment.template.name}</h3>
+        <button type="button" onClick={onClose} className="text-xs font-medium text-zinc-500 hover:underline">
+          Cancel
+        </button>
+      </div>
       {assignment.template.description && (
         <p className="text-xs text-zinc-500">{assignment.template.description}</p>
       )}
@@ -145,6 +150,7 @@ export function FormsTab({
 }) {
   const { run, busy: assigning } = useAction();
   const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [openFormId, setOpenFormId] = useState<string | null>(null);
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -204,9 +210,31 @@ export function FormsTab({
                   <span className="ml-auto shrink-0 text-xs text-zinc-500">waiting on client</span>
                 </div>
               ))
-            : pending.map((a) => (
-                <FillableForm key={a.id} assignment={a} />
-              ))}
+            : pending.map((a) =>
+                openFormId === a.id ? (
+                  <FillableForm key={a.id} assignment={a} onClose={() => setOpenFormId(null)} />
+                ) : (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setOpenFormId(a.id)}
+                    className="flex w-full items-center gap-2.5 rounded-2xl border border-black/[.05] p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+                      <FileText className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-black dark:text-zinc-50">{a.template.name}</p>
+                      <p className="text-xs text-zinc-500">
+                        {a.template.questions.length} question{a.template.questions.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground">
+                      Fill out
+                    </span>
+                  </button>
+                )
+              )}
         </div>
       )}
 
