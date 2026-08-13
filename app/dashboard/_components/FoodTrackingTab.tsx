@@ -32,7 +32,7 @@ import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 import { entryMacros, formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
-import { FoodSearchPicker } from './FoodSearchPicker';
+import { AddFoodSheet } from './AddFoodSheet';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { NutritionTrackingMode } from './categories';
 import type {
@@ -198,7 +198,11 @@ export function FoodTrackingTab({
   const { run: runManual } = useAction();
   const [scanning, setScanning] = useState(false);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
-  const [openSectionId, setOpenSectionId] = useState<string | null>(null);
+  // Shared bottom-sheet "Add food" target -- null means closed; { id: null } targets the
+  // unfiled "Other" bucket (the header's "Search foods" button), a section id targets that
+  // section's own "+ Add food" button. One sheet for all entry points, matching the
+  // prototype's single shared addFoodModal instead of an always-visible inline panel.
+  const [addFoodTarget, setAddFoodTarget] = useState<{ id: string | null; label: string } | null>(null);
   const [newSectionLabel, setNewSectionLabel] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackBody, setFeedbackBody] = useState('');
@@ -303,10 +307,7 @@ export function FoodTrackingTab({
         await logRecipeToDiary(currentDailyLogId, recipeId, servings, sectionId);
         await loadDate(viewingDate);
       },
-      {
-        success: recipe ? `${recipe.name} added` : 'Recipe added',
-        onDone: () => setOpenSectionId(null),
-      }
+      { success: recipe ? `${recipe.name} added` : 'Recipe added' }
     );
   }
 
@@ -471,23 +472,31 @@ export function FoodTrackingTab({
       {!readOnly && !isManual && (
         <div className="space-y-2">
           {!scanning && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setScanning(true);
-                setScanStatus(null);
-              }}
-            >
-              Scan barcode
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setScanning(true);
+                  setScanStatus(null);
+                }}
+              >
+                Scan barcode
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setAddFoodTarget({ id: null, label: 'Other' })}>
+                Search foods
+              </Button>
+            </div>
           )}
           {scanning && (
             <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
           <p className="text-xs text-zinc-500">Scanned or quick-searched items land in &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;+ Add food&quot; to file directly, or re-file afterward.</p>
-          <FoodSearchPicker onAdd={(food, portions) => handleAdd(food, portions)} recipes={recipes} onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings)} />
         </div>
+      )}
+      {!readOnly && isManual && (
+        <p className="text-xs text-zinc-500">No food search in this mode — enter macros directly per section below.</p>
       )}
 
       {sections.map((section, index) => {
@@ -495,7 +504,6 @@ export function FoodTrackingTab({
         const sectionTotals = totalMacros(sectionEntries);
         const sectionManualEntries = manualEntries.filter((e) => e.meal_section_id === section.id);
         const sectionManualCalories = sectionManualEntries.reduce((sum, e) => sum + (e.calories ?? 0), 0);
-        const open = openSectionId === section.id;
         return (
           <div key={section.id} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -533,8 +541,12 @@ export function FoodTrackingTab({
                     Delete
                   </Button>
                   {!isManual && (
-                    <Button variant="ghost" size="sm" onClick={() => setOpenSectionId(open ? null : section.id)}>
-                      {open ? 'Close' : '+ Add food'}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
+                    >
+                      + Add food
                     </Button>
                   )}
                 </div>
@@ -566,15 +578,6 @@ export function FoodTrackingTab({
                     </li>
                   )}
                 </ul>
-                {open && (
-                  <div className="mt-3">
-                    <FoodSearchPicker
-                      onAdd={(food, portions) => handleAdd(food, portions, section.id)}
-                      recipes={recipes}
-                      onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings, section.id)}
-                    />
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -630,6 +633,16 @@ export function FoodTrackingTab({
                 ? 'Add a section above, then log macros against it.'
                 : 'Scan a barcode or search below to add the first one.'
           }
+        />
+      )}
+
+      {addFoodTarget && (
+        <AddFoodSheet
+          sectionLabel={addFoodTarget.label}
+          onAdd={(food, portions) => handleAdd(food, portions, addFoodTarget.id)}
+          recipes={recipes}
+          onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings, addFoodTarget.id)}
+          onClose={() => setAddFoodTarget(null)}
         />
       )}
     </div>
