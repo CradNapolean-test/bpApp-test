@@ -343,15 +343,15 @@ export function DashboardShell({
         </button>
       )}
       {showCoaching && categoryScreens.length > 1 && (
-        <div className="mb-3 flex gap-1 overflow-x-auto rounded-lg border border-black/10 p-1 md:hidden dark:border-white/10">
+        <div className="mb-3 flex gap-2 overflow-x-auto md:hidden">
           {categoryScreens.map((s) => (
             <button
               key={s}
               onClick={() => setScreen(s)}
-              className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 effectiveScreen === s
                   ? 'bg-accent text-accent-foreground'
-                  : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+                  : 'border border-black/[.08] bg-[var(--background)] text-zinc-700 hover:bg-black/5 dark:border-white/[.12] dark:text-zinc-300 dark:hover:bg-white/5'
               }`}
             >
               {s}
