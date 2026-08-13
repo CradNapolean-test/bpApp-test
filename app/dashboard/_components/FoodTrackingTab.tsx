@@ -603,7 +603,10 @@ export function FoodTrackingTab({
           <div key={section.id} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1">
-                {!readOnly ? (
+                {/* Renaming/reordering/deleting a section is structural, coach-only setup --
+                    the client just logs food into whatever sections already exist, matching
+                    the prototype's client view (name + total + "+ Add food", nothing else). */}
+                {readOnly ? (
                   <SectionNameInput sectionId={section.id} initial={section.label} />
                 ) : (
                   <h4 className="font-medium text-black dark:text-zinc-50">{section.label}</h4>
@@ -612,7 +615,7 @@ export function FoodTrackingTab({
                   {Math.round(isManual ? sectionManualCalories : sectionTotals.calories)} kcal
                 </span>
               </div>
-              {!readOnly && (
+              {readOnly && (
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
                     variant="icon"
@@ -635,15 +638,6 @@ export function FoodTrackingTab({
                   <Button variant="danger" size="sm" onClick={() => handleDeleteSection(section)}>
                     Delete
                   </Button>
-                  {!isManual && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
-                    >
-                      + Add food
-                    </Button>
-                  )}
                 </div>
               )}
             </div>
@@ -673,13 +667,22 @@ export function FoodTrackingTab({
                     </li>
                   )}
                 </ul>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
+                    className="mt-2 text-sm font-medium text-accent hover:underline"
+                  >
+                    + Add food
+                  </button>
+                )}
               </>
             )}
           </div>
         );
       })}
 
-      {!readOnly && (
+      {readOnly && (
         <form onSubmit={handleAddSection} className="flex items-center gap-2">
           <input
             value={newSectionLabel}
