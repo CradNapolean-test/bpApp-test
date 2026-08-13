@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Utensils } from 'lucide-react';
+import { Barcode, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
-import { ProgressRing } from '@/app/_components/ProgressRing';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -11,6 +10,7 @@ import {
   addFoodDiaryEntry,
   getFoodDiaryForDate,
   removeFoodDiaryEntry,
+  updateFoodDiaryEntryPortions,
   updateFoodDiaryEntrySection,
 } from '@/lib/data/foodDiary';
 import {
@@ -31,7 +31,7 @@ import { lookupBarcode } from '@/lib/openFoodFacts';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
-import { entryMacros, formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
+import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { NutritionTrackingMode } from './categories';
@@ -117,39 +117,59 @@ function SectionNameInput({ sectionId, initial }: { sectionId: string; initial: 
   );
 }
 
-function EntryRow({
+// Tap a logged entry to correct its quantity or delete it, instead of only ever being able to
+// remove-and-re-add -- opened from EntryRow below, matching the shared bottom-sheet pattern
+// used elsewhere in this app.
+function EditEntrySheet({
   entry,
-  readOnly,
   sections,
-  onRemove,
+  onClose,
+  onSave,
+  onDelete,
   onRefile,
 }: {
   entry: FoodDiaryEntryRow;
-  readOnly: boolean;
   sections: MealSectionRow[];
-  onRemove: (id: string) => void;
-  onRefile: (id: string, sectionId: string | null) => void;
+  onClose: () => void;
+  onSave: (portions: number) => void;
+  onDelete: () => void;
+  onRefile?: (sectionId: string) => void;
 }) {
-  const macros = entryMacros(entry);
+  const [portions, setPortions] = useState(entry.portions);
+  const unitLabel = entry.food?.portion === '1 gram' ? 'Grams' : `× ${entry.food?.portion ?? 'portion'}`;
+
   return (
-    <li className="flex items-center justify-between gap-2 p-3">
-      <div className="text-sm">
-        <p className="font-medium text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
-        <p className="text-xs text-zinc-500">
-          {formatQuantity(entry)} · {Math.round(macros.calories)} kcal · {Math.round(macros.protein)}P /{' '}
-          {Math.round(macros.carbs)}C / {Math.round(macros.fat)}F
-        </p>
-      </div>
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          {entry.meal_section_id === null && sections.length > 0 && (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit food entry"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded-t-2xl bg-[var(--background)] p-4 pb-6"
+      >
+        <h2 className="mb-3 text-sm font-bold text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</h2>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500">Quantity ({unitLabel})</label>
+          <input
+            type="number"
+            min={0}
+            step="any"
+            autoFocus
+            value={portions}
+            onChange={(e) => setPortions(Number(e.target.value))}
+            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          />
+        </div>
+        {onRefile && (
+          <div className="mt-3 space-y-1">
+            <label className="text-xs font-medium text-zinc-500">File under</label>
             <select
               defaultValue=""
-              onChange={(e) => e.target.value && onRefile(entry.id, e.target.value)}
-              className="rounded-md border border-black/10 bg-transparent px-1.5 py-1 text-xs dark:border-white/10"
+              onChange={(e) => e.target.value && onRefile(e.target.value)}
+              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
             >
               <option value="" disabled>
-                File under…
+                Choose a section…
               </option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -157,11 +177,74 @@ function EntryRow({
                 </option>
               ))}
             </select>
-          )}
-          <Button variant="danger" size="sm" onClick={() => onRemove(entry.id)}>
-            Remove
+          </div>
+        )}
+        <div className="mt-4 flex gap-2">
+          <Button variant="primary" onClick={() => onSave(portions)} disabled={portions <= 0}>
+            Save
+          </Button>
+          <Button variant="danger" onClick={onDelete}>
+            Delete
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EntryRow({
+  entry,
+  readOnly,
+  sections,
+  onRemove,
+  onRefile,
+  onUpdatePortions,
+}: {
+  entry: FoodDiaryEntryRow;
+  readOnly: boolean;
+  sections: MealSectionRow[];
+  onRemove: (id: string) => void;
+  onRefile: (id: string, sectionId: string | null) => void;
+  onUpdatePortions: (id: string, portions: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const macros = entryMacros(entry);
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={readOnly}
+        onClick={() => setEditing(true)}
+        className="flex w-full items-center justify-between gap-2 p-3 text-left disabled:cursor-default"
+      >
+        <p className="truncate text-sm text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
+        <span className="shrink-0 text-sm text-zinc-500">{Math.round(macros.calories)} kcal</span>
+      </button>
+      {editing && !readOnly && (
+        <EditEntrySheet
+          entry={entry}
+          sections={sections}
+          onClose={() => setEditing(false)}
+          onSave={(portions) => {
+            onUpdatePortions(entry.id, portions);
+            setEditing(false);
+          }}
+          onDelete={() => {
+            onRemove(entry.id);
+            setEditing(false);
+          }}
+          onRefile={
+            entry.meal_section_id === null && sections.length > 0
+              ? (sectionId) => {
+                  onRefile(entry.id, sectionId);
+                  setEditing(false);
+                }
+              : undefined
+          }
+        />
       )}
     </li>
   );
@@ -352,6 +435,17 @@ export function FoodTrackingTab({
     );
   }
 
+  async function handleUpdatePortions(id: string, portions: number) {
+    if (!currentDailyLogId) return;
+    await run(
+      async () => {
+        await updateFoodDiaryEntryPortions(id, portions, currentDailyLogId);
+        await loadDate(viewingDate);
+      },
+      { success: 'Updated' }
+    );
+  }
+
   async function handleAddSection(e: React.FormEvent) {
     e.preventDefault();
     const label = newSectionLabel.trim();
@@ -442,31 +536,26 @@ export function FoodTrackingTab({
       )}
 
       <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          {isToday ? "Today's totals" : `${dateLabel} totals`}
-        </h3>
-        <div className="mt-3 flex items-center gap-3">
-          {dayTarget && (
-            <>
-              <ProgressRing value={totals.calories} target={dayTarget.calories} label="kcal" />
-              <ProgressRing value={totals.protein} target={dayTarget.protein} label="protein" />
-            </>
-          )}
-          {/* Calories/Protein already shown by the rings above (each rendering "value/target"
-              inline) when a target exists -- repeating them here as plain text too was the
-              same number shown three times over (rings + this grid + a since-removed summary
-              line). Carbs/Fat have no ring, so they always need this text form. */}
-          <dl className="grid flex-1 grid-cols-2 gap-2 text-sm">
-            {!dayTarget && (
-              <>
-                <div><dt className="text-zinc-500">Calories</dt><dd>{Math.round(totals.calories)} kcal</dd></div>
-                <div><dt className="text-zinc-500">Protein</dt><dd>{Math.round(totals.protein)} g</dd></div>
-              </>
-            )}
-            <div><dt className="text-zinc-500">Carbs</dt><dd>{Math.round(totals.carbs)} g</dd></div>
-            <div><dt className="text-zinc-500">Fat</dt><dd>{Math.round(totals.fat)} g</dd></div>
-          </dl>
-        </div>
+        <p className="text-2xl font-bold text-black dark:text-zinc-50">
+          {Math.round(totals.calories).toLocaleString()}
+          <span className="text-base font-normal text-zinc-500">
+            {dayTarget ? ` / ${Math.round(dayTarget.calories).toLocaleString()} kcal` : ' kcal'}
+          </span>
+        </p>
+        <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+          <div>
+            <dt className="text-zinc-500">Protein</dt>
+            <dd className="font-semibold text-black dark:text-zinc-50">{Math.round(totals.protein)}g</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Carbs</dt>
+            <dd className="font-semibold text-black dark:text-zinc-50">{Math.round(totals.carbs)}g</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Fat</dt>
+            <dd className="font-semibold text-black dark:text-zinc-50">{Math.round(totals.fat)}g</dd>
+          </div>
+        </dl>
       </div>
 
       {!readOnly && !isManual && (
@@ -475,15 +564,21 @@ export function FoodTrackingTab({
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="flex-1"
+                className="flex flex-1 items-center justify-center gap-1.5"
                 onClick={() => {
                   setScanning(true);
                   setScanStatus(null);
                 }}
               >
+                <Barcode className="h-4 w-4" />
                 Scan barcode
               </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setAddFoodTarget({ id: null, label: 'Other' })}>
+              <Button
+                variant="outline"
+                className="flex flex-1 items-center justify-center gap-1.5"
+                onClick={() => setAddFoodTarget({ id: null, label: 'Other' })}
+              >
+                <Search className="h-4 w-4" />
                 Search foods
               </Button>
             </div>
@@ -570,7 +665,7 @@ export function FoodTrackingTab({
               <>
                 <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
                   {sectionEntries.map((entry) => (
-                    <EntryRow key={entry.id} entry={entry} readOnly={readOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} />
+                    <EntryRow key={entry.id} entry={entry} readOnly={readOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} />
                   ))}
                   {sectionEntries.length === 0 && (
                     <li>
@@ -616,7 +711,7 @@ export function FoodTrackingTab({
               <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
               <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
                 {otherEntries.map((entry) => (
-                  <EntryRow key={entry.id} entry={entry} readOnly={readOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} />
+                  <EntryRow key={entry.id} entry={entry} readOnly={readOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} />
                 ))}
               </ul>
             </div>

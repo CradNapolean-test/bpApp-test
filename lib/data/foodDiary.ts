@@ -64,6 +64,15 @@ export async function updateFoodDiaryEntrySection(entryId: string, mealSectionId
   if (error) raise(error);
 }
 
+// Corrects a logged quantity after the fact (e.g. misjudged a portion) instead of forcing a
+// delete-and-re-add -- tapping a diary row opens this.
+export async function updateFoodDiaryEntryPortions(entryId: string, portions: number, dailyLogId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('food_diary_entries').update({ portions }).eq('id', entryId);
+  if (error) raise(error);
+  await syncFoodDiaryToLog(dailyLogId);
+}
+
 // Writes the food diary's running totals into today's Weekly Log row, so downstream
 // Totals/Averages and floor-checks reflect what was actually logged (PROJECT_SPEC.md #5).
 export async function syncFoodDiaryToLog(dailyLogId: string): Promise<void> {
