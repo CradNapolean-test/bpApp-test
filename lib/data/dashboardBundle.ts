@@ -9,7 +9,7 @@ import { getMealPlanEntries } from './mealPlan';
 import { getMealSections, getOrCreateMealSections } from './mealSections';
 import { getActivities } from './foods';
 import { getClientUnreadCount, getMessages } from './chat';
-import { getCreditsBalance, getScheduleOccurrences, getUpcomingBookings } from './classes';
+import { getCreditsBalance, getCreditsLedger, getScheduleOccurrences, getUpcomingBookings } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getClientExerciseMaxes } from './clientExerciseMaxes';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
@@ -48,6 +48,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bookings,
     occurrences,
     creditsBalance,
+    creditsLedger,
     programs,
     workoutLogs,
     clientExerciseMaxes,
@@ -79,6 +80,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getUpcomingBookings(clientId),
     getScheduleOccurrences(),
     getCreditsBalance(clientId),
+    getCreditsLedger(clientId),
     getPrograms(clientId),
     getWorkoutLogs(clientId),
     getClientExerciseMaxes(clientId),
@@ -126,6 +128,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bookings,
     occurrences,
     creditsBalance,
+    creditsLedger,
     programs,
     workoutLogs,
     clientExerciseMaxes,

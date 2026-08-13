@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MessageSquare, Settings } from 'lucide-react';
+import { ArrowLeft, Bell, MessageSquare } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
 import { StatusBadge } from '@/app/_components/StatusBadge';
@@ -28,9 +28,10 @@ import { AccountTab } from './AccountTab';
 import { InfoTab } from '@/app/coach/_components/workspace/InfoTab';
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, screensForCategory, toDisabledScreenSet } from './categories';
-import { NotificationBanner } from './NotificationBanner';
+import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
+import { ClientCreditsTab } from './ClientCreditsTab';
 import { WorkoutTab } from './WorkoutTab';
 import type { ClientHealthStatus } from '@/lib/data/coach';
 import type { ThemePreference } from '@/app/_components/theme';
@@ -41,6 +42,7 @@ import type {
   ClientExerciseMaxRow,
   ClientMembershipRow,
   ClientProfileRow,
+  CreditsLedgerRow,
   DailyLogRow,
   EducationCourseAssignmentWithDetails,
   EducationCourseWithModules,
@@ -91,6 +93,7 @@ export function DashboardShell({
   bookings,
   occurrences,
   creditsBalance,
+  creditsLedger,
   programs,
   workoutLogs,
   clientExerciseMaxes,
@@ -137,6 +140,7 @@ export function DashboardShell({
   bookings: BookingRow[];
   occurrences: ScheduleOccurrence[];
   creditsBalance: number;
+  creditsLedger: CreditsLedgerRow[];
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
   clientExerciseMaxes: ClientExerciseMaxRow[];
@@ -251,7 +255,11 @@ export function DashboardShell({
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
   const mobileHeader = (
-    <div className="flex items-center gap-2.5">
+    <button
+      type="button"
+      onClick={() => handleCategoryClick('Account Settings')}
+      className="flex min-w-0 items-center gap-2.5 text-left"
+    >
       <Avatar name={profile?.name ?? clientLabel} size="md" />
       <div className="min-w-0">
         {!isCoachView && category === 'Home' ? (
@@ -265,7 +273,7 @@ export function DashboardShell({
           </p>
         )}
       </div>
-    </div>
+    </button>
   );
 
   const coachSummary = isCoachView && (
@@ -292,7 +300,6 @@ export function DashboardShell({
       topBar={topBar}
       mobileHeader={mobileHeader}
       coachSummary={coachSummary}
-      banner={!isCoachView && <NotificationBanner notifications={notifications} />}
       sidebar={sidebar}
       headerAction={
         <>
@@ -307,11 +314,14 @@ export function DashboardShell({
             )}
           </button>
           <button
-            onClick={() => handleCategoryClick('Account Settings')}
-            aria-label="Account Settings"
-            className="rounded-full bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+            onClick={() => handleCategoryClick('Notifications')}
+            aria-label="Notifications"
+            className="relative rounded-full bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
-            <Settings className="h-5 w-5" />
+            <Bell className="h-5 w-5" />
+            {notifications.length > 0 && (
+              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
+            )}
           </button>
           {isCoachView && <CoachMessagesButton unreadCount={coachUnreadCount} />}
         </>
@@ -379,6 +389,7 @@ export function DashboardShell({
               email={currentUserEmail}
               notificationsEnabled={profile?.notifications_enabled ?? true}
               themePreference={themePreference}
+              onNavigate={handleNavigate}
             />
           )}
           {effectiveScreen === 'Weekly Log' && (
@@ -478,8 +489,14 @@ export function DashboardShell({
               lastCheckinReminderAt={profile?.last_checkin_reminder_at ?? null}
             />
           )}
+          {effectiveScreen === 'Credits' && !isCoachView && (
+            <ClientCreditsTab creditsBalance={creditsBalance} membership={membership} ledger={creditsLedger} />
+          )}
           {effectiveScreen === 'Info' && isCoachView && (
             <InfoTab clientId={clientId} entries={journalEntries} />
+          )}
+          {effectiveScreen === 'Notifications' && (
+            <NotificationsTab notifications={notifications} />
           )}
           {effectiveScreen === 'Messages' && (
             <ChatTab

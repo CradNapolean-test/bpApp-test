@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { Avatar } from '@/app/_components/Avatar';
 import { Checkbox } from '@/app/_components/Checkbox';
@@ -10,8 +11,11 @@ import { ThemeToggle } from '@/app/_components/ThemeToggle';
 import { SignOutButton } from '@/app/_components/SignOutButton';
 import type { ThemePreference } from '@/app/_components/theme';
 import { updateNotificationsEnabled } from '@/lib/data/clientProfile';
+import type { Category, Screen } from './categories';
 
 const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+
+type RowKey = 'password' | 'email';
 
 export function AccountTab({
   clientId,
@@ -19,21 +23,27 @@ export function AccountTab({
   email,
   notificationsEnabled,
   themePreference,
+  onNavigate,
 }: {
   clientId: string;
   name: string;
   email: string;
   notificationsEnabled: boolean;
   themePreference: ThemePreference;
+  onNavigate: (category: Category, screen?: Screen) => void;
 }) {
   const { run } = useAction();
   const [enabled, setEnabled] = useState(notificationsEnabled);
+  const [openRow, setOpenRow] = useState<RowKey | null>(null);
 
   async function handleToggle() {
     const next = !enabled;
     setEnabled(next);
     await run(() => updateNotificationsEnabled(clientId, next));
   }
+
+  const rowCls =
+    'flex w-full items-center justify-between border-b border-black/5 px-4 py-3.5 text-left last:border-b-0 dark:border-white/5';
 
   return (
     <div className="space-y-6">
@@ -45,13 +55,36 @@ export function AccountTab({
         </div>
       </div>
 
-      <div className={cardCls}>
-        <ChangePasswordForm />
+      <div className={`${cardCls} !p-0`}>
+        <button type="button" onClick={() => setOpenRow(openRow === 'password' ? null : 'password')} className={rowCls}>
+          <span className="text-sm font-medium text-black dark:text-zinc-50">Change password</span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+        </button>
+        <button type="button" onClick={() => setOpenRow(openRow === 'email' ? null : 'email')} className={rowCls}>
+          <span className="text-sm font-medium text-black dark:text-zinc-50">Change email</span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+        </button>
+        <button type="button" onClick={() => onNavigate('Account Settings', 'Setup')} className={rowCls}>
+          <span className="text-sm font-medium text-black dark:text-zinc-50">Setup / Profile details</span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+        </button>
+        <button type="button" onClick={() => onNavigate('Account Settings', 'Credits')} className={rowCls}>
+          <span className="text-sm font-medium text-black dark:text-zinc-50">Credits &amp; Membership</span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+        </button>
       </div>
 
-      <div className={cardCls}>
-        <ChangeEmailForm currentEmail={email} />
-      </div>
+      {openRow === 'password' && (
+        <div className={cardCls}>
+          <ChangePasswordForm />
+        </div>
+      )}
+
+      {openRow === 'email' && (
+        <div className={cardCls}>
+          <ChangeEmailForm currentEmail={email} />
+        </div>
+      )}
 
       <div className={cardCls}>
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Reminder notifications</h3>

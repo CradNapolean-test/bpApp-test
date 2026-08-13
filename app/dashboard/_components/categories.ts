@@ -1,4 +1,4 @@
-import { Apple, CheckSquare, Dumbbell, House, MessageSquare, Settings, TrendingUp } from 'lucide-react';
+import { Apple, Bell, CheckSquare, Dumbbell, House, MessageSquare, Settings, TrendingUp } from 'lucide-react';
 
 // Screens are grouped into categories rather than one flat tab bar.
 export type Screen =
@@ -19,14 +19,15 @@ export type Screen =
   | 'Progress & Photos'
   | 'Workout'
   | 'Credits'
-  | 'Messages';
+  | 'Messages'
+  | 'Notifications';
 
-export type Category = 'Home' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings';
-export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Messages', 'Account Settings'];
+export type Category = 'Home' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
+export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Messages', 'Account Settings', 'Notifications'];
 
-// The mobile bottom tab bar shows only these 5 -- Messages and Account Settings move to
-// header icons instead (see BottomTabBar.tsx / DashboardShell.tsx), a tab bar can't
-// comfortably fit 7.
+// The mobile bottom tab bar shows only these 5 -- Messages, Account Settings and
+// Notifications move to header icons instead (see BottomTabBar.tsx / DashboardShell.tsx), a
+// tab bar can't comfortably fit 8.
 export const BOTTOM_TAB_CATEGORIES: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress'];
 
 export const CATEGORY_ICON: Record<Category, typeof House> = {
@@ -37,6 +38,7 @@ export const CATEGORY_ICON: Record<Category, typeof House> = {
   Progress: TrendingUp,
   Messages: MessageSquare,
   'Account Settings': Settings,
+  Notifications: Bell,
 };
 
 // Coach-toggleable via the Tools tab (CoachClientWorkspace) -- Today/Setup/Account/Credits/
@@ -92,13 +94,15 @@ export function screensForCategory(
         return ['Overview', 'Progress & Photos'];
       case 'Messages':
         return ['Messages'];
+      case 'Notifications':
+        return ['Notifications'];
       case 'Account Settings':
         // 'Account' (password/email/notifications/theme) operates on the *logged-in* auth
         // session -- shown only on the client's own dashboard. A coach viewing a client here
         // must never see it: clicking "change password" would silently change the COACH's own
         // password, not the client's, since supabase.auth.updateUser() always targets whoever
         // is actually signed in.
-        return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Setup', 'Account'];
+        return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Setup', 'Account', 'Credits'];
     }
   })();
   return screens.filter((s) => !disabledScreens.has(s));
