@@ -61,7 +61,9 @@ export async function deleteClass(classId: string): Promise<void> {
 
 export async function updateClass(
   classId: string,
-  fields: Partial<Pick<ClassRow, 'linked_day_position'>>
+  fields: Partial<
+    Pick<ClassRow, 'linked_day_position' | 'name' | 'day_of_week' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>
+  >
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').update(fields).eq('id', classId);

@@ -50,6 +50,10 @@ export default async function CoachClientOverviewPage({
       programs={bundle.programs}
       programWeek={bundle.programWeek}
       historyLogs={bundle.historyLogs}
+      formTemplates={bundle.formTemplates}
+      formAssignments={bundle.formAssignments}
+      educationCourses={bundle.educationCourses}
+      educationAssignments={bundle.educationAssignments}
     />
   );
 }

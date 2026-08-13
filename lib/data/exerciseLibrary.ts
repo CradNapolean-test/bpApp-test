@@ -26,7 +26,7 @@ export async function createLibraryExercise(
 
 export async function updateLibraryExercise(
   id: string,
-  fields: Omit<ExerciseLibraryRow, 'id' | 'created_by' | 'created_at'>
+  fields: Partial<Omit<ExerciseLibraryRow, 'id' | 'created_by' | 'created_at'>>
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('exercise_library').update(fields).eq('id', id);

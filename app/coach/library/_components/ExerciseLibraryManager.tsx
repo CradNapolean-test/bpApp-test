@@ -7,13 +7,116 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DefaultMuscleGroupIcon, MUSCLE_GROUPS, MUSCLE_GROUP_ICONS } from '@/app/_components/workouts/muscleGroups';
-import { createLibraryExercise, deleteLibraryExercise } from '@/lib/data/exerciseLibrary';
+import { createLibraryExercise, deleteLibraryExercise, updateLibraryExercise } from '@/lib/data/exerciseLibrary';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
+
+// Tap-to-edit sheet for an existing library entry -- name/muscle group/sets/reps/RPE, or
+// delete. Mirrors the create form's fields but scoped to just what the prototype's edit
+// sheet covers, not the full create form's equipment/video/image/instructions/notes set.
+function EditExerciseSheet({
+  exercise,
+  onClose,
+  onDelete,
+}: {
+  exercise: ExerciseLibraryRow;
+  onClose: () => void;
+  onDelete: (id: string, name: string) => void;
+}) {
+  const { run, busy: saving } = useAction();
+  const [name, setName] = useState(exercise.name);
+  const [muscleGroup, setMuscleGroup] = useState(exercise.muscle_group ?? '');
+  const [defaultSets, setDefaultSets] = useState<number | ''>(exercise.default_sets ?? '');
+  const [defaultReps, setDefaultReps] = useState(exercise.default_reps ?? '');
+  const [defaultRpe, setDefaultRpe] = useState<number | ''>(exercise.default_rpe ?? '');
+
+  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    await run(
+      () =>
+        updateLibraryExercise(exercise.id, {
+          name,
+          muscle_group: muscleGroup || null,
+          default_sets: defaultSets === '' ? null : defaultSets,
+          default_reps: defaultReps || null,
+          default_rpe: defaultRpe === '' ? null : defaultRpe,
+        }),
+      { success: 'Exercise updated', onDone: onClose }
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit exercise"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[75vh] w-full overflow-y-auto rounded-t-2xl bg-[var(--background)] p-4 pb-6"
+      >
+        <h2 className="mb-3 text-sm font-bold text-black dark:text-zinc-50">Edit exercise</h2>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Name</label>
+            <input required autoFocus className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Muscle group</label>
+            <select className={inputCls} value={muscleGroup} onChange={(e) => setMuscleGroup(e.target.value)}>
+              <option value="">—</option>
+              {MUSCLE_GROUPS.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Sets</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={defaultSets}
+                onChange={(e) => setDefaultSets(e.target.value === '' ? '' : Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Reps</label>
+              <input className={inputCls} value={defaultReps} onChange={(e) => setDefaultReps(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">RPE</label>
+              <input
+                type="number"
+                className={inputCls}
+                value={defaultRpe}
+                onChange={(e) => setDefaultRpe(e.target.value === '' ? '' : Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button type="submit" variant="primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button type="button" variant="danger" onClick={() => onDelete(exercise.id, exercise.name)}>
+              Delete
+            </Button>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export function ExerciseLibraryManager({ initialExercises }: { initialExercises: ExerciseLibraryRow[] }) {
   const confirm = useConfirm();
   const { run: runCreate, busy: saving } = useAction();
   const { run: runDelete } = useAction();
+  const [addingExercise, setAddingExercise] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [defaultSets, setDefaultSets] = useState<number | ''>(3);
   const [defaultReps, setDefaultReps] = useState('8-10');
@@ -52,6 +155,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
           setImageUrl('');
           setInstructions('');
           setNotes('');
+          setAddingExercise(false);
         },
       }
     );
@@ -64,7 +168,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
       destructive: true,
     });
     if (!ok) return;
-    await runDelete(() => deleteLibraryExercise(id), { success: 'Exercise removed' });
+    await runDelete(() => deleteLibraryExercise(id), { success: 'Exercise removed', onDone: () => setEditingId(null) });
   }
 
   const filteredExercises = useMemo(
@@ -76,6 +180,16 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
 
   return (
     <div className="space-y-6">
+      {!addingExercise && (
+        <button
+          type="button"
+          onClick={() => setAddingExercise(true)}
+          className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
+        >
+          + Add exercise
+        </button>
+      )}
+      {addingExercise && (
       <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10 sm:grid-cols-4">
         <div className="col-span-2 space-y-1 sm:col-span-4">
           <label className="text-xs font-medium text-zinc-500">Exercise name</label>
@@ -141,14 +255,20 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
           <label className="text-xs font-medium text-zinc-500">Notes</label>
           <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="col-span-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50 sm:col-span-4"
-        >
-          {saving ? 'Adding…' : 'Add to library'}
-        </button>
+        <div className="col-span-2 flex gap-2 sm:col-span-4">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+          >
+            {saving ? 'Adding…' : 'Add to library'}
+          </button>
+          <Button type="button" variant="ghost" onClick={() => setAddingExercise(false)}>
+            Cancel
+          </Button>
+        </div>
       </form>
+      )}
 
       {initialExercises.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -194,8 +314,12 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
           {filteredExercises.map((ex) => {
             const Icon = MUSCLE_GROUP_ICONS[ex.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
             return (
-              <li key={ex.id} className="flex items-center justify-between gap-2 p-3 text-sm">
-                <div className="flex min-w-0 items-center gap-2.5">
+              <li key={ex.id}>
+                <button
+                  type="button"
+                  onClick={() => setEditingId(ex.id)}
+                  className="flex w-full items-center gap-2.5 p-3 text-left text-sm"
+                >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black/5 dark:bg-white/10">
                     {ex.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
@@ -211,14 +335,19 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
                     {ex.default_rpe != null ? ` RPE ${ex.default_rpe}` : ''}
                     {ex.default_rest_seconds != null ? ` · ${ex.default_rest_seconds}s rest` : ''}
                   </span>
-                </div>
-                <Button variant="danger" size="sm" onClick={() => handleDelete(ex.id, ex.name)} className="shrink-0">
-                  Delete
-                </Button>
+                </button>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {editingId && (
+        <EditExerciseSheet
+          exercise={initialExercises.find((ex) => ex.id === editingId)!}
+          onClose={() => setEditingId(null)}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   );

@@ -44,10 +44,116 @@ function LinkedDayPositionInput({ classId, initial }: { classId: string; initial
   );
 }
 
+// "Edit class" bottom sheet -- Schedule/Capacity/Credit cost/Coach note + Save/Delete/Cancel,
+// matching the prototype's tap-a-row-to-edit pattern instead of the row only offering delete.
+function EditClassSheet({
+  classRow,
+  onClose,
+  onDelete,
+}: {
+  classRow: ClassRow;
+  onClose: () => void;
+  onDelete: (id: string, name: string) => void;
+}) {
+  const { run, busy: saving } = useAction();
+  const [name, setName] = useState(classRow.name);
+  const [dayOfWeek, setDayOfWeek] = useState(classRow.day_of_week ?? 1);
+  const [startTime, setStartTime] = useState(classRow.start_time?.slice(0, 5) ?? '06:00');
+  const [capacity, setCapacity] = useState(classRow.capacity);
+  const [creditCost, setCreditCost] = useState(classRow.credit_cost);
+  const [cutoffHours, setCutoffHours] = useState(classRow.cutoff_hours);
+  const [note, setNote] = useState(classRow.coach_note ?? '');
+
+  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    await run(
+      () =>
+        updateClass(classRow.id, {
+          name,
+          day_of_week: dayOfWeek,
+          start_time: startTime,
+          capacity,
+          credit_cost: creditCost,
+          cutoff_hours: cutoffHours,
+          coach_note: note || null,
+        }),
+      { success: 'Class updated', onDone: onClose }
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit class"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[75vh] w-full overflow-y-auto rounded-t-2xl bg-[var(--background)] p-4 pb-6"
+      >
+        <h2 className="mb-3 text-sm font-bold text-black dark:text-zinc-50">Edit class</h2>
+        <form onSubmit={handleSave} className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Name</label>
+            <input required className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Schedule</label>
+            <div className="flex gap-2">
+              <select
+                className={inputCls}
+                value={dayOfWeek}
+                onChange={(e) => setDayOfWeek(Number(e.target.value))}
+              >
+                {WEEKDAY_LABELS.map((label, i) => (
+                  <option key={i} value={i}>{label}</option>
+                ))}
+              </select>
+              <input type="time" className={inputCls} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Capacity</label>
+              <input type="number" className={inputCls} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Credit cost</label>
+              <input type="number" min={0} className={inputCls} value={creditCost} onChange={(e) => setCreditCost(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Cutoff (h)</label>
+              <input type="number" className={inputCls} value={cutoffHours} onChange={(e) => setCutoffHours(Number(e.target.value))} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Coach note</label>
+            <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button type="submit" variant="primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button type="button" variant="danger" onClick={() => onDelete(classRow.id, classRow.name)}>
+              Delete
+            </Button>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] }) {
   const confirm = useConfirm();
   const { run: runCreate, busy: saving } = useAction();
   const { run: runDelete } = useAction();
+  const [addingClass, setAddingClass] = useState(false);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [occurrenceRows, setOccurrenceRows] = useState<OccurrenceRow[]>([
     { id: nextRowId++, dayOfWeek: 1, startTime: '06:00' },
@@ -82,6 +188,7 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
         onDone: () => {
           setName('');
           setOccurrenceRows([{ id: nextRowId++, dayOfWeek: 1, startTime: '06:00' }]);
+          setAddingClass(false);
         },
       }
     );
@@ -94,7 +201,7 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
       destructive: true,
     });
     if (!ok) return;
-    await runDelete(() => deleteClass(id), { success: 'Class deleted' });
+    await runDelete(() => deleteClass(id), { success: 'Class deleted', onDone: () => setEditingClassId(null) });
   }
 
   const inputCls =
@@ -104,70 +211,85 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="col-span-2 space-y-1 sm:col-span-1">
-            <label className="text-xs font-medium text-zinc-500">Name</label>
-            <input required className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Capacity</label>
-            <input type="number" className={inputCls} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Credits per booking</label>
-            <input type="number" min={0} className={inputCls} value={creditCost} onChange={(e) => setCreditCost(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Cutoff (hours)</label>
-            <input type="number" className={inputCls} value={cutoffHours} onChange={(e) => setCutoffHours(Number(e.target.value))} />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-zinc-500">Days &amp; times</label>
-          {occurrenceRows.map((row) => (
-            <div key={row.id} className="flex items-center gap-2">
-              <select
-                className={`${smallInputCls} flex-1`}
-                value={row.dayOfWeek}
-                onChange={(e) => updateOccurrenceRow(row.id, { dayOfWeek: Number(e.target.value) })}
-              >
-                {WEEKDAY_LABELS.map((label, i) => (
-                  <option key={i} value={i}>{label}</option>
-                ))}
-              </select>
-              <input
-                type="time"
-                className={smallInputCls}
-                value={row.startTime}
-                onChange={(e) => updateOccurrenceRow(row.id, { startTime: e.target.value })}
-              />
-              {occurrenceRows.length > 1 && (
-                <Button type="button" variant="danger" size="sm" onClick={() => removeOccurrenceRow(row.id)}>
-                  Remove
-                </Button>
-              )}
+      {addingClass ? (
+        <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="col-span-2 space-y-1 sm:col-span-1">
+              <label className="text-xs font-medium text-zinc-500">Name</label>
+              <input required autoFocus className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-          ))}
-          <button type="button" onClick={addOccurrenceRow} className="text-xs font-medium text-zinc-500 hover:underline">
-            + Add another day/time
-          </button>
-        </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Capacity</label>
+              <input type="number" className={inputCls} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Credits per booking</label>
+              <input type="number" min={0} className={inputCls} value={creditCost} onChange={(e) => setCreditCost(Number(e.target.value))} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Cutoff (hours)</label>
+              <input type="number" className={inputCls} value={cutoffHours} onChange={(e) => setCutoffHours(Number(e.target.value))} />
+            </div>
+          </div>
 
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Note</label>
-          <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
-        </div>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-zinc-500">Days &amp; times</label>
+            {occurrenceRows.map((row) => (
+              <div key={row.id} className="flex items-center gap-2">
+                <select
+                  className={`${smallInputCls} flex-1`}
+                  value={row.dayOfWeek}
+                  onChange={(e) => updateOccurrenceRow(row.id, { dayOfWeek: Number(e.target.value) })}
+                >
+                  {WEEKDAY_LABELS.map((label, i) => (
+                    <option key={i} value={i}>{label}</option>
+                  ))}
+                </select>
+                <input
+                  type="time"
+                  className={smallInputCls}
+                  value={row.startTime}
+                  onChange={(e) => updateOccurrenceRow(row.id, { startTime: e.target.value })}
+                />
+                {occurrenceRows.length > 1 && (
+                  <Button type="button" variant="danger" size="sm" onClick={() => removeOccurrenceRow(row.id)}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+            ))}
+            <button type="button" onClick={addOccurrenceRow} className="text-xs font-medium text-zinc-500 hover:underline">
+              + Add another day/time
+            </button>
+          </div>
 
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Note</label>
+            <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            >
+              {saving ? 'Adding…' : occurrenceRows.length > 1 ? `Add ${occurrenceRows.length} classes` : 'Add class'}
+            </button>
+            <Button type="button" variant="ghost" onClick={() => setAddingClass(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
         <button
-          type="submit"
-          disabled={saving}
-          className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+          type="button"
+          onClick={() => setAddingClass(true)}
+          className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
         >
-          {saving ? 'Adding…' : occurrenceRows.length > 1 ? `Add ${occurrenceRows.length} classes` : 'Add class'}
+          + Add class
         </button>
-      </form>
+      )}
 
       {initialClasses.length === 0 ? (
         <EmptyState
@@ -190,23 +312,28 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
             key={c.id}
             className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
           >
-            <div className="min-w-0">
+            <button type="button" onClick={() => setEditingClassId(c.id)} className="min-w-0 flex-1 text-left">
               <p className="text-sm font-semibold text-black dark:text-zinc-50">{c.name}</p>
               <p className="mt-0.5 text-xs text-zinc-500">
                 {c.day_of_week != null ? WEEKDAY_LABELS[c.day_of_week] : '—'} {c.start_time?.slice(0, 5)} · cap{' '}
                 {c.capacity} · {c.credit_cost} credit{c.credit_cost === 1 ? '' : 's'} · {c.cutoff_hours}h cutoff
               </p>
-            </div>
+            </button>
             <div className="flex shrink-0 items-center gap-2">
               <LinkedDayPositionInput classId={c.id} initial={c.linked_day_position} />
-              <Button variant="danger" size="sm" onClick={() => handleDelete(c.id, c.name)}>
-                Delete
-              </Button>
             </div>
           </div>
         ))}
       </div>
       </>
+      )}
+
+      {editingClassId && (
+        <EditClassSheet
+          classRow={initialClasses.find((c) => c.id === editingClassId)!}
+          onClose={() => setEditingClassId(null)}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   );

@@ -9,15 +9,25 @@ import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from './CoachNav';
 import { CoachBottomTabBar } from './CoachBottomTabBar';
 import { CoachMessagesButton } from './CoachMessagesButton';
+import { FormsTab } from '@/app/dashboard/_components/FormsTab';
+import { EducationTab } from '@/app/dashboard/_components/EducationTab';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { toIsoDate } from '@/lib/utils/dates';
 import type { ClientHealthStatus } from '@/lib/data/coach';
-import type { ClientProfileRow, DailyLogRow, WorkoutProgramRow } from '@/lib/data/types';
+import type {
+  ClientProfileRow,
+  DailyLogRow,
+  EducationCourseAssignmentWithDetails,
+  EducationCourseWithModules,
+  FormAssignmentWithDetails,
+  FormTemplateRow,
+  WorkoutProgramRow,
+} from '@/lib/data/types';
 
-const TABS = ['Overview', 'Program', 'Nutrition', 'Progress'] as const;
+const TABS = ['Overview', 'Program', 'Nutrition', 'Progress', 'Forms & Edu'] as const;
 type Tab = (typeof TABS)[number];
 
 const cardCls =
@@ -70,6 +80,10 @@ export function ClientQuickOverview({
   programs,
   programWeek,
   historyLogs,
+  formTemplates,
+  formAssignments,
+  educationCourses,
+  educationAssignments,
 }: {
   clientId: string;
   clientLabel: string;
@@ -79,6 +93,10 @@ export function ClientQuickOverview({
   programs: WorkoutProgramRow[];
   programWeek: number;
   historyLogs: DailyLogRow[];
+  formTemplates: FormTemplateRow[];
+  formAssignments: FormAssignmentWithDetails[];
+  educationCourses: EducationCourseWithModules[];
+  educationAssignments: EducationCourseAssignmentWithDetails[];
 }) {
   const [tab, setTab] = useState<Tab>('Overview');
   const todayIso = toIsoDate(new Date());
@@ -246,6 +264,18 @@ export function ClientQuickOverview({
               <Sparkline values={bodyweights} />
             </div>
             <p className="mt-1 text-[11px] text-zinc-400">Trend across logged history</p>
+          </div>
+        )}
+
+        {tab === 'Forms & Edu' && (
+          <div className="space-y-6">
+            <FormsTab clientId={clientId} isCoachView templates={formTemplates} assignments={formAssignments} />
+            <EducationTab
+              clientId={clientId}
+              isCoachView
+              courses={educationCourses}
+              assignments={educationAssignments}
+            />
           </div>
         )}
       </div>
