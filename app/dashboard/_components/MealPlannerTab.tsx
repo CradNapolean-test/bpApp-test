@@ -7,7 +7,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { addMealPlanEntry, removeMealPlanEntry } from '@/lib/data/mealPlan';
 import { addRecipeToMealPlan } from '@/lib/data/recipes';
 import { entryMacros, formatQuantity, totalMacros } from '@/lib/utils/foodTotals';
-import { FoodSearchPicker } from './FoodSearchPicker';
+import { AddFoodSheet } from './AddFoodSheet';
 import type { MealPlanEntryRow, MealPlanSection, FoodRow, RecipeRow } from '@/lib/data/types';
 
 const SECTIONS: { key: MealPlanSection; label: string }[] = [
@@ -32,20 +32,16 @@ export function MealPlannerTab({
 }) {
   const { run } = useAction();
   const { run: runRecipe } = useAction();
-  const [openSection, setOpenSection] = useState<MealPlanSection | null>(null);
+  const [addFoodSection, setAddFoodSection] = useState<{ key: MealPlanSection; label: string } | null>(null);
 
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
-    await run(() => addMealPlanEntry(clientId, section, food.id, portions), {
-      success: `${food.name} added`,
-      onDone: () => setOpenSection(null),
-    });
+    await run(() => addMealPlanEntry(clientId, section, food.id, portions), { success: `${food.name} added` });
   }
 
   async function handleAddRecipe(section: MealPlanSection, recipeId: string, servings: number) {
     const recipe = recipes.find((r) => r.id === recipeId);
     await runRecipe(() => addRecipeToMealPlan(clientId, section, recipeId, servings), {
       success: recipe ? `${recipe.name} added` : 'Recipe added',
-      onDone: () => setOpenSection(null),
     });
   }
 
@@ -74,8 +70,8 @@ export function MealPlannerTab({
             <div className="flex items-center justify-between">
               <h4 className="font-medium text-black dark:text-zinc-50">{label}</h4>
               {!readOnly && (
-                <Button variant="ghost" size="sm" onClick={() => setOpenSection(openSection === key ? null : key)}>
-                  {openSection === key ? 'Close' : '+ Add food'}
+                <Button variant="ghost" size="sm" onClick={() => setAddFoodSection({ key, label })}>
+                  + Add food
                 </Button>
               )}
             </div>
@@ -104,18 +100,19 @@ export function MealPlannerTab({
                 </li>
               )}
             </ul>
-            {openSection === key && (
-              <div className="mt-3">
-                <FoodSearchPicker
-                  onAdd={(food, portions) => handleAdd(key, food, portions)}
-                  recipes={recipes}
-                  onAddRecipe={(recipeId, servings) => handleAddRecipe(key, recipeId, servings)}
-                />
-              </div>
-            )}
           </div>
         );
       })}
+
+      {addFoodSection && (
+        <AddFoodSheet
+          sectionLabel={addFoodSection.label}
+          onAdd={(food, portions) => handleAdd(addFoodSection.key, food, portions)}
+          recipes={recipes}
+          onAddRecipe={(recipeId, servings) => handleAddRecipe(addFoodSection.key, recipeId, servings)}
+          onClose={() => setAddFoodSection(null)}
+        />
+      )}
     </div>
   );
 }

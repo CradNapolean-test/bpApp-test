@@ -14,7 +14,7 @@ import {
   updateRecipeServings,
 } from '@/lib/data/recipes';
 import { totalRecipeMacros } from '@/lib/utils/foodTotals';
-import { FoodSearchPicker } from './FoodSearchPicker';
+import { AddFoodSheet } from './AddFoodSheet';
 import type { FoodRow, RecipeWithIngredients } from '@/lib/data/types';
 
 function ServingsInput({ recipeId, initial }: { recipeId: string; initial: number }) {
@@ -58,6 +58,8 @@ export function RecipesTab({
   const [name, setName] = useState('');
   const [servings, setServings] = useState(1);
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
+  const [addingIngredient, setAddingIngredient] = useState(false);
+  const [addingRecipe, setAddingRecipe] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -71,6 +73,7 @@ export function RecipesTab({
         onDone: () => {
           setName('');
           setServings(1);
+          setAddingRecipe(false);
           // Jump straight to adding ingredients instead of leaving the coach to find and
           // click back into the recipe they just created.
           if (newId) setOpenRecipeId(newId);
@@ -102,34 +105,6 @@ export function RecipesTab({
 
   return (
     <div className="space-y-4">
-      {!readOnly && (
-        <form onSubmit={handleCreate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
-          <div className="flex-1 space-y-1">
-            <label className="text-xs font-medium text-zinc-500">New recipe name</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Protein overnight oats"
-              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            />
-          </div>
-          <div className="w-24 space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Servings</label>
-            <input
-              type="number"
-              min={1}
-              value={servings}
-              onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
-              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            />
-          </div>
-          <Button type="submit" variant="primary" disabled={creating}>
-            {creating ? 'Creating…' : 'Create recipe'}
-          </Button>
-        </form>
-      )}
-
       {initialRecipes.length === 0 ? (
         <EmptyState
           icon={ChefHat}
@@ -150,7 +125,10 @@ export function RecipesTab({
               <div key={recipe.id} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
                 <div className="flex items-center justify-between gap-2">
                   <button
-                    onClick={() => setOpenRecipeId(open ? null : recipe.id)}
+                    onClick={() => {
+                      setOpenRecipeId(open ? null : recipe.id);
+                      setAddingIngredient(false);
+                    }}
                     className="text-left font-medium text-black hover:underline dark:text-zinc-50"
                   >
                     {recipe.name}
@@ -177,37 +155,92 @@ export function RecipesTab({
                     {Math.round(totals.fat / servings)}g fat
                   </p>
                 )}
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  {recipe.recipe_ingredients.length} ingredient{recipe.recipe_ingredients.length === 1 ? '' : 's'}
+                </p>
 
-                <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/5">
-                  {recipe.recipe_ingredients.map((ing) => (
-                    <li key={ing.id} className="flex items-center justify-between py-1.5">
-                      <span>
-                        {ing.food?.name ?? 'Unknown food'}{' '}
-                        <span className="text-zinc-500">
-                          {ing.food?.portion === '1 gram' ? `${ing.portions}g` : `${ing.portions}× ${ing.food?.portion ?? ''}`}
-                        </span>
-                      </span>
-                      {!readOnly && (
-                        <Button variant="danger" size="sm" onClick={() => handleRemoveIngredient(ing.id)}>
-                          Remove
-                        </Button>
+                {open && (
+                  <>
+                    <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/5">
+                      {recipe.recipe_ingredients.map((ing) => (
+                        <li key={ing.id} className="flex items-center justify-between py-1.5">
+                          <span>
+                            {ing.food?.name ?? 'Unknown food'}{' '}
+                            <span className="text-zinc-500">
+                              {ing.food?.portion === '1 gram' ? `${ing.portions}g` : `${ing.portions}× ${ing.food?.portion ?? ''}`}
+                            </span>
+                          </span>
+                          {!readOnly && (
+                            <Button variant="danger" size="sm" onClick={() => handleRemoveIngredient(ing.id)}>
+                              Remove
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                      {recipe.recipe_ingredients.length === 0 && (
+                        <li className="py-1.5 text-zinc-500">No ingredients yet.</li>
                       )}
-                    </li>
-                  ))}
-                  {recipe.recipe_ingredients.length === 0 && (
-                    <li className="py-1.5 text-zinc-500">No ingredients yet.</li>
-                  )}
-                </ul>
-
-                {open && !readOnly && (
-                  <div className="mt-3">
-                    <FoodSearchPicker onAdd={(food, portions) => handleAddIngredient(recipe.id, food, portions)} />
-                  </div>
+                    </ul>
+                    {!readOnly && (
+                      <Button variant="ghost" size="sm" className="mt-2" onClick={() => setAddingIngredient(true)}>
+                        + Add ingredient
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             );
           })}
         </div>
+      )}
+
+      {!readOnly &&
+        (addingRecipe ? (
+          <form onSubmit={handleCreate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+            <div className="flex-1 space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Recipe name</label>
+              <input
+                required
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Protein overnight oats"
+                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+              />
+            </div>
+            <div className="w-24 space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Servings</label>
+              <input
+                type="number"
+                min={1}
+                value={servings}
+                onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+              />
+            </div>
+            <Button type="submit" variant="primary" disabled={creating}>
+              {creating ? 'Creating…' : 'Add'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setAddingRecipe(false)}>
+              Cancel
+            </Button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingRecipe(true)}
+            className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
+          >
+            + New recipe
+          </button>
+        ))}
+
+      {openRecipeId && addingIngredient && (
+        <AddFoodSheet
+          sectionLabel={initialRecipes.find((r) => r.id === openRecipeId)?.name ?? 'Recipe'}
+          onAdd={(food, portions) => handleAddIngredient(openRecipeId, food, portions)}
+          onClose={() => setAddingIngredient(false)}
+        />
       )}
     </div>
   );

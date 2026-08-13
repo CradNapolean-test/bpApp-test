@@ -67,6 +67,7 @@ export function PhotoDiaryTab({
   const { run: runUpload, busy: uploading } = useAction();
   const { run: runDelete } = useAction();
   const [description, setDescription] = useState('');
+  const [adding, setAdding] = useState(false);
 
   const dayTarget = useMemo(() => {
     const engineProfile = profile ? toEngineProfile(profile) : null;
@@ -86,6 +87,7 @@ export function PhotoDiaryTab({
       onDone: () => {
         form.reset();
         setDescription('');
+        setAdding(false);
       },
     });
   }
@@ -114,21 +116,35 @@ export function PhotoDiaryTab({
           <p className="text-xs text-zinc-500">{Math.round(totalCalories)} kcal estimated today</p>
         </div>
 
-        {!readOnly && (
-          <form onSubmit={handleUpload} className="mt-3 space-y-2">
-            <input type="file" name="file" accept="image/*" required className="text-sm" />
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this? e.g. Chicken salad, small portion"
-              rows={2}
-              className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
-            />
-            <Button type="submit" variant="primary" disabled={uploading}>
-              {uploading ? 'Uploading…' : 'Add photo'}
-            </Button>
-          </form>
-        )}
+        {!readOnly &&
+          (adding ? (
+            <form onSubmit={handleUpload} className="mt-3 space-y-2">
+              <input type="file" name="file" accept="image/*" required autoFocus className="text-sm" />
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is this? e.g. Chicken salad, small portion"
+                rows={2}
+                className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+              />
+              <div className="flex gap-2">
+                <Button type="submit" variant="primary" disabled={uploading}>
+                  {uploading ? 'Uploading…' : 'Add photo'}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="mt-3 w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
+            >
+              + Add food photo
+            </button>
+          ))}
       </div>
 
       {initialPhotos.length === 0 ? (
