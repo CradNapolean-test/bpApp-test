@@ -243,6 +243,7 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [openCourseId, setOpenCourseId] = useState<string | null>(null);
+  const [addingCourse, setAddingCourse] = useState(false);
   const openCourse = openCourseId ? initialCourses.find((c) => c.id === openCourseId) : undefined;
 
   async function handleCreate(e: React.FormEvent) {
@@ -252,6 +253,7 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
       onDone: () => {
         setTitle('');
         setDescription('');
+        setAddingCourse(false);
       },
     });
   }
@@ -268,23 +270,38 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleCreate} className="space-y-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Title</label>
-          <input required className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Description (optional)</label>
-          <textarea rows={2} className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
+      {addingCourse ? (
+        <form onSubmit={handleCreate} className="space-y-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Title</label>
+            <input required autoFocus className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Description (optional)</label>
+            <textarea rows={2} className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={creating}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            >
+              {creating ? 'Adding…' : 'Add course'}
+            </button>
+            <Button type="button" variant="ghost" onClick={() => setAddingCourse(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
         <button
-          type="submit"
-          disabled={creating}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+          type="button"
+          onClick={() => setAddingCourse(true)}
+          className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
         >
-          {creating ? 'Adding…' : 'Add course'}
+          + New course
         </button>
-      </form>
+      )}
 
       {initialCourses.length === 0 ? (
         <EmptyState

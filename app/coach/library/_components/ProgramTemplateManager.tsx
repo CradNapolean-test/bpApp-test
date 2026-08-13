@@ -111,12 +111,16 @@ export function ProgramTemplateManager({
   const { run: runDuplicateWeek, busy: duplicatingWeek } = useAction();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [openDayId, setOpenDayId] = useState<string | null>(null);
+  const [addingTemplate, setAddingTemplate] = useState(false);
 
   async function handleCreateTemplate(e: React.FormEvent) {
     e.preventDefault();
     await runCreate(() => createProgramTemplate(newTemplateName), {
       success: 'Programme template created',
-      onDone: () => setNewTemplateName(''),
+      onDone: () => {
+        setNewTemplateName('');
+        setAddingTemplate(false);
+      },
     });
   }
 
@@ -198,20 +202,34 @@ export function ProgramTemplateManager({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleCreateTemplate} className="flex items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
-        <div className="flex-1 space-y-1">
-          <label className="text-xs font-medium text-zinc-500">New template name</label>
-          <input
-            required
-            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-            value={newTemplateName}
-            onChange={(e) => setNewTemplateName(e.target.value)}
-          />
-        </div>
-        <button type="submit" disabled={creating} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50">
-          {creating ? 'Creating…' : 'Create template'}
+      {addingTemplate ? (
+        <form onSubmit={handleCreateTemplate} className="flex items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <div className="flex-1 space-y-1">
+            <label className="text-xs font-medium text-zinc-500">New template name</label>
+            <input
+              required
+              autoFocus
+              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+              value={newTemplateName}
+              onChange={(e) => setNewTemplateName(e.target.value)}
+            />
+          </div>
+          <button type="submit" disabled={creating} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50">
+            {creating ? 'Creating…' : 'Create template'}
+          </button>
+          <Button type="button" variant="ghost" onClick={() => setAddingTemplate(false)}>
+            Cancel
+          </Button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingTemplate(true)}
+          className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
+        >
+          + New template
         </button>
-      </form>
+      )}
 
       {initialTemplates.length === 0 && (
         <EmptyState

@@ -29,6 +29,15 @@ export async function createPackage(fields: Omit<MembershipPackageRow, 'id' | 'c
   if (error) raise(error);
 }
 
+export async function updatePackage(
+  packageId: string,
+  fields: Partial<Omit<MembershipPackageRow, 'id' | 'coach_id' | 'created_at'>>
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('membership_packages').update(fields).eq('id', packageId);
+  if (error) raise(error);
+}
+
 export async function deletePackage(packageId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('membership_packages').delete().eq('id', packageId);
