@@ -54,35 +54,40 @@ export function AppShell({
       data-view={isCoachView ? 'coach' : undefined}
       className={`mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 ${bottomBar ? 'pb-20 md:pb-10' : ''}`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {sidebar && !bottomBar && (
-            <button
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Open menu"
-              className="-ml-1 rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          )}
-          {mobileHeader && <div className="min-w-0 flex-1 md:hidden">{mobileHeader}</div>}
-          <div className={`min-w-0 items-center gap-2 ${mobileHeader ? 'hidden md:flex' : 'flex'}`}>
-            <Logo size={28} className="hidden shrink-0 sm:block" />
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</h1>
-              {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+      <div className={`flex flex-col ${topBar ? 'gap-4' : ''}`}>
+        <div className={`flex items-center justify-between gap-3 ${mobileHeader ? 'order-2 md:order-1' : ''}`}>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {sidebar && !bottomBar && (
+              <button
+                onClick={() => setDrawerOpen(true)}
+                aria-label="Open menu"
+                className="-ml-1 rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            {mobileHeader && <div className="min-w-0 flex-1 md:hidden">{mobileHeader}</div>}
+            <div className={`min-w-0 items-center gap-2 ${mobileHeader ? 'hidden md:flex' : 'flex'}`}>
+              <Logo size={28} className="hidden shrink-0 sm:block" />
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</h1>
+                {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+              </div>
             </div>
           </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {headerAction}
+            <span className={mobileHeader ? 'hidden md:inline-flex' : undefined}>
+              <SignOutButton />
+            </span>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {headerAction}
-          <span className={mobileHeader ? 'hidden md:inline-flex' : undefined}>
-            <SignOutButton />
-          </span>
-        </div>
+
+        {topBar && (
+          <div className={`overflow-x-auto ${mobileHeader ? 'order-1 md:order-2' : ''}`}>{topBar}</div>
+        )}
       </div>
 
-      {topBar && <div className="mt-4 overflow-x-auto">{topBar}</div>}
       {coachSummary}
       {banner}
 
