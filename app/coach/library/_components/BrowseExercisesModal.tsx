@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Search, X } from 'lucide-react';
-import { DefaultMuscleGroupIcon, MUSCLE_GROUPS, MUSCLE_GROUP_ICONS } from '@/app/_components/workouts/muscleGroups';
+import { MUSCLE_GROUPS } from '@/app/_components/workouts/muscleGroups';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
 
 // First consumer of a modal overlay in this app besides ConfirmDialog -- mirrors its exact
@@ -48,21 +48,21 @@ export function BrowseExercisesModal({
         </div>
 
         <div className="relative mt-3">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search exercises"
-            className="w-full rounded-md border border-black/10 bg-transparent py-1.5 pl-8 pr-2 text-sm dark:border-white/10"
+            placeholder="Search exercises…"
+            className="w-full rounded-full bg-black/5 py-2 pl-9 pr-3 text-sm dark:bg-white/10"
           />
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1.5">
           <button
             onClick={() => setGroupFilter('')}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              groupFilter === '' ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/10'
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+              groupFilter === '' ? 'bg-[#141414] text-white' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
             }`}
           >
             All
@@ -71,8 +71,8 @@ export function BrowseExercisesModal({
             <button
               key={g}
               onClick={() => setGroupFilter(g === groupFilter ? '' : g)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                groupFilter === g ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/10'
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                groupFilter === g ? 'bg-[#141414] text-white' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
               }`}
             >
               {g}
@@ -80,31 +80,28 @@ export function BrowseExercisesModal({
           ))}
         </div>
 
-        <div className="mt-3 grid flex-1 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
-          {results.map((entry) => {
-            const Icon = MUSCLE_GROUP_ICONS[entry.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
-            return (
-              <button
-                key={entry.id}
-                onClick={() => {
-                  onPick(entry);
-                  onClose();
-                }}
-                className="flex flex-col items-center gap-1.5 rounded-md border border-black/10 p-3 text-center hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
-              >
-                <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md bg-black/5 dark:bg-white/10">
-                  {entry.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
-                    <img src={entry.image_url} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <Icon className="h-4 w-4 text-zinc-500" />
-                  )}
-                </span>
-                <span className="truncate text-xs font-medium">{entry.name}</span>
-                {entry.muscle_group && <span className="text-[10px] text-zinc-500">{entry.muscle_group}</span>}
-              </button>
-            );
-          })}
+        <div className="mt-3 grid flex-1 grid-cols-2 gap-2 overflow-y-auto">
+          {results.map((entry) => (
+            <button
+              key={entry.id}
+              onClick={() => {
+                onPick(entry);
+                onClose();
+              }}
+              className="rounded-2xl border border-black/[.05] p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+            >
+              <p className="font-bold text-black dark:text-zinc-50">{entry.name}</p>
+              <p className="mt-0.5 text-sm text-zinc-500">
+                {[
+                  entry.muscle_group,
+                  entry.default_sets != null ? `${entry.default_sets}×${entry.default_reps ?? '—'}` : null,
+                  entry.default_rpe != null ? `RPE ${entry.default_rpe}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </button>
+          ))}
           {results.length === 0 && (
             <p className="col-span-full py-6 text-center text-sm text-zinc-500">No exercises match.</p>
           )}

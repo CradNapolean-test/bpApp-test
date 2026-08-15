@@ -36,6 +36,7 @@ export default async function CoachClassesPage() {
       initialPackages={packages}
       report={report}
       unreadCount={unreadCount}
+      email={user.email ?? 'Coach'}
     />
   );
 }

@@ -70,9 +70,9 @@ export function AddClientForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2">
-      <div className="flex-1 space-y-1">
-        <label htmlFor="client-email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-1">
+        <label htmlFor="client-email" className="text-sm font-medium text-zinc-500">
           New client email
         </label>
         <input
@@ -81,13 +81,13 @@ export function AddClientForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
         />
       </div>
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
+        className="w-full rounded-full bg-accent py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 disabled:opacity-50"
       >
         {submitting ? 'Adding…' : 'Add client'}
       </button>

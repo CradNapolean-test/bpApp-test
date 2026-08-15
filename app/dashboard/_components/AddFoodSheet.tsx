@@ -12,12 +12,22 @@ export function AddFoodSheet({
   onAdd,
   recipes,
   onAddRecipe,
+  onAddQuickAdd,
+  favorites,
+  recentlyLogged,
+  favoriteIds,
+  onToggleFavorite,
   onClose,
 }: {
   sectionLabel: string;
   onAdd: (food: FoodRow, portions: number) => void;
   recipes?: RecipeRow[];
   onAddRecipe?: (recipeId: string, servings: number) => void;
+  onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => void;
+  favorites?: FoodRow[];
+  recentlyLogged?: FoodRow[];
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (food: FoodRow, isFavorite: boolean) => void;
   onClose: () => void;
 }) {
   return (
@@ -53,6 +63,18 @@ export function AddFoodSheet({
                 }
               : undefined
           }
+          onAddQuickAdd={
+            onAddQuickAdd
+              ? (fields) => {
+                  onAddQuickAdd(fields);
+                  onClose();
+                }
+              : undefined
+          }
+          favorites={favorites}
+          recentlyLogged={recentlyLogged}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={onToggleFavorite}
         />
       </div>
     </div>

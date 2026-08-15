@@ -1,6 +1,6 @@
 import { raise } from './errors';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { daysBetween, toIsoDate } from '@/lib/utils/dates';
+import { addDays, daysBetween, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 
 // The "coach-global" tables (classes, membership_packages, form_templates) are scoped to a
 // specific coach, but the caller could be that coach themself or one of their clients --
@@ -29,6 +29,7 @@ export interface CoachClientRow {
   start_weight: number | null;
   goal_weight: number | null;
   balance: number;
+  deletion_requested_at: string | null;
 }
 
 export async function getMyClients(
@@ -38,7 +39,7 @@ export async function getMyClients(
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, client_profiles(name, start_weight, goal_weight), credits_balance(balance)'
+      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at), credits_balance(balance)'
     )
     .eq('coach_id', coachId)
     .eq('role', 'client')
@@ -56,6 +57,7 @@ export async function getMyClients(
       start_weight: profile?.start_weight ?? null,
       goal_weight: profile?.goal_weight ?? null,
       balance: balanceRow?.balance ?? 0,
+      deletion_requested_at: profile?.deletion_requested_at ?? null,
     };
   });
 }
@@ -81,7 +83,7 @@ export async function getClientHealthStatuses(
 ): Promise<ClientHealthStatus[]> {
   const { data: clients, error: clientsError } = await supabase
     .from('profiles')
-    .select('id, email, created_at, client_profiles(name, checkin_reminder_days)')
+    .select('id, email, created_at, client_profiles(name, checkin_reminder_days, timezone)')
     .eq('coach_id', coachId)
     .eq('role', 'client');
   if (clientsError) raise(clientsError);
@@ -93,13 +95,16 @@ export async function getClientHealthStatuses(
     ((lastActiveRows ?? []) as { client_id: string; last_active: string }[]).map((r) => [r.client_id, r.last_active])
   );
 
-  const todayIso = toIsoDate(new Date());
-
   return clients.map((row) => {
     const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
     const threshold = profile?.checkin_reminder_days ?? 3;
     const lastActive = lastActiveMap.get(row.id) ?? null;
-    const daysSinceActive = daysBetween(lastActive ?? (row.created_at as string).slice(0, 10), todayIso);
+    // Each client's own local "today", not one shared UTC value for the whole roster --
+    // same root-cause fix as loadDashboardBundle (see migration 0044).
+    const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+    // Clamped at 0 as defense-in-depth -- shouldn't go negative anymore now "today" is
+    // computed per-client, but a display value should never read as nonsensical regardless.
+    const daysSinceActive = Math.max(0, daysBetween(lastActive ?? (row.created_at as string).slice(0, 10), todayIso));
 
     let status: ClientHealthBucket;
     if (threshold === 0) status = 'unmonitored';
@@ -115,4 +120,78 @@ export async function getClientHealthStatuses(
       lastActiveDate: lastActive,
     };
   });
+}
+
+export interface ClientHabitAdherence {
+  clientId: string;
+  name: string;
+  totalHabits: number;
+  completedToday: number;
+}
+
+// Roster-wide "who's on track with their habits today" -- reuses getClientHealthStatuses'
+// exact aggregation shape (fetch every client the coach owns, join their own data, compute a
+// per-client summary), just for habits/habit_logs instead of last-active. Only clients with at
+// least one habit assigned are included -- a client with none isn't "0/0 done", they're just
+// not using this feature.
+export async function getRosterHabitAdherence(
+  supabase: SupabaseClient,
+  coachId: string
+): Promise<ClientHabitAdherence[]> {
+  const { data: clients, error: clientsError } = await supabase
+    .from('profiles')
+    .select('id, email, client_profiles(name, timezone)')
+    .eq('coach_id', coachId)
+    .eq('role', 'client');
+  if (clientsError) raise(clientsError);
+  if (!clients || clients.length === 0) return [];
+
+  const clientIds = clients.map((c) => c.id);
+  const { data: habits, error: habitsError } = await supabase
+    .from('habits')
+    .select('id, client_id')
+    .in('client_id', clientIds);
+  if (habitsError) raise(habitsError);
+  if (!habits || habits.length === 0) return [];
+
+  const habitIds = habits.map((h) => h.id);
+  // A wide-enough window (yesterday UTC onward) to cover "today" in every real-world
+  // timezone, not just UTC -- narrowed to each client's own exact local today below.
+  const windowStart = toIsoDate(addDays(new Date(), -1));
+  const { data: logs, error: logsError } = await supabase
+    .from('habit_logs')
+    .select('habit_id, log_date, completed')
+    .in('habit_id', habitIds)
+    .eq('completed', true)
+    .gte('log_date', windowStart);
+  if (logsError) raise(logsError);
+
+  const habitsByClient = new Map<string, string[]>();
+  for (const h of habits) {
+    const list = habitsByClient.get(h.client_id) ?? [];
+    list.push(h.id);
+    habitsByClient.set(h.client_id, list);
+  }
+  const completedHabitIdsByDate = new Map<string, Set<string>>();
+  for (const l of logs ?? []) {
+    const set = completedHabitIdsByDate.get(l.log_date) ?? new Set<string>();
+    set.add(l.habit_id);
+    completedHabitIdsByDate.set(l.log_date, set);
+  }
+
+  return clients
+    .map((row) => {
+      const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
+      const clientHabitIds = habitsByClient.get(row.id) ?? [];
+      if (clientHabitIds.length === 0) return null;
+      const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+      const completedToday = completedHabitIdsByDate.get(todayIso) ?? new Set<string>();
+      return {
+        clientId: row.id,
+        name: profile?.name ?? row.email,
+        totalHabits: clientHabitIds.length,
+        completedToday: clientHabitIds.filter((id) => completedToday.has(id)).length,
+      };
+    })
+    .filter((row): row is ClientHabitAdherence => row !== null);
 }

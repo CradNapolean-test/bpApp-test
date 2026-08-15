@@ -16,8 +16,6 @@ import type {
   EducationLessonRow,
 } from '@/lib/data/types';
 
-const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
-
 function LessonItem({
   lesson,
   clientId,
@@ -118,7 +116,12 @@ function CourseOverlay({
           const sortedLessons = [...module.education_lessons].sort((a, b) => a.sort_order - b.sort_order);
           return (
             <div key={module.id} className="space-y-2 rounded-2xl border border-black/[.05] p-3 dark:border-white/10">
-              <h4 className="font-medium text-black dark:text-zinc-50">{module.title}</h4>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-bold text-black dark:text-zinc-50">{module.title}</h4>
+                <span className="shrink-0 text-sm text-zinc-500">
+                  {sortedLessons.length} lesson{sortedLessons.length === 1 ? '' : 's'}
+                </span>
+              </div>
               <div className="space-y-2">
                 {sortedLessons.map((lesson) => (
                   <LessonItem
@@ -170,10 +173,14 @@ export function EducationTab({
   return (
     <div className="space-y-6">
       {isCoachView && (
-        <form onSubmit={handleAssign} className="flex flex-wrap items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Assign a course</label>
-            <select className={inputCls} value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)}>
+        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <h3 className="font-bold text-black dark:text-zinc-50">Assign a course</h3>
+          <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
+            <select
+              className="w-full min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+            >
               <option value="">Select…</option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -181,15 +188,15 @@ export function EducationTab({
                 </option>
               ))}
             </select>
-          </div>
-          <button
-            type="submit"
-            disabled={assigning || !selectedCourse}
-            className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
-          >
-            {assigning ? 'Assigning…' : 'Assign'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={assigning || !selectedCourse}
+              className="shrink-0 rounded-full bg-[#141414] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {assigning ? 'Assigning…' : 'Assign'}
+            </button>
+          </form>
+        </div>
       )}
 
       {assignments.length === 0 ? (
@@ -209,10 +216,10 @@ export function EducationTab({
                   className="w-full rounded-2xl border border-black/[.05] p-4 text-left dark:border-white/10"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-black dark:text-zinc-50">{a.course.title}</p>
-                    <span className="text-xs text-zinc-500">{pct}%</span>
+                    <p className="font-bold text-black dark:text-zinc-50">{a.course.title}</p>
+                    <span className="text-sm font-bold text-accent">{pct}%</span>
                   </div>
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
                     <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
                   </div>
                 </button>

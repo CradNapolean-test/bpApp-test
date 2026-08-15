@@ -27,6 +27,12 @@ export async function addMealPlanEntry(
   if (error) raise(error);
 }
 
+export async function updateMealPlanEntryPortions(id: string, portions: number): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('meal_plan_entries').update({ portions }).eq('id', id);
+  if (error) raise(error);
+}
+
 export async function removeMealPlanEntry(id: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('meal_plan_entries').delete().eq('id', id);

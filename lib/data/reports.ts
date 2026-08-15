@@ -19,7 +19,16 @@ export async function getCoachReport(): Promise<CoachReport> {
     .eq('coach_id', user.id);
   if (classesError) raise(classesError);
   if (!classes || classes.length === 0) {
-    return { attendanceRate: null, totalBooked: 0, totalAttended: 0, noShows: [], classPopularity: [] };
+    return {
+      attendanceRate: null,
+      totalBooked: 0,
+      totalAttended: 0,
+      noShowRate: null,
+      avgClassesPerClient: null,
+      activeBookings: 0,
+      noShows: [],
+      classPopularity: [],
+    };
   }
   const classMap = new Map(classes.map((c) => [c.id, c.name]));
 
@@ -44,6 +53,20 @@ export async function getCoachReport(): Promise<CoachReport> {
   const totalBooked = pastBooked.length;
   const totalAttended = pastBooked.filter((b) => b.attended).length;
   const attendanceRate = totalBooked > 0 ? Math.round((totalAttended / totalBooked) * 100) : null;
+  const noShowRate = totalBooked > 0 ? Math.round((pastBooked.filter((b) => b.no_show).length / totalBooked) * 100) : null;
+  const uniqueClientCount = new Set(pastBooked.map((b) => b.client_id)).size;
+  const avgClassesPerClient = uniqueClientCount > 0 ? Math.round((totalBooked / uniqueClientCount) * 10) / 10 : null;
+
+  const { count: activeBookings, error: activeError } = await supabase
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .in(
+      'class_id',
+      classes.map((c) => c.id)
+    )
+    .eq('status', 'booked')
+    .gte('booking_date', todayIso);
+  if (activeError) raise(activeError);
 
   // Genuinely marked no-show, not just "not yet marked" -- a past booking the coach hasn't
   // gotten to yet used to count as a no-show here (`!b.attended` is true for both), inflating
@@ -72,5 +95,14 @@ export async function getCoachReport(): Promise<CoachReport> {
     .map(([classId, count]) => ({ className: classMap.get(classId) ?? 'Unknown class', bookingCount: count }))
     .sort((a, b) => b.bookingCount - a.bookingCount);
 
-  return { attendanceRate, totalBooked, totalAttended, noShows, classPopularity };
+  return {
+    attendanceRate,
+    totalBooked,
+    totalAttended,
+    noShowRate,
+    avgClassesPerClient,
+    activeBookings: activeBookings ?? 0,
+    noShows,
+    classPopularity,
+  };
 }

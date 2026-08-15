@@ -6,7 +6,7 @@ import { useAction } from '@/app/_components/useAction';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
-import { addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
+import { addDays, formatClassTime, startOfWeek, toIsoDate } from '@/lib/utils/dates';
 import { CheckInButton } from './CheckInButton';
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
@@ -63,11 +63,12 @@ export function ClassesArea({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">This week&apos;s credits</h3>
-        <p className="mt-1 text-2xl font-semibold text-black dark:text-zinc-50">{creditsBalance}</p>
+        <h3 className="text-sm text-zinc-500">This week&apos;s credits</h3>
+        <p className="text-2xl font-bold text-black dark:text-zinc-50">{creditsBalance}</p>
         {membership?.package ? (
           <p className="mt-1 text-sm text-zinc-500">
-            {membership.package.name} · {membership.package.credits_per_week}/week · resets {nextReset}
+            {membership.package.name} · {membership.package.credits_per_week}/week · resets{' '}
+            {new Date(nextReset + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
           </p>
         ) : (
           <p className="mt-1 text-sm text-zinc-500">No membership package assigned yet.</p>
@@ -104,11 +105,9 @@ export function ClassesArea({
                   className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-black dark:text-zinc-50">
-                      {occ.className}
-                      {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
-                    </p>
-                    <p className="mt-0.5 text-xs text-zinc-500">
+                    <p className="font-bold text-black dark:text-zinc-50">{occ.className}</p>
+                    <p className="mt-0.5 text-sm text-zinc-500">
+                      {occ.startTime ? `${formatClassTime(occ.startTime)} · ` : ''}
                       {occ.bookedCount}/{occ.capacity} booked · {occ.creditCost} credit{occ.creditCost === 1 ? '' : 's'}
                     </p>
                   </div>
@@ -116,7 +115,7 @@ export function ClassesArea({
                     <button
                       onClick={() => handleCancel(existingBooking.id)}
                       disabled={busyKey === existingBooking.id}
-                      className="shrink-0 rounded-lg border border-black/10 px-3 py-1.5 text-xs font-semibold disabled:opacity-50 dark:border-white/10"
+                      className="shrink-0 rounded-full bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger disabled:opacity-50"
                     >
                       {existingBooking.status === 'waitlist' ? 'Leave waitlist' : 'Cancel'}
                     </button>
@@ -160,8 +159,11 @@ export function ClassesArea({
                 className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-black dark:text-zinc-50">{b.class?.name}</p>
-                  <p className="mt-0.5 text-xs text-zinc-500">{b.booking_date}</p>
+                  <p className="font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
+                  <p className="mt-0.5 text-sm text-zinc-500">
+                    {new Date(b.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                    {b.class?.start_time ? ` · ${formatClassTime(b.class.start_time)}` : ''}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {b.status === 'booked' && b.booking_date === todayIso && (

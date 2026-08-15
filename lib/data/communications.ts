@@ -63,10 +63,16 @@ export async function composeCommunication(
     if (clientIds.length > 0 && (channel === 'email' || channel === 'both')) {
       const { data: recipients, error: profilesError } = await supabase
         .from('profiles')
-        .select('email')
+        .select('email, client_profiles(email_notifications_enabled)')
         .in('id', clientIds);
       if (profilesError) raise(profilesError);
-      const result = await sendBroadcastEmail(recipients ?? [], subjectFromMessage(message), messageToHtml(message));
+      // Opted-out clients are skipped, not just muted -- same shape as notifications_enabled's
+      // existing gate on send_checkin_reminders.
+      const optedIn = (recipients ?? []).filter((r) => {
+        const profile = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
+        return profile?.email_notifications_enabled ?? true;
+      });
+      const result = await sendBroadcastEmail(optedIn, subjectFromMessage(message), messageToHtml(message));
       if (!result.skipped) emailSentAt = new Date().toISOString();
     }
 

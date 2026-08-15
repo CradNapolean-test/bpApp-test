@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDown, ArrowUp, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { isoWeekKey } from '@/lib/utils/dates';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
@@ -70,7 +70,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 function TrendCard({
-  weeks, title, dataKey, color, unit, formatter,
+  weeks, title, dataKey, color, unit, formatter, lowerIsBetter,
 }: {
   weeks: WeekPoint[];
   title: string;
@@ -78,30 +78,41 @@ function TrendCard({
   color: string;
   unit: string;
   formatter: (v: number) => string;
+  // Colors the delta green/red by direction -- only meaningful for a metric with an
+  // unambiguous "better" direction (bodyweight, in a fat-loss-focused app). Omitted for
+  // Calories/Steps, where trending up or down isn't inherently good or bad.
+  lowerIsBetter?: boolean;
 }) {
   const points = weeks.map((w) => w[dataKey]).filter((v): v is number => v != null);
   const current = points.length ? points[points.length - 1] : null;
   const prev = points.length >= 2 ? points[points.length - 2] : null;
   const delta = current != null && prev != null ? current - prev : null;
+  const favorable = lowerIsBetter != null && delta != null ? (lowerIsBetter ? delta < 0 : delta > 0) : null;
 
   return (
     <div className={cardCls}>
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{title}</h3>
-      <div className="mt-1 flex items-baseline gap-2">
-        <p className="text-2xl font-semibold text-black dark:text-zinc-50">
-          {current != null ? formatter(current) : '—'}
-          {unit && current != null ? <span className="ml-1 text-sm font-normal text-zinc-500">{unit}</span> : null}
-        </p>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-bold text-black dark:text-zinc-50">{title}</h3>
         {delta != null && Math.abs(delta) > 0.001 && (
-          <span className="flex items-center gap-0.5 text-xs font-medium text-zinc-500">
-            {delta > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-            {formatter(Math.abs(delta))} {unit} vs last week
+          <span
+            className={`text-sm font-bold ${
+              favorable == null ? 'text-zinc-500' : favorable ? 'text-success' : 'text-danger'
+            }`}
+          >
+            {delta > 0 ? '+' : '-'}
+            {formatter(Math.abs(delta))}
+            {unit}
           </span>
         )}
       </div>
+      <p className="mt-1 text-2xl font-bold text-black dark:text-zinc-50">
+        {current != null ? formatter(current) : '—'}
+        {unit && current != null ? unit : null}
+      </p>
       <div className="mt-3">
         <Sparkline values={points} color={color} />
       </div>
+      <p className="mt-1 text-xs text-zinc-500">8-week average trend</p>
     </div>
   );
 }
@@ -128,6 +139,7 @@ export function OverviewTab({ historyLogs }: { historyLogs: DailyLogRow[] }) {
         color="var(--chart-1)"
         unit="kg"
         formatter={(v) => v.toFixed(1)}
+        lowerIsBetter
       />
       <TrendCard
         weeks={weeks}

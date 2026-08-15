@@ -98,7 +98,7 @@ export function InsightsTab({
 
   return (
     <div className="space-y-3">
-      <InsightCard icon={Gauge} iconCls="bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400" title="Adaptive maintenance check" flag={divergenceFlag}>
+      <InsightCard icon={Gauge} iconCls="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400" title="Adaptive maintenance check" flag={divergenceFlag}>
         {adaptiveInsight ? (
           <p>
             Formula TDEE: {Math.round(adaptiveInsight.formulaTdee)} kcal · Real-world estimate:{' '}

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ImageIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ImageIcon, Plus } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -36,21 +36,22 @@ export function ProgressTab({
   const { run: runDelete } = useAction();
   const { run: runMeasurement, busy: savingMeasurement } = useAction();
   const today = toIsoDate(new Date());
-  const [photoDate, setPhotoDate] = useState(today);
-  const [measurementDate, setMeasurementDate] = useState(today);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    // Capture the form element up front -- e.currentTarget is nulled out once the handler
-    // yields at the first await, so resetting it afterwards would throw.
-    const form = e.currentTarget;
-    const formData = new FormData(form);
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.set('file', file);
     formData.set('clientId', clientId);
-    formData.set('date', photoDate);
+    formData.set('date', today);
     await runUpload(() => uploadProgressPhoto(formData), {
       success: 'Photo uploaded',
-      onDone: () => form.reset(),
+      onDone: () => {
+        input.value = '';
+      },
     });
   }
 
@@ -71,114 +72,70 @@ export function ProgressTab({
         .filter(([, v]) => v !== '')
         .map(([k, v]) => [k, Number(v)])
     );
-    await runMeasurement(() => addMeasurementLog(clientId, measurementDate, fields), {
+    await runMeasurement(() => addMeasurementLog(clientId, today, fields), {
       success: 'Measurements saved',
       onDone: () => setMeasurements({}),
     });
   }
 
-  const inputCls = 'rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
+  const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10';
+  const labelCls = 'text-sm font-semibold text-zinc-500';
 
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progress photos</h3>
 
-        {!readOnly && (
-          <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-zinc-500">Date</label>
-              <input
-                type="date"
-                value={photoDate}
-                onChange={(e) => setPhotoDate(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <input type="file" name="file" accept="image/*" required className="text-sm" />
-            <button
-              type="submit"
-              disabled={uploading}
-              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
-            >
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-          </form>
-        )}
-
-        {initialPhotos.length === 0 ? (
+        {initialPhotos.length === 0 && readOnly ? (
           <div className="mt-4">
-            <EmptyState
-              icon={ImageIcon}
-              title="No progress photos yet"
-              hint={readOnly ? 'Nothing uploaded yet.' : 'Upload one above to start tracking visual progress over time.'}
-            />
+            <EmptyState icon={ImageIcon} title="No progress photos yet" hint="Nothing uploaded yet." />
           </div>
         ) : (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {initialPhotos.map((photo) => (
-            <div key={photo.id} className="space-y-1">
-              {photo.signedUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={photo.signedUrl}
-                  alt={`Progress photo ${photo.photo_date}`}
-                  className="aspect-square w-full rounded-xl object-cover"
-                />
-              ) : (
-                <div className="aspect-square w-full rounded-xl bg-black/5 dark:bg-white/5" />
-              )}
-              <div className="flex items-center justify-between text-xs text-zinc-500">
-                <span>{photo.photo_date}</span>
-                {!readOnly && (
-                  <button onClick={() => handleDeletePhoto(photo.id, photo.photo_date)} className="text-red-600 hover:underline dark:text-red-400">
-                    Delete
-                  </button>
-                )}
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {!readOnly && (
+              <div>
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-black/15 text-sm font-semibold text-zinc-500 disabled:opacity-50 dark:border-white/15"
+                >
+                  <Plus className="h-5 w-5" />
+                  {uploading ? 'Uploading…' : 'Add photo'}
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+            {initialPhotos.map((photo) => (
+              <div key={photo.id} className="space-y-1">
+                {photo.signedUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photo.signedUrl}
+                    alt={`Progress photo ${photo.photo_date}`}
+                    className="aspect-square w-full rounded-xl object-cover"
+                  />
+                ) : (
+                  <div className="aspect-square w-full rounded-xl bg-black/5 dark:bg-white/5" />
+                )}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-500">
+                    {new Date(photo.photo_date + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                  </span>
+                  {!readOnly && (
+                    <button onClick={() => handleDeletePhoto(photo.id, photo.photo_date)} className="font-bold text-danger hover:underline">
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
       <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements</h3>
-
-        {!readOnly && (
-          <form onSubmit={handleSaveMeasurement} className="mt-3 space-y-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-zinc-500">Date</label>
-              <input
-                type="date"
-                value={measurementDate}
-                onChange={(e) => setMeasurementDate(e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {MEASUREMENT_FIELDS.map(({ key, label }) => (
-                <div key={key} className="space-y-1">
-                  <label className="text-xs font-medium text-zinc-500">{label}</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={measurements[key] ?? ''}
-                    onChange={(e) => setMeasurements({ ...measurements, [key]: e.target.value })}
-                    className={`${inputCls} w-full`}
-                  />
-                </div>
-              ))}
-            </div>
-            <button
-              type="submit"
-              disabled={savingMeasurement}
-              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
-            >
-              {savingMeasurement ? 'Saving…' : 'Save measurements'}
-            </button>
-          </form>
-        )}
 
         {initialMeasurements.length === 0 ? (
           <p className="mt-4 text-sm text-zinc-500">No measurements logged yet.</p>
@@ -209,6 +166,35 @@ export function ProgressTab({
           </>
         )}
       </div>
+
+      {!readOnly && (
+        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <h3 className="font-bold text-black dark:text-zinc-50">Log new measurements</h3>
+          <form onSubmit={handleSaveMeasurement} className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              {MEASUREMENT_FIELDS.map(({ key, label }) => (
+                <div key={key} className="space-y-1">
+                  <label className={labelCls}>{label} (cm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={measurements[key] ?? ''}
+                    onChange={(e) => setMeasurements({ ...measurements, [key]: e.target.value })}
+                    className={inputCls}
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              type="submit"
+              disabled={savingMeasurement}
+              className="w-full rounded-full bg-accent py-3 text-sm font-bold text-accent-foreground disabled:opacity-50"
+            >
+              {savingMeasurement ? 'Saving…' : 'Save measurements'}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

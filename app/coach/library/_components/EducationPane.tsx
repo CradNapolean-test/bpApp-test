@@ -191,7 +191,15 @@ function ModuleSection({
   );
 }
 
-function CourseOverlay({ course, onClose }: { course: EducationCourseWithModules; onClose: () => void }) {
+function CourseOverlay({
+  course,
+  onClose,
+  onDelete,
+}: {
+  course: EducationCourseWithModules;
+  onClose: () => void;
+  onDelete: (id: string, courseTitle: string) => void;
+}) {
   const { run: runAddModule, busy: addingModule } = useAction();
   const { run: runReorder } = useAction();
   const [newModuleTitle, setNewModuleTitle] = useState('');
@@ -215,7 +223,16 @@ function CourseOverlay({ course, onClose }: { course: EducationCourseWithModules
   }
 
   return (
-    <FocusOverlay title={course.title} subtitle={course.description ?? undefined} onClose={onClose}>
+    <FocusOverlay
+      title={course.title}
+      subtitle={course.description ?? undefined}
+      onClose={onClose}
+      headerActions={
+        <Button variant="danger" size="sm" onClick={() => onDelete(course.id, course.title)}>
+          Delete
+        </Button>
+      }
+    >
       <div className="space-y-4">
         {sortedModules.map((module, i) => (
           <ModuleSection key={module.id} module={module} index={i} count={sortedModules.length} onMove={handleMoveModule} />
@@ -269,9 +286,19 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
   }
 
   return (
-    <div className="space-y-6">
-      {addingCourse ? (
-        <form onSubmit={handleCreate} className="space-y-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setAddingCourse(true)}
+          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+        >
+          + New course
+        </button>
+      </div>
+
+      {addingCourse && (
+        <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-500">Title</label>
             <input required autoFocus className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -281,26 +308,14 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
             <textarea rows={2} className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={creating}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" disabled={creating}>
               {creating ? 'Adding…' : 'Add course'}
-            </button>
+            </Button>
             <Button type="button" variant="ghost" onClick={() => setAddingCourse(false)}>
               Cancel
             </Button>
           </div>
         </form>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAddingCourse(true)}
-          className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
-        >
-          + New course
-        </button>
       )}
 
       {initialCourses.length === 0 ? (
@@ -310,21 +325,36 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
           hint="Add a course above, then build out its modules and lessons, then assign it to clients from their Accountability tab."
         />
       ) : (
-        <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {initialCourses.map((c) => (
-            <li key={c.id} className="flex items-center justify-between p-3 text-sm">
-              <button onClick={() => setOpenCourseId(c.id)} className="text-left font-medium text-black hover:underline dark:text-zinc-50">
-                {c.title}
-              </button>
-              <Button variant="danger" size="sm" onClick={() => handleDelete(c.id, c.title)}>
-                Delete
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {initialCourses.map((c) => {
+            const lessonCount = c.education_modules.reduce((sum, m) => sum + m.education_lessons.length, 0);
+            return (
+              <div
+                key={c.id}
+                className="rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-bold text-black dark:text-zinc-50">{c.title}</p>
+                  <div className="flex shrink-0 gap-2.5 text-sm font-semibold">
+                    <button type="button" onClick={() => setOpenCourseId(c.id)} className="text-black hover:underline dark:text-zinc-50">
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => handleDelete(c.id, c.title)} className="text-danger hover:underline">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {c.description && <p className="mt-0.5 text-sm text-zinc-500">{c.description}</p>}
+                <p className="mt-1 text-sm font-semibold text-[#19adb1]">
+                  {c.education_modules.length} module{c.education_modules.length === 1 ? '' : 's'} · {lessonCount} lesson{lessonCount === 1 ? '' : 's'}
+                </p>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {openCourse && <CourseOverlay course={openCourse} onClose={() => setOpenCourseId(null)} />}
+      {openCourse && <CourseOverlay course={openCourse} onClose={() => setOpenCourseId(null)} onDelete={handleDelete} />}
     </div>
   );
 }

@@ -31,6 +31,7 @@ export default async function CoachMessagesPage() {
       currentUserId={user.id}
       groups={groups}
       communications={communications}
+      email={user.email ?? 'Coach'}
     />
   );
 }

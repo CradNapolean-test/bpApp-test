@@ -24,10 +24,29 @@ const SIZE_CLS = {
   lg: 'h-12 w-12 text-base',
 };
 
-export function Avatar({ name, size = 'md' }: { name: string; size?: keyof typeof SIZE_CLS }) {
+const SELF_RADIUS_CLS = {
+  sm: 'rounded-lg',
+  md: 'rounded-xl',
+  lg: 'rounded-2xl',
+};
+
+// 'self' is the signed-in user's own identity chip (header, account card) -- squared and in
+// the app's accent teal, distinct from the multi-color circular 'person' style used to
+// visually tell other people (clients, chat partners) apart in a roster or list.
+export function Avatar({
+  name,
+  size = 'md',
+  variant = 'person',
+}: {
+  name: string;
+  size?: keyof typeof SIZE_CLS;
+  variant?: 'person' | 'self';
+}) {
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-full font-semibold text-white ${SIZE_CLS[size]} ${colorFor(name)}`}
+      className={`flex shrink-0 items-center justify-center font-semibold text-white ${SIZE_CLS[size]} ${
+        variant === 'self' ? `${SELF_RADIUS_CLS[size]} bg-accent` : `rounded-full ${colorFor(name)}`
+      }`}
       aria-hidden
     >
       {initialsFor(name)}

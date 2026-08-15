@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, FileText } from 'lucide-react';
+import { Camera, CheckCircle2, FileText } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
@@ -167,13 +167,14 @@ export function FormsTab({
   return (
     <div className="space-y-6">
       {isCoachView && (
-        <form
-          onSubmit={handleAssign}
-          className="flex flex-wrap items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10"
-        >
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Assign a form</label>
-            <select className={inputCls} value={selectedTemplate} onChange={(e) => setSelectedTemplate(e.target.value)}>
+        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <h3 className="font-bold text-black dark:text-zinc-50">Assign a form</h3>
+          <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
+            <select
+              className="w-full min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+            >
               <option value="">Select…</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -181,15 +182,15 @@ export function FormsTab({
                 </option>
               ))}
             </select>
-          </div>
-          <button
-            type="submit"
-            disabled={assigning || !selectedTemplate}
-            className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
-          >
-            {assigning ? 'Assigning…' : 'Assign'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={assigning || !selectedTemplate}
+              className="shrink-0 rounded-full bg-[#141414] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {assigning ? 'Assigning…' : 'Assign'}
+            </button>
+          </form>
+        </div>
       )}
 
       {pending.length > 0 && (
@@ -214,25 +215,26 @@ export function FormsTab({
                 openFormId === a.id ? (
                   <FillableForm key={a.id} assignment={a} onClose={() => setOpenFormId(null)} />
                 ) : (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setOpenFormId(a.id)}
-                    className="flex w-full items-center gap-2.5 rounded-2xl border border-black/[.05] p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-                      <FileText className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-black dark:text-zinc-50">{a.template.name}</p>
-                      <p className="text-xs text-zinc-500">
-                        {a.template.questions.length} question{a.template.questions.length === 1 ? '' : 's'}
-                      </p>
+                  <div key={a.id} className="rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+                        <Camera className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-black dark:text-zinc-50">{a.template.name}</p>
+                        <p className="text-xs text-zinc-500">
+                          {a.template.questions.length} question{a.template.questions.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
                     </div>
-                    <span className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground">
+                    <button
+                      type="button"
+                      onClick={() => setOpenFormId(a.id)}
+                      className="mt-3 w-full rounded-full bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground"
+                    >
                       Fill out
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 )
               )}
         </div>

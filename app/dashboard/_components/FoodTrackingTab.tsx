@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Barcode, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
@@ -8,6 +8,8 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import {
   addFoodDiaryEntry,
+  addQuickAddEntry,
+  copyFromDate,
   getFoodDiaryForDate,
   removeFoodDiaryEntry,
   updateFoodDiaryEntryPortions,
@@ -24,9 +26,10 @@ import {
   renameMealSection,
   reorderMealSections,
 } from '@/lib/data/mealSections';
-import { getFoodByBarcode, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { getFavoriteFoods, getFoodByBarcode, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { logRecipeToDiary } from '@/lib/data/recipes';
 import { addJournalEntry } from '@/lib/data/clientJournal';
+import { fail, ok } from '@/lib/data/result';
 import { lookupBarcode } from '@/lib/openFoodFacts';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -147,19 +150,28 @@ function EditEntrySheet({
         onClick={(e) => e.stopPropagation()}
         className="w-full rounded-t-2xl bg-[var(--background)] p-4 pb-6"
       >
-        <h2 className="mb-3 text-sm font-bold text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</h2>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Quantity ({unitLabel})</label>
-          <input
-            type="number"
-            min={0}
-            step="any"
-            autoFocus
-            value={portions}
-            onChange={(e) => setPortions(Number(e.target.value))}
-            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-          />
-        </div>
+        <h2 className="mb-3 text-sm font-bold text-black dark:text-zinc-50">
+          {entry.food?.name ?? entry.quick_add_name ?? 'Unknown food'}
+        </h2>
+        {entry.food ? (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Quantity ({unitLabel})</label>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              autoFocus
+              value={portions}
+              onChange={(e) => setPortions(Number(e.target.value))}
+              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">
+            {Math.round(entryMacros(entry).calories)} kcal · {Math.round(entryMacros(entry).protein)}P /{' '}
+            {Math.round(entryMacros(entry).carbs)}C / {Math.round(entryMacros(entry).fat)}F
+          </p>
+        )}
         {onRefile && (
           <div className="mt-3 space-y-1">
             <label className="text-xs font-medium text-zinc-500">File under</label>
@@ -180,9 +192,11 @@ function EditEntrySheet({
           </div>
         )}
         <div className="mt-4 flex gap-2">
-          <Button variant="primary" onClick={() => onSave(portions)} disabled={portions <= 0}>
-            Save
-          </Button>
+          {entry.food && (
+            <Button variant="primary" onClick={() => onSave(portions)} disabled={portions <= 0}>
+              Save
+            </Button>
+          )}
           <Button variant="danger" onClick={onDelete}>
             Delete
           </Button>
@@ -220,7 +234,7 @@ function EntryRow({
         onClick={() => setEditing(true)}
         className="flex w-full items-center justify-between gap-2 p-3 text-left disabled:cursor-default"
       >
-        <p className="truncate text-sm text-black dark:text-zinc-50">{entry.food?.name ?? 'Unknown food'}</p>
+        <p className="truncate text-sm text-black dark:text-zinc-50">{entry.food?.name ?? entry.quick_add_name ?? 'Unknown food'}</p>
         <span className="shrink-0 text-sm text-zinc-500">{Math.round(macros.calories)} kcal</span>
       </button>
       {editing && !readOnly && (
@@ -297,7 +311,24 @@ export function FoodTrackingTab({
   const [entries, setEntries] = useState(initialEntries);
   const [manualEntries, setManualEntries] = useState(initialManualMacroEntries);
   const [dateLoading, setDateLoading] = useState(false);
+  const [favorites, setFavorites] = useState<FoodRow[]>([]);
+  const [recentlyLogged, setRecentlyLogged] = useState<FoodRow[]>([]);
   const isToday = viewingDate === todayIso;
+  const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites]);
+
+  // Lazy, not part of initialEntries -- cheap derived/lookup queries the sheet only needs once
+  // it's actually opened for the first time, not on every Food Tracking tab visit.
+  useEffect(() => {
+    if (readOnly || isManual) return;
+    getFavoriteFoods(clientId).then(setFavorites);
+    getRecentlyLoggedFoods(clientId).then(setRecentlyLogged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per client, not on every entries/date change
+  }, [clientId]);
+
+  async function handleToggleFavorite(food: FoodRow, isFavorite: boolean) {
+    setFavorites((prev) => (isFavorite ? [food, ...prev.filter((f) => f.id !== food.id)] : prev.filter((f) => f.id !== food.id)));
+    await setFavoriteFood(clientId, food.id, isFavorite);
+  }
 
   const totals = isManual
     ? manualEntries.reduce(
@@ -382,6 +413,20 @@ export function FoodTrackingTab({
     );
   }
 
+  async function handleAddQuickAdd(
+    fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null },
+    sectionId: string | null = null
+  ) {
+    if (!currentDailyLogId) return;
+    await run(
+      async () => {
+        await addQuickAddEntry(currentDailyLogId, sectionId, fields);
+        await loadDate(viewingDate);
+      },
+      { success: `${fields.name} added` }
+    );
+  }
+
   async function handleAddRecipe(recipeId: string, servings: number, sectionId: string | null = null) {
     if (!currentDailyLogId) return;
     const recipe = recipes.find((r) => r.id === recipeId);
@@ -412,6 +457,20 @@ export function FoodTrackingTab({
     } catch (err) {
       setScanStatus(err instanceof Error ? err.message : 'Lookup failed.');
     }
+  }
+
+  async function handleCopyFromYesterday() {
+    if (!currentDailyLogId) return;
+    const yesterday = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
+    await run(
+      async () => {
+        const count = await copyFromDate(clientId, yesterday, currentDailyLogId);
+        if (count === 0) return fail(null, 'Nothing logged yesterday to copy.');
+        await loadDate(viewingDate);
+        return ok();
+      },
+      { success: 'Copied from yesterday' }
+    );
   }
 
   async function handleRemove(id: string) {
@@ -588,6 +647,9 @@ export function FoodTrackingTab({
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
           <p className="text-xs text-zinc-500">Scanned or quick-searched items land in &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;+ Add food&quot; to file directly, or re-file afterward.</p>
+          <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-medium text-accent hover:underline">
+            Copy from yesterday
+          </button>
         </div>
       )}
       {!readOnly && isManual && (
@@ -611,7 +673,7 @@ export function FoodTrackingTab({
                 ) : (
                   <h4 className="font-medium text-black dark:text-zinc-50">{section.label}</h4>
                 )}
-                <span className="shrink-0 text-xs text-zinc-500">
+                <span className="shrink-0 text-sm text-zinc-500">
                   {Math.round(isManual ? sectionManualCalories : sectionTotals.calories)} kcal
                 </span>
               </div>
@@ -740,6 +802,11 @@ export function FoodTrackingTab({
           onAdd={(food, portions) => handleAdd(food, portions, addFoodTarget.id)}
           recipes={recipes}
           onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings, addFoodTarget.id)}
+          onAddQuickAdd={(fields) => handleAddQuickAdd(fields, addFoodTarget.id)}
+          favorites={favorites}
+          recentlyLogged={recentlyLogged}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={handleToggleFavorite}
           onClose={() => setAddFoodTarget(null)}
         />
       )}

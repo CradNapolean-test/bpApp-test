@@ -40,6 +40,7 @@ export default async function CoachLibraryPage() {
       initialCourses={courses}
       unreadCount={unreadCount}
       groups={groups}
+      email={user.email ?? 'Coach'}
     />
   );
 }

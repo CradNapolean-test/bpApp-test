@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckSquare } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { Checkbox } from '@/app/_components/Checkbox';
 import { useAction } from '@/app/_components/useAction';
@@ -106,9 +105,9 @@ function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWit
 
 function MoodDots({ label, value, onChange, disabled }: { label: string; value: number | null; onChange: (n: number) => void; disabled: boolean }) {
   return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-zinc-500">{label}</p>
-      <div className="flex gap-1">
+    <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
+      <p className="w-20 shrink-0 text-sm text-zinc-500">{label}</p>
+      <div className="flex flex-1 gap-1.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
@@ -116,10 +115,10 @@ function MoodDots({ label, value, onChange, disabled }: { label: string; value: 
             disabled={disabled}
             onClick={() => onChange(n)}
             aria-label={`${label} ${n} of 5`}
-            className={`h-6 w-6 rounded-md transition-colors disabled:opacity-60 ${
-              value != null && n <= value
+            className={`h-7 flex-1 rounded-full transition-colors disabled:opacity-60 ${
+              value != null && n === value
                 ? 'bg-accent'
-                : 'bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20'
+                : 'bg-black/[.04] hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20'
             }`}
           />
         ))}
@@ -234,8 +233,8 @@ export function WeeklyLogTab({
   const n = loggedDays.length || 1;
 
   const inputCls =
-    'w-full rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10 disabled:opacity-60';
-  const labelCls = 'text-xs font-medium text-zinc-500';
+    'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10 disabled:opacity-60';
+  const labelCls = 'text-xs font-semibold uppercase tracking-wide text-zinc-500';
 
   const d = days[focusedDate];
   const calories = dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0);
@@ -248,16 +247,16 @@ export function WeeklyLogTab({
 
       <div className="grid grid-cols-3 gap-3">
         <div className={cardCls}>
-          <p className="text-xs font-medium text-zinc-500">Avg calories</p>
-          <p className="mt-1 text-xl font-semibold text-black dark:text-zinc-50">{Math.round(totals.calories / n)}</p>
+          <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(totals.calories / n)}</p>
+          <p className="mt-0.5 text-xs text-zinc-500">avg kcal</p>
         </div>
         <div className={cardCls}>
-          <p className="text-xs font-medium text-zinc-500">Avg protein</p>
-          <p className="mt-1 text-xl font-semibold text-black dark:text-zinc-50">{Math.round(totals.protein / n)}g</p>
+          <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(totals.protein / n)}g</p>
+          <p className="mt-0.5 text-xs text-zinc-500">avg protein</p>
         </div>
         <div className={cardCls}>
-          <p className="text-xs font-medium text-zinc-500">Total steps</p>
-          <p className="mt-1 text-xl font-semibold text-black dark:text-zinc-50">{totals.steps}</p>
+          <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(totals.steps / n).toLocaleString()}</p>
+          <p className="mt-0.5 text-xs text-zinc-500">avg steps</p>
         </div>
       </div>
       <p className="text-xs text-zinc-500">
@@ -277,19 +276,19 @@ export function WeeklyLogTab({
               key={date}
               type="button"
               onClick={() => setFocusedDate(date)}
-              className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+              className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors ${
                 isFocused
                   ? 'border-accent bg-accent text-accent-foreground'
                   : 'border-black/[.05] text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
               }`}
             >
-              <span className="uppercase opacity-80">
+              <span className="text-xs font-medium uppercase opacity-80">
                 {dateObj.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
               </span>
-              <span>{dateObj.toLocaleDateString(undefined, { day: 'numeric', timeZone: 'UTC' })}</span>
+              <span className="text-sm font-bold">{dateObj.toLocaleDateString(undefined, { day: 'numeric', timeZone: 'UTC' })}</span>
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  logged ? (isFocused ? 'bg-accent-foreground' : 'bg-accent') : 'bg-transparent'
+                  logged ? (isFocused ? 'bg-accent-foreground' : 'bg-success') : 'bg-transparent'
                 }`}
               />
             </button>
@@ -324,20 +323,19 @@ export function WeeklyLogTab({
         )}
 
         {habits.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-black/5 pb-3 text-sm dark:border-white/5">
-            <span className="flex items-center gap-1 text-xs font-medium text-zinc-500">
-              <CheckSquare className="h-3.5 w-3.5" /> Habits
-            </span>
+          <div className="mt-3 space-y-2 border-b border-black/5 pb-3 dark:border-white/5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Habits</p>
             {habits.map((habit) => {
               const habitLog = habit.logs.find((l) => l.log_date === focusedDate);
               const done = habitLog?.completed ?? false;
               const key = `${habit.id}|${focusedDate}`;
               return (
-                <label key={habit.id} className="flex items-center gap-1.5">
+                <label key={habit.id} className="flex items-center gap-3 text-sm">
                   <Checkbox
                     checked={done}
                     disabled={isCoachView || busyHabitKey === key}
                     onChange={() => toggleHabit(habit.id, focusedDate, !done)}
+                    className="h-7 w-7 rounded-lg"
                   />
                   {habit.name}
                 </label>

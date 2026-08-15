@@ -14,11 +14,14 @@ export async function getFormTemplates(): Promise<FormTemplateRow[]> {
   const coachId = await resolveScopingCoachId(supabase);
   const { data, error } = await supabase
     .from('form_templates')
-    .select('*')
+    .select('*, form_questions(count)')
     .eq('coach_id', coachId)
     .order('created_at');
   if (error) raise(error);
-  return data ?? [];
+  return (data ?? []).map((row) => {
+    const { form_questions, ...rest } = row as typeof row & { form_questions: { count: number }[] };
+    return { ...rest, questionCount: form_questions[0]?.count ?? 0 };
+  });
 }
 
 export async function getFormTemplateWithQuestions(templateId: string): Promise<FormTemplateWithQuestions | null> {

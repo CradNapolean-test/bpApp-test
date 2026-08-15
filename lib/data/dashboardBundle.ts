@@ -23,7 +23,7 @@ import { getProgramTemplates } from './programTemplates';
 import { getRecipesWithIngredients } from './recipes';
 import { getCourses, getClientCourseAssignments } from './education';
 import { getDisabledScreens } from './clientScreenSettings';
-import { toIsoDate, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
+import { toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 
 const HISTORY_DAYS = 84;
 
@@ -31,14 +31,18 @@ const HISTORY_DAYS = 84;
 // insert their own daily_logs rows, so a coach's session can't (and shouldn't) create
 // today's blank row as a side effect of just looking at the page.
 export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
-  const today = new Date();
-  const todayIso = toIsoDate(today);
+  // Profile is fetched first (not inside the big Promise.all below) specifically so its
+  // timezone is available before "today" is resolved -- this is the fix for a client's
+  // logged data landing on the wrong day near a UTC boundary (see migration 0044's comment
+  // for the full root-cause explanation). Every date below derives from this, not raw UTC.
+  const profile = await getClientProfile(clientId);
+  const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+  const today = new Date(`${todayIso}T00:00:00Z`);
   const weekStart = startOfWeek(today);
   const dates = weekDatesFor(weekStart);
   const historyStart = toIsoDate(addDays(today, -HISTORY_DAYS));
 
   const [
-    profile,
     weekLogs,
     historyLogs,
     mealPlanEntries,
@@ -70,7 +74,6 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     mealSections,
     disabledScreens,
   ] = await Promise.all([
-    getClientProfile(clientId),
     getDailyLogs(clientId, dates[0], dates[6]),
     getDailyLogs(clientId, historyStart, todayIso),
     getMealPlanEntries(clientId),
@@ -89,7 +92,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getPackages(),
     getPhotos(clientId),
     getMeasurementLogs(clientId),
-    getHabitsWithLogs(clientId),
+    getHabitsWithLogs(clientId, profile?.timezone ?? DEFAULT_TIMEZONE),
     getUnreadNotifications(clientId),
     getFormTemplates(),
     getClientFormAssignments(clientId),

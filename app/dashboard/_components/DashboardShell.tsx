@@ -25,7 +25,7 @@ import { TodayTab } from './TodayTab';
 import { ChatTab } from './ChatTab';
 import { CategoryNav } from './CategoryNav';
 import { AccountTab } from './AccountTab';
-import { InfoTab } from '@/app/coach/_components/workspace/InfoTab';
+import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, screensForCategory, toDisabledScreenSet } from './categories';
 import { NotificationsTab } from './NotificationsTab';
@@ -254,27 +254,54 @@ export function DashboardShell({
   // prototype's Nutrition/Training/Accountability/Progress screens never repeat the greeting.
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
+  const greetingHour = new Date().getHours();
+  const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
   // Who the client is chatting with (coach sees the client's name; client sees a generic
   // "Your coach" since the client-side bundle doesn't carry the coach's own profile).
   const otherPartyName = isCoachView ? clientLabel : 'Your coach';
-  const mobileHeader = (
+  // Screens reached by tapping into something (header icons, avatar) rather than a bottom
+  // tab -- get a back-chevron chip in place of the avatar, matching the redesign's pattern of
+  // only showing self-identity on the persistent tab screens. The Classes area (its own top
+  // toggle, not a Coaching-category drill-in) always counts as top-level here -- `category`
+  // is stale while area === 'Classes' since setArea() alone doesn't touch it, so this must not
+  // key off `category` in that case or the header shows whatever Coaching category was last
+  // active before switching tabs.
+  const isSubScreen = area === 'Coaching' && !BOTTOM_TAB_CATEGORIES.includes(category);
+  const mobileHeaderTitle =
+    category === 'Messages'
+      ? otherPartyName
+      : isCoachView
+        ? clientLabel
+        : category === 'Account Settings'
+          ? 'Account'
+          : category;
+  const mobileHeader = isSubScreen ? (
+    <button
+      type="button"
+      onClick={() => handleCategoryClick('Home')}
+      className="flex min-w-0 items-center gap-2.5 text-left"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+        <ArrowLeft className="h-4 w-4" />
+      </span>
+      <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{mobileHeaderTitle}</p>
+    </button>
+  ) : (
     <button
       type="button"
       onClick={() => handleCategoryClick('Account Settings')}
       className="flex min-w-0 items-center gap-2.5 text-left"
     >
-      <Avatar name={category === 'Messages' ? otherPartyName : (profile?.name ?? clientLabel)} size="md" />
+      <Avatar name={profile?.name ?? clientLabel} size="md" variant={!isCoachView ? 'self' : 'person'} />
       <div className="min-w-0">
-        {!isCoachView && category === 'Home' ? (
+        {!isCoachView && area === 'Coaching' && category === 'Home' ? (
           <>
             <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">{todayLabel}</p>
-            <p className="truncate text-lg font-bold text-black dark:text-zinc-50">Hey, {firstName}</p>
+            <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{timeGreeting}, {firstName}</p>
           </>
-        ) : category === 'Messages' ? (
-          <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{otherPartyName}</p>
         ) : (
           <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
-            {isCoachView ? clientLabel : category}
+            {isCoachView ? clientLabel : area === 'Classes' ? 'Classes' : category}
           </p>
         )}
       </div>
@@ -284,7 +311,7 @@ export function DashboardShell({
   const coachSummary = isCoachView && (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
       <Link
-        href="/coach"
+        href="/coach/clients"
         className="flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
       >
         &larr; All clients
@@ -311,7 +338,7 @@ export function DashboardShell({
           <button
             onClick={() => handleCategoryClick('Messages')}
             aria-label="Messages"
-            className="relative rounded-full bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+            className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
             <MessageSquare className="h-5 w-5" />
             {(isCoachView ? perClientUnreadCount : unreadMessageCount) > 0 && (
@@ -321,7 +348,7 @@ export function DashboardShell({
           <button
             onClick={() => handleCategoryClick('Notifications')}
             aria-label="Notifications"
-            className="relative rounded-full bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+            className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
             <Bell className="h-5 w-5" />
             {notifications.length > 0 && (
@@ -336,7 +363,7 @@ export function DashboardShell({
       {showCoaching && !BOTTOM_TAB_CATEGORIES.includes(category) && (
         <button
           onClick={() => handleCategoryClick('Home')}
-          className="mb-3 flex items-center gap-1 text-sm font-medium text-zinc-500 hover:text-black md:hidden dark:hover:text-zinc-300"
+          className="mb-3 hidden items-center gap-1 text-sm font-medium text-zinc-500 hover:text-black md:flex dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -393,6 +420,8 @@ export function DashboardShell({
               name={profile?.name ?? 'You'}
               email={currentUserEmail}
               notificationsEnabled={profile?.notifications_enabled ?? true}
+              emailNotificationsEnabled={profile?.email_notifications_enabled ?? true}
+              deletionRequestedAt={profile?.deletion_requested_at ?? null}
               themePreference={themePreference}
               onNavigate={handleNavigate}
             />
@@ -498,7 +527,7 @@ export function DashboardShell({
             <ClientCreditsTab creditsBalance={creditsBalance} membership={membership} ledger={creditsLedger} />
           )}
           {effectiveScreen === 'Info' && isCoachView && (
-            <InfoTab clientId={clientId} entries={journalEntries} />
+            <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} />
           )}
           {effectiveScreen === 'Notifications' && (
             <NotificationsTab notifications={notifications} />

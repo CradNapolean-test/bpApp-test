@@ -129,7 +129,7 @@ export function RecipesTab({
                       setOpenRecipeId(open ? null : recipe.id);
                       setAddingIngredient(false);
                     }}
-                    className="text-left font-medium text-black hover:underline dark:text-zinc-50"
+                    className="text-left text-base font-bold text-black hover:underline dark:text-zinc-50"
                   >
                     {recipe.name}
                   </button>
@@ -148,12 +148,7 @@ export function RecipesTab({
                 </div>
 
                 {recipe.recipe_ingredients.length > 0 && (
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Per serving: {Math.round(totals.calories / servings)} kcal ·{' '}
-                    {Math.round(totals.protein / servings)}g protein ·{' '}
-                    {Math.round(totals.carbs / servings)}g carbs ·{' '}
-                    {Math.round(totals.fat / servings)}g fat
-                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">Per serving: {Math.round(totals.calories / servings)} kcal</p>
                 )}
                 <p className="mt-0.5 text-xs text-zinc-400">
                   {recipe.recipe_ingredients.length} ingredient{recipe.recipe_ingredients.length === 1 ? '' : 's'}

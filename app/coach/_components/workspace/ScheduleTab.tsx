@@ -1,6 +1,6 @@
 import { EmptyState } from '@/app/_components/EmptyState';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
-import { toIsoDate } from '@/lib/utils/dates';
+import { formatClassTime, toIsoDate } from '@/lib/utils/dates';
 import type { BookingRow, WorkoutProgramRow } from '@/lib/data/types';
 
 // Read-only, both sections derived from data the client already has -- see
@@ -32,7 +32,7 @@ export function ScheduleTab({ bookings, programs }: { bookings: BookingRow[]; pr
               <p className="text-sm font-medium text-black dark:text-zinc-50">{b.class?.name ?? 'Class'}</p>
               <p className="text-sm text-zinc-500">
                 {new Date(b.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                {b.class?.start_time && ` · ${b.class.start_time.slice(0, 5)}`}
+                {b.class?.start_time && ` · ${formatClassTime(b.class.start_time)}`}
               </p>
             </div>
           ))}

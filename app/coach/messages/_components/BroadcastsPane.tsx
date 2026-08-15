@@ -59,7 +59,8 @@ export function BroadcastsPane({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/10 p-4 dark:border-white/10">
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+        <h2 className="text-sm font-bold text-black dark:text-zinc-50">Compose broadcast</h2>
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -140,15 +141,15 @@ export function BroadcastsPane({
           <button
             type="submit"
             disabled={!canSubmit}
-            className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            className="rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
           >
-            {timing === 'now' ? 'Send' : 'Schedule'}
+            {timing === 'now' ? 'Send now' : 'Schedule'}
           </button>
         </div>
       </form>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-black dark:text-zinc-50">History</h3>
+        <h3 className="text-sm font-bold text-black dark:text-zinc-50">Scheduled &amp; sent</h3>
         {communications.length === 0 && <EmptyState compact title="No broadcasts yet." />}
         {communications.map((c) => {
           const group = c.target_group_id ? groups.find((g) => g.id === c.target_group_id) : null;
@@ -160,22 +161,22 @@ export function BroadcastsPane({
           return (
             <div
               key={c.id}
-              className="flex items-start justify-between gap-3 rounded-xl border border-black/10 p-3 text-sm dark:border-white/10"
+              className="flex items-start justify-between gap-3 rounded-2xl border border-black/[.05] p-3.5 text-sm shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-zinc-900 dark:text-zinc-100">{c.message}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {targetLabel} · {new Date(c.send_at).toLocaleString()}
+                  {targetLabel} · {isSent ? 'Sent' : 'Scheduled'} {new Date(c.send_at).toLocaleDateString()}
                   {showsMessage && (
                     <>
                       {' · Message: '}
-                      <span className={isSent ? 'text-accent' : 'text-zinc-500'}>{isSent ? 'Sent' : 'Scheduled'}</span>
+                      <span className={isSent ? 'text-[#19adb1]' : 'text-zinc-500'}>{isSent ? 'Sent' : 'Scheduled'}</span>
                     </>
                   )}
                   {showsEmail && (
                     <>
                       {' · Email: '}
-                      <span className={isEmailSent ? 'text-accent' : 'text-zinc-500'}>{isEmailSent ? 'Sent' : 'Scheduled'}</span>
+                      <span className={isEmailSent ? 'text-[#19adb1]' : 'text-zinc-500'}>{isEmailSent ? 'Sent' : 'Scheduled'}</span>
                     </>
                   )}
                 </p>

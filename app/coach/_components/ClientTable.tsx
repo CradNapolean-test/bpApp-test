@@ -2,16 +2,25 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpDown, Search, Users } from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, Search, Users } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
-import { StatusBadge } from '@/app/_components/StatusBadge';
 import { GroupsManager } from './GroupsManager';
-import type { ClientHealthStatus, CoachClientRow } from '@/lib/data/coach';
+import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow } from '@/lib/data/coach';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 
 const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
+
+// Plain color-word text for this table specifically (matches the desktop clients table design)
+// -- distinct from StatusBadge's pill+label treatment used in Program Health / client detail,
+// which needs the fuller "Action required"/"Keep watch" phrasing since it stands alone there.
+const STATUS_TEXT: Record<ClientHealthBucket, { label: string; cls: string }> = {
+  red: { label: 'Red', cls: 'text-red-600 dark:text-red-400' },
+  amber: { label: 'Amber', cls: 'text-amber-600 dark:text-amber-400' },
+  green: { label: 'Green', cls: 'text-emerald-600 dark:text-emerald-400' },
+  unmonitored: { label: 'Unmonitored', cls: 'text-zinc-400' },
+};
 
 export function ClientTable({
   clients,
@@ -24,20 +33,21 @@ export function ClientTable({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [asc, setAsc] = useState(true);
-  // Compensates for ClientSidebar's search box becoming unreachable on mobile once this
-  // page's AppShell also has a bottomBar (bottomBar suppresses the sidebar's hamburger).
   const [query, setQuery] = useState('');
   const [groupId, setGroupId] = useState('');
   const [managingGroups, setManagingGroups] = useState(false);
+  const [pendingDeletionOnly, setPendingDeletionOnly] = useState(false);
 
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.clientId, s])), [statuses]);
+  const pendingDeletionCount = useMemo(() => clients.filter((c) => c.deletion_requested_at != null).length, [clients]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const activeGroup = groupId ? groups.find((g) => g.id === groupId) : null;
     const filteredClients = clients
       .filter((c) => (q ? (c.name ?? '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) : true))
-      .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true));
+      .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true))
+      .filter((c) => (pendingDeletionOnly ? c.deletion_requested_at != null : true));
     const merged = filteredClients.map((c) => ({ client: c, health: statusById.get(c.id) ?? null }));
     merged.sort((a, b) => {
       let cmp = 0;
@@ -56,7 +66,7 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [clients, statusById, sortKey, asc, query, groupId, groups]);
+  }, [clients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setAsc((v) => !v);
@@ -109,6 +119,19 @@ export function ClientTable({
         >
           Manage groups
         </button>
+        {pendingDeletionCount > 0 && (
+          <button
+            onClick={() => setPendingDeletionOnly((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+              pendingDeletionOnly
+                ? 'border-danger/30 bg-danger/10 text-danger'
+                : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Pending deletion ({pendingDeletionCount})
+          </button>
+        )}
       </div>
       {managingGroups && (
         <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
@@ -150,22 +173,39 @@ export function ClientTable({
                   <div className="flex items-center gap-2.5">
                     <Avatar name={client.name ?? client.email} size="sm" />
                     <div className="min-w-0">
-                      <Link
-                        href={`/coach/clients/${client.id}`}
-                        className="font-medium text-black hover:underline dark:text-zinc-50"
-                      >
-                        {client.name ?? client.email}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/coach/clients/${client.id}`}
+                          className="font-medium text-black hover:underline dark:text-zinc-50"
+                        >
+                          {client.name ?? client.email}
+                        </Link>
+                        {client.deletion_requested_at && (
+                          <span
+                            title="Deletion requested"
+                            className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-danger"
+                          >
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            Deletion requested
+                          </span>
+                        )}
+                      </div>
                       <p className="truncate text-xs text-zinc-500">{client.email}</p>
                     </div>
                   </div>
                 </td>
                 <td className="p-3">
-                  <StatusBadge status={health?.status ?? 'unmonitored'} />
+                  <span className={`font-semibold ${STATUS_TEXT[health?.status ?? 'unmonitored'].cls}`}>
+                    {STATUS_TEXT[health?.status ?? 'unmonitored'].label}
+                  </span>
                 </td>
                 <td className="whitespace-nowrap p-3 text-zinc-500">
                   {health?.lastActiveDate
-                    ? `${health.daysSinceActive}d ago`
+                    ? health.daysSinceActive === 0
+                      ? 'Today'
+                      : health.daysSinceActive === 1
+                        ? 'Yesterday'
+                        : `${health.daysSinceActive}d ago`
                     : 'Never logged'}
                 </td>
                 <td className="p-3 text-zinc-500">{client.balance}</td>

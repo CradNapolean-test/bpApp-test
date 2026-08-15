@@ -9,11 +9,11 @@ import type { ChatOverviewRow } from '@/lib/data/types';
 export function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 type FilterMode = 'active' | 'unread' | 'all';
@@ -72,7 +72,7 @@ export function ConversationList({
             onClick={() => onSelect(c.client_id)}
             className={`block w-full rounded-2xl px-3 py-2.5 text-left text-sm transition-colors ${
               selected === c.client_id
-                ? 'bg-accent text-accent-foreground shadow-sm'
+                ? 'bg-black/[.04] dark:bg-white/[.06]'
                 : 'text-zinc-700 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/5'
             }`}
           >
@@ -80,21 +80,13 @@ export function ConversationList({
               <Avatar name={c.client_name} size="sm" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{c.client_name}</span>
-                  {c.unread_count > 0 && (
-                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-[10px] font-semibold text-white">
-                      {c.unread_count > 99 ? '99+' : c.unread_count}
-                    </span>
-                  )}
+                  <span className="truncate font-bold text-black dark:text-zinc-50">{c.client_name}</span>
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-400">
+                    {c.last_message_at && relativeTime(c.last_message_at)}
+                    {c.unread_count > 0 && <span className="h-2 w-2 rounded-full bg-[#19adb1]" aria-label="Unread" />}
+                  </span>
                 </div>
-                {c.last_message ? (
-                  <p className={`truncate text-xs ${selected === c.client_id ? 'opacity-80' : 'text-zinc-500'}`}>
-                    {c.last_message}
-                    {c.last_message_at && ` · ${relativeTime(c.last_message_at)}`}
-                  </p>
-                ) : (
-                  <p className={`text-xs ${selected === c.client_id ? 'opacity-80' : 'text-zinc-500'}`}>No messages yet</p>
-                )}
+                <p className="truncate text-xs text-zinc-500">{c.last_message ?? 'No messages yet'}</p>
               </div>
             </div>
           </button>

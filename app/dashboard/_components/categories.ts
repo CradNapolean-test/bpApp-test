@@ -102,7 +102,7 @@ export function screensForCategory(
         // must never see it: clicking "change password" would silently change the COACH's own
         // password, not the client's, since supabase.auth.updateUser() always targets whoever
         // is actually signed in.
-        return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Setup', 'Account', 'Credits'];
+        return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Account', 'Setup', 'Credits'];
     }
   })();
   return screens.filter((s) => !disabledScreens.has(s));

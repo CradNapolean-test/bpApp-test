@@ -168,6 +168,20 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
 
   const dates = [...new Set(occurrences.map((o) => o.date))];
   const classIds = [...new Set(occurrences.map((o) => o.classId))];
+
+  // Skip generating any occurrence a coach has cancelled (0051) -- filtered out entirely
+  // rather than flagged, matching the virtual-generation model: a cancelled date simply isn't
+  // a bookable/attendable occurrence anymore.
+  const { data: exceptions, error: exceptionsError } = await supabase
+    .from('class_exceptions')
+    .select('class_id, occurrence_date')
+    .in('class_id', classIds)
+    .in('occurrence_date', dates);
+  if (exceptionsError) raise(exceptionsError);
+  const cancelledKeys = new Set((exceptions ?? []).map((e) => `${e.class_id}|${e.occurrence_date}`));
+  const activeOccurrences = occurrences.filter((o) => !cancelledKeys.has(`${o.classId}|${o.date}`));
+  if (activeOccurrences.length === 0) return [];
+
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select('class_id, booking_date')
@@ -182,9 +196,20 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
     countMap.set(key, (countMap.get(key) ?? 0) + 1);
   }
 
-  return occurrences
+  return activeOccurrences
     .map((o) => ({ ...o, bookedCount: countMap.get(`${o.classId}|${o.date}`) ?? 0 }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+// Bulk cancel: refunds every booked spot, cancels every booked/waitlist row, notifies every
+// affected client -- see migration 0051's cancel_class_occurrence for the exact refund/notify
+// logic (mirrors cancel_booking's reason format, skips waitlist-promotion since the whole
+// occurrence is gone). Returns how many bookings were affected, for the UI's confirmation toast.
+export async function cancelClassOccurrence(classId: string, date: string): Promise<ActionResult & { count?: number }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('cancel_class_occurrence', { p_class_id: classId, p_date: date });
+  if (error) return fail(error, 'Could not cancel that occurrence');
+  return { ...ok(), count: data as number };
 }
 
 // Roster for one specific occurrence (class + date), with each booked client's name and

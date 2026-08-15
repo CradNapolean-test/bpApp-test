@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarDays, Check, UserX, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Ban, Check, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Button } from '@/app/_components/Button';
-import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
-import { getRoster, markAttendanceStatus } from '@/lib/data/classes';
+import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { cancelClassOccurrence, getRoster, markAttendanceStatus } from '@/lib/data/classes';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 
 function statusOf(entry: RosterEntry): AttendanceStatus {
@@ -23,32 +24,61 @@ const NEXT_STATUS: Record<AttendanceStatus, AttendanceStatus> = {
   no_show: 'unmarked',
 };
 
-const STATUS_META: Record<AttendanceStatus, { label: string; variant: 'outline' | 'primary' | 'danger-solid' }> = {
-  unmarked: { label: 'Mark', variant: 'outline' },
-  attended: { label: 'Attended', variant: 'primary' },
-  no_show: { label: 'No-show', variant: 'danger-solid' },
+const STATUS_META: Record<AttendanceStatus, { label: string; cls: string }> = {
+  unmarked: { label: 'Mark attended', cls: 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300' },
+  attended: { label: 'Attended', cls: 'bg-success/10 text-success' },
+  no_show: { label: 'No-show', cls: 'bg-danger/10 text-danger' },
 };
+
+function occKey(o: ScheduleOccurrence): string {
+  return `${o.classId}|${o.date}`;
+}
+
+function formatChipLabel(o: ScheduleOccurrence): string {
+  const dateLabel = new Date(o.date + 'T00:00:00Z').toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  return `${dateLabel} · ${o.className}`;
+}
 
 export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
   const toast = useToast();
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selected, setSelected] = useState<ScheduleOccurrence | null>(null);
+  const confirm = useConfirm();
+  const { run: runCancel, busy: cancelling } = useAction();
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const selected = occurrences.find((o) => occKey(o) === selectedKey) ?? null;
+
   async function openOccurrence(occ: ScheduleOccurrence) {
-    setSelected(occ);
+    setSelectedKey(occKey(occ));
     setLoading(true);
     try {
       const r = await getRoster(occ.classId, occ.date);
       setRoster(r);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not load the roster');
-      setSelected(null);
     } finally {
       setLoading(false);
     }
   }
+
+  // Auto-select the soonest upcoming occurrence so the roster is visible without an extra
+  // click, matching the design (first chip shown already active). Only reacts to the
+  // occurrences prop itself, not to openOccurrence's identity -- same narrow-deps exception
+  // used by WorkoutTab.tsx's focusDay effect.
+  useEffect(() => {
+    // Reacting to an external signal (the initial occurrences list arriving), not
+    // synchronizing with an external system -- the standard justified exception used
+    // elsewhere in the app (see WorkoutTab.tsx's focusDay effect).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (occurrences.length > 0) void openOccurrence(occurrences[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occurrences]);
 
   async function cycleStatus(entry: RosterEntry) {
     if (!selected) return;
@@ -76,87 +106,94 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     }
   }
 
-  if (selected) {
-    return (
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setSelected(null);
-            setRoster(null);
-          }}
-        >
-          &larr; Back to schedule
-        </Button>
-        <h3 className="text-lg font-medium text-black dark:text-zinc-50">
-          {selected.className} — {selected.date}
-        </h3>
-        {loading && <p className="text-sm text-zinc-500">Loading roster…</p>}
-        {!loading && (roster ?? []).length === 0 && (
-          <EmptyState icon={UserX} title="Nobody booked in" hint="No clients have booked this class occurrence." />
-        )}
-        {!loading && (roster ?? []).length > 0 && (
-          <div className="space-y-2">
-            {(roster ?? []).map((entry) => (
-              <div
-                key={entry.bookingId}
-                className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <Avatar name={entry.clientName} size="sm" />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.clientName}</p>
-                    <p className="text-xs text-zinc-500">{entry.status}</p>
-                  </div>
-                </div>
-                <Button variant={STATUS_META[statusOf(entry)].variant} size="sm" onClick={() => cycleStatus(entry)}>
-                  {statusOf(entry) === 'attended' && <Check className="mr-1 inline h-3.5 w-3.5" />}
-                  {statusOf(entry) === 'no_show' && <X className="mr-1 inline h-3.5 w-3.5" />}
-                  {STATUS_META[statusOf(entry)].label}
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+  async function handleCancelOccurrence() {
+    if (!selected) return;
+    const ok = await confirm({
+      title: `Cancel ${selected.className} on ${formatChipLabel(selected).split(' · ')[0]}?`,
+      body: 'Every booked client is refunded and notified. This only cancels this one date -- the rest of the recurring class is unaffected.',
+      confirmLabel: 'Cancel occurrence',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runCancel(
+      async () => {
+        const result = await cancelClassOccurrence(selected.classId, selected.date);
+        if (result.ok) {
+          setSelectedKey(null);
+          setRoster(null);
+        }
+        return result;
+      },
+      { success: 'Occurrence cancelled' }
     );
   }
 
-  const dayOccurrences = occurrences.filter((o) => o.date === selectedDate);
+  if (occurrences.length === 0) {
+    return (
+      <EmptyState
+        icon={UserX}
+        title="No upcoming classes"
+        hint="Add a class under Manage and its occurrences will appear here."
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      <div className="flex flex-wrap gap-2">
+        {occurrences.map((occ) => {
+          const isActive = occKey(occ) === selectedKey;
+          return (
+            <button
+              key={occKey(occ)}
+              type="button"
+              onClick={() => openOccurrence(occ)}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                isActive
+                  ? 'bg-[#141414] text-white'
+                  : 'border border-black/10 text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
+              }`}
+            >
+              {formatChipLabel(occ)}
+            </button>
+          );
+        })}
+      </div>
 
-      {!selectedDate && (
-        <EmptyState
-          icon={CalendarDays}
-          title={occurrences.length === 0 ? 'No upcoming classes' : 'Pick a day to take attendance'}
-          hint={
-            occurrences.length === 0
-              ? 'Add a class under Manage Classes and its occurrences will appear here.'
-              : 'Marked days have a class scheduled. Select one to see who booked in.'
-          }
-        />
+      {selected && !loading && (
+        <div className="flex justify-end">
+          <Button variant="danger" size="sm" onClick={handleCancelOccurrence} disabled={cancelling} className="flex items-center gap-1.5">
+            <Ban className="h-3.5 w-3.5" />
+            Cancel this occurrence
+          </Button>
+        </div>
       )}
 
-      {selectedDate && (
+      {loading && <p className="text-sm text-zinc-500">Loading roster…</p>}
+      {!loading && (roster ?? []).length === 0 && (
+        <EmptyState icon={UserX} title="Nobody booked in" hint="No clients have booked this class occurrence." />
+      )}
+      {!loading && (roster ?? []).length > 0 && (
         <div className="space-y-2">
-          {dayOccurrences.map((occ) => (
-            <button
-              key={`${occ.classId}-${occ.date}`}
-              onClick={() => openOccurrence(occ)}
-              className="flex w-full items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] transition-colors hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+          {(roster ?? []).map((entry) => (
+            <div
+              key={entry.bookingId}
+              className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
-              <span className="text-sm font-semibold text-black dark:text-zinc-50">
-                {occ.className}
-                {occ.startTime ? ` ${occ.startTime.slice(0, 5)}` : ''}
-              </span>
-              <span className="text-xs text-zinc-500">
-                {occ.bookedCount}/{occ.capacity} booked
-              </span>
-            </button>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Avatar name={entry.clientName} size="sm" />
+                <p className="truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.clientName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => cycleStatus(entry)}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${STATUS_META[statusOf(entry)].cls}`}
+              >
+                {statusOf(entry) === 'attended' && <Check className="mr-1 inline h-3.5 w-3.5" />}
+                {statusOf(entry) === 'no_show' && <X className="mr-1 inline h-3.5 w-3.5" />}
+                {STATUS_META[statusOf(entry)].label}
+              </button>
+            </div>
           ))}
         </div>
       )}

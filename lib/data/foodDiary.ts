@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
+import { entryMacros } from '@/lib/utils/foodTotals';
 import type { FoodDiaryEntryRow } from './types';
 
 // Resolves a given date's diary, for the date-nav in FoodTrackingTab (Phase 3: past-day
@@ -46,6 +47,30 @@ export async function addFoodDiaryEntry(
   await syncFoodDiaryToLog(dailyLogId);
 }
 
+// Quick Add -- a diary row with no food_id, for something with no food-database match (a
+// restaurant meal, an estimate). Same row shape/section filing as a normal entry, just
+// carrying inline quick_add_* macros instead of a resolved food (migration 0049).
+export async function addQuickAddEntry(
+  dailyLogId: string,
+  mealSectionId: string | null,
+  fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('food_diary_entries').insert({
+    daily_log_id: dailyLogId,
+    food_id: null,
+    portions: 1,
+    meal_section_id: mealSectionId,
+    quick_add_name: fields.name,
+    quick_add_calories: fields.calories,
+    quick_add_protein: fields.protein,
+    quick_add_carbs: fields.carbs,
+    quick_add_fat: fields.fat,
+  });
+  if (error) raise(error);
+  await syncFoodDiaryToLog(dailyLogId);
+}
+
 export async function removeFoodDiaryEntry(id: string, dailyLogId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('food_diary_entries').delete().eq('id', id);
@@ -73,16 +98,60 @@ export async function updateFoodDiaryEntryPortions(entryId: string, portions: nu
   await syncFoodDiaryToLog(dailyLogId);
 }
 
+// "Copy from yesterday" entry point -- resolves the source day by date (client_id + a date
+// string, not a dailyLogId the UI doesn't have) rather than making FoodTrackingTab do its own
+// date math against getDailyLog. Returns 0 (not an error) if the source day never got a
+// daily_logs row at all -- "yesterday" being blank is an expected, common case.
+export async function copyFromDate(clientId: string, fromDate: string, toDailyLogId: string): Promise<number> {
+  const fromDailyLog = await getDailyLog(clientId, fromDate);
+  if (!fromDailyLog) return 0;
+  return copyDiaryEntries(fromDailyLog.id, toDailyLogId);
+}
+
+// Copies a source day's entries (optionally scoped to one section) into a target day --
+// "Copy from yesterday" and, later, a per-section "copy this meal" affordance. Copies both
+// food-matched and Quick Add rows (portions/quick_add_* carry over as-is); meal_section_id
+// carries over too, so a copy lands in the same section it came from on the target day.
+export async function copyDiaryEntries(
+  fromDailyLogId: string,
+  toDailyLogId: string,
+  mealSectionId?: string | null
+): Promise<number> {
+  const supabase = await createClient();
+  let request = supabase.from('food_diary_entries').select('*').eq('daily_log_id', fromDailyLogId);
+  if (mealSectionId !== undefined) request = request.eq('meal_section_id', mealSectionId);
+  const { data: source, error: fetchError } = await request;
+  if (fetchError) raise(fetchError);
+  if (!source || source.length === 0) return 0;
+
+  const copies = source.map((entry) => ({
+    daily_log_id: toDailyLogId,
+    food_id: entry.food_id,
+    portions: entry.portions,
+    meal_section_id: entry.meal_section_id,
+    quick_add_name: entry.quick_add_name,
+    quick_add_calories: entry.quick_add_calories,
+    quick_add_protein: entry.quick_add_protein,
+    quick_add_carbs: entry.quick_add_carbs,
+    quick_add_fat: entry.quick_add_fat,
+  }));
+
+  const { error: insertError } = await supabase.from('food_diary_entries').insert(copies);
+  if (insertError) raise(insertError);
+  await syncFoodDiaryToLog(toDailyLogId);
+  return copies.length;
+}
+
 // Writes the food diary's running totals into today's Weekly Log row, so downstream
 // Totals/Averages and floor-checks reflect what was actually logged (PROJECT_SPEC.md #5).
 export async function syncFoodDiaryToLog(dailyLogId: string): Promise<void> {
   const entries = await getFoodDiaryEntries(dailyLogId);
   const totals = entries.reduce(
     (acc, entry) => {
-      if (!entry.food) return acc;
-      acc.protein += entry.food.protein * entry.portions;
-      acc.carbs += entry.food.carbs * entry.portions;
-      acc.fat += entry.food.fat * entry.portions;
+      const m = entryMacros(entry);
+      acc.protein += m.protein;
+      acc.carbs += m.carbs;
+      acc.fat += m.fat;
       return acc;
     },
     { protein: 0, carbs: 0, fat: 0 }

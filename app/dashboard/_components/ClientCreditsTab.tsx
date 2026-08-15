@@ -37,7 +37,7 @@ export function ClientCreditsTab({
               className="flex items-center justify-between rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10"
             >
               <div>
-                <p className="text-sm font-medium text-black dark:text-zinc-50">{entry.reason}</p>
+                <p className="text-sm font-semibold text-black dark:text-zinc-50">{entry.reason}</p>
                 <p className="mt-0.5 text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString()}</p>
               </div>
               <p className={`text-sm font-bold ${entry.delta >= 0 ? 'text-success' : 'text-danger'}`}>

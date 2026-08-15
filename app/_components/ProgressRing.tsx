@@ -15,6 +15,7 @@ export function ProgressRing({
   trackClassName = 'stroke-black/10 dark:stroke-white/10',
   labelClassName = 'text-zinc-500',
   valueClassName = 'text-black dark:text-zinc-50',
+  hideValue = false,
 }: {
   value: number;
   target: number;
@@ -27,6 +28,9 @@ export function ProgressRing({
   trackClassName?: string;
   labelClassName?: string;
   valueClassName?: string;
+  // Omits the centered value/target text -- used where the number is already shown bigger
+  // elsewhere next to the ring (Today hero card), so the ring reads as pure decoration.
+  hideValue?: boolean;
 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -57,10 +61,12 @@ export function ProgressRing({
           style={{ transition: 'stroke-dashoffset 0.3s ease' }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`text-sm font-semibold leading-tight ${valueClassName}`}>{Math.round(value)}</span>
-        <span className={`text-[10px] leading-tight ${labelClassName}`}>/{Math.round(target)} {label}</span>
-      </div>
+      {!hideValue && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className={`text-sm font-semibold leading-tight ${valueClassName}`}>{Math.round(value)}</span>
+          <span className={`text-[10px] leading-tight ${labelClassName}`}>/{Math.round(target)} {label}</span>
+        </div>
+      )}
     </div>
   );
 }

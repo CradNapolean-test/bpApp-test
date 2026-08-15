@@ -22,7 +22,7 @@ export function AppShell({
   mobileHeader,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   topBar?: ReactNode;
   banner?: ReactNode;

@@ -387,17 +387,6 @@ function AddExerciseForm({
   );
 }
 
-// Non-coach viewers (the client) get this instead of EditableField -- same box look, no input,
-// no onUpdate path (mutations are coach-only, both by RLS and by intent).
-function ReadOnlyField({ label, value }: { label: string; value: string | number | null }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</p>
-      <p className="mt-0.5 truncate rounded-md border border-black/10 px-1.5 py-1 text-xs dark:border-white/10">{value ?? '—'}</p>
-    </div>
-  );
-}
-
 // A single editable value box: local state seeded from `value`, saves onBlur only if changed,
 // synced back if the parent's value changes underneath it (e.g. after a save round-trips
 // through router.refresh()). Mirrors the same pattern already used by PhaseLabelInput.
@@ -535,10 +524,34 @@ function SortableExerciseRow<T extends EditableExercise>({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-medium">{exercise.name}</p>
+            <p className="truncate font-bold text-black dark:text-zinc-50">{exercise.name}</p>
             {canEdit && menuItems.length > 0 && <DropdownMenu items={menuItems} triggerLabel={`${exercise.name} actions`} />}
           </div>
 
+          {!isCircuit && (
+            <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm text-zinc-500">
+              {exercise.sets != null && (
+                <span>
+                  <span className="font-bold text-black dark:text-zinc-50">{exercise.sets}</span> sets
+                </span>
+              )}
+              {exercise.reps != null && (
+                <span>
+                  <span className="font-bold text-black dark:text-zinc-50">{exercise.reps}</span> reps
+                </span>
+              )}
+              {isPercent
+                ? exercise.percent_1rm != null && (
+                    <span className="font-bold text-black dark:text-zinc-50">{exercise.percent_1rm}% 1RM</span>
+                  )
+                : exercise.load != null && <span className="font-bold text-black dark:text-zinc-50">{exercise.load}kg</span>}
+              {exercise.rpe != null && (
+                <span>
+                  RPE <span className="font-bold text-black dark:text-zinc-50">{exercise.rpe}</span>
+                </span>
+              )}
+            </p>
+          )}
           {!isCircuit && canEdit && (
             <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1.5 sm:grid-cols-5">
               <EditableField label="Sets" value={exercise.sets} numeric onSave={(v) => saveField('sets', v, true)} />
@@ -550,19 +563,6 @@ function SortableExerciseRow<T extends EditableExercise>({
               )}
               <EditableField label="RPE" value={exercise.rpe} numeric onSave={(v) => saveField('rpe', v, true)} />
               <EditableField label="Rest (s)" value={exercise.rest_seconds} numeric onSave={(v) => saveField('rest_seconds', v, true)} />
-            </div>
-          )}
-          {!isCircuit && !canEdit && (
-            <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1.5 sm:grid-cols-5">
-              <ReadOnlyField label="Sets" value={exercise.sets} />
-              <ReadOnlyField label="Reps" value={exercise.reps} />
-              {isPercent ? (
-                <ReadOnlyField label="% 1RM" value={exercise.percent_1rm} />
-              ) : (
-                <ReadOnlyField label="Load" value={exercise.load} />
-              )}
-              <ReadOnlyField label="RPE" value={exercise.rpe} />
-              <ReadOnlyField label="Rest (s)" value={exercise.rest_seconds} />
             </div>
           )}
           {isPercent && resolvedMax != null && exercise.percent_1rm != null && (

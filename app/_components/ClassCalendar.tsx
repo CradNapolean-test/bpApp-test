@@ -92,7 +92,7 @@ export function ClassCalendar({
               type="button"
               disabled={count === 0}
               onClick={() => onSelectDate(cell.date!)}
-              className={`relative rounded-md py-2 text-sm transition-colors ${
+              className={`relative rounded-2xl py-2 text-sm transition-colors ${
                 count === 0
                   ? 'text-zinc-300 dark:text-zinc-700'
                   : 'text-black hover:bg-black/5 dark:text-zinc-50 dark:hover:bg-white/5'

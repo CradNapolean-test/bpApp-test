@@ -14,7 +14,7 @@ export function CoachMessagesButton({ unreadCount = 0 }: { unreadCount?: number 
     <button
       onClick={open}
       aria-label="Messages"
-      className="relative rounded-md p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
+      className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
     >
       <MessageSquare className="h-5 w-5" />
       {unreadCount > 0 && (

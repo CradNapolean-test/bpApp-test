@@ -25,7 +25,23 @@ export interface ClientProfileRow {
   checkin_reminder_days: number;
   last_checkin_reminder_at: string | null;
   notifications_enabled: boolean;
+  email_notifications_enabled: boolean;
   nutrition_tracking_mode: 'full_tracking' | 'manual_import' | 'photo_diary';
+  timezone: string;
+  // Client-editable contact/personal fields.
+  phone: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  address: string | null;
+  date_of_birth: string | null;
+  // Coach-only admin fields -- edited via set_client_admin_details, never the client's own
+  // Setup save (see upsertClientProfile's Omit list).
+  join_date: string | null;
+  referral_source: string | null;
+  admin_notes: string | null;
+  // Client-owned request flag -- see updateClientAdminDetails/requestAccountDeletion for how
+  // this differs from a real hard-delete (there isn't one; the coach handles it manually).
+  deletion_requested_at: string | null;
 }
 
 export interface DailyLogRow {
@@ -87,6 +103,13 @@ export interface FoodDiaryEntryRow {
   portions: number;
   meal_section_id: string | null;
   food: FoodRow | null;
+  created_at: string;
+  // Quick Add -- set when food_id is null (a logged item with no food-database match).
+  quick_add_name: string | null;
+  quick_add_calories: number | null;
+  quick_add_protein: number | null;
+  quick_add_carbs: number | null;
+  quick_add_fat: number | null;
 }
 
 // Customizable per-client tracking sections (MyFitnessPal-style) -- distinct from
@@ -406,6 +429,9 @@ export interface CoachReport {
   attendanceRate: number | null; // 0-100, null if no data
   totalBooked: number;
   totalAttended: number;
+  noShowRate: number | null; // 0-100, null if no data
+  avgClassesPerClient: number | null; // per unique client, over the report window
+  activeBookings: number; // currently booked, today or later (not time-windowed)
   noShows: { clientName: string; className: string; date: string }[];
   classPopularity: { className: string; bookingCount: number }[];
 }
@@ -461,6 +487,7 @@ export interface FormTemplateRow {
   description: string | null;
   is_default_onboarding: boolean;
   created_at: string;
+  questionCount: number;
 }
 
 export interface FormQuestionRow {

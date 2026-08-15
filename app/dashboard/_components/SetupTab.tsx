@@ -5,6 +5,7 @@ import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
+import { COMMON_TIMEZONES, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow, MeasurementLogRow } from '@/lib/data/types';
 
 const NUTRITION_MODES: { value: ClientProfileRow['nutrition_tracking_mode']; label: string; hint: string }[] = [
@@ -21,7 +22,12 @@ type SetupFields = Omit<
   | 'checkin_reminder_days'
   | 'last_checkin_reminder_at'
   | 'notifications_enabled'
+  | 'email_notifications_enabled'
   | 'nutrition_tracking_mode'
+  | 'join_date'
+  | 'referral_source'
+  | 'admin_notes'
+  | 'deletion_requested_at'
 >;
 
 const BLANK: SetupFields = {
@@ -37,6 +43,12 @@ const BLANK: SetupFields = {
   diet_approach: 'High Carb Low Fat',
   tier: 1,
   cycling: false,
+  timezone: DEFAULT_TIMEZONE,
+  phone: null,
+  emergency_contact_name: null,
+  emergency_contact_phone: null,
+  address: null,
+  date_of_birth: null,
   meas_arm_start: null, meas_arm_goal: null,
   meas_chest_start: null, meas_chest_goal: null,
   meas_waist_start: null, meas_waist_goal: null,
@@ -141,7 +153,7 @@ export function SetupTab({
   }
 
   const inputCls =
-    'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10 disabled:opacity-60';
+    'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10 disabled:opacity-60';
   const labelCls = 'text-sm font-medium text-zinc-700 dark:text-zinc-300';
 
   return (
@@ -194,6 +206,55 @@ export function SetupTab({
       )}
 
       <fieldset disabled={readOnly} className="space-y-6">
+        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Contact details</h3>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className={labelCls}>Phone</label>
+              <input
+                type="tel"
+                className={inputCls}
+                value={form.phone ?? ''}
+                onChange={(e) => setForm({ ...form, phone: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Date of birth</label>
+              <input
+                type="date"
+                className={inputCls}
+                value={form.date_of_birth ?? ''}
+                onChange={(e) => setForm({ ...form, date_of_birth: e.target.value || null })}
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className={labelCls}>Address</label>
+              <input
+                className={inputCls}
+                value={form.address ?? ''}
+                onChange={(e) => setForm({ ...form, address: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Emergency contact name</label>
+              <input
+                className={inputCls}
+                value={form.emergency_contact_name ?? ''}
+                onChange={(e) => setForm({ ...form, emergency_contact_name: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Emergency contact phone</label>
+              <input
+                type="tel"
+                className={inputCls}
+                value={form.emergency_contact_phone ?? ''}
+                onChange={(e) => setForm({ ...form, emergency_contact_phone: e.target.value || null })}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <label className={labelCls}>Name</label>
@@ -231,6 +292,23 @@ export function SetupTab({
               value={form.experience ?? ''}
               onChange={(e) => setForm({ ...form, experience: e.target.value })}
             />
+          </div>
+          <div className="space-y-1">
+            <label className={labelCls}>Timezone</label>
+            <select
+              className={inputCls}
+              value={form.timezone}
+              onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500">
+              Used to work out which calendar day your logs and reminders land on.
+            </p>
           </div>
           <div className="space-y-1">
             <label className={labelCls}>Age</label>
@@ -390,8 +468,8 @@ export function SetupTab({
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         {!readOnly && (
-          <Button type="submit" variant="primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save Setup'}
+          <Button type="submit" variant="primary" disabled={saving} className="w-full !rounded-full py-3 text-base">
+            {saving ? 'Saving…' : 'Save changes'}
           </Button>
         )}
       </fieldset>

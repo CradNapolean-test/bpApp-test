@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from 'react';
 
-type Variant = 'primary' | 'outline' | 'ghost' | 'danger' | 'danger-solid' | 'icon';
+type Variant = 'primary' | 'outline' | 'ghost' | 'danger' | 'danger-solid' | 'danger-soft' | 'icon';
 type Size = 'sm' | 'md';
 
 // Single source of truth for button styling, keyed off the CSS variables in globals.css
@@ -13,6 +13,10 @@ const VARIANT_CLS: Record<Variant, string> = {
   ghost: 'text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/5',
   danger: 'text-danger hover:bg-danger/10',
   'danger-solid': 'bg-danger text-white hover:opacity-90',
+  // Full-width pill treatment for a screen-level destructive action (e.g. Sign out) rather
+  // than an inline row action -- persistently tinted, not just on hover, so it doesn't read
+  // as a plain link.
+  'danger-soft': 'border border-danger/20 bg-danger/10 text-danger hover:bg-danger/15',
   icon: 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5',
 };
 
@@ -22,6 +26,7 @@ const SIZE_CLS: Record<Exclude<Variant, 'icon'>, Record<Size, string>> = {
   ghost: { sm: 'px-2 py-1 text-xs', md: 'px-3 py-1.5 text-sm' },
   danger: { sm: 'px-2 py-1 text-xs', md: 'px-3 py-1.5 text-sm' },
   'danger-solid': { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm' },
+  'danger-soft': { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2.5 text-sm' },
 };
 
 const ICON_SIZE_CLS: Record<Size, string> = {
@@ -42,7 +47,12 @@ export function Button({
   children?: React.ReactNode;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const sizeCls = variant === 'icon' ? ICON_SIZE_CLS[size] : SIZE_CLS[variant][size];
-  const shapeCls = variant === 'icon' ? 'flex items-center justify-center rounded-md' : 'rounded-md font-medium';
+  const shapeCls =
+    variant === 'icon'
+      ? 'flex items-center justify-center rounded-md'
+      : variant === 'danger-soft'
+        ? 'rounded-full text-center font-bold'
+        : 'rounded-md font-medium';
   return (
     <button
       className={`${shapeCls} ${VARIANT_CLS[variant]} ${sizeCls} shrink-0 whitespace-nowrap transition-colors disabled:opacity-50 disabled:pointer-events-none ${className}`}

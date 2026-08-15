@@ -219,24 +219,36 @@ function LogSetForm({
     );
   }
 
-  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
+  const pillInputCls =
+    'w-full min-w-0 rounded-full border border-black/10 bg-transparent px-3 py-1.5 text-center text-sm dark:border-white/10';
 
   return (
-    <div className="mt-2 rounded-md border border-black/5 p-2 dark:border-white/5">
-      <p className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-        Set {nextSetNumber}
-      </p>
-      <form onSubmit={handleSubmit} className="mt-1 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        <select className={inputCls} value={setType} onChange={(e) => setSetType(e.target.value as SetType)}>
-          {SET_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-        <input type="number" placeholder="Reps" className={inputCls} value={reps} onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))} />
-        <input type="number" placeholder="Load" className={inputCls} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
-        <input type="number" placeholder="RPE" className={inputCls} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-        <button type="submit" disabled={busy} className="col-span-2 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50 sm:col-span-4">
-          Log
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+          Set {nextSetNumber}
+        </span>
+        {SET_TYPES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setSetType(t)}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize transition-colors ${
+              setType === t
+                ? 'bg-accent text-accent-foreground'
+                : 'text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5'
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={handleSubmit} className="mt-1.5 flex items-center gap-1.5">
+        <input type="number" placeholder="Reps" className={pillInputCls} value={reps} onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))} />
+        <input type="number" placeholder="Load" className={pillInputCls} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
+        <input type="number" placeholder="RPE" className={pillInputCls} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
+        <button type="submit" disabled={busy} className="shrink-0 flex-[2] rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Logging…' : 'Log set'}
         </button>
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
@@ -279,14 +291,14 @@ function DayFeedbackForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-2 space-y-2 border-t border-black/5 pt-2 dark:border-white/5">
-      <p className="text-xs text-zinc-500">{feedback ? 'Update rating:' : 'Rate this session:'}</p>
-      <div className="flex flex-wrap gap-1">
+      <p className="font-bold text-black dark:text-zinc-50">{feedback ? 'Update rating' : 'Rate this session'}</p>
+      <div className="flex flex-wrap gap-1.5">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <button
             key={n}
             type="button"
             onClick={() => setRpe(n)}
-            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors ${
               rpe === n
                 ? 'bg-accent text-accent-foreground'
                 : 'bg-black/5 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15'
@@ -462,19 +474,18 @@ export function WorkoutTab({
   const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
   const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
   const { run: runDuplicateWeek, busy: duplicatingWeek } = useAction();
-  // Weeks collapsed by default -- with multiple weeks per program this was a lot of scroll --
-  // except each program's current week (by start_date), pre-expanded so the day list (icon
-  // chips, exercise counts, phase badges) is visible on load instead of requiring a tap to
-  // reveal anything. Days are no longer expand-in-place (see openDayId below) -- clicking one
-  // opens the fullscreen FocusOverlay instead, which is what actually solved the "congested"
-  // feeling multiple inline exercise editors caused, not the week-level grouping.
-  const [expandedWeeks, setExpandedWeeks] = useState<Record<string, boolean>>(() => {
+  // One week shown at a time via a Wk 1/2/3... pill selector (see ProgramDayList), defaulted
+  // per-program to its current week (by start_date) so the day list (icon chips, exercise
+  // counts, phase badges) opens on the relevant week instead of always Week 1. Days are no
+  // longer expand-in-place (see openDayId below) -- clicking one opens the fullscreen
+  // FocusOverlay instead, which is what actually solved the "congested" feeling multiple
+  // inline exercise editors caused, not the week-level grouping.
+  const [activeWeeks, setActiveWeeks] = useState<Record<string, number>>(() => {
     const todayIso = toIsoDate(new Date());
-    const initial: Record<string, boolean> = {};
+    const initial: Record<string, number> = {};
     for (const program of programs) {
       const active = resolveActiveProgram([program], todayIso);
-      const weekNum = active?.weekNum ?? 1;
-      initial[`${program.id}:${weekNum}`] = true;
+      initial[program.id] = active?.weekNum ?? 1;
     }
     return initial;
   });
@@ -485,10 +496,10 @@ export function WorkoutTab({
     for (const program of programs) {
       const day = program.workout_program_days.find((d) => d.id === focusDay.dayId);
       if (!day) continue;
-      // Reacting to an external signal (a classes check-in click) by expanding local collapse
-      // state, not synchronizing with any external system -- the standard justified exception.
+      // Reacting to an external signal (a classes check-in click) by switching the active week
+      // locally, not synchronizing with any external system -- the standard justified exception.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setExpandedWeeks((s) => ({ ...s, [`${program.id}:${day.week_num}`]: true }));
+      setActiveWeeks((s) => ({ ...s, [program.id]: day.week_num }));
       setOpenDayId(day.id);
       break;
     }
@@ -637,8 +648,8 @@ export function WorkoutTab({
             library={exerciseLibrary}
             showPhaseLabel={!isCoachView}
             onOpenDay={setOpenDayId}
-            expandedWeeks={expandedWeeks}
-            onToggleWeek={(weekKey) => setExpandedWeeks((s) => ({ ...s, [weekKey]: !s[weekKey] }))}
+            activeWeek={activeWeeks[program.id]}
+            onChangeWeek={(week) => setActiveWeeks((s) => ({ ...s, [program.id]: week }))}
             days={program.workout_program_days.map((day) => ({
               id: day.id,
               weekNum: day.week_num,
@@ -776,9 +787,9 @@ export function WorkoutTab({
               />
               <button
                 onClick={() => handleAddDay(program.id)}
-                className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium dark:border-white/10"
+                className="rounded-full bg-[#141414] px-3 py-1.5 text-xs font-bold text-white"
               >
-                Add day
+                + Day
               </button>
             </div>
           )}

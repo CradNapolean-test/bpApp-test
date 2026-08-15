@@ -4,7 +4,8 @@ import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
 import { getClientHealthStatuses } from '@/lib/data/coach';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getJournalEntries } from '@/lib/data/clientJournal';
-import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
+import { getRecentActivity } from '@/lib/data/activity';
+import { CoachClientWorkspace } from '@/app/coach/_components/CoachClientWorkspace';
 
 export default async function CoachClientPage({
   params,
@@ -18,11 +19,7 @@ export default async function CoachClientPage({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: callerProfile } = await supabase
-    .from('profiles')
-    .select('role, theme_preference')
-    .eq('id', user.id)
-    .single();
+  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (callerProfile?.role !== 'coach') redirect('/dashboard');
 
   const { data: targetProfile } = await supabase
@@ -31,67 +28,37 @@ export default async function CoachClientPage({
     .eq('id', clientId)
     .eq('coach_id', user.id)
     .maybeSingle();
-  if (!targetProfile) redirect('/coach');
+  if (!targetProfile) redirect('/coach/clients');
 
-  const [bundle, healthStatuses, chatOverview, journalEntries] = await Promise.all([
+  const [bundle, healthStatuses, chatOverview, journalEntries, activity] = await Promise.all([
     loadDashboardBundle(clientId, false),
     getClientHealthStatuses(supabase, user.id),
     getCoachChatOverview(),
     getJournalEntries(clientId),
+    getRecentActivity(clientId),
   ]);
   const healthStatus = healthStatuses.find((s) => s.clientId === clientId) ?? null;
   const coachUnreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
-  // Distinct from coachUnreadCount (the sum across every client, for the global inbox link) --
-  // this scopes to just the thread with the client being viewed, for the header Messages icon.
-  const perClientUnreadCount = chatOverview.find((c) => c.client_id === clientId)?.unread_count ?? 0;
 
   return (
-    <DashboardShell
+    <CoachClientWorkspace
       clientId={clientId}
       clientLabel={bundle.profile?.name ?? targetProfile.email}
-      isCoachView={true}
+      clientEmail={targetProfile.email}
       healthStatus={healthStatus}
       coachUnreadCount={coachUnreadCount}
-      perClientUnreadCount={perClientUnreadCount}
-      currentUserId={user.id}
-      currentUserEmail={user.email ?? ''}
-      themePreference={(callerProfile.theme_preference as 'light' | 'dark' | 'system') ?? 'system'}
-      journalEntries={journalEntries}
+      coachEmail={user.email ?? 'Coach'}
       profile={bundle.profile}
-      weekDates={bundle.weekDates}
-      weekLogs={bundle.weekLogs}
-      historyLogs={bundle.historyLogs}
-      todayLogId={bundle.todayLogId}
-      foodDiaryEntries={bundle.foodDiaryEntries}
-      foodPhotos={bundle.foodPhotos}
-      manualMacroEntries={bundle.manualMacroEntries}
-      mealPlanEntries={bundle.mealPlanEntries}
-      mealSections={bundle.mealSections}
-      activities={bundle.activities}
-      programWeek={bundle.programWeek}
-      messages={bundle.messages}
+      journalEntries={journalEntries}
       bookings={bundle.bookings}
-      occurrences={bundle.occurrences}
-      creditsBalance={bundle.creditsBalance}
-      creditsLedger={bundle.creditsLedger}
       programs={bundle.programs}
-      workoutLogs={bundle.workoutLogs}
-      clientExerciseMaxes={bundle.clientExerciseMaxes}
-      workoutDayFeedback={bundle.workoutDayFeedback}
-      membership={bundle.membership}
-      packages={bundle.packages}
-      photos={bundle.photos}
-      measurementLogs={bundle.measurementLogs}
-      habits={bundle.habits}
-      notifications={bundle.notifications}
-      formTemplates={bundle.formTemplates}
       formAssignments={bundle.formAssignments}
-      exerciseLibrary={bundle.exerciseLibrary}
-      programTemplates={bundle.programTemplates}
-      recipes={bundle.recipes}
-      educationCourses={bundle.educationCourses}
       educationAssignments={bundle.educationAssignments}
-      unreadMessageCount={bundle.unreadMessageCount}
+      habits={bundle.habits}
+      activity={activity}
+      disabledScreens={bundle.disabledScreens}
+      clientExerciseMaxes={bundle.clientExerciseMaxes}
+      exerciseLibrary={bundle.exerciseLibrary}
     />
   );
 }
