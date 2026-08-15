@@ -33,7 +33,7 @@ import { fail, ok } from '@/lib/data/result';
 import { lookupBarcode } from '@/lib/openFoodFacts';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
-import { addDays, toIsoDate } from '@/lib/utils/dates';
+import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -293,7 +293,11 @@ export function FoodTrackingTab({
   const { run: runSection, busy: addingSection } = useAction();
   const { run: runFeedback, busy: sendingFeedback } = useAction();
   const { run: runManual } = useAction();
-  const [scanning, setScanning] = useState(false);
+  // Which meal section a scan will file into -- null means closed; { id: null } targets the
+  // unfiled "Other" bucket (the header's "Scan barcode" button), a section id targets that
+  // section's own "Scan" trigger. Mirrors addFoodTarget below so a scanned item can land
+  // directly in a meal instead of always going to "Other" for a manual re-file afterward.
+  const [scanTarget, setScanTarget] = useState<{ id: string | null; label: string } | null>(null);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   // Shared bottom-sheet "Add food" target -- null means closed; { id: null } targets the
   // unfiled "Other" bucket (the header's "Search foods" button), a section id targets that
@@ -305,7 +309,11 @@ export function FoodTrackingTab({
   const [feedbackBody, setFeedbackBody] = useState('');
   const isManual = nutritionMode === 'manual_import';
 
-  const todayIso = useMemo(() => toIsoDate(new Date()), []);
+  // Must match the timezone dashboardBundle used to resolve `dailyLogId`/`initialEntries`
+  // server-side (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the
+  // UTC date, not the client's local one, so near a day boundary this and the server would
+  // disagree on "today" and silently start operating on a different (wrong) daily_logs row.
+  const todayIso = useMemo(() => todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE), [profile?.timezone]);
   const [viewingDate, setViewingDate] = useState(todayIso);
   const [currentDailyLogId, setCurrentDailyLogId] = useState(dailyLogId);
   const [entries, setEntries] = useState(initialEntries);
@@ -440,7 +448,8 @@ export function FoodTrackingTab({
   }
 
   async function handleBarcodeDetected(barcode: string) {
-    setScanning(false);
+    const target = scanTarget;
+    setScanTarget(null);
     setScanStatus('Looking up…');
     try {
       let food = await getFoodByBarcode(barcode);
@@ -452,8 +461,8 @@ export function FoodTrackingTab({
         }
         food = await upsertFoodFromBarcode(barcode, { ...product, portion: '1 gram' });
       }
-      await handleAdd(food, 100);
-      setScanStatus(`Added ${food.name}.`);
+      await handleAdd(food, 100, target?.id ?? null);
+      setScanStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
     } catch (err) {
       setScanStatus(err instanceof Error ? err.message : 'Lookup failed.');
     }
@@ -619,13 +628,13 @@ export function FoodTrackingTab({
 
       {!readOnly && !isManual && (
         <div className="space-y-2">
-          {!scanning && (
+          {!scanTarget && (
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 className="flex flex-1 items-center justify-center gap-1.5"
                 onClick={() => {
-                  setScanning(true);
+                  setScanTarget({ id: null, label: 'Other' });
                   setScanStatus(null);
                 }}
               >
@@ -642,11 +651,11 @@ export function FoodTrackingTab({
               </Button>
             </div>
           )}
-          {scanning && (
-            <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
+          {scanTarget && (
+            <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanTarget(null)} />
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
-          <p className="text-xs text-zinc-500">Scanned or quick-searched items land in &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;+ Add food&quot; to file directly, or re-file afterward.</p>
+          <p className="text-xs text-zinc-500">This scans into &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;Scan&quot; or &quot;+ Add food&quot; link to file directly into that meal instead.</p>
           <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-medium text-accent hover:underline">
             Copy from yesterday
           </button>
@@ -730,13 +739,25 @@ export function FoodTrackingTab({
                   )}
                 </ul>
                 {!readOnly && (
-                  <button
-                    type="button"
-                    onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
-                    className="mt-2 text-sm font-medium text-accent hover:underline"
-                  >
-                    + Add food
-                  </button>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
+                      className="text-sm font-medium text-accent hover:underline"
+                    >
+                      + Add food
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanTarget({ id: section.id, label: section.label });
+                        setScanStatus(null);
+                      }}
+                      className="text-sm font-medium text-accent hover:underline"
+                    >
+                      Scan
+                    </button>
+                  </div>
                 )}
               </>
             )}
