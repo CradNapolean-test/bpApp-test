@@ -200,11 +200,16 @@ async function seedClient(coachId: string, coachEmail: string, index: number, cl
   if (programErr) throw programErr;
 
   const dayLabels = ['Day A', 'Day B', 'Day C'];
+  // Matches seedClasses' day_of_week values (1=Mon, 3=Wed, 5=Fri) so the seeded classes
+  // actually auto-link to these program days for check-in, demonstrating the feature live.
+  const dayPositions = [1, 3, 5];
   const exerciseNames = ['Back Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Pull Up'];
   for (let week = 1; week <= 2; week++) {
     const { data: days, error: daysErr } = await supabase
       .from('workout_program_days')
-      .insert(dayLabels.map((label, i) => ({ program_id: program.id, week_num: week, day_label: label, day_position: i })))
+      .insert(
+        dayLabels.map((label, i) => ({ program_id: program.id, week_num: week, day_label: label, day_position: dayPositions[i] }))
+      )
       .select('id');
     if (daysErr) throw daysErr;
     for (const day of days ?? []) {

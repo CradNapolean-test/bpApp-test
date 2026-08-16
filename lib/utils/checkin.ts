@@ -8,6 +8,10 @@
 // still <= today wins, no overlap/tiebreak logic needed. A future-dated program simply
 // doesn't count until its date arrives, at which point it naturally becomes the new
 // latest-applicable one -- no "close out the old program" step required.
+//
+// A class's own day_of_week is matched directly against a programme day's day_position (both
+// use the same 0=Sunday..6=Saturday convention) -- no separate manual "linked day" step for a
+// coach to keep in sync with the class schedule.
 
 import { daysBetween, isoDateInTz } from './dates';
 import type { WorkoutLogRow, WorkoutProgramDayRow, WorkoutProgramRow } from '@/lib/data/types';
@@ -54,16 +58,16 @@ function hasLoggedDayToday(day: WorkoutProgramDayRow, workoutLogs: WorkoutLogRow
 export function resolveCheckinTarget(
   programs: WorkoutProgramRow[],
   workoutLogs: WorkoutLogRow[],
-  linkedDayPosition: number | null,
+  classDayOfWeek: number | null,
   todayIso: string,
   tz: string
 ): CheckinResolution {
-  if (linkedDayPosition == null) return { status: 'not_linked' };
+  if (classDayOfWeek == null) return { status: 'not_linked' };
 
   const active = resolveActiveProgram(programs, todayIso);
   if (!active) return { status: 'no_active_program' };
 
-  const day = resolveProgramDayByPosition(active.program, active.weekNum, linkedDayPosition);
+  const day = resolveProgramDayByPosition(active.program, active.weekNum, classDayOfWeek);
   if (!day) return { status: 'no_matching_day' };
 
   if (hasLoggedDayToday(day, workoutLogs, todayIso, tz)) {

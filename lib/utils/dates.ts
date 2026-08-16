@@ -19,6 +19,14 @@ export const COMMON_TIMEZONES = [
 
 export const DEFAULT_TIMEZONE = 'Pacific/Auckland';
 
+// 0=Sunday..6=Saturday, matching classes.day_of_week / Postgres's own convention.
+export const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Values a programme day's weekday picker offers -- Monday(1) through Saturday(6); Sunday(0)
+// is deliberately excluded since a programme only runs Monday-Saturday.
+export const PROGRAM_WEEKDAYS = [1, 2, 3, 4, 5, 6];
+
 // A given instant's calendar date in `tz`, not the server's (UTC) one -- the fix for a client
 // near a UTC day boundary having "today" (or a stored timestamp's day) resolve to the wrong
 // day for them (see lib/data/dashboardBundle.ts, lib/data/coach.ts, lib/utils/checkin.ts).

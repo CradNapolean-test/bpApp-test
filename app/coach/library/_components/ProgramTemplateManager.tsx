@@ -28,6 +28,7 @@ import {
 } from '@/lib/data/programTemplates';
 import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
+import { PROGRAM_WEEKDAYS, WEEKDAY_LABELS } from '@/lib/utils/dates';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgramTemplateWithDays } from '@/lib/data/types';
 
 function exportTemplate(template: ProgramTemplateWithDays) {
@@ -56,26 +57,29 @@ function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | 
   );
 }
 
-function DayPositionInput({ dayId, initial }: { dayId: string; initial: number | null }) {
+function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | null }) {
   const { run } = useAction();
-  const [value, setValue] = useState(initial != null ? String(initial) : '');
 
-  async function handleBlur() {
-    const parsed = value === '' ? null : Number(value);
+  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const parsed = e.target.value === '' ? null : Number(e.target.value);
     if (parsed === initial) return;
     await run(() => updateTemplateDay(dayId, { day_position: parsed }));
   }
 
   return (
-    <input
-      type="number"
-      placeholder="Day #"
-      title="Day position -- carried onto every program instantiated from this template"
-      className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-    />
+    <select
+      title="Day of the week -- carried onto every program instantiated from this template"
+      className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      value={initial ?? ''}
+      onChange={handleChange}
+    >
+      <option value="">Day of week…</option>
+      {PROGRAM_WEEKDAYS.map((d) => (
+        <option key={d} value={d}>
+          {WEEKDAY_LABELS[d]}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -394,7 +398,7 @@ export function ProgramTemplateManager({
               return (
                 <>
                   <PhaseLabelInput dayId={day.id} initial={day.phase_label} />
-                  <DayPositionInput dayId={day.id} initial={day.day_position} />
+                  <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
                   <DropdownMenu
                     triggerLabel="Day actions"
                     items={[
@@ -493,11 +497,9 @@ export function ProgramTemplateManager({
                 })
               }
             />
-            <input
-              type="number"
-              placeholder="Day #"
-              title="Day position -- carried onto every program instantiated from this template"
-              className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+            <select
+              title="Day of the week -- carried onto every program instantiated from this template"
+              className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
               value={dayForms[previewTemplate.id]?.dayPosition ?? ''}
               onChange={(e) =>
                 setDayForms({
@@ -509,7 +511,14 @@ export function ProgramTemplateManager({
                   },
                 })
               }
-            />
+            >
+              <option value="">Day of week…</option>
+              {PROGRAM_WEEKDAYS.map((d) => (
+                <option key={d} value={d}>
+                  {WEEKDAY_LABELS[d]}
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => handleAddDay(previewTemplate.id)}
               className="rounded-full bg-[#141414] px-3 py-1.5 text-xs font-bold text-white"

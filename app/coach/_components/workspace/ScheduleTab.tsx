@@ -5,8 +5,9 @@ import type { BookingRow, WorkoutProgramRow } from '@/lib/data/types';
 
 // Read-only, both sections derived from data the client already has -- see
 // docs/PT_DISTINCTION_LAYOUT_ROADMAP.md's Phase 2 note on why training days are grouped by
-// week rather than shown on a literal calendar: workout_program_days only carries an
-// abstract day_position "slot", which only resolves to a real date once a class links to it.
+// week rather than shown on a literal calendar: workout_program_days' day_position is a
+// weekday (Mon-Sat), but the program's start_date only anchors which *week* is current, not
+// an exact calendar date per day within it.
 export function ScheduleTab({
   bookings,
   programs,

@@ -1,18 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Link2 } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
-import { useClickOutside } from '@/app/_components/useClickOutside';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createClass, createClasses, deleteClass, updateClass } from '@/lib/data/classes';
-import { formatClassTime } from '@/lib/utils/dates';
+import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClassRow } from '@/lib/data/types';
-
-const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type OccurrenceRow = { rowId: number; classId: string | null; dayOfWeek: number; startTime: string };
 
@@ -63,64 +59,6 @@ function formatScheduleSummary(group: ClassGroup): string {
   const timeLabel =
     times.size <= 1 ? formatClassTime(group.occurrences[0].start_time) : group.occurrences.map((o) => formatClassTime(o.start_time)).join('/');
   return `${days} · ${timeLabel} · Cap ${group.capacity} · ${group.creditCost} credit${group.creditCost === 1 ? '' : 's'}`;
-}
-
-// Small anchored popover, not a field buried in the edit form -- links this class group to a
-// workout-program "day position" (see lib/utils/checkin.ts) so a client booked into it can
-// self-check-in straight into logging that day's workout. Applies the same day position to
-// every occurrence row in the group. Kept separate from Edit since it's usually decided once
-// the program structure exists, not while first setting up the class schedule, and the design
-// surfaces it as its own always-visible row action.
-function LinkProgramDayButton({ group }: { group: ClassGroup }) {
-  const { run, busy } = useAction();
-  const [open, setOpen] = useState(false);
-  const commonValue = group.occurrences.every((o) => o.linked_day_position === group.occurrences[0].linked_day_position)
-    ? group.occurrences[0].linked_day_position
-    : null;
-  const [value, setValue] = useState(commonValue != null ? String(commonValue) : '');
-  const ref = useClickOutside<HTMLDivElement>(() => setOpen(false), open);
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    const linkedDayPosition = value === '' ? null : Number(value);
-    await run(
-      () => Promise.all(group.occurrences.map((o) => updateClass(o.id, { linked_day_position: linkedDayPosition }))),
-      { success: 'Linked day updated', onDone: () => setOpen(false) }
-    );
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-      >
-        <Link2 className="h-3.5 w-3.5" />
-        Link to program day
-      </button>
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Link to program day"
-          className="absolute right-0 z-20 mt-2 w-64 rounded-2xl border border-black/[.05] bg-[var(--background)] p-3.5 shadow-xl dark:border-white/10"
-        >
-          <label
-            className="text-xs font-medium text-zinc-500"
-            title="Whatever a coach numbered as Day 1, 2, 3… when building a client's programme. Once linked, a client booked into this class can self-check-in straight into logging that day's workout."
-          >
-            Linked day # (optional)
-          </label>
-          <form onSubmit={handleSave} className="mt-1 flex gap-2">
-            <input type="number" className={inputCls} value={value} onChange={(e) => setValue(e.target.value)} />
-            <Button type="submit" variant="primary" size="sm" disabled={busy}>
-              Save
-            </Button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // Shared occurrence-row editor (day + time, add/remove) used by both the Add form and the
@@ -354,6 +292,10 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-zinc-500">
+        A client booked into a class gets an automatic check-in button when their programme has
+        a workout day set for that same day of the week — no separate linking step needed.
+      </p>
       <div className="flex justify-end">
         <button
           type="button"
@@ -387,7 +329,6 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
                   <p className="mt-0.5 text-sm text-zinc-500">{formatScheduleSummary(group)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <LinkProgramDayButton group={group} />
                   <button
                     type="button"
                     onClick={() => setEditingName(group.name)}

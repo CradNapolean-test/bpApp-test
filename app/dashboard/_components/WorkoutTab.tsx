@@ -29,7 +29,7 @@ import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
-import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
   ClientProfileRow,
@@ -340,29 +340,33 @@ function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | 
   );
 }
 
-// Stable "slot" across every week of the block (Week 1's Monday and Week 2's Monday share
-// the same day_position) -- what a class's linked_day_position resolves against, see
-// lib/utils/checkin.ts. Editable after the fact, not just at Add-day time.
-function DayPositionInput({ dayId, initial }: { dayId: string; initial: number | null }) {
+// Which weekday (Mon-Sat) this day falls on -- shared by every week of the block (Week 1's
+// Monday and Week 2's Monday share the same value). A class scheduled for the same weekday
+// auto-links to it for client check-in, see lib/utils/checkin.ts. Editable after the fact,
+// not just at Add-day time.
+function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | null }) {
   const { run } = useAction();
-  const [value, setValue] = useState(initial != null ? String(initial) : '');
 
-  async function handleBlur() {
-    const parsed = value === '' ? null : Number(value);
+  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const parsed = e.target.value === '' ? null : Number(e.target.value);
     if (parsed === initial) return;
     await run(() => updateProgramDay(dayId, { day_position: parsed }));
   }
 
   return (
-    <input
-      type="number"
-      placeholder="Day #"
-      title="Day position -- links a recurring class to this slot across every week"
-      className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-    />
+    <select
+      title="Day of the week -- a class scheduled the same day auto-links here for client check-in"
+      className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      value={initial ?? ''}
+      onChange={handleChange}
+    >
+      <option value="">Day of week…</option>
+      {PROGRAM_WEEKDAYS.map((d) => (
+        <option key={d} value={d}>
+          {WEEKDAY_LABELS[d]}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -670,7 +674,7 @@ export function WorkoutTab({
                     return (
                       <>
                         <PhaseLabelInput dayId={day.id} initial={day.phase_label} />
-                        <DayPositionInput dayId={day.id} initial={day.day_position} />
+                        <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
                         <DropdownMenu
                           triggerLabel="Day actions"
                           items={[
@@ -772,11 +776,9 @@ export function WorkoutTab({
                   })
                 }
               />
-              <input
-                type="number"
-                placeholder="Day #"
-                title="Day position -- links a recurring class to this slot across every week"
-                className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+              <select
+                title="Day of the week -- a class scheduled the same day auto-links here for client check-in"
+                className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
                 value={dayForms[program.id]?.dayPosition ?? ''}
                 onChange={(e) =>
                   setDayForms({
@@ -788,7 +790,14 @@ export function WorkoutTab({
                     },
                   })
                 }
-              />
+              >
+                <option value="">Day of week…</option>
+                {PROGRAM_WEEKDAYS.map((d) => (
+                  <option key={d} value={d}>
+                    {WEEKDAY_LABELS[d]}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={() => handleAddDay(program.id)}
                 className="rounded-full bg-[#141414] px-3 py-1.5 text-xs font-bold text-white"

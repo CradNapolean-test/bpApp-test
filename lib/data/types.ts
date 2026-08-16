@@ -179,9 +179,6 @@ export interface ClassRow {
   coach_note: string | null;
   cutoff_hours: number;
   credit_cost: number;
-  // Not a foreign key -- a day-position number is only meaningful combined with whichever
-  // client's program is currently active (see lib/utils/checkin.ts), never a fixed row.
-  linked_day_position: number | null;
 }
 
 export type BookingStatus = 'booked' | 'waitlist' | 'cancelled';
@@ -256,8 +253,9 @@ export interface WorkoutProgramDayRow {
   sort_order: number;
   phase_label: string | null;
   notes: string | null;
-  // Stable "slot" across every week of the block (e.g. every week's Monday shares the same
-  // day_position) -- what a class's linked_day_position resolves against. Null until a coach
+  // Which weekday (Mon-Sat, 1=Monday..6=Saturday matching classes.day_of_week's convention)
+  // this day falls on -- shared by every week of the block. A class scheduled for the same
+  // weekday auto-links to it for client check-in, see lib/utils/checkin.ts. Null until a coach
   // sets it; day_label (free text) and sort_order (defaults to 0 everywhere) aren't reliable
   // ordinals for this.
   day_position: number | null;
@@ -494,7 +492,6 @@ export interface ScheduleOccurrence {
   capacity: number;
   creditCost: number;
   bookedCount: number;
-  linkedDayPosition: number | null;
 }
 
 export interface RosterEntry {

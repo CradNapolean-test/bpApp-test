@@ -28,9 +28,7 @@ export async function getClasses(): Promise<ClassRow[]> {
   return data ?? [];
 }
 
-export async function createClass(
-  fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'linked_day_position'>
-): Promise<void> {
+export async function createClass(fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id'>): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -44,11 +42,8 @@ export async function createClass(
 
 // Creates one class row per {day_of_week, start_time} occurrence, sharing every other
 // field -- lets a coach set up "Yoga, Mon/Wed/Fri 6am" in one submit instead of three.
-// linked_day_position isn't set at creation -- a class starts unlinked and a coach links it
-// afterward per-row (see updateClass), since it's usually decided once the workout program
-// structure exists, not while first setting up the class schedule.
 export async function createClasses(
-  shared: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'day_of_week' | 'start_time' | 'linked_day_position'>,
+  shared: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'day_of_week' | 'start_time'>,
   occurrences: { day_of_week: number; start_time: string }[]
 ): Promise<void> {
   const supabase = await createClient();
@@ -71,9 +66,7 @@ export async function deleteClass(classId: string): Promise<void> {
 
 export async function updateClass(
   classId: string,
-  fields: Partial<
-    Pick<ClassRow, 'linked_day_position' | 'name' | 'day_of_week' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>
-  >
+  fields: Partial<Pick<ClassRow, 'name' | 'day_of_week' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>>
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').update(fields).eq('id', classId);
@@ -196,7 +189,6 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
         startTime: c.start_time,
         capacity: c.capacity,
         creditCost: c.credit_cost,
-        linkedDayPosition: c.linked_day_position,
       });
     }
   }
