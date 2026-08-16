@@ -41,6 +41,16 @@ async function main() {
     .insert({ id: userData.user.id, role: 'coach', email, gym_id: gymId, is_gym_admin: isAdmin });
   if (profileError) throw profileError;
 
+  // Mirrors the profiles.gym_id/is_gym_admin set above into coach_gym_memberships (0056), the
+  // real source of truth for gym membership -- profiles' columns are just this coach's cached
+  // "currently active" selection.
+  if (gymId) {
+    const { error: membershipError } = await supabase
+      .from('coach_gym_memberships')
+      .insert({ coach_id: userData.user.id, gym_id: gymId, is_gym_admin: isAdmin });
+    if (membershipError) throw membershipError;
+  }
+
   console.log('Coach account created:');
   console.log(`  email:    ${email}`);
   console.log(`  password: ${password}`);

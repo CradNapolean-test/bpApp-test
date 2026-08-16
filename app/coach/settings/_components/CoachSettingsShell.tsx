@@ -17,8 +17,9 @@ import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
 import { CoachProfileForm } from './CoachProfileForm';
 import { DefaultCheckinReminderForm } from './DefaultCheckinReminderForm';
 import { GymAdminSection } from './GymAdminSection';
+import { GymSwitcher } from './GymSwitcher';
 import type { ThemePreference } from '@/app/_components/theme';
-import type { GymCoachRow } from '@/lib/data/gym';
+import type { GymCoachRow, MyGymRow } from '@/lib/data/gym';
 
 type RowKey = 'password' | 'email' | 'profile' | 'notifications' | 'gym';
 
@@ -31,6 +32,7 @@ export function CoachSettingsShell({
   isGymAdmin = false,
   gymName = '',
   gymRoster = [],
+  myGyms = [],
   currentUserId = '',
 }: {
   email: string;
@@ -41,8 +43,13 @@ export function CoachSettingsShell({
   isGymAdmin?: boolean;
   gymName?: string;
   gymRoster?: GymCoachRow[];
+  myGyms?: MyGymRow[];
   currentUserId?: string;
 }) {
+  // The switcher must show for any coach who belongs to more than one gym, not just admins --
+  // the row itself (and the switcher inside it) is ungated by admin status; only the
+  // name-edit/roster/add-coach section further down stays admin-only.
+  const showGymRow = isGymAdmin || myGyms.length > 1;
   const [openRow, setOpenRow] = useState<RowKey | null>(null);
   const logoUrl = useCoachLogoUrl();
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
@@ -101,7 +108,7 @@ export function CoachSettingsShell({
             <span className="font-semibold text-black dark:text-zinc-50">Notification preferences</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
           </button>
-          {isGymAdmin && (
+          {showGymRow && (
             <button type="button" onClick={() => setOpenRow(openRow === 'gym' ? null : 'gym')} className={rowCls}>
               <span className="font-semibold text-black dark:text-zinc-50">Gym</span>
               <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
@@ -136,9 +143,10 @@ export function CoachSettingsShell({
           </div>
         )}
 
-        {isGymAdmin && openRow === 'gym' && (
-          <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
-            <GymAdminSection gymName={gymName} roster={gymRoster} currentUserId={currentUserId} />
+        {showGymRow && openRow === 'gym' && (
+          <div className="space-y-4 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+            {myGyms.length > 1 && <GymSwitcher gyms={myGyms} />}
+            {isGymAdmin && <GymAdminSection gymName={gymName} roster={gymRoster} currentUserId={currentUserId} />}
           </div>
         )}
 

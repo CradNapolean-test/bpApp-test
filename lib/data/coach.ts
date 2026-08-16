@@ -51,10 +51,12 @@ export interface GymClientRow extends CoachClientRow {
   isOwnClient: boolean;
 }
 
-// Every client at the coach's gym, regardless of which coach they're assigned to -- read-only
-// cross-coach search (see is_same_gym_as_client RLS, 0052/0053). Renders through the same
-// ClientTable component as getMyClients; the coachName/isOwnClient fields let the UI attribute
-// each row and gate mutating actions to the client's actual assigned coach.
+// Every client at the gym, regardless of which coach they're assigned to -- read-only
+// cross-coach search (see is_same_gym_as_client RLS, 0052/0053). Filters on the client's own
+// fixed gym_id (0056), not their coach's currently-active gym -- a dual-gym coach's clients
+// stay put in their home gym's search results even after that coach switches gyms. Renders
+// through the same ClientTable component as getMyClients; the coachName/isOwnClient fields let
+// the UI attribute each row and gate mutating actions to the client's actual assigned coach.
 export async function searchGymClients(
   supabase: SupabaseClient,
   gymId: string,
@@ -63,10 +65,10 @@ export async function searchGymClients(
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at), credits_balance(balance), coach:coach_id!inner(id, email, display_name, gym_id)'
+      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at), credits_balance(balance), coach:coach_id(id, email, display_name)'
     )
     .eq('role', 'client')
-    .eq('coach.gym_id', gymId)
+    .eq('gym_id', gymId)
     .order('created_at', { ascending: false });
 
   if (error) raise(error);

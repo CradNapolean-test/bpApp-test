@@ -31,9 +31,31 @@ export async function POST(request: Request) {
   if (!email) {
     return NextResponse.json({ error: 'email is required' }, { status: 400 });
   }
-  const password: string = body?.password || randomBytes(9).toString('base64url');
 
   const admin = createAdminClient();
+
+  // An email that already belongs to a coach account just gets added as a member of this gym
+  // (0056) -- a dual-gym coach doesn't need (or want) a second login. Looked up via the admin
+  // client since the caller has no RLS visibility into a coach at a different gym; the actual
+  // authorization for granting membership still happens inside add_coach_to_gym, called through
+  // the caller's own session so its is_gym_admin check applies.
+  const { data: existing } = await admin.from('profiles').select('id, role').eq('email', email).maybeSingle();
+
+  if (existing) {
+    if (existing.role !== 'coach') {
+      return NextResponse.json({ error: 'That email belongs to a client account' }, { status: 400 });
+    }
+    const { error: membershipError } = await supabase.rpc('add_coach_to_gym', {
+      p_coach_id: existing.id,
+      p_is_admin: false,
+    });
+    if (membershipError) {
+      return NextResponse.json({ error: membershipError.message }, { status: 400 });
+    }
+    return NextResponse.json({ email, existingAccount: true });
+  }
+
+  const password: string = body?.password || randomBytes(9).toString('base64url');
 
   const { data: newUser, error: createUserError } = await admin.auth.admin.createUser({
     email,
@@ -51,5 +73,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profileError.message }, { status: 400 });
   }
 
-  return NextResponse.json({ email, password, coachId: newUser.user.id });
+  const { error: membershipError } = await admin
+    .from('coach_gym_memberships')
+    .insert({ coach_id: newUser.user.id, gym_id: callerProfile.gym_id, is_gym_admin: false });
+  if (membershipError) {
+    return NextResponse.json({ error: membershipError.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ email, password, coachId: newUser.user.id, existingAccount: false });
 }

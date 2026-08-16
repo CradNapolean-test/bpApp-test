@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   const { error: profileError } = await admin
     .from('profiles')
-    .insert({ id: newUser.user.id, role: 'client', coach_id: user.id, email });
+    .insert({ id: newUser.user.id, role: 'client', coach_id: user.id, gym_id: callerProfile.gym_id, email });
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 400 });
   }

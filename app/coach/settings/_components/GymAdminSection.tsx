@@ -76,7 +76,9 @@ function AddCoachForm() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  // password is only set for a brand-new account (existingAccount: false) -- an email that
+  // already belongs to a coach just gets added as a member of this gym, no new credentials.
+  const [created, setCreated] = useState<{ email: string; password: string | null } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,9 +100,9 @@ function AddCoachForm() {
         return;
       }
 
-      setCreated({ email: body.email, password: body.password });
+      setCreated({ email: body.email, password: body.existingAccount ? null : body.password });
       setEmail('');
-      toast.success('Coach account created');
+      toast.success(body.existingAccount ? 'Existing coach added to this gym' : 'Coach account created');
       router.refresh();
     } catch {
       const message = 'Could not reach the server. Check your connection and try again.';
@@ -114,14 +116,22 @@ function AddCoachForm() {
   if (created) {
     return (
       <div className="rounded-md border border-emerald-600/30 bg-emerald-50 p-4 text-sm dark:bg-emerald-950/30">
-        <p className="font-medium text-emerald-800 dark:text-emerald-300">Coach account created</p>
+        <p className="font-medium text-emerald-800 dark:text-emerald-300">
+          {created.password ? 'Coach account created' : 'Coach added to this gym'}
+        </p>
         <p className="mt-1 text-zinc-700 dark:text-zinc-300">
           Email: <span className="font-mono">{created.email}</span>
-          <br />
-          Temp password: <span className="font-mono">{created.password}</span>
+          {created.password && (
+            <>
+              <br />
+              Temp password: <span className="font-mono">{created.password}</span>
+            </>
+          )}
         </p>
         <p className="mt-1 text-xs text-zinc-500">
-          This password is shown once — pass it to the coach now; it can&apos;t be retrieved later.
+          {created.password
+            ? "This password is shown once — pass it to the coach now; it can't be retrieved later."
+            : 'They already had an account and can switch to this gym from their own Settings page.'}
         </p>
         <button
           onClick={() => setCreated(null)}

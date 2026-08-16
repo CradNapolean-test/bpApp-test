@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCoachChatOverview } from '@/lib/data/chat';
-import { getGymRoster } from '@/lib/data/gym';
+import { getGymRoster, getMyGyms } from '@/lib/data/gym';
 import { CoachSettingsShell } from './_components/CoachSettingsShell';
 
 export default async function CoachSettingsPage() {
@@ -19,9 +19,10 @@ export default async function CoachSettingsPage() {
   if (profile?.role !== 'coach') redirect('/dashboard');
   const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
-  const [chatOverview, gymRoster] = await Promise.all([
+  const [chatOverview, gymRoster, myGyms] = await Promise.all([
     getCoachChatOverview(),
     profile.is_gym_admin ? getGymRoster() : Promise.resolve([]),
+    getMyGyms(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
@@ -35,6 +36,7 @@ export default async function CoachSettingsPage() {
       isGymAdmin={profile.is_gym_admin}
       gymName={gym?.name ?? ''}
       gymRoster={gymRoster}
+      myGyms={myGyms}
       currentUserId={user.id}
     />
   );
