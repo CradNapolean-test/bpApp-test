@@ -27,6 +27,7 @@ import type {
   BookingRow,
   ClientExerciseMaxRow,
   ClientJournalEntryRow,
+  ClientMembershipRow,
   ClientProfileRow,
   EducationCourseAssignmentWithDetails,
   ExerciseLibraryRow,
@@ -66,6 +67,7 @@ export function CoachClientWorkspace({
   habits,
   activity,
   disabledScreens,
+  membership = null,
   clientExerciseMaxes,
   exerciseLibrary,
 }: {
@@ -88,6 +90,7 @@ export function CoachClientWorkspace({
   habits: HabitWithLogs[];
   activity: ActivityEventRow[];
   disabledScreens: string[];
+  membership?: ClientMembershipRow | null;
   clientExerciseMaxes: ClientExerciseMaxRow[];
   exerciseLibrary: ExerciseLibraryRow[];
 }) {
@@ -167,6 +170,7 @@ export function CoachClientWorkspace({
           <ToolsTab
             clientId={clientId}
             disabledScreens={disabledScreens}
+            tierIncludedScreens={membership?.package?.included_screens ?? null}
             clientExerciseMaxes={clientExerciseMaxes}
             exerciseLibrary={exerciseLibrary}
             readOnly={!isOwnClient}

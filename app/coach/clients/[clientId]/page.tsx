@@ -62,6 +62,7 @@ export default async function CoachClientPage({
       habits={bundle.habits}
       activity={activity}
       disabledScreens={bundle.disabledScreens}
+      membership={bundle.membership}
       clientExerciseMaxes={bundle.clientExerciseMaxes}
       exerciseLibrary={bundle.exerciseLibrary}
     />

@@ -458,6 +458,10 @@ export interface MembershipPackageRow {
   credits_per_week: number;
   description: string | null;
   created_at: string;
+  // null = unrestricted (every DISABLEABLE_SCREENS entry available); non-null = the subset of
+  // screen names a client on this package can see, enforced live -- see
+  // categories.ts's toEffectiveDisabledScreenSet.
+  included_screens: string[] | null;
 }
 
 export interface ClientMembershipRow {

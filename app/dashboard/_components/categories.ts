@@ -65,6 +65,24 @@ export function toDisabledScreenSet(raw: string[]): Set<Screen> {
   return new Set(raw.filter((s): s is Screen => allowed.has(s as Screen)));
 }
 
+// Layers a membership tier's screen access under the client's own per-client toggles -- the
+// tier (package.included_screens) sets the ceiling of what a client on it can ever see;
+// clientDisabled can only take away further, never restore what the tier excludes. null
+// tierIncludedScreens means the tier doesn't restrict anything, matching every package that
+// predates this feature. Recomputed from the caller's current membership on every call --
+// there's no synced/stored "effective" state, so a package edit or reassignment takes effect
+// on the client's very next load.
+export function toEffectiveDisabledScreenSet(clientDisabled: string[], tierIncludedScreens: string[] | null): Set<Screen> {
+  const disabled = toDisabledScreenSet(clientDisabled);
+  if (tierIncludedScreens !== null) {
+    const included = new Set(tierIncludedScreens);
+    for (const screen of DISABLEABLE_SCREENS) {
+      if (!included.has(screen)) disabled.add(screen);
+    }
+  }
+  return disabled;
+}
+
 export type NutritionTrackingMode = 'full_tracking' | 'manual_import' | 'photo_diary';
 
 // Accountability = did-you-do-the-thing (check-ins, habits, coach-flagged insights);

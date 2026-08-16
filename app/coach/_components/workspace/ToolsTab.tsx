@@ -80,11 +80,17 @@ function ToolRow({
   screen,
   initialEnabled,
   readOnly,
+  lockedByTier,
 }: {
   clientId: string;
   screen: Screen;
   initialEnabled: boolean;
   readOnly: boolean;
+  // True when the client's current membership tier excludes this screen -- the tier is a
+  // ceiling this per-client toggle can't override (see categories.ts's
+  // toEffectiveDisabledScreenSet), so flipping it back on here would silently do nothing.
+  // Shown disabled with a note instead of letting a coach hit that dead end.
+  lockedByTier: boolean;
 }) {
   const { run, busy } = useAction();
   const [enabled, setEnabled] = useState(initialEnabled);
@@ -97,12 +103,15 @@ function ToolRow({
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-black/10 p-3 dark:border-white/10">
-      <p className="text-sm font-medium text-black dark:text-zinc-50">{screen}</p>
+      <div>
+        <p className="text-sm font-medium text-black dark:text-zinc-50">{screen}</p>
+        {lockedByTier && <p className="text-xs text-zinc-500">Locked by membership tier</p>}
+      </div>
       <button
         role="switch"
         aria-checked={enabled}
         aria-label={`Toggle ${screen}`}
-        disabled={busy || readOnly}
+        disabled={busy || readOnly || lockedByTier}
         onClick={handleToggle}
         className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
           enabled ? 'bg-accent' : 'bg-black/15 dark:bg-white/15'
@@ -126,17 +135,22 @@ function ToolRow({
 export function ToolsTab({
   clientId,
   disabledScreens,
+  tierIncludedScreens = null,
   clientExerciseMaxes,
   exerciseLibrary,
   readOnly = false,
 }: {
   clientId: string;
   disabledScreens: string[];
+  // The client's current membership package's included_screens -- null means no tier
+  // restriction. See ToolRow's lockedByTier.
+  tierIncludedScreens?: string[] | null;
   clientExerciseMaxes: ClientExerciseMaxRow[];
   exerciseLibrary: ExerciseLibraryRow[];
   readOnly?: boolean;
 }) {
   const disabledSet = new Set(disabledScreens);
+  const tierIncludedSet = tierIncludedScreens === null ? null : new Set(tierIncludedScreens);
 
   return (
     <div className="space-y-4">
@@ -152,6 +166,7 @@ export function ToolsTab({
             screen={screen}
             initialEnabled={!disabledSet.has(screen)}
             readOnly={readOnly}
+            lockedByTier={tierIncludedSet !== null && !tierIncludedSet.has(screen)}
           />
         ))}
       </div>

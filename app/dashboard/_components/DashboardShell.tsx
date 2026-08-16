@@ -27,7 +27,7 @@ import { CategoryNav } from './CategoryNav';
 import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
-import { BOTTOM_TAB_CATEGORIES, screensForCategory, toDisabledScreenSet } from './categories';
+import { BOTTOM_TAB_CATEGORIES, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
@@ -185,7 +185,7 @@ export function DashboardShell({
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
 
-  const disabledScreenSet = toDisabledScreenSet(disabledScreens);
+  const disabledScreenSet = toEffectiveDisabledScreenSet(disabledScreens, membership?.package?.included_screens ?? null);
   const nutritionMode = profile?.nutrition_tracking_mode ?? 'full_tracking';
   // The single enforcement choke point: handleNavigate/handleCheckIn below set `screen`
   // directly (for a home-card shortcut or the classes check-in flow), bypassing
