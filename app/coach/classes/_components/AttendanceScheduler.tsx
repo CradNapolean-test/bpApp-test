@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Ban, Check, UserX, X } from 'lucide-react';
+import { useState } from 'react';
+import { Ban, CalendarDays, Check, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Button } from '@/app/_components/Button';
+import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { cancelClassOccurrence, getRoster, markAttendanceStatus } from '@/lib/data/classes';
+import { formatClassTime } from '@/lib/utils/dates';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 
 function statusOf(entry: RosterEntry): AttendanceStatus {
@@ -34,24 +36,40 @@ function occKey(o: ScheduleOccurrence): string {
   return `${o.classId}|${o.date}`;
 }
 
-function formatChipLabel(o: ScheduleOccurrence): string {
-  const dateLabel = new Date(o.date + 'T00:00:00Z').toLocaleDateString(undefined, {
+function formatDateLabel(date: string): string {
+  return new Date(date + 'T00:00:00Z').toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
   });
-  return `${dateLabel} · ${o.className}`;
+}
+
+// Time only -- the calendar day picker already establishes the date, so a same-day occurrence
+// only needs to be disambiguated by time (and name, when a day mixes different classes).
+function formatOccurrenceLabel(o: ScheduleOccurrence): string {
+  const timeLabel = formatClassTime(o.startTime);
+  return `${o.className}${timeLabel ? ` · ${timeLabel}` : ''}`;
 }
 
 export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
   const toast = useToast();
   const confirm = useConfirm();
   const { run: runCancel, busy: cancelling } = useAction();
+  // Picking a day is the primary nav (a calendar, not a flat list of every upcoming
+  // occurrence across every date at once -- that wall of chips is what made this screen
+  // unusable once a single class started running several times a day). Defaults to the
+  // earliest upcoming date that actually has a class, so the screen isn't empty on load.
+  const [selectedDate, setSelectedDate] = useState<string | null>(
+    () => [...occurrences].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0]?.date ?? null
+  );
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const dayOccurrences = [...occurrences]
+    .filter((o) => o.date === selectedDate)
+    .sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const selected = occurrences.find((o) => occKey(o) === selectedKey) ?? null;
 
   async function openOccurrence(occ: ScheduleOccurrence) {
@@ -67,18 +85,15 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     }
   }
 
-  // Auto-select the soonest upcoming occurrence so the roster is visible without an extra
-  // click, matching the design (first chip shown already active). Only reacts to the
-  // occurrences prop itself, not to openOccurrence's identity -- same narrow-deps exception
-  // used by WorkoutTab.tsx's focusDay effect.
-  useEffect(() => {
-    // Reacting to an external signal (the initial occurrences list arriving), not
-    // synchronizing with an external system -- the standard justified exception used
-    // elsewhere in the app (see WorkoutTab.tsx's focusDay effect).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (occurrences.length > 0) void openOccurrence(occurrences[0]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [occurrences]);
+  function handleSelectDate(date: string) {
+    setSelectedDate(date);
+    setSelectedKey(null);
+    setRoster(null);
+    // Only one class that day -- open its roster straight away, same zero-extra-click feel
+    // as before. With more than one, an explicit pick avoids guessing which time was meant.
+    const dayOccs = occurrences.filter((o) => o.date === date);
+    if (dayOccs.length === 1) void openOccurrence(dayOccs[0]);
+  }
 
   async function cycleStatus(entry: RosterEntry) {
     if (!selected) return;
@@ -109,7 +124,7 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
   async function handleCancelOccurrence() {
     if (!selected) return;
     const ok = await confirm({
-      title: `Cancel ${selected.className} on ${formatChipLabel(selected).split(' · ')[0]}?`,
+      title: `Cancel ${selected.className} on ${formatDateLabel(selected.date)}?`,
       body: 'Every booked client is refunded and notified. This only cancels this one date -- the rest of the recurring class is unaffected.',
       confirmLabel: 'Cancel occurrence',
       destructive: true,
@@ -140,25 +155,33 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {occurrences.map((occ) => {
-          const isActive = occKey(occ) === selectedKey;
-          return (
-            <button
-              key={occKey(occ)}
-              type="button"
-              onClick={() => openOccurrence(occ)}
-              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                isActive
-                  ? 'bg-[#141414] text-white'
-                  : 'border border-black/10 text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
-              }`}
-            >
-              {formatChipLabel(occ)}
-            </button>
-          );
-        })}
-      </div>
+      <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+
+      {selectedDate && dayOccurrences.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {dayOccurrences.map((occ) => {
+            const isActive = occKey(occ) === selectedKey;
+            return (
+              <button
+                key={occKey(occ)}
+                type="button"
+                onClick={() => openOccurrence(occ)}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'bg-[#141414] text-white'
+                    : 'border border-black/10 text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
+                }`}
+              >
+                {formatOccurrenceLabel(occ)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedDate && dayOccurrences.length === 0 && (
+        <EmptyState icon={CalendarDays} title="No classes that day" compact />
+      )}
 
       {selected && !loading && (
         <div className="flex justify-end">
@@ -170,7 +193,7 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
       )}
 
       {loading && <p className="text-sm text-zinc-500">Loading roster…</p>}
-      {!loading && (roster ?? []).length === 0 && (
+      {!loading && selected && (roster ?? []).length === 0 && (
         <EmptyState icon={UserX} title="Nobody booked in" hint="No clients have booked this class occurrence." />
       )}
       {!loading && (roster ?? []).length > 0 && (
