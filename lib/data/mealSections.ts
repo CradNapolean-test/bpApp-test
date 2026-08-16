@@ -20,17 +20,26 @@ export async function getMealSections(clientId: string): Promise<MealSectionRow[
 // Seeds the 4 defaults on first use -- mirrors getOrCreateDailyLog's idiom. Only called when
 // canWrite (see dashboardBundle.ts), so a coach's mere page-view of a client never seeds rows
 // as a side effect.
+//
+// Upsert with onConflict + ignoreDuplicates (backed by migration 0057's unique(client_id,
+// label)) rather than a plain check-then-insert: two concurrent calls for a client with no
+// sections yet (e.g. a double-mount, a flaky-network retry) used to both pass the "existing is
+// empty" check before either committed, inserting the same 4 defaults twice -- confirmed in
+// production data before this fix. The re-fetch after upsert returns whichever rows actually
+// exist regardless of which concurrent call's insert "won".
 export async function getOrCreateMealSections(clientId: string): Promise<MealSectionRow[]> {
   const existing = await getMealSections(clientId);
   if (existing.length > 0) return existing;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('meal_sections')
-    .insert(DEFAULT_SECTIONS.map((label, index) => ({ client_id: clientId, label, sort_order: index })))
-    .select('*');
+    .upsert(
+      DEFAULT_SECTIONS.map((label, index) => ({ client_id: clientId, label, sort_order: index })),
+      { onConflict: 'client_id,label', ignoreDuplicates: true }
+    );
   if (error) raise(error);
-  return (data ?? []).sort((a, b) => a.sort_order - b.sort_order);
+  return getMealSections(clientId);
 }
 
 export async function createMealSection(clientId: string, label: string): Promise<void> {
