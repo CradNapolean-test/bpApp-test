@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
+import { Switch } from '@/app/_components/Switch';
 import { setScreenEnabled } from '@/lib/data/clientScreenSettings';
 import { grantCredits } from '@/lib/data/classes';
 import { DISABLEABLE_SCREENS } from '@/app/dashboard/_components/categories';
@@ -107,22 +108,12 @@ function ToolRow({
         <p className="text-sm font-medium text-black dark:text-zinc-50">{screen}</p>
         {lockedByTier && <p className="text-xs text-zinc-500">Locked by membership tier</p>}
       </div>
-      <button
-        role="switch"
-        aria-checked={enabled}
-        aria-label={`Toggle ${screen}`}
+      <Switch
+        checked={enabled}
+        onChange={handleToggle}
         disabled={busy || readOnly || lockedByTier}
-        onClick={handleToggle}
-        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-          enabled ? 'bg-accent' : 'bg-black/15 dark:bg-white/15'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            enabled ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
+        label={`Toggle ${screen}`}
+      />
     </div>
   );
 }
