@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ToastProvider } from "./_components/ToastProvider";
 import { ConfirmProvider } from "./_components/ConfirmDialog";
 import { ThemeSync } from "./_components/ThemeSync";
+import { ServiceWorkerRegister } from "./_components/ServiceWorkerRegister";
 import { createClient } from "@/lib/supabase/server";
 import type { ThemePreference } from "./_components/theme";
 
@@ -39,6 +40,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Ballistic Performance",
   description: "Coaching platform",
+  manifest: "/manifest.json",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#141414",
 };
 
 export default async function RootLayout({
@@ -73,6 +79,7 @@ export default async function RootLayout({
         <ToastProvider>
           <ConfirmProvider>
             <ThemeSync dbPreference={themePreference} />
+            <ServiceWorkerRegister />
             {children}
           </ConfirmProvider>
         </ToastProvider>

@@ -1,0 +1,13 @@
+{
+  "name": "Ballistic Performance",
+  "short_name": "Ballistic",
+  "description": "Coaching platform for nutrition, training, and check-ins.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#141414",
+  "icons": [
+    { "src": "/logo-badge.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo-badge.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

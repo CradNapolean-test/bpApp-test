@@ -437,6 +437,15 @@ export interface NotificationRow {
   read_at: string | null;
 }
 
+export interface PushSubscriptionRow {
+  id: string;
+  client_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
+}
+
 export interface CoachReport {
   attendanceRate: number | null; // 0-100, null if no data
   totalBooked: number;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -19,6 +19,12 @@ import {
   updateEmailNotificationsEnabled,
   updateNotificationsEnabled,
 } from '@/lib/data/clientProfile';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getExistingPushSubscription,
+  isPushSupported,
+} from '@/app/_components/pushNotifications';
 import type { Category, Screen } from './categories';
 
 const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
@@ -50,11 +56,36 @@ export function AccountTab({
   const [emailEnabled, setEmailEnabled] = useState(emailNotificationsEnabled);
   const [deletionRequested, setDeletionRequested] = useState(deletionRequestedAt != null);
   const [openRow, setOpenRow] = useState<RowKey | null>(null);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  // Reflects actual browser subscription state, not a DB flag -- unlike the other toggles
+  // here, "on" only ever means a live PushSubscription exists for this browser right now.
+  useEffect(() => {
+    isPushSupported().then((supported) => {
+      setPushSupported(supported);
+      if (!supported) return;
+      getExistingPushSubscription().then((sub) => setPushEnabled(sub != null));
+    });
+  }, []);
 
   async function handleToggle() {
     const next = !enabled;
     setEnabled(next);
     await run(() => updateNotificationsEnabled(clientId, next));
+  }
+
+  async function handlePushToggle() {
+    const next = !pushEnabled;
+    setPushEnabled(next);
+    await run(() => (next ? enablePushNotifications(clientId) : disablePushNotifications()), {
+      success: next ? 'Push notifications enabled' : 'Push notifications disabled',
+    });
+    // Re-check actual state rather than trust the optimistic flip, on both the success and
+    // failure path -- a denied permission prompt or a subscribe failure should snap the
+    // toggle back off, not leave it stuck on.
+    const sub = await getExistingPushSubscription();
+    setPushEnabled(sub != null);
   }
 
   async function handleEmailToggle() {
@@ -134,6 +165,16 @@ export function AccountTab({
         <span className="font-semibold text-black dark:text-zinc-50">Check-in reminders</span>
         <Switch checked={enabled} onChange={handleToggle} label="Toggle check-in reminders" />
       </div>
+
+      {pushSupported && (
+        <div className={`${cardCls} flex items-center justify-between gap-3`}>
+          <div>
+            <span className="font-semibold text-black dark:text-zinc-50">Push notifications</span>
+            <p className="text-xs text-zinc-500">Get notified on this device, even when the app&apos;s closed.</p>
+          </div>
+          <Switch checked={pushEnabled} onChange={handlePushToggle} label="Toggle push notifications" />
+        </div>
+      )}
 
       <div className={`${cardCls} flex items-center justify-between gap-3`}>
         <div>
