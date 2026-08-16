@@ -4,8 +4,11 @@
 -- and the helper functions later migrations build on; 0053 broadens read access to
 -- client-scoped data, 0054 makes the coach-owned "library" tables (classes, membership
 -- packages, form templates, etc.) gym-wide instead of per-coach.
+--
+-- Written idempotently throughout (IF NOT EXISTS / DROP ... IF EXISTS / CREATE OR REPLACE) --
+-- safe to re-run against a database where it's already partially or fully applied.
 
-create table gyms (
+create table if not exists gyms (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   created_at timestamptz default now()
@@ -15,6 +18,7 @@ alter table gyms enable row level security;
 
 -- Readable by any authenticated user -- needed so a coach's/client's own gym name can be
 -- shown in the UI without a separate admin-only lookup.
+drop policy if exists "authenticated users read gyms" on gyms;
 create policy "authenticated users read gyms"
   on gyms for select
   to authenticated
@@ -23,18 +27,21 @@ create policy "authenticated users read gyms"
 -- gym_id is only ever set on coach-role profiles -- a client's gym is derived through their
 -- own coach (client_gym_id() below), never stored redundantly, so it can't drift if a client
 -- is ever reassigned to a different coach.
-alter table profiles add column gym_id uuid references gyms(id);
-alter table profiles add column is_gym_admin boolean not null default false;
+alter table profiles add column if not exists gym_id uuid references gyms(id);
+alter table profiles add column if not exists is_gym_admin boolean not null default false;
 
 -- Backfill: this app has run for exactly one gym in production so far. Create that gym and
 -- attach every existing coach to it, with admin rights preserved so no one loses capability
--- on deploy.
+-- on deploy. Guarded to run at most once (skipped once any gym exists) so a re-run of this
+-- migration never creates a duplicate gym or re-stamps coaches who've since been reassigned.
 do $$
 declare
   v_gym_id uuid;
 begin
-  insert into gyms (name) values ('Ballistic Performance') returning id into v_gym_id;
-  update profiles set gym_id = v_gym_id, is_gym_admin = true where role = 'coach';
+  if not exists (select 1 from gyms) then
+    insert into gyms (name) values ('Ballistic Performance') returning id into v_gym_id;
+    update profiles set gym_id = v_gym_id, is_gym_admin = true where role = 'coach';
+  end if;
 end $$;
 
 -- ============ Helper functions ============
@@ -45,7 +52,7 @@ end $$;
 -- does NOT resolve a client's gym (see client_gym_id) -- keeping this coach-only means it can
 -- be used directly as a write-scope check (gym_id = my_gym_id()) without ever accidentally
 -- granting a client coach-level access to a gym-shared table.
-create function public.my_gym_id()
+create or replace function public.my_gym_id()
 returns uuid
 language sql
 security definer
@@ -56,7 +63,7 @@ as $$
 $$;
 
 -- Which gym a given client belongs to, via their assigned coach.
-create function public.client_gym_id(target_client_id uuid)
+create or replace function public.client_gym_id(target_client_id uuid)
 returns uuid
 language sql
 security definer
@@ -73,7 +80,7 @@ $$;
 -- client. Deliberately kept separate from owns_client() -- several tables use owns_client (or
 -- is_coach_of directly) to gate `for all` write policies, and write access to a client's data
 -- must stay assigned-coach-only. This only ever gets added as an extra SELECT policy (0053).
-create function public.is_same_gym_as_client(target_client_id uuid)
+create or replace function public.is_same_gym_as_client(target_client_id uuid)
 returns boolean
 language sql
 security definer
@@ -90,10 +97,12 @@ $$;
 -- here, not `client_id` -- a client's own row id doubles as its client_id since profiles has
 -- no separate client_id column).
 
+drop policy if exists "same-gym coaches read each other" on profiles;
 create policy "same-gym coaches read each other"
   on profiles for select
   using (role = 'coach' and gym_id = public.my_gym_id());
 
+drop policy if exists "same-gym coach reads client profiles" on profiles;
 create policy "same-gym coach reads client profiles"
   on profiles for select
   using (public.is_same_gym_as_client(id));

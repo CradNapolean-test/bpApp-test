@@ -6,51 +6,59 @@
 --
 -- exercise_library is deliberately left alone -- it was already app-wide shared before gyms
 -- existed (see 0013's comment), which already exceeds what's needed here.
+--
+-- Written idempotently throughout (IF NOT EXISTS / DROP ... IF EXISTS) -- safe to re-run
+-- against a database where it's already partially or fully applied.
 
 -- ============ classes ============
-alter table classes add column gym_id uuid references gyms(id);
+alter table classes add column if not exists gym_id uuid references gyms(id);
 update classes set gym_id = (select gym_id from profiles where id = classes.coach_id);
 alter table classes alter column gym_id set not null;
 
-drop policy "coach or own-coach's clients read classes" on classes;
-drop policy "coach manages own classes" on classes;
+drop policy if exists "coach or own-coach's clients read classes" on classes;
+drop policy if exists "coach manages own classes" on classes;
 
+drop policy if exists "gym reads classes" on classes;
 create policy "gym reads classes"
   on classes for select
   using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()));
 
+drop policy if exists "gym coaches manage classes" on classes;
 create policy "gym coaches manage classes"
   on classes for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
 -- ============ class_exceptions (join through classes) ============
-drop policy "coach manages own class_exceptions" on class_exceptions;
+drop policy if exists "coach manages own class_exceptions" on class_exceptions;
 
+drop policy if exists "gym coaches manage class_exceptions" on class_exceptions;
 create policy "gym coaches manage class_exceptions"
   on class_exceptions for all
   using (exists (select 1 from classes where classes.id = class_exceptions.class_id and classes.gym_id = public.my_gym_id()))
   with check (exists (select 1 from classes where classes.id = class_exceptions.class_id and classes.gym_id = public.my_gym_id()));
 
 -- ============ membership_packages ============
-alter table membership_packages add column gym_id uuid references gyms(id);
+alter table membership_packages add column if not exists gym_id uuid references gyms(id);
 update membership_packages set gym_id = (select gym_id from profiles where id = membership_packages.coach_id);
 alter table membership_packages alter column gym_id set not null;
 
-drop policy "coach or own-coach's clients read membership_packages" on membership_packages;
-drop policy "coach manages own membership_packages" on membership_packages;
+drop policy if exists "coach or own-coach's clients read membership_packages" on membership_packages;
+drop policy if exists "coach manages own membership_packages" on membership_packages;
 
+drop policy if exists "gym reads membership_packages" on membership_packages;
 create policy "gym reads membership_packages"
   on membership_packages for select
   using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()));
 
+drop policy if exists "gym coaches manage membership_packages" on membership_packages;
 create policy "gym coaches manage membership_packages"
   on membership_packages for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
 -- ============ form_templates + form_questions ============
-alter table form_templates add column gym_id uuid references gyms(id);
+alter table form_templates add column if not exists gym_id uuid references gyms(id);
 update form_templates set gym_id = (select gym_id from profiles where id = form_templates.coach_id);
 alter table form_templates alter column gym_id set not null;
 
@@ -66,26 +74,29 @@ update form_templates
 set is_default_onboarding = false
 where id in (select id from ranked where rn > 1);
 
-drop index one_default_onboarding_form_per_coach;
-create unique index one_default_onboarding_form_per_gym
+drop index if exists one_default_onboarding_form_per_coach;
+create unique index if not exists one_default_onboarding_form_per_gym
   on form_templates (gym_id)
   where is_default_onboarding;
 
-drop policy "coach or own-coach's clients read form_templates" on form_templates;
-drop policy "coach manages own form_templates" on form_templates;
+drop policy if exists "coach or own-coach's clients read form_templates" on form_templates;
+drop policy if exists "coach manages own form_templates" on form_templates;
 
+drop policy if exists "gym reads form_templates" on form_templates;
 create policy "gym reads form_templates"
   on form_templates for select
   using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()));
 
+drop policy if exists "gym coaches manage form_templates" on form_templates;
 create policy "gym coaches manage form_templates"
   on form_templates for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
-drop policy "coach or own-coach's clients read form_questions" on form_questions;
-drop policy "coach manages form_questions" on form_questions;
+drop policy if exists "coach or own-coach's clients read form_questions" on form_questions;
+drop policy if exists "coach manages form_questions" on form_questions;
 
+drop policy if exists "gym reads form_questions" on form_questions;
 create policy "gym reads form_questions"
   on form_questions for select
   using (
@@ -96,6 +107,7 @@ create policy "gym reads form_questions"
     )
   );
 
+drop policy if exists "gym coaches manage form_questions" on form_questions;
 create policy "gym coaches manage form_questions"
   on form_questions for all
   using (
@@ -114,25 +126,28 @@ create policy "gym coaches manage form_questions"
   );
 
 -- ============ program_templates + days + exercises ============
-alter table program_templates add column gym_id uuid references gyms(id);
+alter table program_templates add column if not exists gym_id uuid references gyms(id);
 update program_templates set gym_id = (select gym_id from profiles where id = program_templates.coach_id);
 alter table program_templates alter column gym_id set not null;
 
-drop policy "coach or own-coach's clients read program_templates" on program_templates;
-drop policy "coach manages own program_templates" on program_templates;
+drop policy if exists "coach or own-coach's clients read program_templates" on program_templates;
+drop policy if exists "coach manages own program_templates" on program_templates;
 
+drop policy if exists "gym reads program_templates" on program_templates;
 create policy "gym reads program_templates"
   on program_templates for select
   using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()));
 
+drop policy if exists "gym coaches manage program_templates" on program_templates;
 create policy "gym coaches manage program_templates"
   on program_templates for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
-drop policy "coach or own-coach's clients read program_template_days" on program_template_days;
-drop policy "coach manages own program_template_days" on program_template_days;
+drop policy if exists "coach or own-coach's clients read program_template_days" on program_template_days;
+drop policy if exists "coach manages own program_template_days" on program_template_days;
 
+drop policy if exists "gym reads program_template_days" on program_template_days;
 create policy "gym reads program_template_days"
   on program_template_days for select
   using (
@@ -143,6 +158,7 @@ create policy "gym reads program_template_days"
     )
   );
 
+drop policy if exists "gym coaches manage program_template_days" on program_template_days;
 create policy "gym coaches manage program_template_days"
   on program_template_days for all
   using (
@@ -160,9 +176,10 @@ create policy "gym coaches manage program_template_days"
     )
   );
 
-drop policy "coach or own-coach's clients read program_template_exercises" on program_template_exercises;
-drop policy "coach manages own program_template_exercises" on program_template_exercises;
+drop policy if exists "coach or own-coach's clients read program_template_exercises" on program_template_exercises;
+drop policy if exists "coach manages own program_template_exercises" on program_template_exercises;
 
+drop policy if exists "gym reads program_template_exercises" on program_template_exercises;
 create policy "gym reads program_template_exercises"
   on program_template_exercises for select
   using (
@@ -174,6 +191,7 @@ create policy "gym reads program_template_exercises"
     )
   );
 
+drop policy if exists "gym coaches manage program_template_exercises" on program_template_exercises;
 create policy "gym coaches manage program_template_exercises"
   on program_template_exercises for all
   using (
@@ -194,25 +212,28 @@ create policy "gym coaches manage program_template_exercises"
   );
 
 -- ============ education_courses + modules + lessons ============
-alter table education_courses add column gym_id uuid references gyms(id);
+alter table education_courses add column if not exists gym_id uuid references gyms(id);
 update education_courses set gym_id = (select gym_id from profiles where id = education_courses.coach_id);
 alter table education_courses alter column gym_id set not null;
 
-drop policy "coach or own-coach's clients read education_courses" on education_courses;
-drop policy "coach manages own education_courses" on education_courses;
+drop policy if exists "coach or own-coach's clients read education_courses" on education_courses;
+drop policy if exists "coach manages own education_courses" on education_courses;
 
+drop policy if exists "gym reads education_courses" on education_courses;
 create policy "gym reads education_courses"
   on education_courses for select
   using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()));
 
+drop policy if exists "gym coaches manage education_courses" on education_courses;
 create policy "gym coaches manage education_courses"
   on education_courses for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
-drop policy "coach or own-coach's clients read education_modules" on education_modules;
-drop policy "coach manages own education_modules" on education_modules;
+drop policy if exists "coach or own-coach's clients read education_modules" on education_modules;
+drop policy if exists "coach manages own education_modules" on education_modules;
 
+drop policy if exists "gym reads education_modules" on education_modules;
 create policy "gym reads education_modules"
   on education_modules for select
   using (
@@ -223,6 +244,7 @@ create policy "gym reads education_modules"
     )
   );
 
+drop policy if exists "gym coaches manage education_modules" on education_modules;
 create policy "gym coaches manage education_modules"
   on education_modules for all
   using (
@@ -240,9 +262,10 @@ create policy "gym coaches manage education_modules"
     )
   );
 
-drop policy "coach or own-coach's clients read education_lessons" on education_lessons;
-drop policy "coach manages own education_lessons" on education_lessons;
+drop policy if exists "coach or own-coach's clients read education_lessons" on education_lessons;
+drop policy if exists "coach manages own education_lessons" on education_lessons;
 
+drop policy if exists "gym reads education_lessons" on education_lessons;
 create policy "gym reads education_lessons"
   on education_lessons for select
   using (
@@ -254,6 +277,7 @@ create policy "gym reads education_lessons"
     )
   );
 
+drop policy if exists "gym coaches manage education_lessons" on education_lessons;
 create policy "gym coaches manage education_lessons"
   on education_lessons for all
   using (
@@ -276,19 +300,21 @@ create policy "gym coaches manage education_lessons"
 -- ============ client_groups + client_group_members ============
 -- Coach-only on every operation, no client access -- unchanged in kind, just gym-wide now
 -- instead of per-coach (matches this table's existing "clients never see their groups" intent).
-alter table client_groups add column gym_id uuid references gyms(id);
+alter table client_groups add column if not exists gym_id uuid references gyms(id);
 update client_groups set gym_id = (select gym_id from profiles where id = client_groups.coach_id);
 alter table client_groups alter column gym_id set not null;
 
-drop policy "coach manages own client_groups" on client_groups;
+drop policy if exists "coach manages own client_groups" on client_groups;
 
+drop policy if exists "gym coaches manage client_groups" on client_groups;
 create policy "gym coaches manage client_groups"
   on client_groups for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
-drop policy "coach manages own client_group_members" on client_group_members;
+drop policy if exists "coach manages own client_group_members" on client_group_members;
 
+drop policy if exists "gym coaches manage client_group_members" on client_group_members;
 create policy "gym coaches manage client_group_members"
   on client_group_members for all
   using (
@@ -308,12 +334,13 @@ create policy "gym coaches manage client_group_members"
 
 -- ============ scheduled_communications ============
 -- Also coach-only, no client access -- gym-wide now.
-alter table scheduled_communications add column gym_id uuid references gyms(id);
+alter table scheduled_communications add column if not exists gym_id uuid references gyms(id);
 update scheduled_communications set gym_id = (select gym_id from profiles where id = scheduled_communications.coach_id);
 alter table scheduled_communications alter column gym_id set not null;
 
-drop policy "coach manages own scheduled_communications" on scheduled_communications;
+drop policy if exists "coach manages own scheduled_communications" on scheduled_communications;
 
+drop policy if exists "gym coaches manage scheduled_communications" on scheduled_communications;
 create policy "gym coaches manage scheduled_communications"
   on scheduled_communications for all
   using (gym_id = public.my_gym_id())

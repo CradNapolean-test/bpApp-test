@@ -8,10 +8,12 @@
 -- alongside the existing recurring membership_packages.
 
 -- ============ credits_ledger: bucket + expiry + FK provenance ============
-alter table credits_ledger add column bucket text not null default 'bonus' check (bucket in ('membership', 'bonus'));
-alter table credits_ledger add column expires_at timestamptz;
-alter table credits_ledger add column expired_at timestamptz; -- set once a sweep has clawed back (or found nothing left of) an expired grant, so it isn't reprocessed
-alter table credits_ledger add column booking_id uuid references bookings(id) on delete set null;
+-- (IF NOT EXISTS / OR REPLACE / DROP ... IF EXISTS throughout this file -- safe to re-run
+-- against a database where it's already partially or fully applied.)
+alter table credits_ledger add column if not exists bucket text not null default 'bonus' check (bucket in ('membership', 'bonus'));
+alter table credits_ledger add column if not exists expires_at timestamptz;
+alter table credits_ledger add column if not exists expired_at timestamptz; -- set once a sweep has clawed back (or found nothing left of) an expired grant, so it isn't reprocessed
+alter table credits_ledger add column if not exists booking_id uuid references bookings(id) on delete set null;
 
 -- Backfill: everything that was ever spent or replenished against the fused pool is
 -- attributed to 'membership' (the reset-managed bucket, matching how the pool has actually
@@ -29,7 +31,7 @@ where reason like 'membership reset:%'
 -- Bucketed counterpart to schema.sql's credits_balance view -- same "computed, never stored"
 -- shape, just grouped one level finer so the app can show membership vs. bonus separately
 -- without pulling a client's whole ledger history client-side to sum it.
-create view credits_balance_by_bucket
+create or replace view credits_balance_by_bucket
   with (security_invoker = true) as
   select client_id, bucket, coalesce(sum(delta), 0)::integer as balance
   from credits_ledger
@@ -40,7 +42,7 @@ create view credits_balance_by_bucket
 -- membership_packages, granting one doesn't recur or reset; it's a single ledger grant that
 -- optionally expires. Gym-scoped from the start (membership_packages only got there via
 -- 0052/0054's later migration; gyms already exist by this point).
-create table credit_packs (
+create table if not exists credit_packs (
   id uuid primary key default gen_random_uuid(),
   coach_id uuid not null references profiles(id),
   gym_id uuid not null references gyms(id),
@@ -53,16 +55,18 @@ create table credit_packs (
 
 alter table credit_packs enable row level security;
 
+drop policy if exists "gym reads credit_packs" on credit_packs;
 create policy "gym reads credit_packs"
   on credit_packs for select
   using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()));
 
+drop policy if exists "gym coaches manage credit_packs" on credit_packs;
 create policy "gym coaches manage credit_packs"
   on credit_packs for all
   using (gym_id = public.my_gym_id())
   with check (gym_id = public.my_gym_id());
 
-alter table credits_ledger add column pack_id uuid references credit_packs(id) on delete set null;
+alter table credits_ledger add column if not exists pack_id uuid references credit_packs(id) on delete set null;
 
 -- ============ book_class: split deduction across buckets ============
 -- Draws membership-bucket credits first (they reset to zero weekly regardless, so spending

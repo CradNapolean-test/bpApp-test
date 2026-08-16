@@ -12,6 +12,9 @@
 -- chat voice notes, food-photo-diary) still gate on owns_client() at the path level, so a
 -- cross-coach viewer won't see another coach's client's uploaded photos/audio yet even though
 -- the surrounding DB rows are now visible. Revisit if that turns out to matter in practice.
+--
+-- Every policy below is preceded by a DROP ... IF EXISTS -- safe to re-run against a database
+-- where this migration is already partially or fully applied.
 
 -- ============ Tables with a direct client_id column ============
 do $$
@@ -27,6 +30,7 @@ declare
   ];
 begin
   foreach t in array direct_tables loop
+    execute format('drop policy if exists %I on %I', 'same-gym coach reads ' || t, t);
     execute format(
       'create policy %I on %I for select using (public.is_same_gym_as_client(client_id))',
       'same-gym coach reads ' || t, t
@@ -38,6 +42,7 @@ end $$;
 -- Mirrors each table's existing owns_client(...) select policy shape exactly, swapping in
 -- is_same_gym_as_client(...).
 
+drop policy if exists "same-gym coach reads food_diary_entries" on food_diary_entries;
 create policy "same-gym coach reads food_diary_entries"
   on food_diary_entries for select
   using (
@@ -48,6 +53,7 @@ create policy "same-gym coach reads food_diary_entries"
     )
   );
 
+drop policy if exists "same-gym coach reads manual_macro_entries" on manual_macro_entries;
 create policy "same-gym coach reads manual_macro_entries"
   on manual_macro_entries for select
   using (
@@ -58,6 +64,7 @@ create policy "same-gym coach reads manual_macro_entries"
     )
   );
 
+drop policy if exists "same-gym coach reads food_photo_entries" on food_photo_entries;
 create policy "same-gym coach reads food_photo_entries"
   on food_photo_entries for select
   using (
@@ -68,6 +75,7 @@ create policy "same-gym coach reads food_photo_entries"
     )
   );
 
+drop policy if exists "same-gym coach reads workout_program_days" on workout_program_days;
 create policy "same-gym coach reads workout_program_days"
   on workout_program_days for select
   using (
@@ -78,6 +86,7 @@ create policy "same-gym coach reads workout_program_days"
     )
   );
 
+drop policy if exists "same-gym coach reads workout_exercises" on workout_exercises;
 create policy "same-gym coach reads workout_exercises"
   on workout_exercises for select
   using (
@@ -89,6 +98,7 @@ create policy "same-gym coach reads workout_exercises"
     )
   );
 
+drop policy if exists "same-gym coach reads recipe_ingredients" on recipe_ingredients;
 create policy "same-gym coach reads recipe_ingredients"
   on recipe_ingredients for select
   using (
@@ -99,6 +109,7 @@ create policy "same-gym coach reads recipe_ingredients"
     )
   );
 
+drop policy if exists "same-gym coach reads habit_logs" on habit_logs;
 create policy "same-gym coach reads habit_logs"
   on habit_logs for select
   using (
@@ -109,6 +120,7 @@ create policy "same-gym coach reads habit_logs"
     )
   );
 
+drop policy if exists "same-gym coach reads form_responses" on form_responses;
 create policy "same-gym coach reads form_responses"
   on form_responses for select
   using (
