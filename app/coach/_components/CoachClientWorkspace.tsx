@@ -53,6 +53,7 @@ export function CoachClientWorkspace({
   clientId,
   clientLabel,
   clientEmail,
+  isOwnClient,
   healthStatus,
   coachUnreadCount,
   coachEmail,
@@ -71,6 +72,10 @@ export function CoachClientWorkspace({
   clientId: string;
   clientLabel: string;
   clientEmail: string;
+  // False when this client is assigned to a different coach at the same gym -- viewable via
+  // "Search all clients" but read-only (see is_same_gym_as_client, 0052/0053). Mutating
+  // actions are hidden in that case; the underlying writes are RLS-blocked regardless.
+  isOwnClient: boolean;
   healthStatus: ClientHealthStatus | null;
   coachUnreadCount: number;
   coachEmail: string;
@@ -127,6 +132,12 @@ export function CoachClientWorkspace({
         )}
       </div>
 
+      {!isOwnClient && (
+        <div className="mt-3 rounded-lg border border-black/10 bg-black/[.03] px-3 py-2 text-sm text-zinc-600 dark:border-white/10 dark:bg-white/[.03] dark:text-zinc-400">
+          Viewing read-only -- this client is assigned to another coach at your gym.
+        </div>
+      )}
+
       {profile?.deletion_requested_at && (
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
           <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -152,9 +163,12 @@ export function CoachClientWorkspace({
             disabledScreens={disabledScreens}
             clientExerciseMaxes={clientExerciseMaxes}
             exerciseLibrary={exerciseLibrary}
+            readOnly={!isOwnClient}
           />
         )}
-        {activeTab === 'Notes' && <NotesTab clientId={clientId} entries={journalEntries} profile={profile} />}
+        {activeTab === 'Notes' && (
+          <NotesTab clientId={clientId} entries={journalEntries} profile={profile} readOnly={!isOwnClient} />
+        )}
         {activeTab === 'Activity' && <ActivityTab events={activity} />}
       </div>
 

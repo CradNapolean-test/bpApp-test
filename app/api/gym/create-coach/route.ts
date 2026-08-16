@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+// Mirrors app/api/coach/create-client/route.ts, one level up: a gym admin creating a new
+// coach account for their own gym instead of a coach creating a client. Gated on
+// is_gym_admin rather than role='coach' -- a plain coach can't provision other coaches.
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -15,12 +18,12 @@ export async function POST(request: Request) {
 
   const { data: callerProfile } = await supabase
     .from('profiles')
-    .select('role, gym_id')
+    .select('role, gym_id, is_gym_admin')
     .eq('id', user.id)
     .single();
 
-  if (callerProfile?.role !== 'coach') {
-    return NextResponse.json({ error: 'Only coaches can add clients' }, { status: 403 });
+  if (callerProfile?.role !== 'coach' || !callerProfile.is_gym_admin) {
+    return NextResponse.json({ error: 'Only a gym admin can add coaches' }, { status: 403 });
   }
 
   const body = await request.json();
@@ -43,29 +46,10 @@ export async function POST(request: Request) {
 
   const { error: profileError } = await admin
     .from('profiles')
-    .insert({ id: newUser.user.id, role: 'client', coach_id: user.id, email });
+    .insert({ id: newUser.user.id, role: 'coach', gym_id: callerProfile.gym_id, email });
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 400 });
   }
 
-  // Auto-assign the gym's default onboarding form, if one is set -- form_templates is
-  // gym-shared (0054), so "default" means one per gym, not per creating coach. Same admin
-  // client, bypasses RLS the same way the profiles insert above does.
-  const { data: defaultTemplate } = await admin
-    .from('form_templates')
-    .select('id, name')
-    .eq('gym_id', callerProfile.gym_id)
-    .eq('is_default_onboarding', true)
-    .maybeSingle();
-
-  if (defaultTemplate) {
-    await admin
-      .from('form_assignments')
-      .insert({ template_id: defaultTemplate.id, client_id: newUser.user.id });
-    await admin
-      .from('notifications')
-      .insert({ client_id: newUser.user.id, message: `Welcome! Please fill out: ${defaultTemplate.name}` });
-  }
-
-  return NextResponse.json({ email, password, clientId: newUser.user.id });
+  return NextResponse.json({ email, password, coachId: newUser.user.id });
 }

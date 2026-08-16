@@ -24,6 +24,26 @@ export async function createLibraryExercise(
   if (error) raise(error);
 }
 
+// Bulk-inserts an imported CSV in one round trip rather than looping createLibraryExercise --
+// same shape, just N rows at once. Returns the count actually inserted so the importing UI can
+// report it without a second read.
+export async function bulkCreateLibraryExercises(
+  rows: Omit<ExerciseLibraryRow, 'id' | 'created_by' | 'created_at'>[]
+): Promise<number> {
+  if (rows.length === 0) return 0;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('exercise_library')
+    .insert(rows.map((fields) => ({ ...fields, created_by: user.id })));
+  if (error) raise(error);
+  return rows.length;
+}
+
 export async function updateLibraryExercise(
   id: string,
   fields: Partial<Omit<ExerciseLibraryRow, 'id' | 'created_by' | 'created_at'>>

@@ -25,13 +25,18 @@ export default async function CoachClientPage({
     .single();
   if (callerProfile?.role !== 'coach') redirect('/dashboard');
 
+  // Not restricted to coach_id = user.id -- RLS (is_same_gym_as_client, 0052/0053) now also
+  // lets a coach read a colleague's client at the same gym. isCoachView already renders most
+  // of this dashboard read-only for ANY coach viewing it (see readOnly={isCoachView} below);
+  // isOwnClient narrows the few coach-action affordances that aren't already covered by that.
   const { data: targetProfile } = await supabase
     .from('profiles')
-    .select('email')
+    .select('email, coach_id')
     .eq('id', clientId)
-    .eq('coach_id', user.id)
+    .eq('role', 'client')
     .maybeSingle();
   if (!targetProfile) redirect('/coach');
+  const isOwnClient = targetProfile.coach_id === user.id;
 
   const [bundle, healthStatuses, chatOverview, journalEntries] = await Promise.all([
     loadDashboardBundle(clientId, false),
@@ -50,6 +55,7 @@ export default async function CoachClientPage({
       clientId={clientId}
       clientLabel={bundle.profile?.name ?? targetProfile.email}
       isCoachView={true}
+      isOwnClient={isOwnClient}
       healthStatus={healthStatus}
       coachUnreadCount={coachUnreadCount}
       perClientUnreadCount={perClientUnreadCount}
@@ -73,6 +79,7 @@ export default async function CoachClientPage({
       bookings={bundle.bookings}
       occurrences={bundle.occurrences}
       creditsBalance={bundle.creditsBalance}
+      creditsBuckets={bundle.creditsBuckets}
       creditsLedger={bundle.creditsLedger}
       programs={bundle.programs}
       workoutLogs={bundle.workoutLogs}
@@ -80,6 +87,7 @@ export default async function CoachClientPage({
       workoutDayFeedback={bundle.workoutDayFeedback}
       membership={bundle.membership}
       packages={bundle.packages}
+      creditPacks={bundle.creditPacks}
       photos={bundle.photos}
       measurementLogs={bundle.measurementLogs}
       habits={bundle.habits}

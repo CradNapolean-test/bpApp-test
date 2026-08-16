@@ -16,9 +16,11 @@ import { SignOutButton } from '@/app/_components/SignOutButton';
 import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
 import { CoachProfileForm } from './CoachProfileForm';
 import { DefaultCheckinReminderForm } from './DefaultCheckinReminderForm';
+import { GymAdminSection } from './GymAdminSection';
 import type { ThemePreference } from '@/app/_components/theme';
+import type { GymCoachRow } from '@/lib/data/gym';
 
-type RowKey = 'password' | 'email' | 'profile' | 'notifications';
+type RowKey = 'password' | 'email' | 'profile' | 'notifications' | 'gym';
 
 export function CoachSettingsShell({
   email,
@@ -26,12 +28,20 @@ export function CoachSettingsShell({
   displayName,
   defaultCheckinReminderDays,
   unreadCount,
+  isGymAdmin = false,
+  gymName = '',
+  gymRoster = [],
+  currentUserId = '',
 }: {
   email: string;
   themePreference: ThemePreference;
   displayName: string | null;
   defaultCheckinReminderDays: number;
   unreadCount: number;
+  isGymAdmin?: boolean;
+  gymName?: string;
+  gymRoster?: GymCoachRow[];
+  currentUserId?: string;
 }) {
   const [openRow, setOpenRow] = useState<RowKey | null>(null);
   const logoUrl = useCoachLogoUrl();
@@ -91,6 +101,12 @@ export function CoachSettingsShell({
             <span className="font-semibold text-black dark:text-zinc-50">Notification preferences</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
           </button>
+          {isGymAdmin && (
+            <button type="button" onClick={() => setOpenRow(openRow === 'gym' ? null : 'gym')} className={rowCls}>
+              <span className="font-semibold text-black dark:text-zinc-50">Gym</span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+            </button>
+          )}
         </div>
 
         {openRow === 'password' && (
@@ -117,6 +133,12 @@ export function CoachSettingsShell({
             <p className="mt-1 text-xs text-zinc-500">
               Per-channel notification controls aren&apos;t available yet — every alert type is on by default.
             </p>
+          </div>
+        )}
+
+        {isGymAdmin && openRow === 'gym' && (
+          <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+            <GymAdminSection gymName={gymName} roster={gymRoster} currentUserId={currentUserId} />
           </div>
         )}
 

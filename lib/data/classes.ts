@@ -2,18 +2,26 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
-import { resolveScopingCoachId } from './coach';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
-import type { AttendanceStatus, BookingRow, ClassRow, CreditsLedgerRow, RosterEntry, ScheduleOccurrence } from './types';
+import type {
+  AttendanceStatus,
+  BookingRow,
+  ClassRow,
+  CreditBucketBalances,
+  CreditsLedgerRow,
+  RosterEntry,
+  ScheduleOccurrence,
+} from './types';
 
 export async function getClasses(): Promise<ClassRow[]> {
   const supabase = await createClient();
-  const coachId = await resolveScopingCoachId(supabase);
+  const gymId = await resolveScopingGymId(supabase);
   const { data, error } = await supabase
     .from('classes')
     .select('*')
-    .eq('coach_id', coachId)
+    .eq('gym_id', gymId)
     .order('day_of_week')
     .order('start_time');
   if (error) raise(error);
@@ -21,15 +29,16 @@ export async function getClasses(): Promise<ClassRow[]> {
 }
 
 export async function createClass(
-  fields: Omit<ClassRow, 'id' | 'coach_id' | 'linked_day_position'>
+  fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'linked_day_position'>
 ): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
-  const { error } = await supabase.from('classes').insert({ ...fields, coach_id: user.id });
+  const { error } = await supabase.from('classes').insert({ ...fields, coach_id: user.id, gym_id: gymId });
   if (error) raise(error);
 }
 
@@ -39,7 +48,7 @@ export async function createClass(
 // afterward per-row (see updateClass), since it's usually decided once the workout program
 // structure exists, not while first setting up the class schedule.
 export async function createClasses(
-  shared: Omit<ClassRow, 'id' | 'coach_id' | 'day_of_week' | 'start_time' | 'linked_day_position'>,
+  shared: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'day_of_week' | 'start_time' | 'linked_day_position'>,
   occurrences: { day_of_week: number; start_time: string }[]
 ): Promise<void> {
   const supabase = await createClient();
@@ -47,8 +56,9 @@ export async function createClasses(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
-  const rows = occurrences.map((occ) => ({ ...shared, ...occ, coach_id: user.id }));
+  const rows = occurrences.map((occ) => ({ ...shared, ...occ, coach_id: user.id, gym_id: gymId }));
   const { error } = await supabase.from('classes').insert(rows);
   if (error) raise(error);
 }
@@ -110,6 +120,25 @@ export async function getCreditsBalance(clientId: string): Promise<number> {
   return data?.balance ?? 0;
 }
 
+// Per-bucket split of the same total credits_balance sums -- 'membership' resets to the
+// package amount weekly and is spent first; 'bonus' (manual grants + credit packs) carries
+// over and can expire. Two small queries rather than one grouped one: credits_ledger rows
+// aren't worth fetching in full just to sum client-side, and this stays a straight mirror of
+// getCreditsBalance's own shape.
+export async function getCreditsBucketBalances(clientId: string): Promise<CreditBucketBalances> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('credits_balance_by_bucket')
+    .select('bucket, balance')
+    .eq('client_id', clientId);
+  if (error) raise(error);
+  const balances: CreditBucketBalances = { membership: 0, bonus: 0 };
+  for (const row of data ?? []) {
+    balances[row.bucket as 'membership' | 'bonus'] = row.balance;
+  }
+  return balances;
+}
+
 export async function getCreditsLedger(clientId: string): Promise<CreditsLedgerRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -121,7 +150,14 @@ export async function getCreditsLedger(clientId: string): Promise<CreditsLedgerR
   return data ?? [];
 }
 
-export async function grantCredits(clientId: string, delta: number, reason: string): Promise<void> {
+// Always writes to the 'bonus' bucket (the column default) -- manual grants are never the
+// reset-managed 'membership' bucket, which only replenish_due_memberships writes to.
+export async function grantCredits(
+  clientId: string,
+  delta: number,
+  reason: string,
+  expiresAt?: string | null
+): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -130,22 +166,22 @@ export async function grantCredits(clientId: string, delta: number, reason: stri
 
   const { error } = await supabase
     .from('credits_ledger')
-    .insert({ client_id: clientId, delta, reason, granted_by: user.id });
+    .insert({ client_id: clientId, delta, reason, granted_by: user.id, expires_at: expiresAt ?? null });
   if (error) raise(error);
 }
 
 // Upcoming occurrences of every recurring class (day_of_week-based, not stored as
 // individual rows), merged with how many are already booked. Called by both the coach
-// (Take Attendance) and clients (booking calendar) -- resolveScopingCoachId figures out
-// which coach's classes apply either way.
+// (Take Attendance) and clients (booking calendar) -- resolveScopingGymId figures out
+// which gym's classes apply either way.
 export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
-  const coachId = await resolveScopingCoachId(supabase);
+  const gymId = await resolveScopingGymId(supabase);
 
   const { data: classes, error: classesError } = await supabase
     .from('classes')
     .select('*')
-    .eq('coach_id', coachId);
+    .eq('gym_id', gymId);
   if (classesError) raise(classesError);
 
   const occurrences: Omit<ScheduleOccurrence, 'bookedCount'>[] = [];

@@ -149,11 +149,15 @@ export function EducationTab({
   isCoachView,
   courses,
   assignments,
+  readOnly = false,
 }: {
   clientId: string;
   isCoachView: boolean;
   courses: EducationCourseWithModules[];
   assignments: EducationCourseAssignmentWithDetails[];
+  // Narrower than isCoachView -- see FormsTab's identical prop for why this can't just be
+  // isCoachView=false for a read-only cross-coach view.
+  readOnly?: boolean;
 }) {
   const { run, busy: assigning } = useAction();
   const [selectedCourse, setSelectedCourse] = useState('');
@@ -172,7 +176,7 @@ export function EducationTab({
 
   return (
     <div className="space-y-6">
-      {isCoachView && (
+      {isCoachView && !readOnly && (
         <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Assign a course</h3>
           <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">

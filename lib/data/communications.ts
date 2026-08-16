@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import { messageToHtml, sendBroadcastEmail, subjectFromMessage } from '@/lib/email';
 import type { ScheduledCommunicationRow } from './types';
@@ -34,6 +35,7 @@ export async function composeCommunication(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
   const sendImmediately = new Date(sendAt).getTime() <= Date.now();
 
@@ -41,6 +43,7 @@ export async function composeCommunication(
     .from('scheduled_communications')
     .insert({
       coach_id: user.id,
+      gym_id: gymId,
       message,
       target_type: target.type,
       target_group_id: target.type === 'group' ? target.groupId : null,

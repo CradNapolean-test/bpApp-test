@@ -17,6 +17,7 @@ export function ChatTab({
   initialMessages,
   currentUserId,
   otherPartyName = 'Them',
+  readOnly = false,
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -24,6 +25,10 @@ export function ChatTab({
   // Shown on the other party's message avatars -- the client's name (coach's view) or
   // "Your coach" (client's own view), since this component doesn't otherwise know names.
   otherPartyName?: string;
+  // Hides the composer -- a coach viewing a colleague's client read-only can still see the
+  // thread, but sendMessage would fail RLS (owns_client) anyway since they aren't the
+  // assigned coach.
+  readOnly?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState('');
@@ -148,24 +153,26 @@ export function ChatTab({
         })}
         <div ref={bottomRef} />
       </div>
-      <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-black/[.05] p-3 dark:border-white/10">
-        <VoiceRecorder onRecorded={handleVoiceNote} disabled={sending} />
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Message…"
-          className="flex-1 rounded-full border border-black/[.05] bg-black/[.02] px-4 py-2.5 text-sm dark:border-white/10 dark:bg-white/[.03]"
-        />
-        <button
-          type="submit"
-          disabled={sending || !text.trim()}
-          aria-label="Send"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm disabled:opacity-50"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </form>
+      {!readOnly && (
+        <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-black/[.05] p-3 dark:border-white/10">
+          <VoiceRecorder onRecorded={handleVoiceNote} disabled={sending} />
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Message…"
+            className="flex-1 rounded-full border border-black/[.05] bg-black/[.02] px-4 py-2.5 text-sm dark:border-white/10 dark:bg-white/[.03]"
+          />
+          <button
+            type="submit"
+            disabled={sending || !text.trim()}
+            aria-label="Send"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

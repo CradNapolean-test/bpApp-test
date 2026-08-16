@@ -1,26 +1,25 @@
 'use server';
 
 import { raise } from './errors';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientGroupWithMembers } from './types';
 
 export async function getGroups(): Promise<ClientGroupWithMembers[]> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
   const { data, error } = await supabase
     .from('client_groups')
     .select('*, client_group_members(client_id)')
-    .eq('coach_id', user.id)
+    .eq('gym_id', gymId)
     .order('created_at');
   if (error) raise(error);
 
   return (data ?? []).map((row) => ({
     id: row.id,
     coach_id: row.coach_id,
+    gym_id: row.gym_id,
     name: row.name,
     created_at: row.created_at,
     memberIds: (row.client_group_members as { client_id: string }[]).map((m) => m.client_id),
@@ -33,8 +32,9 @@ export async function createGroup(name: string): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
-  const { error } = await supabase.from('client_groups').insert({ coach_id: user.id, name });
+  const { error } = await supabase.from('client_groups').insert({ coach_id: user.id, gym_id: gymId, name });
   if (error) raise(error);
 }
 

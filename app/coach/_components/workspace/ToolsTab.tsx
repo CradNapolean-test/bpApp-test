@@ -75,7 +75,17 @@ function TestedMaxesCard({ maxes, library }: { maxes: ClientExerciseMaxRow[]; li
   );
 }
 
-function ToolRow({ clientId, screen, initialEnabled }: { clientId: string; screen: Screen; initialEnabled: boolean }) {
+function ToolRow({
+  clientId,
+  screen,
+  initialEnabled,
+  readOnly,
+}: {
+  clientId: string;
+  screen: Screen;
+  initialEnabled: boolean;
+  readOnly: boolean;
+}) {
   const { run, busy } = useAction();
   const [enabled, setEnabled] = useState(initialEnabled);
 
@@ -92,7 +102,7 @@ function ToolRow({ clientId, screen, initialEnabled }: { clientId: string; scree
         role="switch"
         aria-checked={enabled}
         aria-label={`Toggle ${screen}`}
-        disabled={busy}
+        disabled={busy || readOnly}
         onClick={handleToggle}
         className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
           enabled ? 'bg-accent' : 'bg-black/15 dark:bg-white/15'
@@ -118,23 +128,31 @@ export function ToolsTab({
   disabledScreens,
   clientExerciseMaxes,
   exerciseLibrary,
+  readOnly = false,
 }: {
   clientId: string;
   disabledScreens: string[];
   clientExerciseMaxes: ClientExerciseMaxRow[];
   exerciseLibrary: ExerciseLibraryRow[];
+  readOnly?: boolean;
 }) {
   const disabledSet = new Set(disabledScreens);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <GrantCreditsCard clientId={clientId} />
+        {!readOnly && <GrantCreditsCard clientId={clientId} />}
         <TestedMaxesCard maxes={clientExerciseMaxes} library={exerciseLibrary} />
       </div>
       <div className="space-y-2">
         {DISABLEABLE_SCREENS.map((screen) => (
-          <ToolRow key={screen} clientId={clientId} screen={screen} initialEnabled={!disabledSet.has(screen)} />
+          <ToolRow
+            key={screen}
+            clientId={clientId}
+            screen={screen}
+            initialEnabled={!disabledSet.has(screen)}
+            readOnly={readOnly}
+          />
         ))}
       </div>
     </div>

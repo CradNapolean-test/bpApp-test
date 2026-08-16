@@ -22,6 +22,19 @@ export async function resolveScopingCoachId(supabase: SupabaseClient): Promise<s
   return profile.role === 'coach' ? user.id : (profile.coach_id as string);
 }
 
+// Same idea as resolveScopingCoachId, but for the gym-shared tables (classes,
+// membership_packages, form_templates, program_templates, education_courses, client_groups,
+// scheduled_communications) -- a coach's own gym_id, or their coach's gym_id if the caller is
+// a client. Calls the my_scoping_gym_id() RPC (0052) rather than a plain embedded select --
+// profiles' select policies don't cover "my own coach's row" for a client caller (the opposite
+// direction from is_coach_of/owns_client), so a client-side embed would silently come back
+// null under RLS. Mirrors get_my_coach_display_name's exact reasoning (0042).
+export async function resolveScopingGymId(supabase: SupabaseClient): Promise<string> {
+  const { data, error } = await supabase.rpc('my_scoping_gym_id');
+  if (error) raise(error);
+  return data as string;
+}
+
 export interface CoachClientRow {
   id: string;
   email: string;
@@ -30,6 +43,51 @@ export interface CoachClientRow {
   goal_weight: number | null;
   balance: number;
   deletion_requested_at: string | null;
+}
+
+export interface GymClientRow extends CoachClientRow {
+  coachId: string;
+  coachName: string;
+  isOwnClient: boolean;
+}
+
+// Every client at the coach's gym, regardless of which coach they're assigned to -- read-only
+// cross-coach search (see is_same_gym_as_client RLS, 0052/0053). Renders through the same
+// ClientTable component as getMyClients; the coachName/isOwnClient fields let the UI attribute
+// each row and gate mutating actions to the client's actual assigned coach.
+export async function searchGymClients(
+  supabase: SupabaseClient,
+  gymId: string,
+  myCoachId: string
+): Promise<GymClientRow[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(
+      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at), credits_balance(balance), coach:coach_id!inner(id, email, display_name, gym_id)'
+    )
+    .eq('role', 'client')
+    .eq('coach.gym_id', gymId)
+    .order('created_at', { ascending: false });
+
+  if (error) raise(error);
+
+  return (data ?? []).map((row) => {
+    const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
+    const balanceRow = Array.isArray(row.credits_balance) ? row.credits_balance[0] : row.credits_balance;
+    const coach = Array.isArray(row.coach) ? row.coach[0] : row.coach;
+    return {
+      id: row.id,
+      email: row.email,
+      name: profile?.name ?? null,
+      start_weight: profile?.start_weight ?? null,
+      goal_weight: profile?.goal_weight ?? null,
+      balance: balanceRow?.balance ?? 0,
+      deletion_requested_at: profile?.deletion_requested_at ?? null,
+      coachId: coach?.id ?? '',
+      coachName: coach?.display_name ?? coach?.email ?? 'Unknown coach',
+      isOwnClient: coach?.id === myCoachId,
+    };
+  });
 }
 
 export async function getMyClients(

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
     "create-coach": "tsx scripts/create-coach.ts",
+    "create-gym": "tsx scripts/create-gym.ts",
     "seed-demo-history": "tsx scripts/seed-demo-history.ts"
   },
   "dependencies": {

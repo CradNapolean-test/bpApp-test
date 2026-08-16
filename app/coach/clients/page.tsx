@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getClientHealthStatuses, getMyClients } from '@/lib/data/coach';
+import { getClientHealthStatuses, getMyClients, searchGymClients } from '@/lib/data/coach';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getGroups } from '@/lib/data/clientGroups';
 import { AppShell } from '@/app/_components/AppShell';
@@ -9,6 +9,7 @@ import { CoachBottomTabBar } from '../_components/CoachBottomTabBar';
 import { CoachBrand } from '../_components/CoachBrand';
 import { CoachHeaderExtras } from '../_components/CoachHeaderExtras';
 import { AddClientButton } from '../_components/AddClientButton';
+import { ImportClientsButton } from '../_components/ImportClientsButton';
 import { ClientTable } from '../_components/ClientTable';
 
 export default async function CoachClientsPage() {
@@ -18,11 +19,17 @@ export default async function CoachClientsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, gym_id, gym:gym_id(name)')
+    .eq('id', user.id)
+    .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
+  const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
-  const [clients, healthStatuses, chatOverview, groups] = await Promise.all([
+  const [clients, gymClients, healthStatuses, chatOverview, groups] = await Promise.all([
     getMyClients(supabase, user.id),
+    searchGymClients(supabase, profile.gym_id, user.id),
     getClientHealthStatuses(supabase, user.id),
     getCoachChatOverview(),
     getGroups(),
@@ -38,10 +45,19 @@ export default async function CoachClientsPage() {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-black dark:text-zinc-50">Clients</h1>
-        <AddClientButton />
+        <div className="flex items-center gap-2">
+          <ImportClientsButton />
+          <AddClientButton />
+        </div>
       </div>
       <div className="mt-4">
-        <ClientTable clients={clients} statuses={healthStatuses} groups={groups} />
+        <ClientTable
+          clients={clients}
+          gymClients={gymClients}
+          gymName={gym?.name ?? 'your gym'}
+          statuses={healthStatuses}
+          groups={groups}
+        />
       </div>
     </AppShell>
   );

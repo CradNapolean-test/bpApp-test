@@ -1,14 +1,16 @@
-import type { ClientMembershipRow, CreditsLedgerRow } from '@/lib/data/types';
+import type { ClientMembershipRow, CreditBucketBalances, CreditsLedgerRow } from '@/lib/data/types';
 
 // Client-facing "view my balance & history" screen -- distinct from CreditsTab.tsx, which is
 // a coach-admin panel (grant credits, assign a package, set reminder thresholds) never meant
 // for a client to see directly.
 export function ClientCreditsTab({
   creditsBalance,
+  creditsBuckets,
   membership,
   ledger,
 }: {
   creditsBalance: number;
+  creditsBuckets: CreditBucketBalances;
   membership: ClientMembershipRow | null;
   ledger: CreditsLedgerRow[];
 }) {
@@ -18,6 +20,9 @@ export function ClientCreditsTab({
         <p className="text-xs opacity-85">Current balance</p>
         <p className="mt-0.5 text-3xl font-extrabold">
           {creditsBalance} credit{creditsBalance === 1 ? '' : 's'}
+        </p>
+        <p className="mt-1 text-xs opacity-80">
+          {creditsBuckets.membership} membership · {creditsBuckets.bonus} bonus
         </p>
         {membership?.package && (
           <p className="mt-1.5 text-xs opacity-90">
@@ -38,7 +43,12 @@ export function ClientCreditsTab({
             >
               <div>
                 <p className="text-sm font-semibold text-black dark:text-zinc-50">{entry.reason}</p>
-                <p className="mt-0.5 text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString()}</p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  {new Date(entry.created_at).toLocaleDateString()}
+                  {entry.expires_at && !entry.expired_at
+                    ? ` · expires ${new Date(entry.expires_at).toLocaleDateString()}`
+                    : ''}
+                </p>
               </div>
               <p className={`text-sm font-bold ${entry.delta >= 0 ? 'text-success' : 'text-danger'}`}>
                 {entry.delta > 0 ? '+' : ''}

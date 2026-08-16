@@ -12,14 +12,21 @@ function parseArgs() {
     })
   );
   if (!args.email) {
-    console.error('Usage: npm run create-coach -- --email=coach@example.com [--password=...]');
+    console.error(
+      'Usage: npm run create-coach -- --email=coach@example.com [--password=...] [--gym=<gym id>] [--admin]'
+    );
     process.exit(1);
   }
-  return { email: args.email as string, password: (args.password as string) || randomBytes(9).toString('base64url') };
+  return {
+    email: args.email as string,
+    password: (args.password as string) || randomBytes(9).toString('base64url'),
+    gymId: (args.gym as string) || null,
+    isAdmin: 'admin' in args,
+  };
 }
 
 async function main() {
-  const { email, password } = parseArgs();
+  const { email, password, gymId, isAdmin } = parseArgs();
   const supabase = createAdminClient();
 
   const { data: userData, error: userError } = await supabase.auth.admin.createUser({
@@ -31,12 +38,14 @@ async function main() {
 
   const { error: profileError } = await supabase
     .from('profiles')
-    .insert({ id: userData.user.id, role: 'coach', email });
+    .insert({ id: userData.user.id, role: 'coach', email, gym_id: gymId, is_gym_admin: isAdmin });
   if (profileError) throw profileError;
 
   console.log('Coach account created:');
   console.log(`  email:    ${email}`);
   console.log(`  password: ${password}`);
+  if (gymId) console.log(`  gym:      ${gymId}${isAdmin ? ' (admin)' : ''}`);
+  else console.log('  gym:      none -- pass --gym=<id> (see scripts/create-gym.ts) to attach one');
   console.log('Log in at /login and change the password afterward if it was auto-generated.');
 }
 

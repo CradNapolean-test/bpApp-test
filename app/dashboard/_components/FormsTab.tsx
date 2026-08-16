@@ -142,11 +142,16 @@ export function FormsTab({
   isCoachView,
   templates,
   assignments,
+  readOnly = false,
 }: {
   clientId: string;
   isCoachView: boolean;
   templates: FormTemplateRow[];
   assignments: FormAssignmentWithDetails[];
+  // Narrower than isCoachView: hides just the "Assign a form" action for a coach viewing a
+  // colleague's client read-only, while keeping the coach-style summary rendering (as opposed
+  // to isCoachView=false, which would switch this to the client's own fill-out UI).
+  readOnly?: boolean;
 }) {
   const { run, busy: assigning } = useAction();
   const [selectedTemplate, setSelectedTemplate] = useState('');
@@ -166,7 +171,7 @@ export function FormsTab({
 
   return (
     <div className="space-y-6">
-      {isCoachView && (
+      {isCoachView && !readOnly && (
         <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Assign a form</h3>
           <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">

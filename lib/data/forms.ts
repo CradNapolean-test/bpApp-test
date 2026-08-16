@@ -2,7 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
-import { resolveScopingCoachId } from './coach';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
 
@@ -11,11 +11,11 @@ type TemplateFields = { name: string; description: string | null; is_default_onb
 
 export async function getFormTemplates(): Promise<FormTemplateRow[]> {
   const supabase = await createClient();
-  const coachId = await resolveScopingCoachId(supabase);
+  const gymId = await resolveScopingGymId(supabase);
   const { data, error } = await supabase
     .from('form_templates')
     .select('*, form_questions(count)')
-    .eq('coach_id', coachId)
+    .eq('gym_id', gymId)
     .order('created_at');
   if (error) raise(error);
   return (data ?? []).map((row) => {
@@ -42,19 +42,22 @@ export async function createFormTemplate(fields: TemplateFields, questions: Ques
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
+  // At most one default onboarding form per gym (0054's unique index) -- clearing by gym_id,
+  // not coach_id, so a second coach setting their own default correctly unsets the first's.
   if (fields.is_default_onboarding) {
     const { error: clearError } = await supabase
       .from('form_templates')
       .update({ is_default_onboarding: false })
-      .eq('coach_id', user.id)
+      .eq('gym_id', gymId)
       .eq('is_default_onboarding', true);
     if (clearError) raise(clearError);
   }
 
   const { data: template, error } = await supabase
     .from('form_templates')
-    .insert({ ...fields, coach_id: user.id })
+    .insert({ ...fields, coach_id: user.id, gym_id: gymId })
     .select()
     .single();
   if (error) raise(error);
@@ -77,12 +80,13 @@ export async function updateFormTemplate(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
   if (fields.is_default_onboarding) {
     const { error: clearError } = await supabase
       .from('form_templates')
       .update({ is_default_onboarding: false })
-      .eq('coach_id', user.id)
+      .eq('gym_id', gymId)
       .eq('is_default_onboarding', true)
       .neq('id', templateId);
     if (clearError) raise(clearError);

@@ -9,11 +9,17 @@ import { getMealPlanEntries } from './mealPlan';
 import { getMealSections, getOrCreateMealSections } from './mealSections';
 import { getActivities } from './foods';
 import { getClientUnreadCount, getMessages } from './chat';
-import { getCreditsBalance, getCreditsLedger, getScheduleOccurrences, getUpcomingBookings } from './classes';
+import {
+  getCreditsBalance,
+  getCreditsBucketBalances,
+  getCreditsLedger,
+  getScheduleOccurrences,
+  getUpcomingBookings,
+} from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getClientExerciseMaxes } from './clientExerciseMaxes';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
-import { getMyMembership, getPackages } from './memberships';
+import { getCreditPacks, getMyMembership, getPackages } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getHabitsWithLogs } from './habits';
 import { getUnreadNotifications } from './notifications';
@@ -52,6 +58,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bookings,
     occurrences,
     creditsBalance,
+    creditsBuckets,
     creditsLedger,
     programs,
     workoutLogs,
@@ -59,6 +66,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     workoutDayFeedback,
     membership,
     packages,
+    creditPacks,
     photos,
     measurementLogs,
     habits,
@@ -83,6 +91,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getUpcomingBookings(clientId),
     getScheduleOccurrences(),
     getCreditsBalance(clientId),
+    getCreditsBucketBalances(clientId),
     getCreditsLedger(clientId),
     getPrograms(clientId),
     getWorkoutLogs(clientId),
@@ -90,6 +99,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getWorkoutDayFeedback(clientId),
     getMyMembership(clientId),
     getPackages(),
+    getCreditPacks(),
     getPhotos(clientId),
     getMeasurementLogs(clientId),
     getHabitsWithLogs(clientId, profile?.timezone ?? DEFAULT_TIMEZONE),
@@ -131,6 +141,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bookings,
     occurrences,
     creditsBalance,
+    creditsBuckets,
     creditsLedger,
     programs,
     workoutLogs,
@@ -138,6 +149,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     workoutDayFeedback,
     membership,
     packages,
+    creditPacks,
     photos,
     measurementLogs,
     habits,

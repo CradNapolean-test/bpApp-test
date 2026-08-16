@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   // sent_at once a row is "due") and not yet processed for email specifically.
   const { data: dueEmails, error: dueError } = await admin
     .from('scheduled_communications')
-    .select('id, coach_id, message, target_type, target_group_id')
+    .select('id, coach_id, gym_id, message, target_type, target_group_id')
     .in('channel', ['email', 'both'])
     .is('email_sent_at', null)
     .not('sent_at', 'is', null);
@@ -38,7 +38,14 @@ export async function GET(request: Request) {
   for (const comm of dueEmails ?? []) {
     let clientIds: string[] = [];
     if (comm.target_type === 'all_clients') {
-      const { data: clients } = await admin.from('profiles').select('id').eq('coach_id', comm.coach_id);
+      // Gym-wide, not just the sending coach's own roster -- scheduled_communications is
+      // gym-shared (0054), matches send_due_communications' RPC resolution for the message
+      // channel above.
+      const { data: coaches } = await admin.from('profiles').select('id').eq('role', 'coach').eq('gym_id', comm.gym_id);
+      const coachIds = (coaches ?? []).map((c) => c.id);
+      const { data: clients } = coachIds.length
+        ? await admin.from('profiles').select('id').in('coach_id', coachIds)
+        : { data: [] };
       clientIds = (clients ?? []).map((c) => c.id);
     } else if (comm.target_group_id) {
       const { data: members } = await admin

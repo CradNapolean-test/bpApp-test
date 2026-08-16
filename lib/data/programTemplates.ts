@@ -2,17 +2,23 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
-import { resolveScopingCoachId } from './coach';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
-import type { ProgramTemplateDayRow, ProgramTemplateExerciseRow, ProgramTemplateRow, ProgramTemplateWithDays } from './types';
+import type { TemplateExport, TemplateExportDay, TemplateExportExercise } from './templateTransfer';
+import type {
+  ProgramTemplateDayRow,
+  ProgramTemplateExerciseRow,
+  ProgramTemplateRow,
+  ProgramTemplateWithDays,
+} from './types';
 
 export async function getProgramTemplates(): Promise<ProgramTemplateRow[]> {
   const supabase = await createClient();
-  const coachId = await resolveScopingCoachId(supabase);
+  const gymId = await resolveScopingGymId(supabase);
   const { data, error } = await supabase
     .from('program_templates')
     .select('*')
-    .eq('coach_id', coachId)
+    .eq('gym_id', gymId)
     .order('created_at');
   if (error) raise(error);
   return data ?? [];
@@ -20,11 +26,11 @@ export async function getProgramTemplates(): Promise<ProgramTemplateRow[]> {
 
 export async function getProgramTemplatesWithDays(): Promise<ProgramTemplateWithDays[]> {
   const supabase = await createClient();
-  const coachId = await resolveScopingCoachId(supabase);
+  const gymId = await resolveScopingGymId(supabase);
   const { data, error } = await supabase
     .from('program_templates')
     .select('*, program_template_days(*, program_template_exercises(*))')
-    .eq('coach_id', coachId)
+    .eq('gym_id', gymId)
     .order('created_at');
   if (error) raise(error);
   return (data ?? []) as unknown as ProgramTemplateWithDays[];
@@ -47,8 +53,9 @@ export async function createProgramTemplate(name: string): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
-  const { error } = await supabase.from('program_templates').insert({ coach_id: user.id, name });
+  const { error } = await supabase.from('program_templates').insert({ coach_id: user.id, gym_id: gymId, name });
   if (error) raise(error);
 }
 
@@ -199,6 +206,115 @@ export async function duplicateProgramTemplate(templateId: string, newName: stri
     p_new_name: newName,
   });
   return error ? fail(error, 'Could not duplicate that template') : ok();
+}
+
+// Structural validation for an uploaded file's parsed JSON -- this crossed a trust boundary
+// (a coach's local file), so it gets checked field-by-field rather than just cast, unlike
+// every other function here which trusts its own UI's typed callers.
+function validateTemplateExport(data: unknown): TemplateExport | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  if (typeof d.name !== 'string' || !d.name.trim() || !Array.isArray(d.days)) return null;
+
+  const days: TemplateExportDay[] = [];
+  for (const rawDay of d.days) {
+    if (!rawDay || typeof rawDay !== 'object') return null;
+    const day = rawDay as Record<string, unknown>;
+    if (typeof day.week_num !== 'number' || typeof day.day_label !== 'string' || !Array.isArray(day.exercises)) {
+      return null;
+    }
+    const exercises: TemplateExportExercise[] = [];
+    for (const rawEx of day.exercises) {
+      if (!rawEx || typeof rawEx !== 'object') return null;
+      const ex = rawEx as Record<string, unknown>;
+      if (typeof ex.name !== 'string' || !ex.name.trim()) return null;
+      exercises.push({
+        name: ex.name,
+        sets: typeof ex.sets === 'number' ? ex.sets : null,
+        reps: typeof ex.reps === 'string' ? ex.reps : null,
+        load: typeof ex.load === 'number' ? ex.load : null,
+        rpe: typeof ex.rpe === 'number' ? ex.rpe : null,
+        notes: typeof ex.notes === 'string' ? ex.notes : null,
+        video_url: typeof ex.video_url === 'string' ? ex.video_url : null,
+        superset_group: typeof ex.superset_group === 'string' ? ex.superset_group : null,
+        rest_seconds: typeof ex.rest_seconds === 'number' ? ex.rest_seconds : null,
+        sort_order: typeof ex.sort_order === 'number' ? ex.sort_order : 0,
+        block_type: ex.block_type === 'circuit' ? 'circuit' : 'exercise',
+        prescription_type: ex.prescription_type === 'percent_1rm' ? 'percent_1rm' : 'absolute',
+        percent_1rm: typeof ex.percent_1rm === 'number' ? ex.percent_1rm : null,
+        progression_load_increment: typeof ex.progression_load_increment === 'number' ? ex.progression_load_increment : null,
+        progression_every_weeks: typeof ex.progression_every_weeks === 'number' ? ex.progression_every_weeks : 1,
+      });
+    }
+    days.push({
+      week_num: day.week_num,
+      day_label: day.day_label,
+      sort_order: typeof day.sort_order === 'number' ? day.sort_order : 0,
+      phase_label: typeof day.phase_label === 'string' ? day.phase_label : null,
+      notes: typeof day.notes === 'string' ? day.notes : null,
+      day_position: typeof day.day_position === 'number' ? day.day_position : null,
+      exercises,
+    });
+  }
+  return { version: 1, name: d.name, days };
+}
+
+// Recreates a template (and every day/exercise) from an exported file -- see toTemplateExport
+// for the mirrored shape. exercise_library_id is re-resolved by case/whitespace-insensitive
+// name match against the *importing* gym's current library rather than trusting any id in the
+// file (which would point at the exporting gym's library, meaningless here); exercises with no
+// match still import fine since name is always stored as free text regardless of the link.
+export async function importProgramTemplate(rawData: unknown): Promise<ActionResult> {
+  const data = validateTemplateExport(rawData);
+  if (!data) return fail(null, 'That file isn’t a recognized programme template export');
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail(null, 'Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
+
+  const { data: library, error: libraryError } = await supabase.from('exercise_library').select('id, name');
+  if (libraryError) return fail(libraryError, 'Could not load the exercise library');
+  const libraryByName = new Map((library ?? []).map((ex) => [ex.name.trim().toLowerCase(), ex.id]));
+
+  const { data: newTemplate, error: templateError } = await supabase
+    .from('program_templates')
+    .insert({ coach_id: user.id, gym_id: gymId, name: data.name })
+    .select('id')
+    .single();
+  if (templateError) return fail(templateError, 'Could not create the template');
+
+  for (const day of data.days) {
+    const { data: newDay, error: dayError } = await supabase
+      .from('program_template_days')
+      .insert({
+        template_id: newTemplate.id,
+        week_num: day.week_num,
+        day_label: day.day_label,
+        sort_order: day.sort_order,
+        phase_label: day.phase_label,
+        notes: day.notes,
+        day_position: day.day_position,
+      })
+      .select('id')
+      .single();
+    if (dayError) return fail(dayError, 'Could not import a day in that template');
+
+    if (day.exercises.length > 0) {
+      const { error: exercisesError } = await supabase.from('program_template_exercises').insert(
+        day.exercises.map((ex) => ({
+          template_day_id: newDay.id,
+          exercise_library_id: libraryByName.get(ex.name.trim().toLowerCase()) ?? null,
+          ...ex,
+        }))
+      );
+      if (exercisesError) return fail(exercisesError, 'Could not import an exercise in that template');
+    }
+  }
+
+  return ok();
 }
 
 // Copies the template into a real program for this client (snapshot, not a live reference --

@@ -22,6 +22,7 @@ function JournalSection({
   addLabel,
   placeholder,
   entries,
+  readOnly,
 }: {
   clientId: string;
   kind: ClientJournalEntryRow['kind'];
@@ -29,6 +30,7 @@ function JournalSection({
   addLabel: string;
   placeholder: string;
   entries: ClientJournalEntryRow[];
+  readOnly: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [body, setBody] = useState('');
@@ -57,15 +59,17 @@ function JournalSection({
         <h3 className="text-sm font-semibold text-black dark:text-zinc-50">
           {label} <span className="font-normal text-zinc-500">({entries.length})</span>
         </h3>
-        <button
-          onClick={() => setAdding((v) => !v)}
-          className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          {adding ? 'Cancel' : addLabel}
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+          >
+            {adding ? 'Cancel' : addLabel}
+          </button>
+        )}
       </div>
 
-      {adding && (
+      {!readOnly && adding && (
         <form onSubmit={handleAdd} className="mt-3 space-y-2">
           <textarea
             value={body}
@@ -101,13 +105,15 @@ function JournalSection({
               <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{entry.body}</p>
               <p className="mt-1 text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString()}</p>
             </div>
-            <button
-              onClick={() => handleDelete(entry.id)}
-              aria-label="Delete"
-              className="shrink-0 rounded-md p-1 text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/5"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => handleDelete(entry.id)}
+                aria-label="Delete"
+                className="shrink-0 rounded-md p-1 text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/5"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -118,7 +124,15 @@ function JournalSection({
 // Coach-only business/admin record -- distinct from the freeform journal sections below
 // (join date/referral source are single values a coach would sort/filter the roster by, not
 // a repeatable list). Never shown to the client, same as the rest of this tab.
-function AdminDetailsSection({ clientId, profile }: { clientId: string; profile: ClientProfileRow | null }) {
+function AdminDetailsSection({
+  clientId,
+  profile,
+  readOnly,
+}: {
+  clientId: string;
+  profile: ClientProfileRow | null;
+  readOnly: boolean;
+}) {
   const { run, busy } = useAction();
   const [joinDate, setJoinDate] = useState(profile?.join_date ?? '');
   const [referralSource, setReferralSource] = useState(profile?.referral_source ?? '');
@@ -149,7 +163,8 @@ function AdminDetailsSection({ clientId, profile }: { clientId: string; profile:
             type="date"
             value={joinDate}
             onChange={(e) => setJoinDate(e.target.value)}
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+            disabled={readOnly}
+            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10 disabled:opacity-60"
           />
         </div>
         <div className="space-y-1">
@@ -158,7 +173,8 @@ function AdminDetailsSection({ clientId, profile }: { clientId: string; profile:
             value={referralSource}
             onChange={(e) => setReferralSource(e.target.value)}
             placeholder="e.g. Word of mouth"
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+            disabled={readOnly}
+            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10 disabled:opacity-60"
           />
         </div>
         <div className="col-span-2 space-y-1">
@@ -168,17 +184,20 @@ function AdminDetailsSection({ clientId, profile }: { clientId: string; profile:
             onChange={(e) => setAdminNotes(e.target.value)}
             rows={2}
             placeholder="Business/admin notes -- never shown to the client"
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+            disabled={readOnly}
+            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10 disabled:opacity-60"
           />
         </div>
       </div>
-      <button
-        type="submit"
-        disabled={busy}
-        className="mt-3 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50"
-      >
-        Save
-      </button>
+      {!readOnly && (
+        <button
+          type="submit"
+          disabled={busy}
+          className="mt-3 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50"
+        >
+          Save
+        </button>
+      )}
     </form>
   );
 }
@@ -187,14 +206,16 @@ export function NotesTab({
   clientId,
   entries,
   profile,
+  readOnly = false,
 }: {
   clientId: string;
   entries: ClientJournalEntryRow[];
   profile?: ClientProfileRow | null;
+  readOnly?: boolean;
 }) {
   return (
     <div className="space-y-4">
-      {profile !== undefined && <AdminDetailsSection clientId={clientId} profile={profile} />}
+      {profile !== undefined && <AdminDetailsSection clientId={clientId} profile={profile} readOnly={readOnly} />}
       {SECTIONS.map((section) => (
         <JournalSection
           key={section.kind}
@@ -204,6 +225,7 @@ export function NotesTab({
           addLabel={section.addLabel}
           placeholder={section.placeholder}
           entries={entries.filter((e) => e.kind === section.kind)}
+          readOnly={readOnly}
         />
       ))}
     </div>

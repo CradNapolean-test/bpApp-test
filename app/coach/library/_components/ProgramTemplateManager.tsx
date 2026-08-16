@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronRight, ClipboardList } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ChevronRight, ClipboardList, Download, Upload } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
@@ -19,12 +20,21 @@ import {
   deleteTemplateExercise,
   duplicateProgramTemplate,
   duplicateTemplateDay,
+  importProgramTemplate,
   instantiateProgramTemplate,
   reorderTemplateExercises,
   updateTemplateDay,
   updateTemplateExercise,
 } from '@/lib/data/programTemplates';
+import { toTemplateExport } from '@/lib/data/templateTransfer';
+import { downloadTextFile } from '@/lib/utils/csv';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgramTemplateWithDays } from '@/lib/data/types';
+
+function exportTemplate(template: ProgramTemplateWithDays) {
+  const json = JSON.stringify(toTemplateExport(template), null, 2);
+  const slug = template.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'template';
+  downloadTextFile(`${slug}.json`, json, 'application/json');
+}
 
 function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | null }) {
   const { run } = useAction();
@@ -100,11 +110,13 @@ export function ProgramTemplateManager({
   groups: ClientGroupWithMembers[];
 }) {
   const confirm = useConfirm();
+  const toast = useToast();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate } = useAction();
   const { run: runAssignGroup, busy: assigningGroup } = useAction();
   const [assignGroupId, setAssignGroupId] = useState<Record<string, string>>({});
   const { run: runDuplicate } = useAction();
+  const { run: runImport, busy: importing } = useAction();
   const [newTemplateName, setNewTemplateName] = useState('');
   const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
   const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
@@ -112,6 +124,25 @@ export function ProgramTemplateManager({
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [addingTemplate, setAddingTemplate] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(reader.result ?? ''));
+      } catch {
+        toast.error('That file isn’t valid JSON');
+        return;
+      }
+      await runImport(() => importProgramTemplate(parsed), { success: 'Programme template imported' });
+    };
+    reader.readAsText(file);
+  }
 
   async function handleCreateTemplate(e: React.FormEvent) {
     e.preventDefault();
@@ -203,7 +234,17 @@ export function ProgramTemplateManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          disabled={importing}
+          onClick={() => importFileRef.current?.click()}
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {importing ? 'Importing…' : 'Import template'}
+        </button>
+        <input ref={importFileRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
         <button
           type="button"
           onClick={() => setAddingTemplate(true)}
@@ -270,6 +311,14 @@ export function ProgramTemplateManager({
                 </button>
                 <button
                   type="button"
+                  title="Download as a JSON file you can import into another gym"
+                  onClick={() => exportTemplate(template)}
+                  className="text-black hover:underline dark:text-zinc-50"
+                >
+                  Export
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleDeleteTemplate(template.id, template.name)}
                   className="text-danger hover:underline"
                 >
@@ -284,6 +333,10 @@ export function ProgramTemplateManager({
       {previewTemplate && (
         <FocusOverlay title={previewTemplate.name} onClose={() => setPreviewId(null)}>
           <div className="flex items-center justify-end gap-3">
+            <Button variant="ghost" size="sm" className="flex items-center gap-1" onClick={() => exportTemplate(previewTemplate)}>
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => handleDuplicate(previewTemplate.id, previewTemplate.name)}>
               Duplicate
             </Button>

@@ -12,16 +12,18 @@ import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { ClassManager } from './ClassManager';
 import { AttendanceScheduler } from './AttendanceScheduler';
 import { PackageManager } from './PackageManager';
+import { CreditPackManager } from './CreditPackManager';
 import { ReportsPane } from './ReportsPane';
-import type { ClassRow, CoachReport, MembershipPackageRow, ScheduleOccurrence } from '@/lib/data/types';
+import type { ClassRow, CoachReport, CreditPackRow, MembershipPackageRow, ScheduleOccurrence } from '@/lib/data/types';
 
-const TABS = ['Manage', 'Attendance', 'Packages', 'Reports'] as const;
+const TABS = ['Manage', 'Attendance', 'Packages', 'Credit Packs', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_PARAM: Record<string, Tab> = {
   manage: 'Manage',
   attendance: 'Attendance',
   packages: 'Packages',
+  'credit-packs': 'Credit Packs',
   reports: 'Reports',
 };
 
@@ -29,6 +31,7 @@ export function ClassesHubShell({
   initialClasses,
   occurrences,
   initialPackages,
+  initialCreditPacks,
   report,
   unreadCount,
   email,
@@ -36,6 +39,7 @@ export function ClassesHubShell({
   initialClasses: ClassRow[];
   occurrences: ScheduleOccurrence[];
   initialPackages: MembershipPackageRow[];
+  initialCreditPacks: CreditPackRow[];
   report: CoachReport;
   unreadCount: number;
   email: string;
@@ -57,6 +61,7 @@ export function ClassesHubShell({
       {tab === 'Manage' && <ClassManager initialClasses={initialClasses} />}
       {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} />}
       {tab === 'Packages' && <PackageManager initialPackages={initialPackages} />}
+      {tab === 'Credit Packs' && <CreditPackManager initialPacks={initialCreditPacks} />}
       {tab === 'Reports' && <ReportsPane report={report} />}
     </AppShell>
   );

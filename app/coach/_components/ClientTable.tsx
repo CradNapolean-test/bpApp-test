@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpDown, Search, Users } from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, Download, Search, Users } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { GroupsManager } from './GroupsManager';
-import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow } from '@/lib/data/coach';
+import { toCsv, downloadTextFile } from '@/lib/utils/csv';
+import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow, GymClientRow } from '@/lib/data/coach';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
+type Scope = 'mine' | 'gym';
 
 const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
 
@@ -24,13 +26,21 @@ const STATUS_TEXT: Record<ClientHealthBucket, { label: string; cls: string }> = 
 
 export function ClientTable({
   clients,
+  gymClients,
+  gymName,
   statuses,
   groups,
 }: {
   clients: CoachClientRow[];
+  // Every client at the gym, regardless of assigned coach -- only present when this table is
+  // used from the main Clients page (search-all-clients toggle). Omitted call sites keep the
+  // "my clients" only behavior unchanged.
+  gymClients?: GymClientRow[];
+  gymName?: string;
   statuses: ClientHealthStatus[];
   groups: ClientGroupWithMembers[];
 }) {
+  const [scope, setScope] = useState<Scope>('mine');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [asc, setAsc] = useState(true);
   const [query, setQuery] = useState('');
@@ -38,13 +48,18 @@ export function ClientTable({
   const [managingGroups, setManagingGroups] = useState(false);
   const [pendingDeletionOnly, setPendingDeletionOnly] = useState(false);
 
+  const activeClients: (CoachClientRow | GymClientRow)[] = scope === 'gym' && gymClients ? gymClients : clients;
+
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.clientId, s])), [statuses]);
-  const pendingDeletionCount = useMemo(() => clients.filter((c) => c.deletion_requested_at != null).length, [clients]);
+  const pendingDeletionCount = useMemo(
+    () => activeClients.filter((c) => c.deletion_requested_at != null).length,
+    [activeClients]
+  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const activeGroup = groupId ? groups.find((g) => g.id === groupId) : null;
-    const filteredClients = clients
+    const filteredClients = activeClients
       .filter((c) => (q ? (c.name ?? '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) : true))
       .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true))
       .filter((c) => (pendingDeletionOnly ? c.deletion_requested_at != null : true));
@@ -66,7 +81,7 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [clients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly]);
+  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setAsc((v) => !v);
@@ -76,7 +91,32 @@ export function ClientTable({
     }
   }
 
-  if (clients.length === 0) {
+  // Exports exactly what's on screen -- current search/group/scope filters and sort order --
+  // rather than the full unfiltered roster, so "export the amber clients" is just a filter
+  // click away instead of a separate flow.
+  function handleExport() {
+    const csv = toCsv(
+      ['Name', 'Email', 'Status', 'Last active', 'Days since active', 'Credits'],
+      rows.map(({ client, health }) => [
+        client.name ?? '',
+        client.email,
+        health ? STATUS_TEXT[health.status].label : STATUS_TEXT.unmonitored.label,
+        health?.lastActiveDate ?? 'Never logged',
+        health?.daysSinceActive ?? '',
+        client.balance,
+      ])
+    );
+    downloadTextFile(`clients-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8;');
+  }
+
+const scopeBtnCls = (active: boolean) =>
+  `rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+    active
+      ? 'bg-[#141414] text-white dark:bg-white dark:text-black'
+      : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
+  }`;
+
+  if (clients.length === 0 && !gymClients) {
     return (
       <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
         <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
@@ -91,6 +131,23 @@ export function ClientTable({
 
   return (
     <div className="space-y-2">
+      {gymClients && (
+        <div className="flex w-max gap-1 rounded-lg bg-black/[.03] p-1 dark:bg-white/[.05]">
+          <button onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
+            My clients
+          </button>
+          <button onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
+            Search all at {gymName}
+          </button>
+        </div>
+      )}
+      {scope === 'gym' && activeClients.length === 0 ? (
+        <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
+          <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+          <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients at this gym yet</p>
+        </div>
+      ) : (
+      <>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
@@ -119,6 +176,14 @@ export function ClientTable({
         >
           Manage groups
         </button>
+        <button
+          onClick={handleExport}
+          title="Export the clients currently shown (respects search/group/scope filters) as CSV"
+          className="flex items-center gap-1.5 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </button>
         {pendingDeletionCount > 0 && (
           <button
             onClick={() => setPendingDeletionOnly((v) => !v)}
@@ -145,6 +210,7 @@ export function ClientTable({
                 Client <ArrowUpDown className="h-3 w-3" />
               </button>
             </th>
+            {scope === 'gym' && <th className={headerCls}>Coach</th>}
             <th className={headerCls}>
               <button onClick={() => toggleSort('status')} className={sortBtn}>
                 Status <ArrowUpDown className="h-3 w-3" />
@@ -194,6 +260,11 @@ export function ClientTable({
                     </div>
                   </div>
                 </td>
+                {scope === 'gym' && (
+                  <td className="p-3 text-zinc-500">
+                    {'coachName' in client ? (client.isOwnClient ? 'You' : client.coachName) : ''}
+                  </td>
+                )}
                 <td className="p-3">
                   <span className={`font-semibold ${STATUS_TEXT[health?.status ?? 'unmonitored'].cls}`}>
                     {STATUS_TEXT[health?.status ?? 'unmonitored'].label}
@@ -214,7 +285,7 @@ export function ClientTable({
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={4} className="p-3 text-center text-zinc-500">
+              <td colSpan={scope === 'gym' ? 5 : 4} className="p-3 text-center text-zinc-500">
                 No clients match &quot;{query}&quot;.
               </td>
             </tr>
@@ -222,6 +293,8 @@ export function ClientTable({
         </tbody>
       </table>
       </div>
+      </>
+      )}
     </div>
   );
 }

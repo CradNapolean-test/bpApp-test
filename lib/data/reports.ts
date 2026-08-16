@@ -1,22 +1,24 @@
 'use server';
 
 import { raise } from './errors';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { CoachReport } from './types';
 
 const WINDOW_DAYS = 30;
 
+// Gym-wide, not just this coach's own classes -- the timetable is a single shared schedule
+// across every coach at the gym now, so a report scoped to "classes I personally created"
+// would silently exclude classes a colleague set up. A "just me" filter can be added later if
+// wanted; this matches what ClassManager/AttendanceScheduler already show.
 export async function getCoachReport(): Promise<CoachReport> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
   const { data: classes, error: classesError } = await supabase
     .from('classes')
     .select('id, name')
-    .eq('coach_id', user.id);
+    .eq('gym_id', gymId);
   if (classesError) raise(classesError);
   if (!classes || classes.length === 0) {
     return {

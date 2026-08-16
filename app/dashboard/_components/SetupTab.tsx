@@ -227,7 +227,7 @@ export function SetupTab({
                 onChange={(e) => setForm({ ...form, date_of_birth: e.target.value || null })}
               />
             </div>
-            <div className="col-span-2 space-y-1">
+            <div className="sm:col-span-2 space-y-1">
               <label className={labelCls}>Address</label>
               <input
                 className={inputCls}
@@ -276,7 +276,7 @@ export function SetupTab({
               <option>Male</option>
             </select>
           </div>
-          <div className="col-span-2 space-y-1">
+          <div className="sm:col-span-2 space-y-1">
             <label className={labelCls}>Goal description</label>
             <input
               className={inputCls}

@@ -42,6 +42,8 @@ import type {
   ClientExerciseMaxRow,
   ClientMembershipRow,
   ClientProfileRow,
+  CreditBucketBalances,
+  CreditPackRow,
   CreditsLedgerRow,
   DailyLogRow,
   EducationCourseAssignmentWithDetails,
@@ -93,6 +95,7 @@ export function DashboardShell({
   bookings,
   occurrences,
   creditsBalance,
+  creditsBuckets,
   creditsLedger,
   programs,
   workoutLogs,
@@ -100,6 +103,7 @@ export function DashboardShell({
   workoutDayFeedback,
   membership,
   packages,
+  creditPacks,
   photos,
   measurementLogs,
   habits,
@@ -117,6 +121,7 @@ export function DashboardShell({
   healthStatus = null,
   coachUnreadCount = 0,
   perClientUnreadCount = 0,
+  isOwnClient = true,
 }: {
   clientId: string;
   clientLabel: string;
@@ -140,6 +145,7 @@ export function DashboardShell({
   bookings: BookingRow[];
   occurrences: ScheduleOccurrence[];
   creditsBalance: number;
+  creditsBuckets: CreditBucketBalances;
   creditsLedger: CreditsLedgerRow[];
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
@@ -147,6 +153,7 @@ export function DashboardShell({
   workoutDayFeedback: WorkoutDayFeedbackRow[];
   membership: ClientMembershipRow | null;
   packages: MembershipPackageRow[];
+  creditPacks: CreditPackRow[];
   photos: ProgressPhoto[];
   measurementLogs: MeasurementLogRow[];
   habits: HabitWithLogs[];
@@ -165,6 +172,10 @@ export function DashboardShell({
   healthStatus?: ClientHealthStatus | null;
   coachUnreadCount?: number;
   perClientUnreadCount?: number;
+  // Only meaningful when isCoachView -- false when the viewing coach isn't this client's own
+  // assigned coach (read-only cross-gym "Search all clients" view, see 0052/0053). Defaults to
+  // true so the client's own load (which never passes this) behaves exactly as before.
+  isOwnClient?: boolean;
 }) {
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
@@ -446,6 +457,7 @@ export function DashboardShell({
               isCoachView={isCoachView}
               templates={formTemplates}
               assignments={formAssignments}
+              readOnly={isCoachView && !isOwnClient}
             />
           )}
           {effectiveScreen === 'Education' && (
@@ -454,6 +466,7 @@ export function DashboardShell({
               isCoachView={isCoachView}
               courses={educationCourses}
               assignments={educationAssignments}
+              readOnly={isCoachView && !isOwnClient}
             />
           )}
           {effectiveScreen === 'Food Tracking' && (
@@ -513,21 +526,28 @@ export function DashboardShell({
               focusDay={focusDay}
             />
           )}
-          {effectiveScreen === 'Credits' && isCoachView && (
+          {effectiveScreen === 'Credits' && isCoachView && isOwnClient && (
             <CreditsTab
               clientId={clientId}
               creditsBalance={creditsBalance}
+              creditsBuckets={creditsBuckets}
               membership={membership}
               packages={packages}
+              creditPacks={creditPacks}
               checkinReminderDays={profile?.checkin_reminder_days ?? 3}
               lastCheckinReminderAt={profile?.last_checkin_reminder_at ?? null}
             />
           )}
-          {effectiveScreen === 'Credits' && !isCoachView && (
-            <ClientCreditsTab creditsBalance={creditsBalance} membership={membership} ledger={creditsLedger} />
+          {effectiveScreen === 'Credits' && (!isCoachView || !isOwnClient) && (
+            <ClientCreditsTab
+              creditsBalance={creditsBalance}
+              creditsBuckets={creditsBuckets}
+              membership={membership}
+              ledger={creditsLedger}
+            />
           )}
           {effectiveScreen === 'Info' && isCoachView && (
-            <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} />
+            <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} readOnly={!isOwnClient} />
           )}
           {effectiveScreen === 'Notifications' && (
             <NotificationsTab notifications={notifications} />
@@ -538,6 +558,7 @@ export function DashboardShell({
               initialMessages={messages}
               currentUserId={currentUserId}
               otherPartyName={otherPartyName}
+              readOnly={isCoachView && !isOwnClient}
             />
           )}
         </>

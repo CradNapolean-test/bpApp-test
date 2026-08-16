@@ -43,6 +43,7 @@ export default async function DashboardPage() {
       bookings={bundle.bookings}
       occurrences={bundle.occurrences}
       creditsBalance={bundle.creditsBalance}
+      creditsBuckets={bundle.creditsBuckets}
       creditsLedger={bundle.creditsLedger}
       programs={bundle.programs}
       workoutLogs={bundle.workoutLogs}
@@ -50,6 +51,7 @@ export default async function DashboardPage() {
       workoutDayFeedback={bundle.workoutDayFeedback}
       membership={bundle.membership}
       packages={bundle.packages}
+      creditPacks={bundle.creditPacks}
       photos={bundle.photos}
       measurementLogs={bundle.measurementLogs}
       habits={bundle.habits}

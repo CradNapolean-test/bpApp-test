@@ -171,6 +171,7 @@ export interface ChatOverviewRow {
 export interface ClassRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   name: string;
   day_of_week: number | null;
   start_time: string | null;
@@ -197,6 +198,8 @@ export interface BookingRow {
   class: ClassRow | null;
 }
 
+export type CreditBucket = 'membership' | 'bonus';
+
 export interface CreditsLedgerRow {
   id: string;
   client_id: string;
@@ -204,6 +207,16 @@ export interface CreditsLedgerRow {
   reason: string;
   granted_by: string | null;
   created_at: string;
+  bucket: CreditBucket;
+  expires_at: string | null;
+  expired_at: string | null;
+  booking_id: string | null;
+  pack_id: string | null;
+}
+
+export interface CreditBucketBalances {
+  membership: number;
+  bonus: number;
 }
 
 export type BlockType = 'exercise' | 'circuit';
@@ -339,6 +352,7 @@ export interface ProgramTemplateDayRow {
 export interface ProgramTemplateRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   name: string;
   created_at: string;
 }
@@ -439,6 +453,7 @@ export interface CoachReport {
 export interface MembershipPackageRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   name: string;
   credits_per_week: number;
   description: string | null;
@@ -454,6 +469,17 @@ export interface ClientMembershipRow {
   last_reset_week: string | null;
   created_at: string;
   package: MembershipPackageRow | null;
+}
+
+export interface CreditPackRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  credits: number;
+  expires_after_days: number | null;
+  description: string | null;
+  created_at: string;
 }
 
 export interface ScheduleOccurrence {
@@ -483,6 +509,7 @@ export type FormQuestionType = 'short_text' | 'long_text' | 'number' | 'single_c
 export interface FormTemplateRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   name: string;
   description: string | null;
   is_default_onboarding: boolean;
@@ -550,6 +577,7 @@ export interface EducationModuleWithLessons extends EducationModuleRow {
 export interface EducationCourseRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   title: string;
   description: string | null;
   created_at: string;
@@ -601,6 +629,7 @@ export interface ActivityEventRow {
 export interface ClientGroupRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   name: string;
   created_at: string;
 }
@@ -612,6 +641,7 @@ export interface ClientGroupWithMembers extends ClientGroupRow {
 export interface ScheduledCommunicationRow {
   id: string;
   coach_id: string;
+  gym_id: string;
   message: string;
   target_type: 'group' | 'all_clients';
   target_group_id: string | null;

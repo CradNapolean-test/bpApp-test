@@ -1,14 +1,80 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Dumbbell } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Dumbbell, Download, Upload } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { MUSCLE_GROUPS } from '@/app/_components/workouts/muscleGroups';
-import { createLibraryExercise, deleteLibraryExercise, updateLibraryExercise } from '@/lib/data/exerciseLibrary';
+import {
+  bulkCreateLibraryExercises,
+  createLibraryExercise,
+  deleteLibraryExercise,
+  updateLibraryExercise,
+} from '@/lib/data/exerciseLibrary';
+import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
+
+const EXPORT_COLUMNS = [
+  'name',
+  'muscle_group',
+  'equipment',
+  'default_sets',
+  'default_reps',
+  'default_rpe',
+  'default_rest_seconds',
+  'video_url',
+  'image_url',
+  'instructions',
+  'notes',
+] as const;
+
+function exportExercises(exercises: ExerciseLibraryRow[]) {
+  const csv = toCsv(
+    [...EXPORT_COLUMNS],
+    exercises.map((ex) => EXPORT_COLUMNS.map((col) => ex[col as keyof ExerciseLibraryRow] as string | number | null))
+  );
+  downloadTextFile(`exercise-library-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8;');
+}
+
+// Tolerant CSV -> createLibraryExercise-shaped rows: numeric columns fall back to null on
+// anything non-numeric (blank cell, stray text) rather than rejecting the whole row, since a
+// coach's hand-edited spreadsheet is exactly the kind of input that has the odd blank cell.
+function parseExerciseCsv(text: string): Omit<ExerciseLibraryRow, 'id' | 'created_by' | 'created_at'>[] {
+  const rows = parseCsv(text);
+  if (rows.length === 0) return [];
+  const col = headerIndex(rows[0]);
+  const nameIdx = col('name');
+  if (nameIdx < 0) throw new Error('CSV must have a "name" column');
+  const numCol = (row: string[], key: string) => {
+    const idx = col(key);
+    if (idx < 0) return null;
+    const n = Number(row[idx]);
+    return row[idx]?.trim() && !Number.isNaN(n) ? n : null;
+  };
+  const strCol = (row: string[], key: string) => {
+    const idx = col(key);
+    return idx >= 0 ? row[idx]?.trim() || null : null;
+  };
+  return rows
+    .slice(1)
+    .filter((r) => r[nameIdx]?.trim())
+    .map((r) => ({
+      name: r[nameIdx].trim(),
+      muscle_group: strCol(r, 'muscle_group'),
+      equipment: strCol(r, 'equipment'),
+      default_sets: numCol(r, 'default_sets'),
+      default_reps: strCol(r, 'default_reps'),
+      default_rpe: numCol(r, 'default_rpe'),
+      default_rest_seconds: numCol(r, 'default_rest_seconds'),
+      video_url: strCol(r, 'video_url'),
+      image_url: strCol(r, 'image_url'),
+      instructions: strCol(r, 'instructions'),
+      notes: strCol(r, 'notes'),
+    }));
+}
 
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
@@ -224,10 +290,13 @@ function AddExerciseCard({ onDone }: { onDone: () => void }) {
 
 export function ExerciseLibraryManager({ initialExercises }: { initialExercises: ExerciseLibraryRow[] }) {
   const confirm = useConfirm();
+  const toast = useToast();
   const { run: runDelete } = useAction();
+  const { run: runImport, busy: importing } = useAction();
   const [addingExercise, setAddingExercise] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterGroup, setFilterGroup] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleDelete(id: string, exerciseName: string) {
     const ok = await confirm({
@@ -239,6 +308,30 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
     await runDelete(() => deleteLibraryExercise(id), { success: 'Exercise removed', onDone: () => setEditingId(null) });
   }
 
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      let rows: ReturnType<typeof parseExerciseCsv>;
+      try {
+        rows = parseExerciseCsv(String(reader.result ?? ''));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not parse that CSV');
+        return;
+      }
+      if (rows.length === 0) {
+        toast.error('No exercise rows found in that file');
+        return;
+      }
+      await runImport(() => bulkCreateLibraryExercises(rows), {
+        success: `Imported ${rows.length} exercise${rows.length === 1 ? '' : 's'}`,
+      });
+    };
+    reader.readAsText(file);
+  }
+
   const filteredExercises = useMemo(
     () => (filterGroup ? initialExercises.filter((ex) => ex.muscle_group === filterGroup) : initialExercises),
     [initialExercises, filterGroup]
@@ -246,7 +339,26 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => exportExercises(initialExercises)}
+          disabled={initialExercises.length === 0}
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </button>
+        <button
+          type="button"
+          disabled={importing}
+          onClick={() => fileRef.current?.click()}
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {importing ? 'Importing…' : 'Import CSV'}
+        </button>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         <button
           type="button"
           onClick={() => setAddingExercise(true)}

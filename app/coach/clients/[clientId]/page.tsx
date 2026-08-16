@@ -22,13 +22,17 @@ export default async function CoachClientPage({
   const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (callerProfile?.role !== 'coach') redirect('/dashboard');
 
+  // Not restricted to coach_id = user.id -- RLS (is_same_gym_as_client, 0052/0053) now also
+  // lets a coach read a colleague's client at the same gym for read-only viewing. A client
+  // outside the caller's gym simply returns no row (RLS default-deny), same as before.
   const { data: targetProfile } = await supabase
     .from('profiles')
-    .select('email')
+    .select('email, coach_id')
     .eq('id', clientId)
-    .eq('coach_id', user.id)
+    .eq('role', 'client')
     .maybeSingle();
   if (!targetProfile) redirect('/coach/clients');
+  const isOwnClient = targetProfile.coach_id === user.id;
 
   const [bundle, healthStatuses, chatOverview, journalEntries, activity] = await Promise.all([
     loadDashboardBundle(clientId, false),
@@ -45,6 +49,7 @@ export default async function CoachClientPage({
       clientId={clientId}
       clientLabel={bundle.profile?.name ?? targetProfile.email}
       clientEmail={targetProfile.email}
+      isOwnClient={isOwnClient}
       healthStatus={healthStatus}
       coachUnreadCount={coachUnreadCount}
       coachEmail={user.email ?? 'Coach'}

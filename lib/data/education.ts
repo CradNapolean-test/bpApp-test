@@ -2,7 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
-import { resolveScopingCoachId } from './coach';
+import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { EducationCourseAssignmentWithDetails, EducationCourseWithModules } from './types';
 
@@ -12,11 +12,11 @@ import type { EducationCourseAssignmentWithDetails, EducationCourseWithModules }
 // re-runs this), rather than a separate on-click fetch that could go stale.
 export async function getCourses(): Promise<EducationCourseWithModules[]> {
   const supabase = await createClient();
-  const coachId = await resolveScopingCoachId(supabase);
+  const gymId = await resolveScopingGymId(supabase);
   const { data, error } = await supabase
     .from('education_courses')
     .select('*, education_modules(*, education_lessons(*))')
-    .eq('coach_id', coachId)
+    .eq('gym_id', gymId)
     .order('created_at');
   if (error) raise(error);
   return (data ?? []) as unknown as EducationCourseWithModules[];
@@ -28,8 +28,11 @@ export async function createCourse(title: string, description: string | null): P
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
 
-  const { error } = await supabase.from('education_courses').insert({ coach_id: user.id, title, description });
+  const { error } = await supabase
+    .from('education_courses')
+    .insert({ coach_id: user.id, gym_id: gymId, title, description });
   if (error) raise(error);
 }
 
