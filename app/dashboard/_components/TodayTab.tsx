@@ -4,7 +4,7 @@ import { CalendarDays, Camera, CheckSquare, Flame, Heart } from 'lucide-react';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
-import { toIsoDate, addDays, formatClassTime } from '@/lib/utils/dates';
+import { toIsoDate, addDays, formatClassTime, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import type {
   BookingRow,
@@ -95,7 +95,10 @@ export function TodayTab({
   onNavigate: (category: Category, screen?: Screen) => void;
   onNavigateClasses?: () => void;
 }) {
-  const todayIso = toIsoDate(new Date());
+  // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
+  // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
+  // which disagrees with the client's local "today" for roughly half of every day outside UTC.
+  const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
   const todayCalories = todayLog ? dayCalories(todayLog.protein ?? 0, todayLog.carbs ?? 0, todayLog.fat ?? 0) : 0;
 
@@ -204,7 +207,7 @@ export function TodayTab({
         )}
         {nextClass && nextClass.booking_date === todayIso && (
           <div className="mt-2">
-            <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} />
+            <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} />
           </div>
         )}
       </div>

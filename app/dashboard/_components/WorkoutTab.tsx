@@ -29,9 +29,10 @@ import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
-import { toIsoDate } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
+  ClientProfileRow,
   ExerciseLibraryRow,
   ProgramTemplateRow,
   SetType,
@@ -453,6 +454,7 @@ export function WorkoutTab({
   exerciseLibrary,
   programTemplates,
   focusDay = null,
+  profile,
 }: {
   clientId: string;
   isCoachView: boolean;
@@ -467,6 +469,7 @@ export function WorkoutTab({
   // makes re-clicking check-in on the same day re-trigger the scroll even if nothing else
   // about the props changed.
   focusDay?: { dayId: string; nonce: number } | null;
+  profile?: ClientProfileRow | null;
 }) {
   const confirm = useConfirm();
   const { run: runCreate, busy: creating } = useAction();
@@ -482,7 +485,7 @@ export function WorkoutTab({
   // FocusOverlay instead, which is what actually solved the "congested" feeling multiple
   // inline exercise editors caused, not the week-level grouping.
   const [activeWeeks, setActiveWeeks] = useState<Record<string, number>>(() => {
-    const todayIso = toIsoDate(new Date());
+    const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
     const initial: Record<string, number> = {};
     for (const program of programs) {
       const active = resolveActiveProgram([program], todayIso);

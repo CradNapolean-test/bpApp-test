@@ -6,7 +6,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
-import { toIsoDate } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta, measurementDelta } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
 
@@ -35,7 +35,10 @@ export function ProgressTab({
   const { run: runUpload, busy: uploading } = useAction();
   const { run: runDelete } = useAction();
   const { run: runMeasurement, busy: savingMeasurement } = useAction();
-  const today = toIsoDate(new Date());
+  // Photos/measurements are saved tagged with this date -- must be the client's local day
+  // (matching dashboardBundle's server-side resolution), not raw UTC, or an entry logged near
+  // a UTC boundary gets silently filed under the wrong calendar day.
+  const today = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 

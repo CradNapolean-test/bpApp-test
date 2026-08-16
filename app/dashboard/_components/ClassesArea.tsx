@@ -6,7 +6,7 @@ import { useAction } from '@/app/_components/useAction';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
-import { addDays, formatClassTime, startOfWeek, toIsoDate } from '@/lib/utils/dates';
+import { addDays, DEFAULT_TIMEZONE, formatClassTime, startOfWeek, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { CheckInButton } from './CheckInButton';
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
@@ -18,6 +18,7 @@ export function ClassesArea({
   programs,
   workoutLogs,
   onCheckIn,
+  timezone,
 }: {
   bookings: BookingRow[];
   occurrences: ScheduleOccurrence[];
@@ -26,12 +27,17 @@ export function ClassesArea({
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
   onCheckIn: (dayId: string) => void;
+  timezone?: string | null;
 }) {
   const { run } = useAction();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  const todayIso = toIsoDate(new Date());
+  // Must match the timezone dashboardBundle used server-side to resolve booking/occurrence
+  // dates (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC
+  // date, which disagrees with the client's local "today" for roughly half of every day
+  // outside UTC.
+  const todayIso = todayIsoInTz(timezone ?? DEFAULT_TIMEZONE);
   const nextReset = toIsoDate(addDays(startOfWeek(new Date()), 7));
 
   const activeBookings = bookings.filter((b) => b.status !== 'cancelled');
@@ -167,7 +173,7 @@ export function ClassesArea({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {b.status === 'booked' && b.booking_date === todayIso && (
-                    <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} />
+                    <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
                   )}
                   {b.status !== 'cancelled' && !isPast && (
                     <button

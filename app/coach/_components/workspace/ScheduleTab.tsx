@@ -1,14 +1,26 @@
 import { EmptyState } from '@/app/_components/EmptyState';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
-import { formatClassTime, toIsoDate } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz } from '@/lib/utils/dates';
 import type { BookingRow, WorkoutProgramRow } from '@/lib/data/types';
 
 // Read-only, both sections derived from data the client already has -- see
 // docs/PT_DISTINCTION_LAYOUT_ROADMAP.md's Phase 2 note on why training days are grouped by
 // week rather than shown on a literal calendar: workout_program_days only carries an
 // abstract day_position "slot", which only resolves to a real date once a class links to it.
-export function ScheduleTab({ bookings, programs }: { bookings: BookingRow[]; programs: WorkoutProgramRow[] }) {
-  const todayIso = toIsoDate(new Date());
+export function ScheduleTab({
+  bookings,
+  programs,
+  timezone,
+}: {
+  bookings: BookingRow[];
+  programs: WorkoutProgramRow[];
+  timezone?: string | null;
+}) {
+  // The client's own timezone, matching how their dashboard resolves "today" (see
+  // lib/data/dashboardBundle.ts) -- not the coach's browser time, which could disagree near a
+  // day boundary and show the coach a different upcoming-classes/active-week list than the
+  // client actually sees.
+  const todayIso = todayIsoInTz(timezone ?? DEFAULT_TIMEZONE);
 
   const upcomingBookings = bookings
     .filter((b) => b.booking_date >= todayIso)

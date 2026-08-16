@@ -1,7 +1,7 @@
 'use client';
 
 import { resolveCheckinTarget } from '@/lib/utils/checkin';
-import { toIsoDate } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClassRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 // Never silently absent -- a client who expects to check in should understand *why* there's
@@ -17,14 +17,17 @@ export function CheckInButton({
   programs,
   workoutLogs,
   onCheckIn,
+  timezone,
 }: {
   classRow: ClassRow | null;
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
   onCheckIn: (dayId: string) => void;
+  timezone?: string | null;
 }) {
-  const todayIso = toIsoDate(new Date());
-  const resolution = resolveCheckinTarget(programs, workoutLogs, classRow?.linked_day_position ?? null, todayIso);
+  const tz = timezone ?? DEFAULT_TIMEZONE;
+  const todayIso = todayIsoInTz(tz);
+  const resolution = resolveCheckinTarget(programs, workoutLogs, classRow?.linked_day_position ?? null, todayIso, tz);
 
   if (resolution.status === 'already_logged') {
     return <p className="text-xs font-medium text-accent">Already logged today ✓</p>;

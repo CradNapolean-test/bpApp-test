@@ -467,6 +467,7 @@ export function DashboardShell({
               courses={educationCourses}
               assignments={educationAssignments}
               readOnly={isCoachView && !isOwnClient}
+              profile={profile}
             />
           )}
           {effectiveScreen === 'Food Tracking' && (
@@ -524,6 +525,7 @@ export function DashboardShell({
               exerciseLibrary={exerciseLibrary}
               programTemplates={programTemplates}
               focusDay={focusDay}
+              profile={profile}
             />
           )}
           {effectiveScreen === 'Credits' && isCoachView && isOwnClient && (
@@ -573,6 +575,7 @@ export function DashboardShell({
           programs={programs}
           workoutLogs={workoutLogs}
           onCheckIn={handleCheckIn}
+          timezone={profile?.timezone}
         />
       )}
 

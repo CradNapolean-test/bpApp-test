@@ -9,7 +9,7 @@
 // doesn't count until its date arrives, at which point it naturally becomes the new
 // latest-applicable one -- no "close out the old program" step required.
 
-import { daysBetween, toIsoDate } from './dates';
+import { daysBetween, isoDateInTz } from './dates';
 import type { WorkoutLogRow, WorkoutProgramDayRow, WorkoutProgramRow } from '@/lib/data/types';
 
 export type CheckinResolution =
@@ -44,10 +44,10 @@ export function resolveProgramDayByPosition(
   return program.workout_program_days.find((d) => d.week_num === weekNum && d.day_position === dayPosition) ?? null;
 }
 
-function hasLoggedDayToday(day: WorkoutProgramDayRow, workoutLogs: WorkoutLogRow[], todayIso: string): boolean {
+function hasLoggedDayToday(day: WorkoutProgramDayRow, workoutLogs: WorkoutLogRow[], todayIso: string, tz: string): boolean {
   const dayExerciseIds = new Set(day.workout_exercises.map((e) => e.id));
   return workoutLogs.some(
-    (log) => log.exercise_id && dayExerciseIds.has(log.exercise_id) && toIsoDate(new Date(log.logged_at)) === todayIso
+    (log) => log.exercise_id && dayExerciseIds.has(log.exercise_id) && isoDateInTz(new Date(log.logged_at), tz) === todayIso
   );
 }
 
@@ -55,7 +55,8 @@ export function resolveCheckinTarget(
   programs: WorkoutProgramRow[],
   workoutLogs: WorkoutLogRow[],
   linkedDayPosition: number | null,
-  todayIso: string
+  todayIso: string,
+  tz: string
 ): CheckinResolution {
   if (linkedDayPosition == null) return { status: 'not_linked' };
 
@@ -65,7 +66,7 @@ export function resolveCheckinTarget(
   const day = resolveProgramDayByPosition(active.program, active.weekNum, linkedDayPosition);
   if (!day) return { status: 'no_matching_day' };
 
-  if (hasLoggedDayToday(day, workoutLogs, todayIso)) {
+  if (hasLoggedDayToday(day, workoutLogs, todayIso, tz)) {
     return { status: 'already_logged', programId: active.program.id, dayId: day.id, weekNum: active.weekNum };
   }
   return { status: 'ready', programId: active.program.id, dayId: day.id, weekNum: active.weekNum };

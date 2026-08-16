@@ -8,9 +8,10 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { assignCourse, markLessonComplete, markLessonIncomplete } from '@/lib/data/education';
 import { courseCompletionPercent, isLessonUnlocked } from '@/lib/utils/educationProgress';
-import { toIsoDate } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { parseVideoEmbedUrl } from '@/lib/utils/videoEmbed';
 import type {
+  ClientProfileRow,
   EducationCourseAssignmentWithDetails,
   EducationCourseWithModules,
   EducationLessonRow,
@@ -99,13 +100,15 @@ function CourseOverlay({
   clientId,
   isCoachView,
   onClose,
+  timezone,
 }: {
   assignment: EducationCourseAssignmentWithDetails;
   clientId: string;
   isCoachView: boolean;
   onClose: () => void;
+  timezone?: string | null;
 }) {
-  const todayIso = toIsoDate(new Date());
+  const todayIso = todayIsoInTz(timezone ?? DEFAULT_TIMEZONE);
   const completedIds = new Set(assignment.completions.map((c) => c.lesson_id));
   const sortedModules = [...assignment.course.education_modules].sort((a, b) => a.sort_order - b.sort_order);
 
@@ -150,6 +153,7 @@ export function EducationTab({
   courses,
   assignments,
   readOnly = false,
+  profile,
 }: {
   clientId: string;
   isCoachView: boolean;
@@ -158,6 +162,7 @@ export function EducationTab({
   // Narrower than isCoachView -- see FormsTab's identical prop for why this can't just be
   // isCoachView=false for a read-only cross-coach view.
   readOnly?: boolean;
+  profile?: ClientProfileRow | null;
 }) {
   const { run, busy: assigning } = useAction();
   const [selectedCourse, setSelectedCourse] = useState('');
@@ -239,6 +244,7 @@ export function EducationTab({
           clientId={clientId}
           isCoachView={isCoachView}
           onClose={() => setOpenAssignmentId(null)}
+          timezone={profile?.timezone}
         />
       )}
     </div>

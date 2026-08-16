@@ -19,14 +19,16 @@ export const COMMON_TIMEZONES = [
 
 export const DEFAULT_TIMEZONE = 'Pacific/Auckland';
 
-// The client's real local calendar date, not the server's (UTC) one -- the fix for a client
-// near a UTC day boundary having "today" resolve to the wrong day for them (see
-// lib/data/dashboardBundle.ts, lib/data/coach.ts). en-CA formats as YYYY-MM-DD directly, no
-// string surgery needed.
+// A given instant's calendar date in `tz`, not the server's (UTC) one -- the fix for a client
+// near a UTC day boundary having "today" (or a stored timestamp's day) resolve to the wrong
+// day for them (see lib/data/dashboardBundle.ts, lib/data/coach.ts, lib/utils/checkin.ts).
+// en-CA formats as YYYY-MM-DD directly, no string surgery needed.
+export function isoDateInTz(d: Date, tz: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
 export function todayIsoInTz(tz: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    new Date()
-  );
+  return isoDateInTz(new Date(), tz);
 }
 
 export function addDays(d: Date, n: number): Date {

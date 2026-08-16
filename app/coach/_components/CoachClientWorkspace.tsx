@@ -20,7 +20,7 @@ import { ActivityTab } from './workspace/ActivityTab';
 import { ToolsTab } from './workspace/ToolsTab';
 import { NotesTab } from './workspace/NotesTab';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
-import { toIsoDate } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClientHealthBucket, ClientHealthStatus } from '@/lib/data/coach';
 import type {
   ActivityEventRow,
@@ -93,7 +93,13 @@ export function CoachClientWorkspace({
 }) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('Info');
 
-  const activeProgram = useMemo(() => resolveActiveProgram(programs, toIsoDate(new Date())), [programs]);
+  // Resolved in the client's own timezone (not the coach's browser time) so the week/program
+  // shown here matches what the client themselves sees on their dashboard -- see
+  // lib/data/dashboardBundle.ts for the same resolution done server-side.
+  const activeProgram = useMemo(
+    () => resolveActiveProgram(programs, todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE)),
+    [programs, profile?.timezone]
+  );
   const maxWeek = activeProgram
     ? Math.max(0, ...activeProgram.program.workout_program_days.map((d) => d.week_num))
     : 0;
@@ -148,7 +154,7 @@ export function CoachClientWorkspace({
       <div className="mt-4">
         <WorkspaceTabBar active={activeTab} onSelect={setActiveTab} />
         {activeTab === 'Info' && <InfoTab profile={profile} />}
-        {activeTab === 'Schedule' && <ScheduleTab bookings={bookings} programs={programs} />}
+        {activeTab === 'Schedule' && <ScheduleTab bookings={bookings} programs={programs} timezone={profile?.timezone} />}
         {activeTab === 'Items' && (
           <ItemsTab
             programs={programs}
