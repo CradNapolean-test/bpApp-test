@@ -2,7 +2,7 @@
   "name": "Ballistic Performance",
   "short_name": "Ballistic",
   "description": "Coaching platform for nutrition, training, and check-ins.",
-  "start_url": "/",
+  "start_url": "/login",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#141414",

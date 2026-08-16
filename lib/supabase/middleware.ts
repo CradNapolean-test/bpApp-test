@@ -44,14 +44,29 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    return NextResponse.redirect(url);
+    return redirectCarryingCookies(url, supabaseResponse);
   }
 
   if (user && isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
-    return NextResponse.redirect(url);
+    return redirectCarryingCookies(url, supabaseResponse);
   }
 
   return supabaseResponse;
+}
+
+// getUser() above can silently refresh an expired access token, queuing the new session
+// cookies onto supabaseResponse via the client's setAll callback -- a bare
+// NextResponse.redirect(url) is a brand-new response object that never received those cookies,
+// so the browser would keep resending the stale (soon-to-be-invalid, already-rotated) token on
+// every subsequent request. That produces exactly a redirect loop: refresh succeeds and detects
+// a user, but the redirect drops the refreshed cookie, so the very next request refreshes again
+// with an already-consumed refresh token, fails, and bounces back the other way.
+function redirectCarryingCookies(url: URL, response: NextResponse): NextResponse {
+  const redirectResponse = NextResponse.redirect(url);
+  for (const cookie of response.cookies.getAll()) {
+    redirectResponse.cookies.set(cookie);
+  }
+  return redirectResponse;
 }
