@@ -8,6 +8,7 @@ import { CoachNav } from './_components/CoachNav';
 import { CoachBottomTabBar } from './_components/CoachBottomTabBar';
 import { CoachBrand } from './_components/CoachBrand';
 import { CoachHeaderExtras } from './_components/CoachHeaderExtras';
+import { CoachTodayLabel, CoachTimeGreeting } from './_components/CoachGreeting';
 import { AddClientForm } from './_components/AddClientForm';
 import { ProgramHealth } from './_components/ProgramHealth';
 import { HabitAdherence } from './_components/HabitAdherence';
@@ -40,15 +41,12 @@ export default async function CoachPage() {
   // profiles has no display-name column for a coach (only clients get one, via
   // client_profiles.name from Setup) -- matches the prototype's own generic "{Greeting}, Coach"
   // greeting rather than inventing a name field that doesn't exist in the schema.
-  const todayLabel = new Date()
-    .toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    .toUpperCase();
-  const greetingHour = new Date().getHours();
-  const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
   const mobileHeader = (
     <div className="min-w-0">
-      <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">{todayLabel}</p>
-      <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{timeGreeting}, Coach</p>
+      <CoachTodayLabel className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500" />
+      <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
+        <CoachTimeGreeting />
+      </p>
     </div>
   );
 
@@ -61,7 +59,9 @@ export default async function CoachPage() {
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
     >
       <div className="space-y-4">
-        <h1 className="hidden text-2xl font-bold text-black dark:text-zinc-50 md:block">{timeGreeting}, Coach</h1>
+        <h1 className="hidden text-2xl font-bold text-black dark:text-zinc-50 md:block">
+          <CoachTimeGreeting />
+        </h1>
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-2xl bg-[#141414] p-4 text-white shadow-[0_1px_2px_rgba(0,0,0,.02)]">
             <p className="text-xs font-medium text-white/60">Active clients</p>

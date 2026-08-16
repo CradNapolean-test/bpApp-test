@@ -28,6 +28,7 @@ import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
+import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
@@ -264,7 +265,13 @@ export function DashboardShell({
   // mobile redesign's Today screen; a plain category title on every other screen, since the
   // prototype's Nutrition/Training/Accountability/Progress screens never repeat the greeting.
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
-  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
+  // Anchored to the client's own account timezone (not the viewer's browser) -- matches
+  // WeeklyLogTab's day selection and every other tz-aware "today" in this codebase; a coach
+  // viewing this client's dashboard from a different timezone must see the same "today" the
+  // client themselves would, or the header and the day the log defaults to disagree.
+  const todayLabel = new Date()
+    .toLocaleDateString('en-US', { timeZone: profile?.timezone ?? DEFAULT_TIMEZONE, weekday: 'long', month: 'short', day: 'numeric' })
+    .toUpperCase();
   const greetingHour = new Date().getHours();
   const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
   // Who the client is chatting with (coach sees the client's name; client sees a generic
