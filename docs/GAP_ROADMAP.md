@@ -4,191 +4,102 @@
 
 `docs/COMPETITIVE_GAP_ANALYSIS.md` identified ~15 feature gaps against three competitor
 products. That document answers "what's missing"; this one answers "in what order do we
-build it, and roughly how." Mirroring the existing `docs/MIGRATION_ROADMAP.md` pattern — a
-sequencing document, not a fully-specified implementation for every phase. Each phase gets
-detailed design (its own migration file, exact schema, exact UI) as its own pass when we
-actually start it, the same way Meal Sections / Account Settings / Classes Check-in just
-went through their own dedicated plan.
+build it, and roughly how."
 
-No code changes happen from this document alone — it's the deliverable itself, per your
-explicit choice this pass ("write the roadmap doc only, no building yet").
-
-Phases are ordered by impact-for-effort, confirmed against the actual codebase (not just
-guessed): every Phase 1-4 item was checked against real schema/data-layer files during
-research, so the "why this order" reasoning below is grounded, not aspirational.
+Rewritten 2026-08-16 to reflect reality: the original Phases 1-4 and 6 have all since
+shipped, Phase 5 (video calls) was cut as never-needed, and Phase 7's "lower priority" list
+turned out to be partially shipped too (multi-location, and half of branding/white-label) —
+this doc had drifted well out of date from the actual codebase.
 
 ---
 
-## Phase 1 — Nutrition logging speed (Quick Add, Favorites/Recently Logged, Copy Day)
+## Shipped
 
-**Why first:** cheapest per-feature, highest daily-adherence impact (MyFitnessPal reviews
-consistently cite logging friction, not database size, as the #1 driver of whether people
-keep a food diary at all), and fully additive to the meal-sections work just shipped — no
-conflicts with anything in flight.
-
-- **Quick Add** (log calories/macros with no food-database item): `food_diary_entries.food_id`
-  is already nullable, but every consumer (`getFoodDiaryEntries`'s join, `entryMacros`,
-  `FoodTrackingTab`'s row rendering, `syncFoodDiaryToLog`) currently assumes a resolved
-  `food` is present. Needs new inline columns (`quick_add_name`, `quick_add_calories`,
-  `quick_add_protein/carbs/fat`) on `food_diary_entries`, plus updating every one of those
-  consumers to fall back to the inline fields when `food_id` is null.
-- **Recently Logged / Favorites**: `foods` is a single shared global table with no per-client
-  usage tracking today (confirmed — no `last_used_at`/count column, `lib/data/foods.ts` has
-  only `searchFoods`/`getFoodByBarcode`/`upsertFoodFromBarcode`). Needs a new per-client
-  `food_favorites(client_id, food_id)` table (explicit favoriting) and either a derived query
-  over `food_diary_entries` joined through `daily_logs.client_id` for "recently logged"
-  (simplest, no new table) or a maintained `food_usage_stats` table if frequency-ranking
-  turns out to matter more than pure recency. Start with the derived-query version — cheaper,
-  and provably sufficient until proven otherwise.
-- **Copy Meal / Copy Day**: no such function exists anywhere in `lib/data/foodDiary.ts` or
-  elsewhere (confirmed). New `copyDiaryEntries(fromDailyLogId, toDailyLogId, mealSectionId?)`
-  in `lib/data/foodDiary.ts` — reads a source day's entries (optionally scoped to one
-  section) and bulk-inserts copies (including quick-add columns once they exist) against the
-  target day. UI: a "Copy from yesterday" action on `FoodTrackingTab.tsx`, and a per-section
-  "copy this meal" affordance once Quick Add's schema exists (do Quick Add first so this can
-  copy those rows too, not just food-linked ones).
-
-**Rough scope:** one migration, `lib/data/foodDiary.ts` + `lib/data/foods.ts` extensions,
-`FoodTrackingTab.tsx` + `FoodSearchPicker.tsx` UI additions. Comparable in size to the Meal
-Sections work just shipped.
+- **Nutrition logging speed** — Quick Add (`food_diary_entries.quick_add_*` columns),
+  Favorites (`food_favorites` table, `lib/data/foods.ts`).
+- **Habit roster-wide adherence view** — `getRosterHabitAdherence` (`lib/data/coach.ts`),
+  `HabitAdherence.tsx`.
+- **Class single-occurrence cancellation** — `class_exceptions` table, `cancelClassOccurrence`
+  RPC (migration `0051`).
+- **Retention automation, v1** — one-off scheduled coach messages via
+  `scheduled_communications` + the `send-communications` cron route. (The bigger vision —
+  drip sequences, purchase-triggered messages — was deliberately deferred within this phase;
+  see "Deeper automations" below, now promoted back to active backlog.)
+- **Group coaching content model** — `client_groups` / `client_group_members`,
+  `GroupsManager.tsx`.
+- **Multi-location support** — the `gyms` system (migrations `0052`-`0056`): a coach can
+  belong to multiple gyms, each with its own roster/classes/shared library. Was Phase 7's
+  "only matters past one coach/location" item; built anyway as part of the multi-coach work.
+- **White-labeling, partial** — coach logo upload/branding (`0047_coach_branding.sql`,
+  `CoachBrandingContext.tsx`) is live. A full branded native mobile app is not, and isn't
+  planned (see below).
 
 ---
 
-## Phase 2 — Habit tracking module + roster-wide adherence view
+## Active backlog
 
-**Why second:** PT Distinction's most-cited coaching-workflow gap for us, and the schema
-groundwork already half-exists (unlike most other gaps here, which start from zero).
+### Web Push notifications
 
-- **Current state** (confirmed): `habits`/`habit_logs` already exist (migration `0006`),
-  coach-created, client-completed, RLS-correct. But `getHabitsWithLogs(clientId)` in
-  `lib/data/habits.ts` is hard-scoped to one client — there is no roster-level query, and the
-  UI (`WeeklyLogTab.tsx`'s `HabitManager`) only ever renders one client's habits at a time.
-- **What's actually missing** is narrower than "build habit tracking" — it's specifically the
-  **roster-wide adherence view**: a new coach-facing query (likely in `lib/data/coach.ts`,
-  alongside the existing `getClientHealthStatuses` pattern) that joins habits/habit_logs
-  across every client a coach owns, computing a simple "X/Y habits done today" or "N-day
-  streak" per client, surfaced as a new widget on the coach's client-list page (`app/coach/
-  page.tsx` / `ClientTable.tsx`) — reusing the exact roster-aggregation pattern
-  `getClientHealthStatuses` already establishes for inactivity buckets.
-- Secondary, smaller ask: consider letting a habit be assigned to multiple clients at once
-  from a single "create habit" action (PT Distinction's "assign once to many" pattern) —
-  worth scoping separately since it changes `createHabit`'s signature; not required for the
-  roster-view win alone.
+Real push (banner shows even with the app closed), not just the in-app notification list.
+The iOS "must be added to home screen" caveat is accepted as fine given clients are expected
+to install it that way regardless.
 
-**Rough scope:** no new tables for the core adherence-view win — just a new roster query +
-a new coach-dashboard widget. The "assign to many" extension would need a small join-table
-change if pursued.
+**Shipped (2026-08-16):**
+- `push_subscriptions(client_id, endpoint, p256dh, auth)` table, RLS scoped to `is_self`
+  (a subscription is a browser/device artifact — a coach's session can't meaningfully manage
+  it on a client's behalf, unlike `owns_client`-style organizational data).
+- VAPID keypair generated, `lib/push.ts` (`sendPushToClient`, same graceful-degradation
+  contract as email/AI photo estimation — unset keys means skip, not throw).
+- `public/sw.js` service worker + `public/manifest.json` (linked via `app/layout.tsx`
+  metadata), `/api/push/send` as an authenticated HTTP entry point for future/manual triggers.
+- Permission-request toggle in the client Account tab (`AccountTab.tsx`) — reflects actual
+  browser subscription state, not a DB flag; snaps back off if permission is denied.
+- **One trigger wired**: check-in reminders. `send_checkin_reminders` (migration `0060`) now
+  returns the client_ids it notified instead of just a count, so the cron route can call
+  `sendPushToClient` per client directly — no pg_net/DB-trigger needed, since this cron is
+  already TypeScript calling the RPC, matching 0039's established "outbound HTTP happens in
+  TS, not plpgsql" precedent (this project has no pg_net set up, and Vercel's Hobby-plan
+  once-daily cron limit would make a generic "sweep unpushed notifications" trigger too
+  laggy for anything that isn't already inherently daily).
 
----
+**Still open:**
+- Generalizing to every other notification-triggering RPC (booking cancellation, class
+  cancellation, form/education assignment, etc.) — each currently only writes the in-app
+  `notifications` row. The natural next step per client is adding a `sendPushToClient` call
+  at the same TypeScript call site that invokes the RPC (mirrors how `composeCommunication`
+  calls `sendBroadcastEmail` right after its own insert) — not a big architectural change,
+  just touching each site once it's prioritized.
+- iOS add-to-home-screen onboarding nudge (a banner guiding iOS Safari users to install).
+- Real on-device delivery hasn't been confirmed by an actual phone yet — build/lint/tests all
+  pass and the local send path exercises correctly, but only a real subscribe-and-receive
+  test on a real device closes the loop.
 
-## Phase 3 — Classes ops: single-occurrence cancellation + deeper attendance reporting
+### Deeper automations
 
-**Why third:** real, currently-clunky gap (a coach literally cannot cancel one date of a
-recurring class without editing/deleting the whole series today) with zero payment
-involvement, unlike most of TeamUp's other advantages.
+Explicitly deferred inside the original retention-automation phase, now confirmed as worth
+pursuing rather than left dormant: automated onboarding sequences, milestone/purchase-
+triggered messages. No Zapier-style external integration scoped yet. Needs its own design
+pass when picked up — the existing `scheduled_communications` table + cron pattern is the
+likely foundation, extended with trigger conditions beyond "coach picked a send time."
 
-- **Confirmed:** `getScheduleOccurrences` (`lib/data/classes.ts`) generates occurrences purely
-  virtually (looping `day_of_week` + `weeksAhead`, no per-occurrence DB row exists anywhere
-  across all 24 migrations). "Cancel this occurrence" therefore needs a new
-  `class_exceptions(class_id, date, cancelled_at)` table that `getScheduleOccurrences` filters
-  against (skip generating an occurrence whose `class_id`+`date` has an exception row).
-- **Bulk refund/notify RPC**: reuse `cancel_booking`'s (migration `0015`) exact refund math —
-  `credit_cost` refunded via a `credits_ledger` insert with `reason = 'refund:' || booking_id`
-  — but as a bulk operation over every `booked`/`waitlist` row matching `class_id`+`date`,
-  skipping the existing single-cancel's waitlist-promotion step entirely (there's no seat
-  to promote into once the whole occurrence is gone) and inserting one `notifications` row
-  per affected client ("Class cancelled: {name} on {date}").
-- **UI**: `AttendanceScheduler.tsx` already has the exact "pick a date, see that class's
-  roster" flow via `ClassCalendar` + `getRoster(classId, date)` — the natural place for a
-  "Cancel this occurrence" button per row, reusing `getRoster`'s existing booked-client
-  lookup rather than a new query.
-- **Deeper attendance/no-show reporting**: additive to the existing `getClientHealthStatuses`-
-  style reports already in `ReportsPane.tsx` — add a "who's missing" trend view and CSV
-  export on top of the current attendance-rate/no-show-list/class-popularity numbers, no
-  schema change needed, purely a reporting-query + UI addition.
+### General flexible scheduling engine
 
-**Rough scope:** one migration (`class_exceptions` table + a `cancel_class_occurrence` RPC),
-`lib/data/classes.ts` additions, `AttendanceScheduler.tsx` UI, `ReportsPane.tsx` extensions.
+From `COMPETITIVE_GAP_ANALYSIS.md`: placing arbitrary items (not just workouts/classes) on a
+calendar, with client-side rescheduling and missed-item alerts. Real gap, but broad and
+never fully scoped — needs its own exploration pass before it's buildable.
 
 ---
 
-## Phase 4 — Lightweight retention automation (inactivity nudges → building block for more)
+## Deliberately not planned
 
-**Why fourth, and scoped narrowly:** PT Distinction's "automations" and TeamUp's "retention
-marketing" are both large, open-ended asks. Scoping this phase to just the cheapest real
-slice — not the full drip-campaign/Zapier vision — keeps it buildable without turning into
-its own multi-week project.
-
-- **Confirmed:** every `notifications` insert today is inside a `security definer` RPC
-  (`send_checkin_reminders`, `cancel_booking`'s waitlist promotion, `assign_form`,
-  `assign_education_content`) — there is deliberately no client/coach-authenticated insert
-  path (schema.sql's own comment: "only security-definer RPCs write these"). A genuinely new
-  automations system needs either a new RPC per trigger type (matching the existing pattern)
-  or, if we want coach-authored custom messages (not just system-generated ones), a new
-  `scheduled_messages(coach_id, client_id, send_at, message)` table + a cron route (mirroring
-  `app/api/cron/checkin-reminders/route.ts`'s existing daily-trigger pattern) that inserts
-  into `notifications` when `send_at` has passed.
-- **v1 scope**: a coach-facing "send a one-off scheduled message to a client" (simplest
-  possible slice — no drip sequences, no purchase triggers yet), reusing the existing cron
-  infrastructure and `notifications` table exactly as-is.
-- **Explicitly deferred within this phase**: automated onboarding sequences, milestone/
-  purchase-triggered messages, and any Zapier-style external integration — these are real
-  PT Distinction advantages but are each their own significant scope; revisit only once v1's
-  simple scheduled-message mechanic is proven useful.
-
-**Rough scope:** one migration (`scheduled_messages` table), one new cron route (copy the
-existing `checkin-reminders` route's shape), a small coach-facing scheduling UI.
-
----
-
-## Phase 5 — In-app video call scheduling
-
-**Why fifth:** a real, cleanly-scoped gap (a scheduled item with a Zoom link, opened from the
-client's view) that doesn't require the heavier "general flexible scheduling engine" PT
-Distinction has — start with just video calls, not a generic arbitrary-item scheduler.
-
-- New `video_calls(coach_id, client_id, scheduled_at, zoom_url, notes)` table, RLS matching
-  the existing `owns_client` pattern used throughout. Surfaced on the client's Home screen
-  (`TodayTab.tsx`, alongside the existing "Next class" card) and a new coach-facing scheduling
-  form. No Zoom API integration needed for v1 — the coach pastes their own meeting link,
-  exactly like `workout_exercises.video_url` already works for exercise demo links.
-
-**Rough scope:** one small migration, one new coach-facing form, one new client-facing card.
-
----
-
-## Phase 6 — Group coaching content model
-
-**Why sixth, and why later:** genuinely useful (assign one program to a group with per-member
-individualization, PT Distinction-style) but architecturally the biggest lift of the
-"still not payment-gated" items — it touches the workout-program assignment model that
-Classes Check-in just finished building on top of, so it should land after that work has
-had time to prove out in production, not immediately after.
-
-- Needs a new `client_groups(coach_id, name)` + `client_group_members(group_id, client_id)`
-  join, and a decision on what "individualization" means concretely for our program model
-  (e.g. instantiate one program template per group member via the existing
-  `instantiate_program_template` RPC, then let per-member edits diverge from there — this
-  reuses existing machinery rather than inventing a new "shared program" concept, but needs
-  its own dedicated plan when we get here).
-
-**Rough scope:** deliberately not fully specified yet — this is the one phase that genuinely
-needs its own exploration pass when we start it, given how much it touches the existing
-program/template system.
-
----
-
-## Phase 7 — Lower priority / lowest ROI right now
-
-Not sequenced yet — revisit only if an earlier phase surfaces a concrete need:
-- Branded native mobile app / white-labeling (high cost, and our web app is already faster/
-  more modern than PT Distinction's reviewed mobile app — this is currently a strength, not
-  a gap to close).
+- **Branded native mobile app** (iOS/Android App Store presence) — high cost, and the web
+  app is already faster/more modern than PT Distinction's reviewed mobile app. Logo/branding
+  customization (above) covers the in-app white-labeling half already.
+- **In-app video call scheduling** — cut; will never be needed.
 - Built-in marketing website builder, structured fitness-assessment library.
-- Multi-location/room support (only matters past one coach/location).
-- Manual waitlist "reserved acceptance window" tier (our simpler always-auto-promote model
-  may suit our scale better as-is).
-- URL-based recipe import, restaurant-menu-specific food database depth (inherent to our
+- Manual waitlist "reserved acceptance window" tier (the simpler always-auto-promote model
+  suits current scale).
+- URL-based recipe import, restaurant-menu-specific food database depth (inherent to the
   curated + Open Food Facts tradeoff, not an oversight).
 
 ## Explicitly out of scope until the payment-processor decision changes
@@ -203,8 +114,7 @@ Per `CLAUDE.md`, unchanged by any of the above:
 
 ## How to use this document
 
-Each phase becomes its own `EnterPlanMode` pass when we're ready to build it — same workflow
-as Meal Sections/Account Settings/Classes Check-in: explore the specific files named above,
-confirm schema decisions with you where flagged, write the migration + code, verify with
-disposable test accounts, deploy. This document's job is just to make sure we're building
-things in the right order, not to lock in every implementation detail today.
+Each active-backlog item becomes its own `EnterPlanMode` pass when picked up — explore the
+specific files, confirm schema decisions, write the migration + code, verify with disposable
+test accounts, deploy. This document's job is to track what's actually still open, not to
+lock in every implementation detail today.
