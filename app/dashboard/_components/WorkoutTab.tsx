@@ -9,6 +9,7 @@ import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workouts/ProgramDayList';
+import { VideoDemo } from '@/app/_components/workouts/VideoDemo';
 import {
   addExercise,
   addProgramDay,
@@ -839,14 +840,7 @@ export function WorkoutTab({
               return (
                 <>
                   {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
-                    <a
-                      href={ex.video_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-block text-xs text-accent hover:underline"
-                    >
-                      ▶ Watch demo
-                    </a>
+                    <VideoDemo videoUrl={ex.video_url} title={ex.name} alwaysOpen />
                   )}
                   {lastTime && (
                     <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">

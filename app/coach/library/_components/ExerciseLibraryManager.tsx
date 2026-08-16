@@ -8,6 +8,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { MUSCLE_GROUPS } from '@/app/_components/workouts/muscleGroups';
+import { VideoDemo } from '@/app/_components/workouts/VideoDemo';
 import {
   bulkCreateLibraryExercises,
   createLibraryExercise,
@@ -438,6 +439,11 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
                     Default {ex.default_sets}×{ex.default_reps ?? '—'}
                     {ex.default_rpe != null ? ` · RPE ${ex.default_rpe}` : ''}
                   </p>
+                )}
+                {ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://') ? (
+                  <VideoDemo videoUrl={ex.video_url} title={ex.name} />
+                ) : (
+                  <p className="mt-1 text-xs text-zinc-400">No video linked</p>
                 )}
               </div>
             )
