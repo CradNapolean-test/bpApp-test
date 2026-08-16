@@ -53,11 +53,28 @@ function groupClasses(classes: ClassRow[]): ClassGroup[] {
   });
 }
 
+// Collapses deduped, sorted weekday numbers into runs ("Mon-Fri" for 3+ consecutive days,
+// "Wed/Thu" for a short run) -- a class with many occurrences (e.g. every weekday at several
+// times a day) previously joined one day label per occurrence with no dedup, producing an
+// unbroken 40-token string with no spaces to wrap on and overflowing the card on mobile.
+function formatDaysSummary(dayNums: (number | null)[]): string {
+  const unique = [...new Set(dayNums)].filter((d): d is number => d != null).sort((a, b) => a - b);
+  if (unique.length === 0) return '—';
+  const runs: number[][] = [];
+  for (const d of unique) {
+    const last = runs[runs.length - 1];
+    if (last && d === last[last.length - 1] + 1) last.push(d);
+    else runs.push([d]);
+  }
+  return runs
+    .map((run) => (run.length >= 3 ? `${WEEKDAY_SHORT[run[0]]}-${WEEKDAY_SHORT[run[run.length - 1]]}` : run.map((d) => WEEKDAY_SHORT[d]).join('/')))
+    .join(', ');
+}
+
 function formatScheduleSummary(group: ClassGroup): string {
-  const days = group.occurrences.map((o) => (o.day_of_week != null ? WEEKDAY_SHORT[o.day_of_week] : '—')).join('/');
-  const times = new Set(group.occurrences.map((o) => o.start_time));
-  const timeLabel =
-    times.size <= 1 ? formatClassTime(group.occurrences[0].start_time) : group.occurrences.map((o) => formatClassTime(o.start_time)).join('/');
+  const days = formatDaysSummary(group.occurrences.map((o) => o.day_of_week));
+  const times = [...new Set(group.occurrences.map((o) => o.start_time))].sort();
+  const timeLabel = times.map((t) => formatClassTime(t)).join(', ');
   return `${days} · ${timeLabel} · Cap ${group.capacity} · ${group.creditCost} credit${group.creditCost === 1 ? '' : 's'}`;
 }
 

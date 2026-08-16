@@ -28,7 +28,7 @@ import {
 } from '@/lib/data/programTemplates';
 import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
-import { PROGRAM_WEEKDAYS, WEEKDAY_LABELS } from '@/lib/utils/dates';
+import { PROGRAM_WEEKDAYS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgramTemplateWithDays } from '@/lib/data/types';
 
 function exportTemplate(template: ProgramTemplateWithDays) {
@@ -49,7 +49,7 @@ function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | 
   return (
     <input
       placeholder="Phase (optional)"
-      className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      className="w-28 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
@@ -69,14 +69,14 @@ function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | 
   return (
     <select
       title="Day of the week -- carried onto every program instantiated from this template"
-      className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      className="w-20 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={initial ?? ''}
       onChange={handleChange}
     >
-      <option value="">Day of week…</option>
+      <option value="">Day…</option>
       {PROGRAM_WEEKDAYS.map((d) => (
         <option key={d} value={d}>
-          {WEEKDAY_LABELS[d]}
+          {WEEKDAY_SHORT[d]}
         </option>
       ))}
     </select>
@@ -499,7 +499,7 @@ export function ProgramTemplateManager({
             />
             <select
               title="Day of the week -- carried onto every program instantiated from this template"
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+              className="w-20 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
               value={dayForms[previewTemplate.id]?.dayPosition ?? ''}
               onChange={(e) =>
                 setDayForms({
@@ -512,10 +512,10 @@ export function ProgramTemplateManager({
                 })
               }
             >
-              <option value="">Day of week…</option>
+              <option value="">Day…</option>
               {PROGRAM_WEEKDAYS.map((d) => (
                 <option key={d} value={d}>
-                  {WEEKDAY_LABELS[d]}
+                  {WEEKDAY_SHORT[d]}
                 </option>
               ))}
             </select>
