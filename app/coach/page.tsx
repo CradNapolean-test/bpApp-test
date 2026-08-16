@@ -21,12 +21,11 @@ export default async function CoachPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  if (profile?.role !== 'coach') redirect('/dashboard');
+  // maybeSingle, not single -- and redirect to '/' (which explicitly handles a missing
+  // profile), not straight to '/dashboard' -- redirecting directly between the two role pages
+  // is what turned "no profile exists yet" into an actual infinite loop. See app/page.tsx.
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  if (!profile || profile.role !== 'coach') redirect('/');
 
   const [clients, healthStatuses, habitAdherence, chatOverview, activity] = await Promise.all([
     getMyClients(supabase, user.id),

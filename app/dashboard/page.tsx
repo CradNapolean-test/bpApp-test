@@ -10,12 +10,15 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  // maybeSingle, not single -- and redirect to '/' (which explicitly handles a missing
+  // profile), not straight to '/coach' -- redirecting directly between the two role pages is
+  // what turned "no profile exists yet" into an actual infinite loop. See app/page.tsx.
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, email, theme_preference')
     .eq('id', user.id)
-    .single();
-  if (profile?.role !== 'client') redirect('/coach');
+    .maybeSingle();
+  if (!profile || profile.role !== 'client') redirect('/');
 
   const bundle = await loadDashboardBundle(user.id, true);
 
