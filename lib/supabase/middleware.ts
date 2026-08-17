@@ -39,26 +39,33 @@ export async function updateSession(request: NextRequest) {
   // Supabase session cookie — Vercel Cron calls it server-to-server with no browser
   // session, so it must be exempt from the cookie-based redirect below.
   //
-  // /reset-password must be exempt too: Supabase's recovery link puts the token in the URL
-  // *fragment* (after #), which never reaches the server -- only the client-side SDK can see
-  // and process it, via detectSessionInUrl, after the page has actually loaded. The very first
-  // request here has no session cookie yet (the person is, by definition, logged out -- that's
-  // why they're resetting), so without this exemption the middleware redirected to /login
-  // before the page's client-side JS ever got a chance to run and establish the recovery
-  // session. The page itself already handles "no valid token yet" by showing a waiting state
-  // (see app/reset-password/page.tsx), so this is safe to leave open.
-  const isPublicPath =
+  // /reset-password must be exempt from the "not logged in -> /login" redirect for the same
+  // reason: Supabase's recovery link puts the token in the URL *fragment* (after #), which
+  // never reaches the server -- only client-side code can see and process it, after the page
+  // has actually loaded. The very first request here has no session cookie yet (the person is,
+  // by definition, logged out -- that's why they're resetting), so without this exemption the
+  // middleware redirected to /login before the page's client-side JS ever got a chance to run.
+  const exemptFromLoginRedirect =
     request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/api/cron') ||
     request.nextUrl.pathname.startsWith('/reset-password');
 
-  if (!user && !isPublicPath) {
+  // Deliberately NOT the same set as above: /reset-password must stay reachable even after a
+  // user becomes authenticated mid-page. The recovery flow's whole point is to establish a
+  // real session (via setSession) *while already on this page*, specifically so the person can
+  // then set a new password -- unlike /login, where being authenticated means there's nothing
+  // left to do here. Reusing exemptFromLoginRedirect for this check was the actual bug: the
+  // instant setSession succeeded, this redirected straight to the dashboard, skipping the
+  // "set a new password" form entirely.
+  const redirectAwayIfAuthenticated = request.nextUrl.pathname.startsWith('/login');
+
+  if (!user && !exemptFromLoginRedirect) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return redirectCarryingCookies(url, supabaseResponse);
   }
 
-  if (user && isPublicPath) {
+  if (user && redirectAwayIfAuthenticated) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return redirectCarryingCookies(url, supabaseResponse);

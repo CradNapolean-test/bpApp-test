@@ -28,11 +28,8 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
-  // TEMPORARY diagnostic -- remove once the recovery-link issue is confirmed fixed live.
-  const [debug, setDebug] = useState('effect not yet run');
 
   useEffect(() => {
-    setDebug(`effect ran; hash.length=${window.location.hash.length}`);
     const supabase = createClient();
 
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -41,11 +38,9 @@ export default function ResetPasswordPage() {
     const type = params.get('type');
 
     if (accessToken && refreshToken && type === 'recovery') {
-      setDebug((d) => d + ' | calling setSession');
       supabase.auth
         .setSession({ access_token: accessToken, refresh_token: refreshToken })
         .then(({ error }) => {
-          setDebug((d) => d + ` | setSession resolved, error=${error ? error.message : 'none'}`);
           if (error) {
             // Previously silently ignored -- left the page stuck on "waiting for a valid
             // link" with zero indication of what actually went wrong.
@@ -56,18 +51,15 @@ export default function ResetPasswordPage() {
           setReady(true);
         })
         .catch((err: unknown) => {
-          setDebug((d) => d + ` | setSession THREW: ${err instanceof Error ? err.message : String(err)}`);
           setError(`Could not verify reset link: ${err instanceof Error ? err.message : 'unknown error'}`);
         });
       return;
     }
 
-    setDebug((d) => d + ' | no recovery params found, falling back to getSession');
     // No recovery fragment present -- fall back to checking for an already-established
-    // session (e.g. detectSessionInUrl did work, or this is a page refresh after setSession
-    // already ran once and cleared the fragment).
+    // session (e.g. this is a page refresh after setSession already ran once and cleared the
+    // fragment).
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setDebug((d) => d + ` | getSession resolved, hasSession=${!!session}`);
       if (session) setReady(true);
     });
   }, []);
@@ -118,7 +110,6 @@ export default function ResetPasswordPage() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               {error ? error : 'Waiting for a valid reset link — open this page from the link in your reset email.'}
             </p>
-            <p className="break-all text-xs text-zinc-400">DEBUG: {debug}</p>
             {error && (
               <Button variant="outline" className="w-full" onClick={() => router.push('/login')}>
                 Back to login
