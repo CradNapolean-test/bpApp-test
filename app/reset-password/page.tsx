@@ -7,10 +7,19 @@ import { Logo } from '@/app/_components/Logo';
 import { Button } from '@/app/_components/Button';
 
 // Reached via the link in the password-reset email (supabase.auth.resetPasswordForEmail's
-// redirectTo, set on /login). Supabase's client SDK auto-detects the recovery token in the
-// URL fragment and opens a temporary session -- this page just needs to wait for that (the
-// PASSWORD_RECOVERY auth event) before showing the form, since navigating here directly
-// without a valid link leaves no session to update.
+// redirectTo, set on /login). Supabase's recovery link redirects here with the session tokens
+// in the URL *fragment* (#access_token=...&refresh_token=...&type=recovery) -- confirmed
+// directly against this project by generating a real recovery link via the admin API and
+// following it.
+//
+// This does NOT rely on the client SDK's automatic detectSessionInUrl: this app's Supabase
+// client is created via @supabase/ssr's createBrowserClient (cookie-based storage, so the
+// server can read the session too), and in practice that combination never processed the
+// fragment automatically here -- confirmed live: loading a real, valid recovery link produced
+// zero network calls to Supabase and an empty localStorage, meaning detectSessionInUrl simply
+// never engaged. So instead: parse the fragment directly and call setSession() explicitly,
+// which establishes the session through whatever storage adapter the client is actually
+// configured with, regardless of whether automatic detection would have worked.
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -22,16 +31,29 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true);
-    });
-    // Covers the case where the event already fired before this listener attached.
+
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type = params.get('type');
+
+    if (accessToken && refreshToken && type === 'recovery') {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
+        if (!error) {
+          // Clear the tokens from the URL so they don't linger in browser history.
+          window.history.replaceState(null, '', window.location.pathname);
+          setReady(true);
+        }
+      });
+      return;
+    }
+
+    // No recovery fragment present -- fall back to checking for an already-established
+    // session (e.g. detectSessionInUrl did work, or this is a page refresh after setSession
+    // already ran once and cleared the fragment).
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
-    return () => subscription.unsubscribe();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
