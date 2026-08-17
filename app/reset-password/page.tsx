@@ -38,13 +38,21 @@ export default function ResetPasswordPage() {
     const type = params.get('type');
 
     if (accessToken && refreshToken && type === 'recovery') {
-      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
-        if (!error) {
-          // Clear the tokens from the URL so they don't linger in browser history.
+      supabase.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (error) {
+            // Previously silently ignored -- left the page stuck on "waiting for a valid
+            // link" with zero indication of what actually went wrong.
+            setError(`Could not verify reset link: ${error.message}`);
+            return;
+          }
           window.history.replaceState(null, '', window.location.pathname);
           setReady(true);
-        }
-      });
+        })
+        .catch((err: unknown) => {
+          setError(`Could not verify reset link: ${err instanceof Error ? err.message : 'unknown error'}`);
+        });
       return;
     }
 
@@ -98,9 +106,16 @@ export default function ResetPasswordPage() {
             </Button>
           </>
         ) : !ready ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Waiting for a valid reset link — open this page from the link in your reset email.
-          </p>
+          <>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {error ? error : 'Waiting for a valid reset link — open this page from the link in your reset email.'}
+            </p>
+            {error && (
+              <Button variant="outline" className="w-full" onClick={() => router.push('/login')}>
+                Back to login
+              </Button>
+            )}
+          </>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
