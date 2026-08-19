@@ -45,10 +45,15 @@ export async function updateSession(request: NextRequest) {
   // has actually loaded. The very first request here has no session cookie yet (the person is,
   // by definition, logged out -- that's why they're resetting), so without this exemption the
   // middleware redirected to /login before the page's client-side JS ever got a chance to run.
+  //
+  // /auth/confirm is the same story but starker: it's the server route that actually
+  // establishes the session (via verifyOtp), so by definition every request to it arrives
+  // with no session cookie yet -- that's the whole point of the route.
   const exemptFromLoginRedirect =
     request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/api/cron') ||
-    request.nextUrl.pathname.startsWith('/reset-password');
+    request.nextUrl.pathname.startsWith('/reset-password') ||
+    request.nextUrl.pathname.startsWith('/auth/confirm');
 
   // Deliberately NOT the same set as above: /reset-password must stay reachable even after a
   // user becomes authenticated mid-page. The recovery flow's whole point is to establish a

@@ -40,6 +40,12 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
+    // This value reaches the email template as {{ .RedirectTo }} -- the "Reset Password"
+    // template in the Supabase dashboard must link to {{ .SiteURL }}/auth/confirm with
+    // token_hash={{ .TokenHash }}&type=recovery&next={{ .RedirectTo }} (see
+    // app/auth/confirm/route.ts) rather than the default {{ .ConfirmationURL }}, which routes
+    // through Supabase's own PKCE-bound /verify redirect and breaks whenever the email is
+    // opened on a different device than the one that requested it.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
