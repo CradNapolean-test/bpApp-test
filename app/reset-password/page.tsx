@@ -7,19 +7,19 @@ import { Logo } from '@/app/_components/Logo';
 import { Button } from '@/app/_components/Button';
 
 // Reached via the link in the password-reset email (supabase.auth.resetPasswordForEmail's
-// redirectTo, set on /login). Supabase's recovery link redirects here with the session tokens
-// in the URL *fragment* (#access_token=...&refresh_token=...&type=recovery) -- confirmed
-// directly against this project by generating a real recovery link via the admin API and
-// following it.
+// redirectTo, set on /login). This app's Supabase browser client (lib/supabase/client.ts,
+// createBrowserClient from @supabase/ssr) defaults to PKCE flow, not implicit -- so a real
+// recovery email redirects here with `?code=...` in the query string, and the session has to
+// be established via exchangeCodeForSession(), using the code_verifier the client already
+// stashed in its own storage when resetPasswordForEmail() was called.
 //
-// This does NOT rely on the client SDK's automatic detectSessionInUrl: this app's Supabase
-// client is created via @supabase/ssr's createBrowserClient (cookie-based storage, so the
-// server can read the session too), and in practice that combination never processed the
-// fragment automatically here -- confirmed live: loading a real, valid recovery link produced
-// zero network calls to Supabase and an empty localStorage, meaning detectSessionInUrl simply
-// never engaged. So instead: parse the fragment directly and call setSession() explicitly,
-// which establishes the session through whatever storage adapter the client is actually
-// configured with, regardless of whether automatic detection would have worked.
+// The hash-fragment branch below (#access_token=...&type=recovery) is kept only because
+// links generated through the admin API (supabase.auth.admin.generateLink, used for manual
+// testing) aren't PKCE-bound and come back that way -- real user-facing links never do. An
+// earlier version of this page only handled the hash-fragment case, which meant it never
+// actually worked for a real user: every forgot-password email hit a `?code=` link, found
+// nothing in the hash, found no session either, and sat on "waiting for a valid reset link"
+// indefinitely.
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -32,12 +32,14 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const accessToken = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-    const type = params.get('type');
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const hashType = hashParams.get('type');
 
-    if (accessToken && refreshToken && type === 'recovery') {
+    const code = new URLSearchParams(window.location.search).get('code');
+
+    if (accessToken && refreshToken && hashType === 'recovery') {
       supabase.auth
         .setSession({ access_token: accessToken, refresh_token: refreshToken })
         .then(({ error }) => {
@@ -56,9 +58,26 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    // No recovery fragment present -- fall back to checking for an already-established
-    // session (e.g. this is a page refresh after setSession already ran once and cleared the
-    // fragment).
+    if (code) {
+      supabase.auth
+        .exchangeCodeForSession(code)
+        .then(({ error }) => {
+          if (error) {
+            setError(`Could not verify reset link: ${error.message}`);
+            return;
+          }
+          window.history.replaceState(null, '', window.location.pathname);
+          setReady(true);
+        })
+        .catch((err: unknown) => {
+          setError(`Could not verify reset link: ${err instanceof Error ? err.message : 'unknown error'}`);
+        });
+      return;
+    }
+
+    // No recovery code/fragment present -- fall back to checking for an already-established
+    // session (e.g. this is a page refresh after the exchange already ran once and cleared the
+    // URL).
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
