@@ -19,13 +19,19 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type') as EmailOtpType | null;
+  // {{ .RedirectTo }} in the email template resolves to the full absolute URL originally
+  // passed as resetPasswordForEmail's redirectTo (see app/login/page.tsx), not a bare path --
+  // so `next` arrives here already absolute. new URL(next, origin) handles both that case and
+  // a plain relative path correctly; naively concatenating `${origin}${next}` double-prepends
+  // the origin onto an already-absolute URL and produces a malformed host like
+  // "central-hub-eta.vercel.apphttps://central-hub-eta.vercel.app/...".
   const next = searchParams.get('next') ?? '/';
 
   if (tokenHash && type) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(new URL(next, origin));
     }
   }
 
