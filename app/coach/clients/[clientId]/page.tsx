@@ -4,8 +4,7 @@ import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
 import { getClientHealthStatuses } from '@/lib/data/coach';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getJournalEntries } from '@/lib/data/clientJournal';
-import { getRecentActivity } from '@/lib/data/activity';
-import { CoachClientWorkspace } from '@/app/coach/_components/CoachClientWorkspace';
+import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
 
 export default async function CoachClientPage({
   params,
@@ -19,12 +18,17 @@ export default async function CoachClientPage({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: callerProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  const { data: callerProfile } = await supabase
+    .from('profiles')
+    .select('role, theme_preference')
+    .eq('id', user.id)
+    .single();
   if (callerProfile?.role !== 'coach') redirect('/dashboard');
 
   // Not restricted to coach_id = user.id -- RLS (is_same_gym_as_client, 0052/0053) now also
-  // lets a coach read a colleague's client at the same gym for read-only viewing. A client
-  // outside the caller's gym simply returns no row (RLS default-deny), same as before.
+  // lets a coach read a colleague's client at the same gym. isCoachView already renders most
+  // of this dashboard read-only for ANY coach viewing it (see readOnly={isCoachView} below);
+  // isOwnClient narrows the few coach-action affordances that aren't already covered by that.
   const { data: targetProfile } = await supabase
     .from('profiles')
     .select('email, coach_id')
@@ -34,37 +38,68 @@ export default async function CoachClientPage({
   if (!targetProfile) redirect('/coach/clients');
   const isOwnClient = targetProfile.coach_id === user.id;
 
-  const [bundle, healthStatuses, chatOverview, journalEntries, activity] = await Promise.all([
+  const [bundle, healthStatuses, chatOverview, journalEntries] = await Promise.all([
     loadDashboardBundle(clientId, false),
     getClientHealthStatuses(supabase, user.id),
     getCoachChatOverview(),
     getJournalEntries(clientId),
-    getRecentActivity(clientId),
   ]);
   const healthStatus = healthStatuses.find((s) => s.clientId === clientId) ?? null;
   const coachUnreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
+  // Distinct from coachUnreadCount (the sum across every client, for the global inbox link) --
+  // this scopes to just the thread with the client being viewed, for the header Messages icon.
+  const perClientUnreadCount = chatOverview.find((c) => c.client_id === clientId)?.unread_count ?? 0;
 
   return (
-    <CoachClientWorkspace
+    <DashboardShell
       clientId={clientId}
       clientLabel={bundle.profile?.name ?? targetProfile.email}
-      clientEmail={targetProfile.email}
+      isCoachView={true}
       isOwnClient={isOwnClient}
       healthStatus={healthStatus}
       coachUnreadCount={coachUnreadCount}
-      coachEmail={user.email ?? 'Coach'}
-      profile={bundle.profile}
+      perClientUnreadCount={perClientUnreadCount}
+      currentUserId={user.id}
+      currentUserEmail={user.email ?? ''}
+      themePreference={(callerProfile.theme_preference as 'light' | 'dark' | 'system') ?? 'system'}
       journalEntries={journalEntries}
+      profile={bundle.profile}
+      weekDates={bundle.weekDates}
+      weekLogs={bundle.weekLogs}
+      historyLogs={bundle.historyLogs}
+      todayLogId={bundle.todayLogId}
+      foodDiaryEntries={bundle.foodDiaryEntries}
+      foodPhotos={bundle.foodPhotos}
+      manualMacroEntries={bundle.manualMacroEntries}
+      mealPlanEntries={bundle.mealPlanEntries}
+      mealSections={bundle.mealSections}
+      activities={bundle.activities}
+      programWeek={bundle.programWeek}
+      messages={bundle.messages}
       bookings={bundle.bookings}
+      occurrences={bundle.occurrences}
+      creditsBalance={bundle.creditsBalance}
+      creditsBuckets={bundle.creditsBuckets}
+      creditsLedger={bundle.creditsLedger}
       programs={bundle.programs}
-      formAssignments={bundle.formAssignments}
-      educationAssignments={bundle.educationAssignments}
-      habits={bundle.habits}
-      activity={activity}
-      disabledScreens={bundle.disabledScreens}
-      membership={bundle.membership}
+      workoutLogs={bundle.workoutLogs}
       clientExerciseMaxes={bundle.clientExerciseMaxes}
+      workoutDayFeedback={bundle.workoutDayFeedback}
+      membership={bundle.membership}
+      packages={bundle.packages}
+      creditPacks={bundle.creditPacks}
+      photos={bundle.photos}
+      measurementLogs={bundle.measurementLogs}
+      habits={bundle.habits}
+      notifications={bundle.notifications}
+      formTemplates={bundle.formTemplates}
+      formAssignments={bundle.formAssignments}
       exerciseLibrary={bundle.exerciseLibrary}
+      programTemplates={bundle.programTemplates}
+      recipes={bundle.recipes}
+      educationCourses={bundle.educationCourses}
+      educationAssignments={bundle.educationAssignments}
+      unreadMessageCount={bundle.unreadMessageCount}
     />
   );
 }

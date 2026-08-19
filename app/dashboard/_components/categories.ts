@@ -41,7 +41,7 @@ export const CATEGORY_ICON: Record<Category, typeof House> = {
   Notifications: Bell,
 };
 
-// Coach-toggleable via the Tools tab (CoachClientWorkspace) -- Today/Setup/Account/Credits/
+// Coach-toggleable from the client dashboard nav -- Today/Setup/Account/Credits/
 // Messages are core infrastructure and stay permanently on, matching PT Distinction's own
 // Tools tab (only ever toggles tracking modules, never account/billing screens).
 export const DISABLEABLE_SCREENS: Screen[] = [
