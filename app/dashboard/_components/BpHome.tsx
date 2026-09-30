@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
-import { Award, CalendarDays, Gift, HelpCircle, MessagesSquare, Package, PlayCircle, Shirt, Star, Trophy, Users } from 'lucide-react';
+import { Award, Gift, HelpCircle, PlayCircle, Star, Ticket, Trophy, Users } from 'lucide-react';
 import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
-import { Badge, Card, IconChip, SectionLabel } from '@/app/_components/ui';
+import { Card, IconChip, SectionLabel } from '@/app/_components/ui';
 import type { Category, Screen } from './categories';
 
 // Member Home, from the owner's BP mockup (01-dashboard) and app flow chart. Split in two so the
@@ -53,25 +53,38 @@ function Tile({
 export function BpHomeHero({
   profile,
   membership,
+  creditsBalance,
+  onNavigateClasses,
 }: {
   profile: ClientProfileRow | null;
   membership: ClientMembershipRow | null;
+  creditsBalance: number;
+  onNavigateClasses?: () => void;
 }) {
   const greetingHour = new Date().getHours();
   const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
-  const membershipName = membership?.package?.name ?? null;
+  const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
+  const low = creditsBalance <= 1;
   return (
-    <Card tone="accent" className="flex items-center justify-between !px-4 !py-3.5">
+    <div className="flex items-center justify-between gap-3 px-1 pt-1">
       <div className="min-w-0">
-        <p className="text-xs text-zinc-500">{greeting}</p>
-        <p className="truncate text-lg font-extrabold text-black dark:text-zinc-50">{profile?.name ?? 'there'}</p>
+        <p className="text-sm text-zinc-500">{greeting}</p>
+        <p className="truncate text-2xl font-black text-black dark:text-zinc-50">{firstName}</p>
       </div>
-      {membershipName && (
-        <div className="ml-3 shrink-0">
-          <Badge>{membershipName}</Badge>
-        </div>
-      )}
-    </Card>
+      <button
+        type="button"
+        onClick={onNavigateClasses}
+        className={`flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left ${
+          low ? 'border-warning/40 bg-warning/10' : 'border-accent/30 bg-accent-soft'
+        }`}
+      >
+        <Ticket className={`h-4 w-4 ${low ? 'text-warning' : 'text-accent'}`} />
+        <span>
+          <span className={`block text-base font-black leading-none ${low ? 'text-warning' : 'text-accent'}`}>{creditsBalance}</span>
+          <span className="block text-[11px] leading-tight text-zinc-500">{membership?.package?.name ?? 'credits'}</span>
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -80,13 +93,11 @@ export function BpHomeSections({
   membership,
   rewards = [],
   onNavigate,
-  onNavigateClasses,
 }: {
   bookings: BookingRow[];
   membership: ClientMembershipRow | null;
   rewards?: RewardRow[];
   onNavigate: (category: Category, screen?: Screen) => void;
-  onNavigateClasses?: () => void;
 }) {
   // Attendance is marked by the coach after each session, so this counts sessions actually
   // attended rather than merely booked.
@@ -102,26 +113,6 @@ export function BpHomeSections({
 
   return (
     <div className="space-y-5">
-      <div>
-        <SectionLabel>Train &amp; coach</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <Tile icon={CalendarDays} title="My sessions" subtitle="Book group PT" highlight onClick={onNavigateClasses} />
-          <Tile icon={MessagesSquare} title="My coaching" subtitle="Chat & nutrition" highlight onClick={() => onNavigate('Coach')} />
-          <Tile icon={PlayCircle} title="Resources" subtitle="Video library" onClick={() => onNavigate('Learn', 'Education')} />
-          <Tile icon={Trophy} title="Events" subtitle="Gym events" onClick={() => onNavigate('Community', 'Events')} />
-        </div>
-      </div>
-
-      <div>
-        <SectionLabel>Engagement &amp; community</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <Tile icon={Users} title="Refer a friend" subtitle="Share your link" onClick={() => onNavigate('Community', 'Refer a Friend')} />
-          <Tile icon={Star} title="Feedback" subtitle="Rate your experience" onClick={() => onNavigate('Community', 'Feedback')} />
-          <Tile icon={Gift} title="Rewards" subtitle="Gifts & clubs" onClick={() => onNavigate('Community', 'Rewards')} />
-          <Tile icon={HelpCircle} title="FAQ & T&Cs" subtitle="Help & policies" onClick={() => onNavigate('Community', 'FAQs')} />
-        </div>
-      </div>
-
       <div>
         <SectionLabel>Your progress</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
@@ -160,10 +151,14 @@ export function BpHomeSections({
       </div>
 
       <div>
-        <SectionLabel>Coming soon</SectionLabel>
+        <SectionLabel>Explore</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
-          <Tile icon={Package} title="Supplements" subtitle="Coming soon" soon />
-          <Tile icon={Shirt} title="Merch" subtitle="Coming soon" soon />
+          <Tile icon={PlayCircle} title="Resources" subtitle="Video library" onClick={() => onNavigate('Learn', 'Education')} />
+          <Tile icon={Trophy} title="Events" subtitle="Gym events" onClick={() => onNavigate('Community', 'Events')} />
+          <Tile icon={Gift} title="Rewards" subtitle="Gifts & clubs" onClick={() => onNavigate('Community', 'Rewards')} />
+          <Tile icon={Users} title="Refer a friend" subtitle="Share your link" onClick={() => onNavigate('Community', 'Refer a Friend')} />
+          <Tile icon={Star} title="Feedback" subtitle="Rate your experience" onClick={() => onNavigate('Community', 'Feedback')} />
+          <Tile icon={HelpCircle} title="FAQ & T&Cs" subtitle="Help & policies" onClick={() => onNavigate('Community', 'FAQs')} />
         </div>
       </div>
     </div>

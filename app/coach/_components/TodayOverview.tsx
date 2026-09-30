@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CalendarCheck, CalendarDays, ChevronRight, MessageSquare, Users } from 'lucide-react';
+import { CalendarCheck, ChevronRight, MessageSquare } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Card, SectionLabel } from '@/app/_components/ui';
 import { formatClassTime } from '@/lib/utils/dates';
@@ -23,6 +23,9 @@ const toMin = (t: string | null) => {
 function localTodayIso(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
+
+// Opens the Sessions tab on one specific session (its date + class), with its roster showing.
+const sessionHref = (o: ScheduleOccurrence) => `/coach/classes?tab=sessions&date=${o.date}&class=${o.classId}`;
 
 function AttentionRow({
   href,
@@ -58,12 +61,10 @@ export function TodayOverview({
   occurrences,
   unreadCount,
   flagged,
-  clientCount,
 }: {
   occurrences: ScheduleOccurrence[];
   unreadCount: number;
   flagged: ClientHealthStatus[];
-  clientCount: number;
 }) {
   const now = new Date();
   const todayIso = localTodayIso(now);
@@ -72,8 +73,6 @@ export function TodayOverview({
   const today = occurrences.filter((o) => o.date === todayIso).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const inProgress = today.find((s) => toMin(s.startTime) <= nowMin && nowMin < toMin(s.startTime) + SESSION_MIN);
   const upNext = inProgress ?? today.find((s) => toMin(s.startTime) > nowMin) ?? null;
-  const booked = today.reduce((n, s) => n + s.bookedCount, 0);
-  const spots = today.reduce((n, s) => n + s.capacity, 0);
 
   const toMark = occurrences.filter((o) => (o.unmarkedCount ?? 0) > 0);
   const toMarkPeople = toMark.reduce((n, o) => n + (o.unmarkedCount ?? 0), 0);
@@ -82,26 +81,6 @@ export function TodayOverview({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <Card tone="accent" className="!p-3">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
-            <CalendarDays className="h-3.5 w-3.5" /> Booked today
-          </p>
-          <p className="text-2xl font-extrabold text-black dark:text-zinc-50">
-            {booked}
-            <span className="text-sm font-semibold text-zinc-500"> / {spots}</span>
-          </p>
-        </Card>
-        <Link href="/coach/clients">
-          <Card className="!p-3">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
-              <Users className="h-3.5 w-3.5" /> Clients
-            </p>
-            <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{clientCount}</p>
-          </Card>
-        </Link>
-      </div>
-
       <div>
         <SectionLabel>{inProgress ? 'Happening now' : upNext ? 'Up next' : "Today's classes"}</SectionLabel>
         {today.length === 0 ? (
@@ -110,7 +89,7 @@ export function TodayOverview({
           <div className="space-y-2.5">
             {upNext ? (
               <Link
-                href="/coach/classes?tab=sessions"
+                href={sessionHref(upNext)}
                 className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4"
               >
                 <span className="min-w-0">
@@ -136,7 +115,7 @@ export function TodayOverview({
                 return (
                   <Link
                     key={`${s.classId}|${s.date}`}
-                    href="/coach/classes?tab=sessions"
+                    href={sessionHref(s)}
                     className={`flex w-[4.5rem] shrink-0 flex-col items-center rounded-2xl border py-2 ${
                       isNext
                         ? 'border-accent bg-accent text-accent-foreground'
@@ -166,7 +145,7 @@ export function TodayOverview({
             <div className="divide-y divide-black/5 dark:divide-white/10">
               {toMark.length > 0 && (
                 <AttentionRow
-                  href="/coach/classes?tab=sessions"
+                  href={sessionHref(toMark[0])}
                   icon={CalendarCheck}
                   title={`${toMark.length} past session${toMark.length === 1 ? '' : 's'} to mark`}
                   hint={`${toMarkPeople} booking${toMarkPeople === 1 ? '' : 's'} not marked attended or no-show`}

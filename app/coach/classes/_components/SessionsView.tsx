@@ -39,7 +39,16 @@ function longDay(iso: string): string {
   return parseDay(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 }
 
-export function SessionsView({ occurrences, clients }: { occurrences: ScheduleOccurrence[]; clients: CoachClientRow[] }) {
+export function SessionsView({
+  occurrences,
+  clients,
+  initialTarget = null,
+}: {
+  occurrences: ScheduleOccurrence[];
+  clients: CoachClientRow[];
+  // Open straight onto one session (from a dashboard link).
+  initialTarget?: { date: string; classId: string } | null;
+}) {
   const toast = useToast();
   const confirm = useConfirm();
   const { run: runCancel, busy: cancelling } = useAction();
@@ -47,7 +56,7 @@ export function SessionsView({ occurrences, clients }: { occurrences: ScheduleOc
 
   const todayIso = localTodayIso();
   const dates = useMemo(() => [...new Set(occurrences.map((o) => o.date))].sort(), [occurrences]);
-  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const [pickedDate, setPickedDate] = useState<string | null>(initialTarget?.date ?? null);
   const selectedDate = pickedDate && dates.includes(pickedDate) ? pickedDate : (dates.find((d) => d >= todayIso) ?? dates[dates.length - 1] ?? null);
 
   // Keep the selected day centred in the strip (it starts at the oldest session, weeks back).
@@ -56,9 +65,9 @@ export function SessionsView({ occurrences, clients }: { occurrences: ScheduleOc
     activeChip.current?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }, [selectedDate]);
 
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(initialTarget ? `${initialTarget.classId}|${initialTarget.date}` : null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!initialTarget);
   const [adding, setAdding] = useState(false);
   const [clientId, setClientId] = useState('');
 
@@ -82,6 +91,16 @@ export function SessionsView({ occurrences, clients }: { occurrences: ScheduleOc
       setLoading(false);
     }
   }
+
+  // Arriving from a dashboard link: the sheet starts open on that session and its roster loads once.
+  useEffect(() => {
+    if (!initialTarget) return;
+    getRoster(initialTarget.classId, initialTarget.date)
+      .then(setRoster)
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Could not load the roster'))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function closeSheet() {
     setOpenKey(null);

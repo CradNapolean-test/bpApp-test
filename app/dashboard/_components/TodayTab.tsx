@@ -120,7 +120,7 @@ export function TodayTab({
 
   return (
     <div className="space-y-3">
-      {!isCoachView && <BpHomeHero profile={profile} membership={membership} />}
+      {!isCoachView && <BpHomeHero profile={profile} membership={membership} creditsBalance={creditsBalance} onNavigateClasses={onNavigateClasses} />}
 
       {isCoachView && (
       <>
@@ -174,7 +174,46 @@ export function TodayTab({
       </>
       )}
 
-      <Card className="!p-3.5">
+      {!isCoachView && (
+        <div className="rounded-3xl border border-accent/30 bg-accent-soft p-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-accent">
+            {nextClass ? (nextClass.booking_date === todayIso ? 'Today' : 'Next session') : 'Your next session'}
+          </p>
+          {nextClass ? (
+            <>
+              <button type="button" onClick={onNavigateClasses} className="mt-1 block w-full text-left">
+                <span className="block text-3xl font-black leading-tight text-black dark:text-zinc-50">
+                  {formatClassTime(nextClass.class?.start_time) || nextClass.class?.name}
+                </span>
+                <span className="block text-sm text-zinc-600 dark:text-zinc-400">
+                  {nextClass.class?.name} ·{' '}
+                  {nextClass.booking_date === todayIso
+                    ? 'today'
+                    : new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                </span>
+              </button>
+              {nextClass.booking_date === todayIso && (
+                <div className="mt-3">
+                  <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} date={nextClass.booking_date} attended={nextClass.attended} />
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">You don&apos;t have anything booked.</p>
+              <button
+                type="button"
+                onClick={onNavigateClasses}
+                className="mt-3 rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground"
+              >
+                Book a session
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {isCoachView && <Card className="!p-3.5">
         {(() => {
           const body = (
             <span className="flex items-center gap-3">
@@ -205,7 +244,7 @@ export function TodayTab({
             <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} date={nextClass.booking_date} attended={nextClass.attended} />
           </div>
         )}
-      </Card>
+      </Card>}
 
       <Card flush className="grid grid-cols-2 divide-x divide-black/5 dark:divide-white/10">
         <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
@@ -228,7 +267,23 @@ export function TodayTab({
         </button>
       </Card>
 
-      {(isCoachView || pendingForms > 0) && (
+      {!isCoachView && pendingForms > 0 && (
+        <button
+          type="button"
+          onClick={() => onNavigate('Accountability', 'Forms')}
+          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-left"
+        >
+          <span className="flex items-center gap-2.5">
+            <Camera className="h-4 w-4 text-warning" />
+            <span className="text-sm font-semibold text-black dark:text-zinc-50">
+              {pendingForms} form{pendingForms === 1 ? '' : 's'} to complete
+            </span>
+          </span>
+          <span className="text-xs font-bold text-warning">Open</span>
+        </button>
+      )}
+
+      {isCoachView && (
       <div className="grid grid-cols-2 gap-3">
         {isCoachView && (onNavigateClasses ? (
           <button type="button" onClick={onNavigateClasses} className={clickableCardCls}>
@@ -272,7 +327,6 @@ export function TodayTab({
           membership={membership}
           rewards={rewards}
           onNavigate={onNavigate}
-          onNavigateClasses={onNavigateClasses}
         />
       )}
     </div>

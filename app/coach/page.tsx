@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getClientHealthStatuses, getMyClients, getRosterHabitAdherence } from '@/lib/data/coach';
+import { getClientHealthStatuses, getMyClients } from '@/lib/data/coach';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getRecentActivity } from '@/lib/data/activity';
 import { getScheduleOccurrences } from '@/lib/data/classes';
@@ -12,7 +12,6 @@ import { CoachBrand } from './_components/CoachBrand';
 import { CoachHeaderExtras } from './_components/CoachHeaderExtras';
 import { CoachTimeGreeting } from './_components/CoachGreeting';
 import { AddClientForm } from './_components/AddClientForm';
-import { HabitAdherence } from './_components/HabitAdherence';
 import { ActivityFeed } from './_components/ActivityFeed';
 import { TodayOverview } from './_components/TodayOverview';
 import { CoachMobileBrand } from './_components/CoachMobileBrand';
@@ -31,10 +30,9 @@ export default async function CoachPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (!profile || profile.role !== 'coach') redirect('/');
 
-  const [clients, healthStatuses, habitAdherence, chatOverview, activity, occurrences] = await Promise.all([
+  const [clients, healthStatuses, chatOverview, activity, occurrences] = await Promise.all([
     getMyClients(supabase, user.id),
     getClientHealthStatuses(supabase, user.id),
-    getRosterHabitAdherence(supabase, user.id),
     getCoachChatOverview(),
     getRecentActivity(),
     getScheduleOccurrences(1, 2),
@@ -70,7 +68,6 @@ export default async function CoachPage() {
           <TodayOverview
             occurrences={occurrences}
             unreadCount={unreadCount}
-            clientCount={clients.length}
             flagged={healthStatuses.filter((s) => s.status === 'red' || s.status === 'amber')}
           />
           <div className="space-y-4">
@@ -85,7 +82,6 @@ export default async function CoachPage() {
             </div>
           </div>
         </div>
-        <HabitAdherence adherence={habitAdherence} />
       </div>
     </AppShell>
     </ClientOnly>

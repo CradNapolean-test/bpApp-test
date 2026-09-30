@@ -58,7 +58,13 @@ export function ClassesHubShell({
       <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Classes</h1>
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
-      {tab === 'Sessions' && <SessionsView occurrences={occurrences} clients={clients} />}
+      {tab === 'Sessions' && (
+        <SessionsView
+          occurrences={occurrences}
+          clients={clients}
+          initialTarget={searchParams.get('date') && searchParams.get('class') ? { date: searchParams.get('date')!, classId: searchParams.get('class')! } : null}
+        />
+      )}
       {tab === 'Timetable' && <TimetableView classes={initialClasses} />}
       {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} />}
     </AppShell>
