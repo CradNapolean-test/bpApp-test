@@ -210,3 +210,20 @@ export async function logSet(
   });
   if (error) raise(error);
 }
+
+// Fix a mistyped set. RLS limits this to the member's own rows.
+export async function updateSet(
+  logId: string,
+  fields: { actual_reps: number | null; actual_load: number | null; actual_rpe: number | null }
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('workout_logs').update(fields).eq('id', logId);
+  if (error) raise(error);
+}
+
+// Remove a logged set (migration 0072 lets a member delete their own).
+export async function deleteSet(logId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('workout_logs').delete().eq('id', logId);
+  if (error) raise(error);
+}

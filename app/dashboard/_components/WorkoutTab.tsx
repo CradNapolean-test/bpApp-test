@@ -8,6 +8,8 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
+import { BottomSheet } from '@/app/_components/BottomSheet';
+import { useToast } from '@/app/_components/ToastProvider';
 import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workouts/ProgramDayList';
 import { VideoDemo } from '@/app/_components/workouts/VideoDemo';
 import {
@@ -23,8 +25,7 @@ import {
   reorderExercises,
   updateExercise,
   updateProgram,
-  updateProgramDay,
-} from '@/lib/data/workouts';
+  updateProgramDay, updateSet, deleteSet } from '@/lib/data/workouts';
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
@@ -188,6 +189,7 @@ function LogSetForm({
   initialLoad,
   lastSet,
   lastLabel,
+  priorBest,
 }: {
   clientId: string;
   exerciseId: string;
@@ -199,6 +201,8 @@ function LogSetForm({
   // What the member did for this same set number last time, and how to label it ("Last week").
   lastSet: { reps: number | null; load: number | null } | null;
   lastLabel: string;
+  // Heaviest load from earlier sessions of this exercise; a heavier set is a new best.
+  priorBest: number | null;
 }) {
   const { run, busy } = useAction();
   // Reps and load carry over between sets (they're usually the same), so after logging only the
@@ -220,7 +224,8 @@ function LogSetForm({
           set_type: 'working' as SetType,
         }),
       {
-        success: `Set ${nextSetNumber} logged`,
+        success:
+          load !== '' && priorBest != null && load > priorBest ? `Set ${nextSetNumber} logged — new best! 🏆` : `Set ${nextSetNumber} logged`,
         onDone: () => {
           setRpe('');
           if (restSeconds != null) setTimerKey((k) => k + 1);
@@ -272,6 +277,69 @@ function LogSetForm({
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
     </div>
+  );
+}
+
+function SetEditSheet({ log, index, onClose }: { log: WorkoutLogRow; index: number; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const [reps, setReps] = useState<number | ''>(log.actual_reps ?? '');
+  const [load, setLoad] = useState<number | ''>(log.actual_load ?? '');
+  const [rpe, setRpe] = useState<number | ''>(log.actual_rpe ?? '');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const field = (label: string, value: number | '', set: (v: number | '') => void) => (
+    <label className="block">
+      <span className="mb-1 block text-center text-[11px] font-medium text-zinc-500">{label}</span>
+      <input
+        type="number"
+        inputMode="decimal"
+        step="any"
+        className="h-11 w-full min-w-0 rounded-xl border border-black/10 bg-card px-2 text-center text-base font-semibold dark:border-white/10"
+        value={value}
+        onChange={(e) => set(e.target.value === '' ? '' : Number(e.target.value))}
+      />
+    </label>
+  );
+
+  return (
+    <BottomSheet title={`Edit set ${index}`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(
+            () =>
+              updateSet(log.id, {
+                actual_reps: reps === '' ? null : reps,
+                actual_load: load === '' ? null : load,
+                actual_rpe: rpe === '' ? null : rpe,
+              }),
+            { success: 'Set updated', onDone: onClose }
+          );
+        }}
+        className="space-y-3"
+      >
+        <div className="grid grid-cols-3 gap-2">
+          {field('Reps', reps, setReps)}
+          {field('Load', load, setLoad)}
+          {field('RPE', rpe, setRpe)}
+        </div>
+        <button type="submit" disabled={busy} className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            confirmingDelete
+              ? void run(() => deleteSet(log.id), { success: 'Set deleted', onDone: onClose })
+              : setConfirmingDelete(true)
+          }
+          className="block w-full py-1 text-sm font-semibold text-danger disabled:opacity-50"
+        >
+          {confirmingDelete ? 'Tap again to delete this set' : 'Delete this set'}
+        </button>
+      </form>
+    </BottomSheet>
   );
 }
 
@@ -518,6 +586,8 @@ export function WorkoutTab({
     return initial;
   });
   const [openDayId, setOpenDayId] = useState<string | null>(null);
+  const [editingSet, setEditingSet] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!focusDay) return;
@@ -607,19 +677,23 @@ export function WorkoutTab({
   // next to each set and as a summary line, so they know what to beat.
   // Same exercise = same library entry when it has one, otherwise the same name (custom exercises).
   const exerciseById = new Map(programs.flatMap((p) => p.workout_program_days.flatMap((d) => d.workout_exercises)).map((e) => [e.id, e]));
-  function lastSessionFor(
-    libraryId: string | null,
-    name: string,
-    excludeExerciseId: string
-  ): { sets: WorkoutLogRow[]; label: string; date: string } | null {
+  // Working sets from other sessions of the same exercise.
+  function earlierLogs(libraryId: string | null, name: string, excludeExerciseId: string): WorkoutLogRow[] {
     const wantName = name.trim().toLowerCase();
-    const candidates = workoutLogs.filter((l) => {
+    return workoutLogs.filter((l) => {
       if (!l.exercise_id || l.exercise_id === excludeExerciseId || l.set_type !== 'working') return false;
       const logged = exerciseById.get(l.exercise_id);
       const logLib = l.exercise_library_id ?? logged?.exercise_library_id ?? null;
       if (libraryId && logLib === libraryId) return true;
       return !!wantName && logged?.name.trim().toLowerCase() === wantName;
     });
+  }
+  function lastSessionFor(
+    libraryId: string | null,
+    name: string,
+    excludeExerciseId: string
+  ): { sets: WorkoutLogRow[]; label: string; date: string } | null {
+    const candidates = earlierLogs(libraryId, name, excludeExerciseId);
     if (candidates.length === 0) return null;
     const latest = [...candidates].sort((a, b) => b.logged_at.localeCompare(a.logged_at))[0];
     const sets = candidates
@@ -890,6 +964,8 @@ export function WorkoutTab({
         </details>
       )}
 
+      {editingSet && <SetEditSheet log={editingSet.log} index={editingSet.index} onClose={() => setEditingSet(null)} />}
+
       {openDay && (
         <FocusOverlay
           title={openDay.day_label}
@@ -900,6 +976,25 @@ export function WorkoutTab({
           {!isCoachView && openDay.notes && (
             <p className="mb-3 whitespace-pre-wrap text-sm text-zinc-500">{openDay.notes}</p>
           )}
+
+          {!isCoachView && (() => {
+            const lifts = openDay.workout_exercises.filter((e) => e.block_type === 'exercise');
+            if (lifts.length === 0) return null;
+            const done = lifts.filter((e) => (logsByExercise[e.id]?.length ?? 0) > 0).length;
+            return (
+              <div className="mb-3">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-black dark:text-zinc-50">
+                    {done} of {lifts.length} exercises logged
+                  </span>
+                  {done === lifts.length && <span className="font-bold text-success">All done ✓</span>}
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                  <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${Math.round((done / lifts.length) * 100)}%` }} />
+                </div>
+              </div>
+            );
+          })()}
 
           <ExerciseEditor
             exercises={openDay.workout_exercises}
@@ -930,6 +1025,8 @@ export function WorkoutTab({
             renderExtra={(ex) => {
               const logs = logsByExercise[ex.id] ?? [];
               const last = lastSessionFor(ex.exercise_library_id, ex.name, ex.id);
+              const loads = earlierLogs(ex.exercise_library_id, ex.name, ex.id).map((l) => l.actual_load ?? 0);
+              const priorBest = loads.length > 0 && Math.max(...loads) > 0 ? Math.max(...loads) : null;
               // Use the exercise's own video link, else the one on its library entry.
               const videoUrl = ex.video_url || libraryVideo(ex.exercise_library_id);
               const lastFor = (setNumber: number) => {
@@ -955,9 +1052,16 @@ export function WorkoutTab({
                       {logs.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {logs.map((l, i) => (
-                            <span key={l.id} className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
+                            <button
+                              key={l.id}
+                              type="button"
+                              onClick={() => setEditingSet({ log: l, index: i + 1 })}
+                              aria-label={`Edit set ${i + 1}`}
+                              className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success"
+                            >
                               ✓ {i + 1} · {l.actual_reps ?? '—'}×{l.actual_load ?? '—'}
-                            </span>
+                              {priorBest != null && l.actual_load != null && l.actual_load > priorBest ? ' 🏆' : ''}
+                            </button>
                           ))}
                         </div>
                       )}
@@ -971,6 +1075,7 @@ export function WorkoutTab({
                         initialLoad={seed?.actual_load ?? null}
                         lastSet={last ? lastFor(logs.length + 1) : null}
                         lastLabel={last?.label ?? 'Last time'}
+                        priorBest={priorBest}
                       />
                     </>
                   )}
@@ -982,6 +1087,19 @@ export function WorkoutTab({
           {isCoachView && <BatchApplyForm dayId={openDay.id} />}
 
           <DayFeedbackForm clientId={clientId} programDayId={openDay.id} isCoachView={isCoachView} feedback={feedbackByDay[openDay.id]} />
+
+          {!isCoachView && (
+            <button
+              type="button"
+              onClick={() => {
+                toast.success('Workout complete — nice work 💪');
+                setOpenDayId(null);
+              }}
+              className="mt-4 h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground"
+            >
+              Finish workout
+            </button>
+          )}
         </FocusOverlay>
       )}
     </div>
