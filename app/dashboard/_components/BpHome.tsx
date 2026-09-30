@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
-import { CalendarDays, MessagesSquare, Package, PlayCircle, Shirt, Star, Trophy, Users } from 'lucide-react';
-import type { BookingRow, ClientMembershipRow, ClientProfileRow } from '@/lib/data/types';
+import { Award, CalendarDays, Gift, HelpCircle, MessagesSquare, Package, PlayCircle, Shirt, Star, Trophy, Users } from 'lucide-react';
+import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 
 // Home tile grid from the owner's BP app mockup (01-dashboard). Tiles for features that
@@ -63,12 +63,14 @@ export function BpHome({
   profile,
   bookings,
   membership,
+  rewards = [],
   onNavigate,
   onNavigateClasses,
 }: {
   profile: ClientProfileRow | null;
   bookings: BookingRow[];
   membership: ClientMembershipRow | null;
+  rewards?: RewardRow[];
   onNavigate: (category: Category, screen?: Screen) => void;
   onNavigateClasses?: () => void;
 }) {
@@ -81,6 +83,12 @@ export function BpHome({
   const sessionsDone = bookings.filter((b) => b.attended).length;
   const nextClub = (Math.floor(sessionsDone / CLUB_STEP) + 1) * CLUB_STEP;
   const clubPct = Math.round(((sessionsDone % CLUB_STEP) / CLUB_STEP) * 100);
+
+  const clubsEarned = Math.floor(sessionsDone / CLUB_STEP);
+  // The nearest not-yet-reached sessions reward (e.g. "Hoodie" at 100), shown on the club bar.
+  const nextReward = rewards
+    .filter((r) => r.kind === 'sessions' && r.threshold > sessionsDone)
+    .sort((a, b) => a.threshold - b.threshold)[0];
 
   const memberMonths = membership ? monthsSince(membership.started_at) : null;
   const membershipName = membership?.package?.name ?? null;
@@ -110,12 +118,11 @@ export function BpHome({
       </div>
 
       <div>
-        <SectionLabel>Community</SectionLabel>
+        <SectionLabel>Engagement &amp; community</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
-          <Tile icon={Users} title="Refer a friend" subtitle="Share & earn" onClick={() => onNavigate('Community', 'Refer a Friend')} />
-          <Tile icon={Star} title="Feedback" subtitle="Rate us" onClick={() => onNavigate('Community', 'Feedback')} />
-          <Tile icon={Package} title="Supplements" subtitle="Shop online" soon />
-          <Tile icon={Shirt} title="Merch" subtitle="Member discounts" soon />
+          <Tile icon={Users} title="Refer a friend" subtitle="Share discount link" onClick={() => onNavigate('Community', 'Refer a Friend')} />
+          <Tile icon={Star} title="Feedback" subtitle="Submit member feedback" onClick={() => onNavigate('Community', 'Feedback')} />
+          <Tile icon={HelpCircle} title="FAQ & T&Cs" subtitle="Policies & help docs" onClick={() => onNavigate('Community', 'FAQs')} />
         </div>
       </div>
 
@@ -139,10 +146,31 @@ export function BpHome({
             <span className="text-[11px] font-bold text-black dark:text-zinc-50">
               {nextClub} club — {nextClub - sessionsDone} {nextClub - sessionsDone === 1 ? 'session' : 'sessions'} to go
             </span>
+            {nextReward && <span className="text-[10px] text-accent">{nextReward.name}</span>}
           </div>
           <div className="h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
             <div className="h-full rounded-full bg-accent" style={{ width: `${clubPct}%` }} />
           </div>
+          {clubsEarned > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Array.from({ length: clubsEarned }, (_, k) => (k + 1) * CLUB_STEP).map((n) => (
+                <span key={n} className="flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-extrabold text-accent">
+                  <Award className="h-3 w-3" /> {n} club
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Tile icon={Gift} title="Rewards" subtitle="Loyalty gifts, hoodies, bottles" onClick={() => onNavigate('Community', 'Rewards')} />
+        </div>
+      </div>
+
+      <div>
+        <SectionLabel>Coming soon</SectionLabel>
+        <div className="grid grid-cols-2 gap-2">
+          <Tile icon={Package} title="Order supplements" subtitle="Coming soon" soon />
+          <Tile icon={Shirt} title="Order merch" subtitle="Partner discounts" soon />
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Star, Trash2, Users } from 'lucide-react';
+import { Gift, Star, Trash2, Users } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -10,7 +10,8 @@ import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
 import { createEvent, deleteEvent, getEventAttendees } from '@/lib/data/community';
-import type { EventWithSignup, FeedbackRow } from '@/lib/data/types';
+import { createReward, deleteReward, markRewardGiven } from '@/lib/data/rewards';
+import type { EventWithSignup, FeedbackRow, RewardOverview } from '@/lib/data/types';
 
 const inputCls = 'w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/15';
 const cardCls = 'rounded-2xl border border-black/[.05] p-4 dark:border-white/10';
@@ -122,13 +123,112 @@ function EventRow({ event }: { event: EventWithSignup }) {
   );
 }
 
+function NewRewardForm() {
+  const { run, busy } = useAction();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [kind, setKind] = useState<'sessions' | 'months'>('sessions');
+  const [threshold, setThreshold] = useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    await run(
+      () => createReward({ name: name.trim(), description: description.trim() || null, kind, threshold: Number(threshold) }),
+      {
+        success: 'Reward added',
+        onDone: () => {
+          setName('');
+          setDescription('');
+          setThreshold('');
+        },
+      }
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className={`${cardCls} space-y-3`}>
+      <p className="text-sm font-semibold text-black dark:text-zinc-50">New reward</p>
+      <input required className={inputCls} placeholder="e.g. Loyal member water bottle" value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="grid grid-cols-2 gap-2">
+        <select className={inputCls} value={kind} onChange={(e) => setKind(e.target.value as 'sessions' | 'months')}>
+          <option value="sessions">Sessions attended</option>
+          <option value="months">Months as a member</option>
+        </select>
+        <input required type="number" min={1} className={inputCls} placeholder={kind === 'sessions' ? 'e.g. 100' : 'e.g. 18'} value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+      </div>
+      <input className={inputCls} placeholder="Note (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <button
+        type="submit"
+        disabled={busy || !name.trim() || !threshold}
+        className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+      >
+        Add reward
+      </button>
+    </form>
+  );
+}
+
+function RewardCard({ reward }: { reward: RewardOverview }) {
+  const { run } = useAction();
+  const confirm = useConfirm();
+
+  async function remove() {
+    if (
+      !(await confirm({
+        title: `Delete "${reward.name}"?`,
+        body: 'Members will no longer see it, and the record of who received it is deleted too.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    )
+      return;
+    await run(() => deleteReward(reward.id), { success: 'Reward deleted' });
+  }
+
+  return (
+    <div className={cardCls}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-black dark:text-zinc-50">{reward.name}</p>
+          <p className="text-xs text-zinc-500">
+            {reward.kind === 'sessions' ? `${reward.threshold} sessions` : `${reward.threshold} months`} · {reward.grantedCount} given
+          </p>
+        </div>
+        <button onClick={remove} aria-label="Delete reward" className="text-zinc-400 hover:text-danger">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      {reward.eligible.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-accent">Ready to hand out</p>
+          {reward.eligible.map((m) => (
+            <div key={m.clientId} className="flex items-center justify-between text-sm">
+              <span className="text-zinc-700 dark:text-zinc-300">{m.name}</span>
+              <button
+                onClick={() => run(() => markRewardGiven(reward.id, m.clientId), { success: `Marked given to ${m.name}` })}
+                className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground"
+              >
+                Mark given
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-zinc-500">Nobody is waiting on this one.</p>
+      )}
+    </div>
+  );
+}
+
 export function CommunityShell({
   events,
   feedback,
+  rewards,
   unreadCount,
 }: {
   events: EventWithSignup[];
   feedback: FeedbackRow[];
+  rewards: RewardOverview[];
   unreadCount: number;
 }) {
   const avg = feedback.length ? feedback.reduce((s, f) => s + f.rating, 0) / feedback.length : null;
@@ -149,6 +249,22 @@ export function CommunityShell({
           ) : (
             events.map((e) => <EventRow key={e.id} event={e} />)
           )}
+        </section>
+
+        <section className="space-y-3 lg:col-span-2">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-black dark:text-zinc-50">
+            <Gift className="h-5 w-5 text-accent" /> Rewards
+          </h2>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <NewRewardForm />
+            <div className="space-y-3">
+              {rewards.length === 0 ? (
+                <p className="text-sm text-zinc-500">No rewards set up yet — add your first one.</p>
+              ) : (
+                rewards.map((r) => <RewardCard key={r.id} reward={r} />)
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="space-y-3">

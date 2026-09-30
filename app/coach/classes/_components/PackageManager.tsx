@@ -166,6 +166,17 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
         />
       </div>
       <div className="space-y-1">
+        <label className="text-xs font-medium text-zinc-500">Book up to (days ahead, blank = no limit)</label>
+        <input
+          type="number"
+          min={1}
+          className={inputCls}
+          value={advanceDays}
+          onChange={(e) => setAdvanceDays(e.target.value)}
+          placeholder="e.g. 14"
+        />
+      </div>
+      <div className="space-y-1">
         <label className="text-xs font-medium text-zinc-500">Description</label>
         <input className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>

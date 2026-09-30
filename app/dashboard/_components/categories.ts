@@ -11,6 +11,8 @@ export type Screen =
   | 'Events'
   | 'Feedback'
   | 'Refer a Friend'
+  | 'Rewards'
+  | 'FAQs'
   | 'Weekly Log'
   | 'Forms'
   | 'Education'
@@ -113,7 +115,7 @@ export function screensForCategory(
       case 'Coach':
         return ['Coaching'];
       case 'Community':
-        return ['Events', 'Feedback', 'Refer a Friend'];
+        return ['Events', 'Feedback', 'Refer a Friend', 'Rewards', 'FAQs'];
       case 'Nutrition':
         // manual_import shows the same Food Tracking screen, but FoodTrackingTab branches
         // internally to a simple per-section macro-entry form instead of the food-search

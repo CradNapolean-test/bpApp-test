@@ -6,6 +6,7 @@ import { ToastProvider } from "./_components/ToastProvider";
 import { ConfirmProvider } from "./_components/ConfirmDialog";
 import { ThemeSync } from "./_components/ThemeSync";
 import { ServiceWorkerRegister } from "./_components/ServiceWorkerRegister";
+import { SplashScreen } from "./_components/SplashScreen";
 import { createClient } from "@/lib/supabase/server";
 import type { ThemePreference } from "./_components/theme";
 
@@ -80,6 +81,7 @@ export default async function RootLayout({
           <ConfirmProvider>
             <ThemeSync dbPreference={themePreference} />
             <ServiceWorkerRegister />
+            <SplashScreen />
             {children}
           </ConfirmProvider>
         </ToastProvider>

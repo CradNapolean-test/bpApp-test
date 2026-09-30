@@ -102,6 +102,7 @@ export default async function CoachClientPage({
       unreadMessageCount={bundle.unreadMessageCount}
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}
+      rewardsData={bundle.rewardsData}
     />
   );
 }

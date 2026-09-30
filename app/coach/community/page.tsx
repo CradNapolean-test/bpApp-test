@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getRecentFeedback, getUpcomingEvents } from '@/lib/data/community';
+import { getRewardOverview } from '@/lib/data/rewards';
 import { CommunityShell } from './_components/CommunityShell';
 
 export default async function CoachCommunityPage() {
@@ -14,12 +15,13 @@ export default async function CoachCommunityPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [events, feedback, chatOverview] = await Promise.all([
+  const [events, feedback, chatOverview, rewards] = await Promise.all([
     getUpcomingEvents(null),
     getRecentFeedback(),
     getCoachChatOverview(),
+    getRewardOverview(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
-  return <CommunityShell events={events} feedback={feedback} unreadCount={unreadCount} />;
+  return <CommunityShell events={events} feedback={feedback} rewards={rewards} unreadCount={unreadCount} />;
 }

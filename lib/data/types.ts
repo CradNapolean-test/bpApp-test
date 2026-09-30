@@ -705,3 +705,25 @@ export interface FeedbackRow {
   created_at: string;
   clientName: string;
 }
+
+export interface RewardRow {
+  id: string;
+  gym_id: string;
+  name: string;
+  description: string | null;
+  kind: 'sessions' | 'months';
+  threshold: number;
+  created_at: string;
+}
+
+export interface RewardsForMember {
+  rewards: RewardRow[];
+  grantedIds: string[];
+  sessions: number;
+  months: number;
+}
+
+export interface RewardOverview extends RewardRow {
+  grantedCount: number;
+  eligible: { clientId: string; name: string }[];
+}

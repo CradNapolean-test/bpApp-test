@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Check, Copy, MapPin, Share2, Star, Users } from 'lucide-react';
+import Link from 'next/link';
+import { CalendarDays, Check, ChevronDown, Copy, ExternalLink, Gift, MapPin, Share2, Star, Users } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { leaveEvent, signUpForEvent, submitFeedback } from '@/lib/data/community';
-import type { EventWithSignup } from '@/lib/data/types';
+import type { EventWithSignup, RewardsForMember } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.06] bg-[var(--background)] p-4 dark:border-white/10';
 
@@ -152,17 +153,13 @@ export function FeedbackTab({ readOnly }: { readOnly: boolean }) {
 
 // ---------------------------------------------------------------- Refer a friend
 
-// A stable, human-shareable code derived from the member's id -- nothing extra to store. The
-// discount itself is redeemed manually at sign-up (no payments in the app), so the code is how
-// the team knows who referred whom.
-export function referralCodeFor(clientId: string): string {
-  return `BP-${clientId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
-}
+// The gym's own referral sign-up page -- the referral discount is already applied there, so
+// members just share this link.
+export const REFER_URL = 'https://ballisticperformancequays.co.uk/refer';
 
-export function ReferTab({ clientId, name }: { clientId: string; name: string }) {
+export function ReferTab({ name }: { name: string }) {
   const [copied, setCopied] = useState(false);
-  const code = referralCodeFor(clientId);
-  const message = `${name.split(' ')[0]} here — I train at Ballistic Performance and think you'd love it. Ask about the 6 week challenge and mention my code ${code} for a discount.`;
+  const message = `${name.split(' ')[0]} here — I train at Ballistic Performance and think you'd love it. Join with my link and your discount is already applied: ${REFER_URL}`;
 
   async function share() {
     try {
@@ -191,12 +188,8 @@ export function ReferTab({ clientId, name }: { clientId: string; name: string })
       <div>
         <p className="text-sm font-extrabold text-black dark:text-zinc-50">Refer a friend or family member</p>
         <p className="text-xs text-zinc-500">
-          Send them your code. They get a discount off the 6 week challenge when they join and quote it.
+          Send them your link. Their discount off the 6 week challenge is already applied when they sign up through it.
         </p>
-      </div>
-      <div className="rounded-xl border border-dashed border-accent/40 bg-accent-soft py-4 text-center">
-        <p className="text-[10px] uppercase tracking-widest text-zinc-500">Your code</p>
-        <p className="mt-1 text-2xl font-black tracking-widest text-accent">{code}</p>
       </div>
       <p className="rounded-xl bg-black/[.03] p-3 text-xs text-zinc-600 dark:bg-white/[.04] dark:text-zinc-400">{message}</p>
       <div className="flex gap-2">
@@ -215,6 +208,134 @@ export function ReferTab({ clientId, name }: { clientId: string; name: string })
           {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
           {copied ? 'Copied' : 'Copy'}
         </button>
+        <a
+          href={REFER_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open the referral page"
+          className="flex items-center justify-center rounded-xl border border-black/10 px-3 dark:border-white/15"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Rewards
+
+export function RewardsTab({ data }: { data: RewardsForMember }) {
+  const { rewards, grantedIds, sessions, months } = data;
+  const clubs = Math.floor(sessions / 100);
+
+  return (
+    <div className="space-y-3">
+      <div className={cardCls}>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Session clubs</p>
+        <p className="mt-1 text-sm font-extrabold text-black dark:text-zinc-50">
+          {clubs > 0 ? `You're in the ${clubs * 100} club` : `${100 - sessions} sessions to the 100 club`}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {[100, 200, 300, 400, 500].map((n) => (
+            <span
+              key={n}
+              className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
+                sessions >= n ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-400 dark:bg-white/10'
+              }`}
+            >
+              {n} club
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {rewards.length === 0 ? (
+        <EmptyState icon={Gift} title="No rewards yet" hint="Loyalty gifts like bottles and hoodies will show up here." />
+      ) : (
+        rewards.map((r) => {
+          const value = r.kind === 'sessions' ? sessions : months;
+          const given = grantedIds.includes(r.id);
+          const earned = value >= r.threshold;
+          const pct = Math.min(100, Math.round((value / r.threshold) * 100));
+          return (
+            <div key={r.id} className={cardCls}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-black dark:text-zinc-50">{r.name}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {r.kind === 'sessions' ? `${r.threshold} sessions` : `${r.threshold} months as a member`}
+                    {r.description ? ` · ${r.description}` : ''}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                    given
+                      ? 'bg-success/15 text-success'
+                      : earned
+                        ? 'bg-accent/15 text-accent'
+                        : 'bg-black/5 text-zinc-500 dark:bg-white/10'
+                  }`}
+                >
+                  {given ? 'Received ✓' : earned ? 'Earned — ask your coach' : `${value}/${r.threshold}`}
+                </span>
+              </div>
+              {!earned && (
+                <div className="mt-2.5 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- FAQs
+
+// DRAFT answers, written from the booking rules in the owner's brief. Rob should review the
+// wording (and add anything from the TeamUp FAQ) before this goes in front of members.
+const FAQS: { q: string; a: string }[] = [
+  { q: 'How do I book a session?', a: 'Open the Book tab, pick a day, and tap Book on the session you want. Your credits are shown at the top.' },
+  { q: 'Where can I see my booked sessions?', a: 'Under "My bookings" on the Book tab. They also appear on your Home screen as your next class.' },
+  {
+    q: 'What is the cancellation policy?',
+    a: 'Cancel at least 3 hours before your session to keep your credit. Between 11pm and 5am does not count, so for early-morning sessions you need to cancel by 11pm the night before. Each booking shows its exact cancel-by time. Cancel later than that and the credit is lost.',
+  },
+  { q: 'What if a session is full?', a: 'Tap Waitlist. If a spot opens and you have enough credits, you are booked in automatically and we let you know.' },
+  { q: 'How far ahead can I book?', a: 'Challenge members can book 2 weeks ahead. Full and Big Dog members can book 2 weeks and 5 days ahead.' },
+  { q: 'What are Strong and Big Dog memberships?', a: 'Strong gives you 3 sessions a week. Big Dog gives you unlimited sessions.' },
+  {
+    q: 'What are the Big Dog T-shirts?',
+    a: 'Hit the Big Dog standard in one exercise for a White shirt, 3 for Turquoise, 6 for Silver, and every exercise for Gold. Your standards are on your profile.',
+  },
+  { q: 'How do I refer a friend?', a: 'Open Refer a friend, tap Share, and send them your link. Their discount is already applied.' },
+];
+
+export function FaqTab() {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <div className="space-y-3">
+      <div className={`${cardCls} !p-0`}>
+        {FAQS.map((f, i) => (
+          <div key={f.q} className="border-b border-black/5 last:border-b-0 dark:border-white/5">
+            <button
+              type="button"
+              onClick={() => setOpen(open === i ? null : i)}
+              aria-expanded={open === i}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+            >
+              <span className="text-sm font-bold text-black dark:text-zinc-50">{f.q}</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open === i ? 'rotate-180' : ''}`} />
+            </button>
+            {open === i && <p className="px-4 pb-3.5 text-sm text-zinc-600 dark:text-zinc-400">{f.a}</p>}
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-center gap-4 text-xs text-zinc-500">
+        <Link href="/legal/terms" className="underline">Terms &amp; conditions</Link>
+        <Link href="/legal/privacy" className="underline">Privacy policy</Link>
       </div>
     </div>
   );

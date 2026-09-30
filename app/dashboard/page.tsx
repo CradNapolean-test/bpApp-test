@@ -69,6 +69,7 @@ export default async function DashboardPage() {
       disabledScreens={bundle.disabledScreens}
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}
+      rewardsData={bundle.rewardsData}
       unreadMessageCount={bundle.unreadMessageCount}
     />
   );

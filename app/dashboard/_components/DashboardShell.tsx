@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bell, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Bell, MessageSquare, User } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
 import { Logo } from '@/app/_components/Logo';
@@ -39,7 +39,7 @@ import { CreditsTab } from './CreditsTab';
 import { ClientCreditsTab } from './ClientCreditsTab';
 import { WorkoutTab } from './WorkoutTab';
 import { BigDogTab } from './BigDogTab';
-import { EventsTab, FeedbackTab, ReferTab } from './CommunityTabs';
+import { EventsTab, FaqTab, FeedbackTab, ReferTab, RewardsTab } from './CommunityTabs';
 import type { ClientHealthStatus } from '@/lib/data/coach';
 import type { ThemePreference } from '@/app/_components/theme';
 import type {
@@ -47,6 +47,7 @@ import type {
   BigDogResultRow,
   BookingRow,
   EventWithSignup,
+  RewardsForMember,
   ChatMessage,
   ClientExerciseMaxRow,
   ClientMembershipRow,
@@ -128,6 +129,7 @@ export function DashboardShell({
   journalEntries = [],
   bigDogResults = [],
   events = [],
+  rewardsData = { rewards: [], grantedIds: [], sessions: 0, months: 0 },
   unreadMessageCount = 0,
   healthStatus = null,
   coachUnreadCount = 0,
@@ -180,6 +182,7 @@ export function DashboardShell({
   journalEntries?: ClientJournalEntryRow[];
   bigDogResults?: BigDogResultRow[];
   events?: EventWithSignup[];
+  rewardsData?: RewardsForMember;
   unreadMessageCount?: number;
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
@@ -426,6 +429,15 @@ export function DashboardShell({
             )}
           </button>
           {isCoachView && <CoachMessagesButton unreadCount={coachUnreadCount} />}
+          {!isCoachView && area === 'Coaching' && category === 'Home' && (
+            <button
+              onClick={() => handleCategoryClick('Account Settings')}
+              aria-label="My profile"
+              className="rounded-full bg-accent p-2 text-accent-foreground md:hidden"
+            >
+              <User className="h-5 w-5" />
+            </button>
+          )}
         </>
       }
       bottomBar={
@@ -481,6 +493,7 @@ export function DashboardShell({
               onNavigate={handleNavigate}
               onNavigateClasses={isCoachView ? undefined : () => setArea('Classes')}
               isCoachView={isCoachView}
+              rewards={rewardsData.rewards}
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (
@@ -632,9 +645,11 @@ export function DashboardShell({
             <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} readOnly={!isOwnClient} />
           )}
           {effectiveScreen === 'Events' && <EventsTab events={events} readOnly={isCoachView} />}
+          {effectiveScreen === 'Rewards' && <RewardsTab data={rewardsData} />}
+          {effectiveScreen === 'FAQs' && <FaqTab />}
           {effectiveScreen === 'Feedback' && <FeedbackTab readOnly={isCoachView} />}
           {effectiveScreen === 'Refer a Friend' && !isCoachView && (
-            <ReferTab clientId={clientId} name={profile?.name ?? clientLabel} />
+            <ReferTab name={profile?.name ?? clientLabel} />
           )}
           {effectiveScreen === 'Big Dog' && (
             <BigDogTab

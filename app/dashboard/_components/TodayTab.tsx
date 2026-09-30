@@ -13,6 +13,7 @@ import type {
   DailyLogRow,
   FormAssignmentWithDetails,
   HabitWithLogs,
+  RewardRow,
   WorkoutLogRow,
   WorkoutProgramRow,
 } from '@/lib/data/types';
@@ -81,6 +82,7 @@ export function TodayTab({
   onNavigate,
   onNavigateClasses,
   isCoachView = false,
+  rewards = [],
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -97,6 +99,7 @@ export function TodayTab({
   onNavigate: (category: Category, screen?: Screen) => void;
   onNavigateClasses?: () => void;
   isCoachView?: boolean;
+  rewards?: RewardRow[];
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -135,6 +138,7 @@ export function TodayTab({
           profile={profile}
           bookings={bookings}
           membership={membership}
+          rewards={rewards}
           onNavigate={onNavigate}
           onNavigateClasses={onNavigateClasses}
         />
