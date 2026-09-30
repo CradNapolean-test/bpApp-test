@@ -7,9 +7,9 @@ import { getMyClients } from '@/lib/data/coach';
 import { ClassesHubShell } from './_components/ClassesHubShell';
 
 export default async function CoachClassesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  // Packages and credit packs moved to their own Memberships area -- keep old links working.
+  // Packages and credit packs moved to Business -- keep old links working.
   const { tab } = await searchParams;
-  if (tab === 'packages' || tab === 'credit-packs') redirect(`/coach/memberships${tab === 'credit-packs' ? '?tab=credit-packs' : ''}`);
+  if (tab === 'packages' || tab === 'credit-packs') redirect(`/coach/business?tab=${tab === 'credit-packs' ? 'credit-packs' : 'plans'}`);
 
   const supabase = await createClient();
   const {

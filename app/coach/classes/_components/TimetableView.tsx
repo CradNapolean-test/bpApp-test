@@ -9,12 +9,12 @@ import { Card } from '@/app/_components/ui';
 import { createClass, deleteClass, updateClass } from '@/lib/data/classes';
 import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClassRow } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
 // The weekly timetable: every class row is one slot (a day, a time, a class). Shown as a
 // Monday-to-Saturday grid on desktop and a day-by-day list on a phone, with per-slot editing.
 // (The "By class" view in ClassManager still edits a recurring class as a group.)
 
-const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
 
 // Monday first, and Sunday only if something is actually scheduled on it.
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];

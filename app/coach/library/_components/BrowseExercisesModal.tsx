@@ -62,7 +62,7 @@ export function BrowseExercisesModal({
           <button
             onClick={() => setGroupFilter('')}
             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-              groupFilter === '' ? 'bg-[#141414] text-white' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+              groupFilter === '' ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
             }`}
           >
             All
@@ -72,7 +72,7 @@ export function BrowseExercisesModal({
               key={g}
               onClick={() => setGroupFilter(g === groupFilter ? '' : g)}
               className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                groupFilter === g ? 'bg-[#141414] text-white' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                groupFilter === g ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
               }`}
             >
               {g}

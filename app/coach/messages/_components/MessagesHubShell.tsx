@@ -8,6 +8,7 @@ import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
+import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -75,23 +76,12 @@ export function MessagesHubShell({
 
   const header = (
     <>
-      <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Messages</h1>
-      <div className="mb-4 flex w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 dark:bg-white/[.03]">
-        {(['inbox', 'broadcasts'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
-              tab === t
-                ? 'bg-[#141414] text-white shadow-sm'
-                : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
-            }`}
-          >
-            {TAB_LABEL[t]}
-          </button>
-        ))}
-      </div>
+      <h1 className="mb-4 mt-3 text-2xl font-bold text-black md:mt-0 dark:text-zinc-50">Messages</h1>
+      <HubTabBar
+        tabs={['Conversations', 'Broadcasts'] as const}
+        active={TAB_LABEL[tab] as 'Conversations' | 'Broadcasts'}
+        onSelect={(t) => setTab(t === 'Broadcasts' ? 'broadcasts' : 'inbox')}
+      />
     </>
   );
 

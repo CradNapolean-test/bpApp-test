@@ -111,7 +111,7 @@ export function ClientTable({
 const scopeBtnCls = (active: boolean) =>
   `rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
     active
-      ? 'bg-[#141414] text-white dark:bg-white dark:text-black'
+      ? 'bg-accent text-accent-foreground'
       : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
   }`;
 

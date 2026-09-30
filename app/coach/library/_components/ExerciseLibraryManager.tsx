@@ -17,6 +17,7 @@ import {
 } from '@/lib/data/exerciseLibrary';
 import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
 const EXPORT_COLUMNS = [
   'name',
@@ -77,7 +78,6 @@ function parseExerciseCsv(text: string): Omit<ExerciseLibraryRow, 'id' | 'create
     }));
 }
 
-const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
 // Inline edit -- replaces the card's own content in place, matching the desktop pattern used
 // by ClassManager's row edit (plenty of width for this instead of a mobile bottom sheet).
@@ -372,7 +372,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         <button
           type="button"
           onClick={() => setAddingExercise(true)}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + Add exercise
         </button>

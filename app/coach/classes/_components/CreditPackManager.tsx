@@ -8,8 +8,8 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createCreditPack, deleteCreditPack, updateCreditPack } from '@/lib/data/memberships';
 import type { CreditPackRow } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
-const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
 // Catalog CRUD for one-off, optionally-expiring credit bundles -- the credit-pack counterpart
 // to PackageManager.tsx's recurring membership packages. Granting a pack to a specific client
@@ -175,7 +175,7 @@ export function CreditPackManager({ initialPacks }: { initialPacks: CreditPackRo
         <button
           type="button"
           onClick={() => setAddingPack(true)}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + Add pack
         </button>
@@ -210,7 +210,7 @@ export function CreditPackManager({ initialPacks }: { initialPacks: CreditPackRo
                     </button>
                   </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-[#19adb1]">
+                <p className="mt-2 text-2xl font-extrabold text-accent">
                   {p.credits} <span className="text-sm font-medium text-zinc-500">credits</span>
                 </p>
                 <p className="mt-1 text-sm text-zinc-500">

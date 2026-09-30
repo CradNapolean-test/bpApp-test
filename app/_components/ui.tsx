@@ -14,6 +14,10 @@ import type { ReactNode } from 'react';
 //   16-18px          screen and card titles
 //   24-32px          big numbers
 
+// The one text-input style for forms (coach and member). Compact inline inputs (text-xs) keep
+// their own smaller styling.
+export const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
+
 export const cardBase = 'rounded-2xl border border-black/[.06] bg-card dark:border-white/10';
 
 export function Card({

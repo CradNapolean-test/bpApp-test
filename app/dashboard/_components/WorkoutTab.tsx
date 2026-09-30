@@ -800,7 +800,7 @@ export function WorkoutTab({
               </select>
               <button
                 onClick={() => handleAddDay(program.id)}
-                className="rounded-full bg-[#141414] px-3 py-1.5 text-xs font-bold text-white"
+                className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
               >
                 + Day
               </button>

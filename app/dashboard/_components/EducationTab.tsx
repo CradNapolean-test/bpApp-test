@@ -200,7 +200,7 @@ export function EducationTab({
             <button
               type="submit"
               disabled={assigning || !selectedCourse}
-              className="shrink-0 rounded-full bg-[#141414] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
             >
               {assigning ? 'Assigning…' : 'Assign'}
             </button>

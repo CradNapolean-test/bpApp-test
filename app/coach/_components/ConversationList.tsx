@@ -83,7 +83,7 @@ export function ConversationList({
                   <span className="truncate font-bold text-black dark:text-zinc-50">{c.client_name}</span>
                   <span className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-400">
                     {c.last_message_at && relativeTime(c.last_message_at)}
-                    {c.unread_count > 0 && <span className="h-2 w-2 rounded-full bg-[#19adb1]" aria-label="Unread" />}
+                    {c.unread_count > 0 && <span className="h-2 w-2 rounded-full bg-accent" aria-label="Unread" />}
                   </span>
                 </div>
                 <p className="truncate text-xs text-zinc-500">{c.last_message ?? 'No messages yet'}</p>

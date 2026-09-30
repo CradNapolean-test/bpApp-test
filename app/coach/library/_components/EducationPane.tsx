@@ -19,8 +19,8 @@ import {
   updateLesson,
 } from '@/lib/data/education';
 import type { EducationCourseWithModules, EducationLessonRow, EducationModuleWithLessons } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
-const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
 const smallInputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
 
 function LessonRow({
@@ -291,7 +291,7 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
         <button
           type="button"
           onClick={() => setAddingCourse(true)}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + New course
         </button>
@@ -345,7 +345,7 @@ export function EducationPane({ initialCourses }: { initialCourses: EducationCou
                   </div>
                 </div>
                 {c.description && <p className="mt-0.5 text-sm text-zinc-500">{c.description}</p>}
-                <p className="mt-1 text-sm font-semibold text-[#19adb1]">
+                <p className="mt-1 text-sm font-semibold text-accent">
                   {c.education_modules.length} module{c.education_modules.length === 1 ? '' : 's'} · {lessonCount} lesson{lessonCount === 1 ? '' : 's'}
                 </p>
               </div>

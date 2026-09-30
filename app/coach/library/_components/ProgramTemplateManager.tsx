@@ -252,7 +252,7 @@ export function ProgramTemplateManager({
         <button
           type="button"
           onClick={() => setAddingTemplate(true)}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + New template
         </button>
@@ -521,7 +521,7 @@ export function ProgramTemplateManager({
             </select>
             <button
               onClick={() => handleAddDay(previewTemplate.id)}
-              className="rounded-full bg-[#141414] px-3 py-1.5 text-xs font-bold text-white"
+              className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
             >
               + Day
             </button>

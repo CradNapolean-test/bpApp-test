@@ -141,7 +141,7 @@ export function BroadcastsPane({
           <button
             type="submit"
             disabled={!canSubmit}
-            className="rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
           >
             {timing === 'now' ? 'Send now' : 'Schedule'}
           </button>
@@ -170,13 +170,13 @@ export function BroadcastsPane({
                   {showsMessage && (
                     <>
                       {' · Message: '}
-                      <span className={isSent ? 'text-[#19adb1]' : 'text-zinc-500'}>{isSent ? 'Sent' : 'Scheduled'}</span>
+                      <span className={isSent ? 'text-accent' : 'text-zinc-500'}>{isSent ? 'Sent' : 'Scheduled'}</span>
                     </>
                   )}
                   {showsEmail && (
                     <>
                       {' · Email: '}
-                      <span className={isEmailSent ? 'text-[#19adb1]' : 'text-zinc-500'}>{isEmailSent ? 'Sent' : 'Scheduled'}</span>
+                      <span className={isEmailSent ? 'text-accent' : 'text-zinc-500'}>{isEmailSent ? 'Sent' : 'Scheduled'}</span>
                     </>
                   )}
                 </p>

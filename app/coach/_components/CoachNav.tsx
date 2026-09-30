@@ -12,7 +12,7 @@ export function CoachNav() {
   const linkCls = (active: boolean) =>
     `flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
       active
-        ? 'bg-[#141414] text-white shadow-sm'
+        ? 'bg-accent text-accent-foreground shadow-sm'
         : 'text-zinc-500 hover:bg-black/5 hover:text-black dark:hover:bg-white/5 dark:hover:text-zinc-300'
     }`;
 

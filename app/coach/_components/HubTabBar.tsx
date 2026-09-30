@@ -26,7 +26,7 @@ export function HubTabBar<T extends string>({
             onClick={() => onSelect(tab)}
             className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors ${
               isActive
-                ? 'border-[#19adb1] dark:border-[#2abfbf] font-bold text-black dark:text-zinc-50'
+                ? 'border-accent font-bold text-black dark:text-zinc-50'
                 : 'border-transparent font-medium text-zinc-500 hover:text-black dark:hover:text-zinc-300'
             }`}
           >

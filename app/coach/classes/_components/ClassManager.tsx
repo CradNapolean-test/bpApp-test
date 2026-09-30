@@ -10,12 +10,12 @@ import { createClass, createClasses, deleteClass, updateClass } from '@/lib/data
 import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { TimetableView } from './TimetableView';
 import type { ClassRow } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
 type OccurrenceRow = { rowId: number; classId: string | null; dayOfWeek: number; startTime: string };
 
 let nextRowId = 1;
 
-const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
 // One design "class" (e.g. "Strength Circuit, Mon/Wed/Fri 6am") is actually several ClassRow
 // occurrences sharing a name, one per {day_of_week, start_time} -- see createClasses' comment

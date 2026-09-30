@@ -9,8 +9,8 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { createPackage, deletePackage, updatePackage } from '@/lib/data/memberships';
 import { DISABLEABLE_SCREENS } from '@/app/dashboard/_components/categories';
 import type { MembershipPackageRow } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
-const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
 // All-checked collapses to `null` (unrestricted) on save -- the canonical "this tier doesn't
 // restrict anything" value, same as every package that predates this feature. Partially
@@ -215,7 +215,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
         <button
           type="button"
           onClick={() => setAddingPackage(true)}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + Add package
         </button>
@@ -250,7 +250,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
                     </button>
                   </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-[#19adb1]">
+                <p className="mt-2 text-2xl font-extrabold text-accent">
                   {p.credits_per_week} <span className="text-sm font-medium text-zinc-500">credits / week</span>
                 </p>
                 <p className="mt-1 text-sm text-zinc-500">

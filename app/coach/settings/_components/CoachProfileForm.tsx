@@ -4,8 +4,8 @@ import { useRef, useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
 import { Button } from '@/app/_components/Button';
 import { setDisplayName, uploadCoachLogo } from '@/lib/data/coachSettings';
+import { inputCls } from '@/app/_components/ui';
 
-const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
 
 export function CoachProfileForm({ initialName, logoUrl }: { initialName: string | null; logoUrl?: string | null }) {
   const { run, busy } = useAction();

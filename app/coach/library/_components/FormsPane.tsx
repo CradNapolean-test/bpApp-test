@@ -15,6 +15,7 @@ import {
   updateFormTemplate,
 } from '@/lib/data/forms';
 import type { FormQuestionType, FormTemplateRow } from '@/lib/data/types';
+import { inputCls } from '@/app/_components/ui';
 
 const QUESTION_TYPES: { value: FormQuestionType; label: string }[] = [
   { value: 'short_text', label: 'Short text' },
@@ -35,7 +36,6 @@ type QuestionDraft = {
 
 const BLANK_QUESTION: QuestionDraft = { question_text: '', question_type: 'short_text', optionsRaw: '', required: true };
 
-const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
 // Fullscreen editor for one form template -- name/description/default-onboarding flag, plus
 // its question list. Shared by both "+ New form" (editingId null) and each row's "Edit".
@@ -256,7 +256,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
         <button
           type="button"
           onClick={openNew}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + New form
         </button>
@@ -279,7 +279,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
               </div>
               <div className="flex shrink-0 items-center gap-2.5">
                 {t.is_default_onboarding && (
-                  <span className="rounded-full bg-[#19adb1]/10 px-2.5 py-1 text-xs font-semibold text-[#19adb1]">
+                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
                     Default onboarding
                   </span>
                 )}
