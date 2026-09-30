@@ -9,6 +9,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { createClass, deleteClass, updateClass } from '@/lib/data/classes';
+import { formatClock } from '@/lib/utils/cancelDeadline';
 import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClassRow } from '@/lib/data/types';
 
@@ -42,6 +43,36 @@ function toDraft(c: ClassRow): Draft {
   };
 }
 
+// A session has no stored length, so the calendar draws each as a 45-minute block.
+const DURATION = 45;
+const HOUR_H = 56;
+
+const toMin = (t: string | null) => {
+  const [h, m] = (t ?? '00:00').split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
+// "6:45" -- the am/pm suffix would not fit in a narrow day column; the hour labels carry it.
+const shortTime = (t: string | null) => {
+  const m = toMin(t);
+  const h12 = Math.floor(m / 60) % 12 === 0 ? 12 : Math.floor(m / 60) % 12;
+  return `${h12}:${String(m % 60).padStart(2, '0')}`;
+};
+
+// Side-by-side lanes for sessions in one day that overlap in time.
+function layoutDay(rows: ClassRow[]): { row: ClassRow; lane: number; lanes: number }[] {
+  const laneEnds: number[] = [];
+  const placed = rows.map((row) => {
+    const start = toMin(row.start_time);
+    let lane = laneEnds.findIndex((end) => end <= start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = start + DURATION;
+    return { row, lane };
+  });
+  const lanes = Math.max(1, laneEnds.length);
+  return placed.map((p) => ({ ...p, lanes }));
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -64,14 +95,18 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
   const daySlots = (d: number) =>
     classes.filter((c) => c.day_of_week === d).sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''));
   const slots = daySlots(day);
+  const startMins = classes.filter((c) => c.start_time).map((c) => toMin(c.start_time));
+  const firstHour = startMins.length ? Math.min(5, Math.floor(Math.min(...startMins) / 60)) : 5;
+  const lastHour = startMins.length ? Math.max(20, Math.ceil((Math.max(...startMins) + DURATION) / 60)) : 20;
+  const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
 
-  function newSlot() {
-    const template = slots[slots.length - 1] ?? classes[0];
+  function newSlot(forDay: number = day, time = '06:00') {
+    const template = daySlots(forDay)[daySlots(forDay).length - 1] ?? classes[0];
     setDraft({
       id: null,
       name: template?.name ?? '',
-      dayOfWeek: day,
-      startTime: '06:00',
+      dayOfWeek: forDay,
+      startTime: time,
       capacity: template?.capacity ?? 12,
       creditCost: template?.credit_cost ?? 1,
       cutoffHours: template?.cutoff_hours ?? 3,
@@ -147,12 +182,12 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="px-1 text-sm font-extrabold text-black dark:text-zinc-50">
-          {WEEKDAY_LABELS[day]} · {slots.length} session{slots.length === 1 ? '' : 's'}
+          Weekly timetable · {classes.length} session{classes.length === 1 ? '' : 's'}
         </p>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={newSlot}
+            onClick={() => newSlot(1)}
             className="flex items-center gap-1 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
           >
             <Plus className="h-4 w-4" /> Add session
@@ -160,60 +195,84 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
           <DropdownMenu
             variant="header"
             triggerLabel="More timetable actions"
-            items={[{ label: `Copy ${WEEKDAY_SHORT[day]} to other days`, disabled: slots.length === 0, onSelect: () => setCopying(true) }]}
+            items={[{ label: 'Copy a day to other days', disabled: classes.length === 0, onSelect: () => setCopying(true) }]}
           />
         </div>
       </div>
 
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {days.map((d) => {
-          const n = daySlots(d).length;
-          const active = d === day;
-          return (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDay(d)}
-              aria-pressed={active}
-              className={`flex w-[3.75rem] shrink-0 flex-col items-center gap-0.5 rounded-2xl border py-2.5 transition-colors ${
-                active
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : n > 0
-                    ? 'border-black/[.06] bg-card text-black dark:border-white/10 dark:text-zinc-100'
-                    : 'border-transparent text-zinc-400 dark:text-zinc-600'
-              }`}
-            >
-              <span className="text-[11px] font-bold uppercase opacity-80">{WEEKDAY_SHORT[d]}</span>
-              <span className="text-base font-black leading-none">{n}</span>
-            </button>
-          );
-        })}
-      </div>
+      {classes.length === 0 ? (
+        <EmptyState icon={CalendarDays} title="No sessions yet" hint="Add your first session, or tap any slot on the calendar once you have one." compact />
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+          <div className="min-w-[21rem]" style={{ display: 'grid', gridTemplateColumns: `2.5rem repeat(${days.length}, minmax(3rem, 1fr))` }}>
+            <div className="border-b border-black/[.06] dark:border-white/10" />
+            {days.map((d) => (
+              <div key={d} className="border-b border-l border-black/[.06] py-2 text-center dark:border-white/10">
+                <p className="text-[11px] font-bold uppercase text-zinc-500">{WEEKDAY_SHORT[d]}</p>
+                <p className="text-[11px] text-zinc-400">{daySlots(d).length}</p>
+              </div>
+            ))}
 
-      <div className="space-y-2">
-        {slots.length === 0 && (
-          <EmptyState icon={CalendarDays} title={`Nothing on ${WEEKDAY_LABELS[day]}`} hint="Add a session, or copy another day across from its ⋯ menu." compact />
-        )}
-        {slots.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setDraft(toDraft(s))}
-            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[.06] bg-card p-3.5 text-left dark:border-white/10"
-          >
-            <span className="min-w-0">
-              <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">{s.start_time ? formatClassTime(s.start_time) : '—'}</span>
-              <span className="block truncate text-xs text-zinc-500">{s.name}</span>
-            </span>
-            <span className="shrink-0 text-right text-xs text-zinc-500">
-              <span className="block">max {s.capacity}</span>
-              <span className="block">
-                {s.credit_cost} credit{s.credit_cost === 1 ? '' : 's'}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
+            <div className="relative" style={{ height: hours.length * HOUR_H }}>
+              {hours.map((h, i) => (
+                <span key={h} className="absolute right-1.5 -translate-y-1/2 text-[11px] text-zinc-400" style={{ top: i * HOUR_H + (i === 0 ? 6 : 0) }}>
+                  {formatClock(`${String(h).padStart(2, '0')}:00`)}
+                </span>
+              ))}
+            </div>
+
+            {days.map((d) => {
+              const placed = layoutDay(daySlots(d));
+              return (
+                <div
+                  key={d}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Add a session on ${WEEKDAY_LABELS[d]}`}
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const snapped = Math.floor((((e.clientY - rect.top) / HOUR_H) * 60) / 15) * 15;
+                    const total = firstHour * 60 + snapped;
+                    newSlot(d, `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && newSlot(d)}
+                  className="relative cursor-pointer border-l border-black/[.06] dark:border-white/10"
+                  style={{
+                    height: hours.length * HOUR_H,
+                    backgroundImage: 'linear-gradient(to bottom, transparent calc(100% - 1px), rgba(128,128,128,.18) 0)',
+                    backgroundSize: `100% ${HOUR_H}px`,
+                  }}
+                >
+                  {placed.map(({ row, lane, lanes }) => {
+                    const start = toMin(row.start_time);
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDraft(toDraft(row));
+                        }}
+                        aria-label={`${row.name} ${formatClassTime(row.start_time)} on ${WEEKDAY_LABELS[d]}`}
+                        className="absolute overflow-hidden rounded-lg bg-accent/20 px-1 py-0.5 text-left ring-1 ring-inset ring-accent/40 hover:bg-accent/30"
+                        style={{
+                          top: ((start - firstHour * 60) * HOUR_H) / 60 + 1,
+                          height: (DURATION * HOUR_H) / 60 - 2,
+                          left: `calc(${(lane / lanes) * 100}% + 1px)`,
+                          width: `calc(${100 / lanes}% - 2px)`,
+                        }}
+                      >
+                        <span className="block text-[11px] font-bold leading-tight text-accent">{shortTime(row.start_time)}</span>
+                        <span className="block text-[11px] leading-tight text-zinc-500">max {row.capacity}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <p className="px-1 text-xs text-zinc-500">
         Times are the gym&apos;s local time. To cancel a single date (for example a bank holiday), use Sessions.
@@ -281,9 +340,31 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
       )}
 
       {copying && (
-        <BottomSheet title={`Copy ${WEEKDAY_LABELS[day]}`} onClose={() => setCopying(false)}>
-          <p className="mb-3 text-sm text-zinc-500">
-            Copy its {slots.length} session{slots.length === 1 ? '' : 's'} to:
+        <BottomSheet title="Copy a day" onClose={() => setCopying(false)}>
+          <p className="mb-2 text-xs font-medium text-zinc-500">From</p>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {days.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => {
+                  setDay(d);
+                  setCopyTo((prev) => {
+                    const next = new Set(prev);
+                    next.delete(d);
+                    return next;
+                  });
+                }}
+                className={`rounded-full px-4 py-2 text-sm font-bold ${
+                  d === day ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                }`}
+              >
+                {WEEKDAY_SHORT[d]}
+              </button>
+            ))}
+          </div>
+          <p className="mb-2 text-xs font-medium text-zinc-500">
+            To ({slots.length} session{slots.length === 1 ? '' : 's'} will be copied)
           </p>
           <div className="mb-3 flex flex-wrap gap-2">
             {days
