@@ -6,8 +6,9 @@ import { Logo } from './Logo';
 // Ballistic Performance splash: the logo on black for about a second when the app is opened,
 // then fades out. Shown once per browser session (not on every navigation). The fade is pure
 // CSS (see .bp-splash in globals.css) so the overlay always disappears even if this component
-// never hydrates; the effect below just removes it straight away on repeat visits, and
-// removes the element once the fade has finished.
+// never hydrates; the effect below just hides it straight away on repeat visits. It only ever
+// changes the element's style -- removing a React-rendered node from the DOM by hand makes
+// React throw removeChild/insertBefore errors on the next update.
 const KEY = 'bp-splash-seen';
 
 export function SplashScreen() {
@@ -18,14 +19,16 @@ export function SplashScreen() {
     if (!el) return;
     try {
       if (sessionStorage.getItem(KEY)) {
-        el.remove();
+        el.style.display = 'none';
         return;
       }
       sessionStorage.setItem(KEY, '1');
     } catch {
       /* storage blocked -- the CSS fade still hides it */
     }
-    const t = setTimeout(() => el.remove(), 1800);
+    const t = setTimeout(() => {
+      el.style.display = 'none';
+    }, 1800);
     return () => clearTimeout(t);
   }, []);
 
