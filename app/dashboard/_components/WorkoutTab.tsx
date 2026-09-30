@@ -1040,12 +1040,26 @@ export function WorkoutTab({
                     <VideoDemo videoUrl={videoUrl} title={ex.name} alwaysOpen />
                   )}
                   {last && (
-                    <p className="mt-1.5 text-xs text-zinc-500">
-                      <span className="font-semibold text-accent">
-                        {last.label} ({last.date}):
-                      </span>{' '}
-                      {last.sets.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(' · ')}
-                    </p>
+                    <div className="mt-2">
+                      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-accent">
+                        {last.label} · {last.date}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {last.sets.map((l, i) => (
+                          <span
+                            key={l.id}
+                            className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs ${
+                              i === logs.length ? 'border-accent/50 bg-accent-soft' : 'border-black/[.08] dark:border-white/10'
+                            }`}
+                          >
+                            <span className="text-[10px] font-bold uppercase text-zinc-400">Set {i + 1}</span>
+                            <span className="font-semibold text-black dark:text-zinc-100">
+                              {l.actual_reps ?? '—'} × {l.actual_load ?? '—'}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {!isCoachView && ex.block_type === 'exercise' && (
                     <>
