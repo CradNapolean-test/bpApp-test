@@ -441,6 +441,7 @@ export function DashboardShell({
             )}
           </button>
           )}
+          {!isCoachView && (
           <button
             onClick={() => handleNavigate('Notifications')}
             aria-label="Notifications"
@@ -451,7 +452,12 @@ export function DashboardShell({
               <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
             )}
           </button>
-          {isCoachView && <CoachMessagesButton unreadCount={coachUnreadCount} />}
+          )}
+          {isCoachView && (
+            <span className="hidden md:inline-flex">
+              <CoachMessagesButton unreadCount={coachUnreadCount} />
+            </span>
+          )}
           {!isCoachView && area === 'Coaching' && category === 'Home' && (
             <button
               onClick={() => handleNavigate('Account Settings')}

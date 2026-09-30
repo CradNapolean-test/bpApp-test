@@ -20,7 +20,7 @@ export function CoachHeaderExtras({ unreadCount, email }: { unreadCount: number;
 
   return (
     <div className="flex items-center gap-3">
-      <span className="hidden text-sm text-zinc-500 sm:inline">{todayLabel}</span>
+      <span className="hidden text-sm text-zinc-500 md:inline">{todayLabel}</span>
       <CoachMessagesButton unreadCount={unreadCount} />
       <Link href="/coach/settings" aria-label="Account settings">
         <Avatar name={email} size="md" variant="self" />

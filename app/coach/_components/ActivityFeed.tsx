@@ -12,8 +12,20 @@ import type { CoachClientRow } from '@/lib/data/coach';
 // Cross-client version of ActivityTab.tsx -- the coach dashboard's primary content, matching
 // PT Distinction's own dashboard where this feed (not the client roster table) is what a
 // coach sees first.
-export function ActivityFeed({ events, clients }: { events: ActivityEventRow[]; clients: CoachClientRow[] }) {
-  const nameById = useMemo(() => new Map(clients.map((c) => [c.id, c.name ?? c.email])), [clients]);
+export function ActivityFeed({
+  events,
+  clients,
+  extraNames = {},
+}: {
+  events: ActivityEventRow[];
+  clients: CoachClientRow[];
+  // Names for clients who belong to another coach in the gym (the feed is gym-wide).
+  extraNames?: Record<string, string>;
+}) {
+  const nameById = useMemo(
+    () => new Map<string, string>([...Object.entries(extraNames), ...clients.map((c): [string, string] => [c.id, c.name ?? c.email])]),
+    [clients, extraNames]
+  );
   const items = useMemo(() => groupActivity(events).slice(0, 20), [events]);
 
   return (

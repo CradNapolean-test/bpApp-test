@@ -254,7 +254,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
                   {p.credits_per_week} <span className="text-sm font-medium text-zinc-500">credits / week</span>
                 </p>
                 <p className="mt-1 text-sm text-zinc-500">
-                  {p.credits_per_week} class{p.credits_per_week === 1 ? '' : 'es'} / week
+                  {p.advance_booking_days ? `Book up to ${p.advance_booking_days} days ahead` : 'No booking limit'}
                   {p.description ? ` · ${p.description}` : ''}
                 </p>
                 <p className="mt-1 text-xs text-zinc-400">

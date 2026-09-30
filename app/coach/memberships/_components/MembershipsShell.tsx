@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
-import { Logo } from '@/app/_components/Logo';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
+import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
@@ -40,7 +40,7 @@ export function MembershipsShell({
         topBar={<CoachNav />}
         bottomBar={<CoachBottomTabBar />}
         headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={email} />}
-        mobileHeader={<Logo size={28} />}
+        mobileHeader={<CoachMobileBrand />}
       >
         <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">Memberships</h1>
         <p className="mb-4 text-sm text-zinc-500">

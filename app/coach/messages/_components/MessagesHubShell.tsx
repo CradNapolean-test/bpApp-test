@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MessageSquare } from 'lucide-react';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
-import { Logo } from '@/app/_components/Logo';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
+import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
+import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { ChatTab } from '@/app/dashboard/_components/ChatTab';
 import { useCoachMessages } from '@/app/coach/_components/useCoachMessages';
@@ -34,6 +35,8 @@ export function MessagesHubShell({
   email: string;
 }) {
   const [tab, setTab] = useState<Tab>('inbox');
+  // Phone only: whether a conversation is open (otherwise the list shows).
+  const [threadOpen, setThreadOpen] = useState(false);
   const { localOverview, selected, selectClient, messages, loading, selectedClient } = useCoachMessages(
     overview,
     currentUserId
@@ -44,7 +47,7 @@ export function MessagesHubShell({
   const autoSelected = useRef(false);
   useEffect(() => {
     if (autoSelected.current) return;
-    if (overview[0]) {
+    if (overview[0] && window.matchMedia('(min-width: 768px)').matches) {
       autoSelected.current = true;
       selectClient(overview[0].client_id);
     }
@@ -55,6 +58,11 @@ export function MessagesHubShell({
   // the messages experience; opening the MessagesDrawer on top of it double-mounts a
   // second ChatTab for the same client, which throws (verified) on the shared realtime
   // channel name ("cannot add postgres_changes callbacks ... after subscribe()").
+  function pick(clientId: string) {
+    selectClient(clientId);
+    setThreadOpen(true);
+  }
+
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
   const headerExtras = (
     <div className="flex items-center gap-3">
@@ -87,48 +95,57 @@ export function MessagesHubShell({
     </>
   );
 
-  if (tab === 'broadcasts') {
-    return (
+  return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
       <AppShell
         title={<CoachBrand />}
         topBar={<CoachNav />}
+        bottomBar={<CoachBottomTabBar />}
         headerAction={headerExtras}
         banner={header}
-        mobileHeader={<Logo size={28} />}
+        mobileHeader={<CoachMobileBrand />}
+        sidebar={tab === 'inbox' ? <ConversationList overview={localOverview} selected={selected} onSelect={pick} /> : undefined}
       >
-        <BroadcastsPane overview={overview} groups={groups} communications={communications} />
+        {tab === 'broadcasts' ? (
+          <BroadcastsPane overview={overview} groups={groups} communications={communications} />
+        ) : (
+          <>
+            {/* Phone: a conversation list first, then the thread with a back arrow. The sidebar
+                list is desktop-only, so the list is repeated here for small screens. */}
+            <div className={threadOpen ? 'hidden' : 'md:hidden'}>
+              <ConversationList overview={localOverview} selected={selected} onSelect={pick} />
+            </div>
+            <div className={threadOpen ? '' : 'hidden md:block'}>
+              {selected && (
+                <button
+                  type="button"
+                  onClick={() => setThreadOpen(false)}
+                  className="mb-3 flex items-center gap-1.5 text-sm font-medium text-zinc-500 md:hidden"
+                >
+                  <ArrowLeft className="h-4 w-4" /> All conversations
+                </button>
+              )}
+              {!selected ? (
+                <EmptyState
+                  icon={MessageSquare}
+                  title="No conversations yet"
+                  hint="Once you have clients, their threads will show up here."
+                />
+              ) : loading ? (
+                <p className="text-sm text-zinc-500">Loading messages…</p>
+              ) : (
+                <ChatTab
+                  key={selected}
+                  clientId={selected}
+                  initialMessages={messages}
+                  currentUserId={currentUserId}
+                  otherPartyName={selectedClient?.client_name ?? 'Client'}
+                />
+              )}
+            </div>
+          </>
+        )}
       </AppShell>
-    );
-  }
-
-  return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
-    <AppShell
-      title={<CoachBrand />}
-      topBar={<CoachNav />}
-      headerAction={headerExtras}
-      banner={header}
-      mobileHeader={<Logo size={28} />}
-      sidebar={<ConversationList overview={localOverview} selected={selected} onSelect={selectClient} />}
-    >
-      {!selected ? (
-        <EmptyState
-          icon={MessageSquare}
-          title="No conversations yet"
-          hint="Once you have clients, their threads will show up here."
-        />
-      ) : loading ? (
-        <p className="text-sm text-zinc-500">Loading messages…</p>
-      ) : (
-        <ChatTab
-          key={selected}
-          clientId={selected}
-          initialMessages={messages}
-          currentUserId={currentUserId}
-          otherPartyName={selectedClient?.client_name ?? 'Client'}
-        />
-      )}
-    </AppShell>
     </ClientOnly>
   );
 }

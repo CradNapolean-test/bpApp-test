@@ -27,7 +27,6 @@ const STATUS_TEXT: Record<ClientHealthBucket, { label: string; cls: string }> = 
 export function ClientTable({
   clients,
   gymClients,
-  gymName,
   statuses,
   groups,
 }: {
@@ -137,7 +136,7 @@ const scopeBtnCls = (active: boolean) =>
             My clients
           </button>
           <button onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
-            Search all at {gymName}
+            Whole gym
           </button>
         </div>
       )}
@@ -201,7 +200,42 @@ const scopeBtnCls = (active: boolean) =>
       {managingGroups && (
         <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
       )}
-      <div className="overflow-x-auto rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
+      {/* Phone: one card per client (the table needs ~34rem of width). */}
+      <ul className="space-y-2 md:hidden">
+        {rows.map(({ client, health }) => {
+          const status = STATUS_TEXT[health?.status ?? 'unmonitored'];
+          const last = health?.lastActiveDate
+            ? health.daysSinceActive === 0
+              ? 'Active today'
+              : health.daysSinceActive === 1
+                ? 'Active yesterday'
+                : `Active ${health.daysSinceActive}d ago`
+            : 'Never logged';
+          return (
+            <li key={client.id}>
+              <Link
+                href={`/coach/clients/${client.id}`}
+                className="flex items-center gap-3 rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10"
+              >
+                <Avatar name={client.name ?? client.email} size="md" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-black dark:text-zinc-50">{client.name ?? client.email}</p>
+                  <p className="truncate text-xs text-zinc-500">
+                    <span className={`font-semibold ${status.cls}`}>{status.label}</span> · {last}
+                    {'coachName' in client && !client.isOwnClient ? ` · ${client.coachName}` : ''}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-bold text-black dark:text-zinc-50">{client.balance}</p>
+                  <p className="text-[11px] text-zinc-500">credits</p>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+        {rows.length === 0 && <li className="p-3 text-center text-sm text-zinc-500">No clients match &quot;{query}&quot;.</li>}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-2xl border border-black/10 shadow-sm md:block dark:border-white/10">
         <table className="w-full min-w-[34rem] text-sm">
         <thead>
           <tr className="border-b border-black/10 text-zinc-500 dark:border-white/10">

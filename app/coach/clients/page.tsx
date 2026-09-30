@@ -7,6 +7,7 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { CoachNav } from '../_components/CoachNav';
 import { CoachBottomTabBar } from '../_components/CoachBottomTabBar';
+import { CoachMobileBrand } from '../_components/CoachMobileBrand';
 import { CoachBrand } from '../_components/CoachBrand';
 import { CoachHeaderExtras } from '../_components/CoachHeaderExtras';
 import { AddClientButton } from '../_components/AddClientButton';
@@ -43,6 +44,7 @@ export default async function CoachClientsPage() {
       title={<CoachBrand />}
       topBar={<CoachNav />}
       bottomBar={<CoachBottomTabBar />}
+      mobileHeader={<CoachMobileBrand />}
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">

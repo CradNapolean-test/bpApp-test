@@ -132,7 +132,7 @@ export function TodayTab({
         type="button"
         onClick={() => onNavigate('Nutrition', 'Food Tracking')}
         className="block w-full overflow-hidden rounded-2xl p-5 text-left text-white shadow-[0_1px_2px_rgba(0,0,0,.02)]"
-        style={{ background: 'linear-gradient(155deg, #19adb1, #0e6266)' }}
+        style={{ background: 'linear-gradient(155deg, #2abfbf, #157f7f)' }}
       >
         <div className="flex items-center gap-4">
           {dayTarget ? (
@@ -187,7 +187,7 @@ export function TodayTab({
                 <span className="block text-sm text-zinc-500">
                   {nextClass
                     ? `${new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })} · ${formatClassTime(nextClass.class?.start_time)}`
-                    : 'Tap to book a session'}
+                    : isCoachView ? '' : 'Tap to book a session'}
                 </span>
               </span>
             </span>
