@@ -140,6 +140,8 @@ export function TodayTab({
         />
       )}
 
+      {isCoachView && (
+      <>
       {/* Hidden on mobile -- DashboardShell's mobileHeader shows this same greeting there
           (avatar chip + date), to match the redesign's compact per-screen mobile header. */}
       <p className="hidden text-sm font-medium text-zinc-500 md:block">{timeGreeting}, {firstName}</p>
@@ -187,6 +189,8 @@ export function TodayTab({
           </div>
         )}
       </button>
+      </>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className={clickableCardCls}>
@@ -225,8 +229,9 @@ export function TodayTab({
         )}
       </div>
 
+      {(isCoachView || pendingForms > 0) && (
       <div className="grid grid-cols-2 gap-3">
-        {onNavigateClasses ? (
+        {isCoachView && (onNavigateClasses ? (
           <button type="button" onClick={onNavigateClasses} className={clickableCardCls}>
             <p className={`${labelCls} flex items-center gap-1.5`}>
               <Heart className="h-4 w-4 text-accent" />
@@ -248,7 +253,7 @@ export function TodayTab({
               {membership?.package ? ` · ${membership.package.name}` : ''}
             </p>
           </div>
-        )}
+        ))}
 
         <button type="button" onClick={() => onNavigate('Accountability', 'Forms')} className={clickableCardCls}>
           <p className={`${labelCls} flex items-center gap-1.5`}>
@@ -258,6 +263,7 @@ export function TodayTab({
           <p className={valueCls}>{pendingForms}</p>
         </button>
       </div>
+      )}
     </div>
   );
 }

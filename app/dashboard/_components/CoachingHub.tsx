@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Camera, ChevronRight, Dumbbell, LineChart, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
+import { ChevronRight, Dumbbell, LineChart, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -214,14 +214,8 @@ export function CoachingHub({
         <div className={`${cardCls} !p-0`}>
           <LinkRow
             icon={LineChart}
-            title="Body composition"
-            subtitle="Weight, measurements & trends"
-            onClick={() => onNavigate('Progress', 'Progress & Photos')}
-          />
-          <LinkRow
-            icon={Camera}
-            title="Progress photos"
-            subtitle="Body photos & InBody scans"
+            title="Body composition & photos"
+            subtitle="Weight, measurements, progress photos & scans"
             onClick={() => onNavigate('Progress', 'Progress & Photos')}
           />
           <LinkRow

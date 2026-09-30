@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Bell, MessageSquare } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
+import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
@@ -334,6 +335,25 @@ export function DashboardShell({
       </span>
       <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{mobileHeaderTitle}</p>
     </button>
+  ) : !isCoachView ? (
+    // Member top-level tabs: the Profile tab replaces the old avatar shortcut, and the greeting
+    // now lives once, in the Home hero card -- so the header is just the brand (Home) or the
+    // screen title (other tabs).
+    <div className="flex min-w-0 items-center gap-2.5">
+      {area === 'Coaching' && category === 'Home' ? (
+        <>
+          <Logo size={36} />
+          <div className="min-w-0 leading-tight">
+            <p className="text-[15px] font-black text-black dark:text-zinc-50">Ballistic</p>
+            <p className="text-[8px] font-semibold uppercase tracking-[2px] text-zinc-500">Performance</p>
+          </div>
+        </>
+      ) : (
+        <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
+          {area === 'Classes' ? 'Book a session' : mobileHeaderTitle}
+        </p>
+      )}
+    </div>
   ) : (
     <button
       type="button"
@@ -383,6 +403,7 @@ export function DashboardShell({
       sidebar={sidebar}
       headerAction={
         <>
+          {isCoachView && (
           <button
             onClick={() => handleCategoryClick('Messages')}
             aria-label="Messages"
@@ -393,6 +414,7 @@ export function DashboardShell({
               <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
             )}
           </button>
+          )}
           <button
             onClick={() => handleCategoryClick('Notifications')}
             aria-label="Notifications"
@@ -410,7 +432,7 @@ export function DashboardShell({
         isCoachView ? (
           <BottomTabBar category={category} onSelectCategory={handleCategoryClick} />
         ) : (
-          <ClientBottomTabBar active={activeClientTab} onSelect={handleClientTab} />
+          <ClientBottomTabBar active={activeClientTab} onSelect={handleClientTab} coachUnread={unreadMessageCount > 0} />
         )
       }
     >

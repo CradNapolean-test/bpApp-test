@@ -154,7 +154,6 @@ export function AccountTab({
           {[
             { label: 'Date of birth', value: formatDob(profile?.date_of_birth ?? null) },
             { label: 'Phone', value: profile?.phone || null },
-            { label: 'Membership', value: membershipName },
           ].map((row) => (
             <div key={row.label} className="border-b border-black/5 px-4 py-2.5 last:border-b-0 dark:border-white/5">
               <p className="text-[10px] text-zinc-500">{row.label}</p>

@@ -104,6 +104,11 @@ export function ClassesArea({
   const dayOccurrences = bookable
     .filter((o) => o.date === selectedDate)
     .sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
+  // Upcoming only (today onwards, not cancelled) -- past sessions live in attendance history, not
+  // the booking list.
+  const upcoming = bookings
+    .filter((b) => b.status !== 'cancelled' && b.booking_date >= todayIso)
+    .sort((a, b) => (a.booking_date + (a.class?.start_time ?? '')).localeCompare(b.booking_date + (b.class?.start_time ?? '')));
   const morning = dayOccurrences.filter((o) => (o.startTime ?? '00:00') < '12:00');
   const evening = dayOccurrences.filter((o) => (o.startTime ?? '00:00') >= '12:00');
 
@@ -272,56 +277,64 @@ export function ClassesArea({
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Bookings</h3>
-        {bookings.length === 0 ? (
-          <EmptyState icon={Ticket} title="No bookings yet" hint="Book a class above and it'll show up here." />
+        <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">My bookings</h3>
+        {upcoming.length === 0 ? (
+          <EmptyState icon={Ticket} title="No upcoming bookings" hint="Book a session above and it'll show up here." />
         ) : (
-        <div className="space-y-2">
-          {bookings.map((b) => {
-            const isPast = b.booking_date < todayIso;
-            const badge =
-              b.status === 'cancelled'
-                ? { label: 'Cancelled', cls: 'bg-black/5 text-zinc-500 dark:bg-white/10' }
-                : b.status === 'waitlist'
-                  ? { label: 'Waitlist', cls: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' }
-                  : isPast
-                    ? b.attended
-                      ? { label: 'Attended', cls: 'bg-success/10 text-success' }
-                      : { label: 'No-show', cls: 'bg-danger/10 text-danger' }
-                    : { label: 'Booked', cls: 'bg-accent-soft text-accent' };
-            return (
-              <div
-                key={b.id}
-                className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10"
-              >
-                <div className="min-w-0">
-                  <p className="font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
-                  <p className="mt-0.5 text-sm text-zinc-500">
-                    {new Date(b.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
-                    {b.class?.start_time ? ` · ${formatClassTime(b.class.start_time)}` : ''}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {b.status === 'booked' && b.booking_date === todayIso && (
-                    <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
+          <div className="space-y-2">
+            {upcoming.map((b) => {
+              const waitlisted = b.status === 'waitlist';
+              // Same cancellation rule as the session cards above: refund up to the deadline,
+              // none after it (enforced by the database; this just shows it).
+              const deadline =
+                !waitlisted && b.class
+                  ? cancelDeadline(b.booking_date, b.class.start_time, b.class.cutoff_hours, blackoutStart, blackoutEnd)
+                  : null;
+              const late = deadline != null && nowMs >= deadline.deadlineMs;
+              return (
+                <div
+                  key={b.id}
+                  className="rounded-2xl border border-black/[.06] bg-[var(--background)] p-3.5 dark:border-white/10"
+                >
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <p className="font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
+                      <p className="mt-0.5 text-sm text-zinc-500">
+                        {new Date(b.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, {
+                          weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+                        })}
+                        {b.class?.start_time ? ` · ${formatClassTime(b.class.start_time)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {!waitlisted && b.booking_date === todayIso && (
+                        <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
+                      )}
+                      <span
+                        className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${
+                          waitlisted ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 'bg-accent-soft text-accent'
+                        }`}
+                      >
+                        {waitlisted ? 'Waitlist' : 'Booked'}
+                      </span>
+                      <button
+                        onClick={() => handleCancel(b.id, b)}
+                        disabled={busyKey === b.id}
+                        className="text-xs font-medium text-danger hover:underline disabled:opacity-50"
+                      >
+                        {waitlisted ? 'Leave' : 'Cancel'}
+                      </button>
+                    </div>
+                  </div>
+                  {deadline && (
+                    <p className={`mt-2 text-[10px] ${late ? 'text-danger' : 'text-zinc-500'}`}>
+                      {late ? 'Past the cancellation deadline — cancelling now forfeits your credit' : cancelNote(deadline)}
+                    </p>
                   )}
-                  {b.status !== 'cancelled' && !isPast && (
-                    <button
-                      onClick={() => handleCancel(b.id, b)}
-                      disabled={busyKey === b.id}
-                      className="text-xs font-medium text-danger hover:underline disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                  <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${badge.cls}`}>
-                    {badge.label}
-                  </span>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
