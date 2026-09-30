@@ -26,6 +26,7 @@ export async function getCoachReport(): Promise<CoachReport> {
       attendanceRate: null,
       totalBooked: 0,
       totalAttended: 0,
+      unmarked: 0,
       noShowRate: null,
       avgClassesPerClient: null,
       activeBookings: 0,
@@ -63,11 +64,20 @@ export async function getCoachReport(): Promise<CoachReport> {
   if (bookingsError) raise(bookingsError);
 
   const rows = bookings ?? [];
-  const pastBooked = rows.filter((b) => b.status === 'booked' && b.booking_date <= todayIso);
+  // Sessions before today, plus today's once they've been marked -- a session later today hasn't
+  // happened yet, so it isn't "not marked", it's just not over. Matches the Attendance tab's
+  // "needs marking" list (which only counts days before today).
+  const pastBooked = rows.filter(
+    (b) => b.status === 'booked' && (b.booking_date < todayIso || (b.booking_date === todayIso && (b.attended || b.no_show)))
+  );
   const totalBooked = pastBooked.length;
   const totalAttended = pastBooked.filter((b) => b.attended).length;
-  const attendanceRate = totalBooked > 0 ? Math.round((totalAttended / totalBooked) * 100) : null;
-  const noShowRate = totalBooked > 0 ? Math.round((pastBooked.filter((b) => b.no_show).length / totalBooked) * 100) : null;
+  // Only sessions the coach has actually marked count towards the rates. Counting unmarked ones as
+  // absences made the attendance rate read 0% for a coach who simply hadn't got round to marking.
+  const marked = pastBooked.filter((b) => b.attended || b.no_show);
+  const unmarked = totalBooked - marked.length;
+  const attendanceRate = marked.length > 0 ? Math.round((totalAttended / marked.length) * 100) : null;
+  const noShowRate = marked.length > 0 ? Math.round((pastBooked.filter((b) => b.no_show).length / marked.length) * 100) : null;
   const uniqueClientCount = new Set(pastBooked.map((b) => b.client_id)).size;
   const avgClassesPerClient = uniqueClientCount > 0 ? Math.round((totalBooked / uniqueClientCount) * 10) / 10 : null;
 
@@ -113,6 +123,7 @@ export async function getCoachReport(): Promise<CoachReport> {
     attendanceRate,
     totalBooked,
     totalAttended,
+    unmarked,
     noShowRate,
     avgClassesPerClient,
     activeBookings: activeBookings ?? 0,

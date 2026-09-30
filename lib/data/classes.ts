@@ -180,7 +180,9 @@ export async function grantCredits(
 // individual rows), merged with how many are already booked. Called by both the coach
 // (Take Attendance) and clients (booking calendar) -- resolveScopingGymId figures out
 // which gym's classes apply either way.
-export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOccurrence[]> {
+// `weeksBack` also generates recent past occurrences (the Attendance tab needs them, to mark
+// sessions that have already happened); members only ever see upcoming ones.
+export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
   const gymId = await resolveScopingGymId(supabase);
 
@@ -196,11 +198,11 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
   const blackoutStart: string | null = gym?.blackout_start ?? null;
   const blackoutEnd: string | null = gym?.blackout_end ?? null;
 
-  const occurrences: Omit<ScheduleOccurrence, 'bookedCount'>[] = [];
+  const occurrences: Omit<ScheduleOccurrence, 'bookedCount' | 'unmarkedCount'>[] = [];
   for (const c of classes ?? []) {
     if (c.day_of_week == null) continue;
     const firstDate = new Date(nextDateForWeekday(c.day_of_week) + 'T00:00:00Z');
-    for (let w = 0; w < weeksAhead; w++) {
+    for (let w = -weeksBack; w < weeksAhead; w++) {
       occurrences.push({
         classId: c.id,
         className: c.name,
@@ -234,20 +236,28 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
 
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('class_id, booking_date')
+    .select('class_id, booking_date, attended, no_show')
     .in('class_id', classIds)
     .in('booking_date', dates)
     .eq('status', 'booked');
   if (bookingsError) raise(bookingsError);
 
+  const todayIso = toIsoDate(new Date());
   const countMap = new Map<string, number>();
+  // Past bookings the coach hasn't marked attended or no-show yet -- what Attendance nudges about.
+  const unmarkedMap = new Map<string, number>();
   for (const b of bookings ?? []) {
     const key = `${b.class_id}|${b.booking_date}`;
     countMap.set(key, (countMap.get(key) ?? 0) + 1);
+    if (b.booking_date < todayIso && !b.attended && !b.no_show) unmarkedMap.set(key, (unmarkedMap.get(key) ?? 0) + 1);
   }
 
   return activeOccurrences
-    .map((o) => ({ ...o, bookedCount: countMap.get(`${o.classId}|${o.date}`) ?? 0 }))
+    .map((o) => ({
+      ...o,
+      bookedCount: countMap.get(`${o.classId}|${o.date}`) ?? 0,
+      unmarkedCount: unmarkedMap.get(`${o.classId}|${o.date}`) ?? 0,
+    }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 

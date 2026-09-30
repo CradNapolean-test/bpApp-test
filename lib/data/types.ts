@@ -447,9 +447,11 @@ export interface PushSubscriptionRow {
 }
 
 export interface CoachReport {
-  attendanceRate: number | null; // 0-100, null if no data
+  attendanceRate: number | null; // 0-100 of sessions that have been marked, null if none marked yet
   totalBooked: number;
   totalAttended: number;
+  // Past bookings the coach hasn't marked attended or no-show yet -- excluded from the rates.
+  unmarked: number;
   noShowRate: number | null; // 0-100, null if no data
   avgClassesPerClient: number | null; // per unique client, over the report window
   activeBookings: number; // currently booked, today or later (not time-windowed)
@@ -508,6 +510,8 @@ export interface ScheduleOccurrence {
   cutoffHours: number;
   blackoutStart: string | null;
   blackoutEnd: string | null;
+  // Past bookings on this date not yet marked attended / no-show.
+  unmarkedCount?: number;
 }
 
 export interface RosterEntry {

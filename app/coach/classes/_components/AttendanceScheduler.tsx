@@ -113,9 +113,14 @@ export function AttendanceScheduler({ occurrences, clients }: { occurrences: Sch
   // occurrence across every date at once -- that wall of chips is what made this screen
   // unusable once a single class started running several times a day). Defaults to the
   // earliest upcoming date that actually has a class, so the screen isn't empty on load.
-  const [selectedDate, setSelectedDate] = useState<string | null>(
-    () => [...occurrences].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0]?.date ?? null
-  );
+  // (The list now also includes the last couple of weeks so past sessions can be marked, so this
+  // picks the first date from today onwards rather than the very first one.)
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const sorted = [...occurrences].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return (sorted.find((o) => o.date >= today) ?? sorted[0])?.date ?? null;
+  });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -220,13 +225,45 @@ export function AttendanceScheduler({ occurrences, clients }: { occurrences: Sch
       <EmptyState
         icon={UserX}
         title="No upcoming classes"
-        hint="Add a class under Manage and its occurrences will appear here."
+        hint="Add a session under Schedule and it will appear here."
       />
     );
   }
 
+  // Past sessions with bookings nobody has marked attended or no-show yet, oldest first.
+  const needsMarking = occurrences
+    .filter((o) => (o.unmarkedCount ?? 0) > 0)
+    .sort((a, b) => (a.date + (a.startTime ?? '')).localeCompare(b.date + (b.startTime ?? '')));
+
   return (
     <div className="space-y-4">
+      {needsMarking.length > 0 && (
+        <div className="rounded-2xl border border-warning/30 bg-warning/10 p-3.5">
+          <p className="text-sm font-semibold text-black dark:text-zinc-50">
+            {needsMarking.length} past {needsMarking.length === 1 ? 'session needs' : 'sessions need'} marking
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+            Mark who attended or didn&apos;t, so attendance and no-show numbers are accurate.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {needsMarking.slice(0, 6).map((o) => (
+              <button
+                key={occKey(o)}
+                type="button"
+                onClick={() => {
+                  handleSelectDate(o.date);
+                  void openOccurrence(o);
+                }}
+                className="rounded-full bg-warning/20 px-3 py-1 text-xs font-bold text-black dark:text-zinc-50"
+              >
+                {new Date(o.date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}{' '}
+                {formatClassTime(o.startTime)} · {o.unmarkedCount} to mark
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <ClassCalendar occurrences={occurrences} selectedDate={selectedDate} onSelectDate={handleSelectDate} />
 
       {selectedDate && dayOccurrences.length > 1 && (

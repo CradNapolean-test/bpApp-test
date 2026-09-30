@@ -58,7 +58,7 @@ export function ClassesHubShell({
 
       {tab === 'Schedule' && <ClassManager initialClasses={initialClasses} />}
       {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} clients={clients} />}
-      {tab === 'Reports' && <ReportsPane report={report} />}
+      {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Attendance')} />}
     </AppShell>
     </ClientOnly>
   );
