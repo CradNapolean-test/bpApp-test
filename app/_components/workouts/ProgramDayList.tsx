@@ -109,12 +109,12 @@ export function ProgramDayList({
           return (
             <div
               key={day.id}
-              className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/[.05] p-3 dark:border-white/5"
+              className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-black/[.06] bg-card-muted p-3 dark:border-white/5"
             >
               <button
                 type="button"
                 onClick={() => onOpenDay(day.id)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                className="flex min-w-[11rem] flex-1 items-center gap-3 text-left"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
                   <Icon className="h-4 w-4" />
@@ -125,7 +125,7 @@ export function ProgramDayList({
                     {day.exerciseCount} exercise{day.exerciseCount === 1 ? '' : 's'}
                   </p>
                   {day.phaseLabel && showPhaseLabel && (
-                    <span className="mt-0.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
+                    <span className="mt-0.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
                       {day.phaseLabel}
                     </span>
                   )}
@@ -137,7 +137,7 @@ export function ProgramDayList({
                 )}
               </button>
               {renderDayControls && (
-                <div className="flex shrink-0 items-center gap-2">{renderDayControls(day)}</div>
+                <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">{renderDayControls(day)}</div>
               )}
             </div>
           );

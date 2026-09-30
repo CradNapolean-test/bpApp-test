@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
+import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -286,13 +287,14 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
                 <button
                   type="button"
                   onClick={() => openEdit(t.id)}
-                  className="text-sm font-semibold text-black hover:underline dark:text-zinc-50"
+                  className="rounded-full px-2.5 py-1 text-sm font-semibold text-accent hover:bg-accent/10"
                 >
                   Edit
                 </button>
-                <button type="button" onClick={() => handleDelete(t.id)} className="text-sm font-semibold text-danger hover:underline">
-                  Delete
-                </button>
+                <DropdownMenu
+                  triggerLabel={`More actions for ${t.name}`}
+                  items={[{ label: 'Delete form', destructive: true, onSelect: () => handleDelete(t.id) }]}
+                />
               </div>
             </div>
           ))}

@@ -58,12 +58,12 @@ function StartFromTemplateForm({ clientId, templates }: { clientId: string; temp
   if (templates.length === 0) return null;
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <form onSubmit={handleSubmit} className="flex items-end gap-2 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
       <div className="flex-1 space-y-1">
         <label className="text-xs font-medium text-zinc-500">Start from a programme template</label>
         <select
           required
-          className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
           value={templateId}
           onChange={(e) => setTemplateId(e.target.value)}
         >
@@ -77,7 +77,7 @@ function StartFromTemplateForm({ clientId, templates }: { clientId: string; temp
           ))}
         </select>
       </div>
-      <button type="submit" disabled={busy} className="rounded-md border border-black/10 px-4 py-2 text-sm font-medium disabled:opacity-50 dark:border-white/10">
+      <button type="submit" disabled={busy} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50">
         {busy ? 'Starting…' : 'Start programme'}
       </button>
     </form>
@@ -110,12 +110,12 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
   if (library.length === 0) return null;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
       <div className="space-y-1">
         <label className="text-xs font-medium text-zinc-500">Record a tested max</label>
         <select
           required
-          className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          className="rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
           value={libraryId}
           onChange={(e) => setLibraryId(e.target.value)}
         >
@@ -133,7 +133,7 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
         type="number"
         required
         placeholder="Weight"
-        className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+        className="rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
         value={max}
         onChange={(e) => setMax(e.target.value === '' ? '' : Number(e.target.value))}
       />
@@ -144,7 +144,7 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
           min={1}
           required
           title="1 = a true 1RM. More than 1 (e.g. a 3-rep or 5-rep max) gets converted to an estimated 1RM automatically."
-          className="w-16 rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+          className="w-16 rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
           value={reps}
           onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))}
         />
@@ -153,7 +153,7 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
         <input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} />
         Estimated
       </label>
-      <button type="submit" disabled={busy} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50">
+      <button type="submit" disabled={busy} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50">
         Save
       </button>
     </form>
@@ -478,6 +478,9 @@ export function WorkoutTab({
   const confirm = useConfirm();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate } = useAction();
+  // A coach's program-setup forms (new program, start from a template, record a max) stay tucked
+  // away once a program exists.
+  const [showSetup, setShowSetup] = useState(false);
   const [newProgramName, setNewProgramName] = useState('');
   const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
   const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
@@ -601,26 +604,47 @@ export function WorkoutTab({
 
   return (
     <div className="space-y-6">
-      {isCoachView && (
-        <form onSubmit={handleCreateProgram} className="flex items-end gap-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
-          <div className="flex-1 space-y-1">
-            <label className="text-xs font-medium text-zinc-500">New program name</label>
-            <input
-              required
-              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-              value={newProgramName}
-              onChange={(e) => setNewProgramName(e.target.value)}
-            />
+      {isCoachView ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-bold text-black dark:text-zinc-50">
+              {programs.length === 0 ? 'Set up a program' : 'Programs'}
+            </p>
+            {programs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowSetup((v) => !v)}
+                aria-expanded={showSetup}
+                className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+              >
+                {showSetup ? 'Hide tools' : '+ New program & tools'}
+              </button>
+            )}
           </div>
-          <button type="submit" disabled={creating} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground disabled:opacity-50">
-            {creating ? 'Creating…' : 'Create program'}
-          </button>
-        </form>
+          {(showSetup || programs.length === 0) && (
+            <div className="space-y-3">
+        <form onSubmit={handleCreateProgram} className="flex items-end gap-2 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+              <div className="flex-1 space-y-1">
+                <label className="text-xs font-medium text-zinc-500">New program name</label>
+                <input
+                  required
+                  className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                  value={newProgramName}
+                  onChange={(e) => setNewProgramName(e.target.value)}
+                />
+              </div>
+              <button type="submit" disabled={creating} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50">
+                {creating ? 'Creating…' : 'Create program'}
+              </button>
+            </form>
+              <StartFromTemplateForm clientId={clientId} templates={programTemplates} />
+              <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
       )}
-
-      {isCoachView && <StartFromTemplateForm clientId={clientId} templates={programTemplates} />}
-
-      <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
 
       {programs.length === 0 && (
         <EmptyState

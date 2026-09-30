@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
+import { Segmented } from '@/app/_components/ui';
 import { composeCommunication, deleteCommunication } from '@/lib/data/communications';
 import type { ChatOverviewRow, ClientGroupWithMembers, ScheduledCommunicationRow } from '@/lib/data/types';
 
@@ -69,69 +70,70 @@ export function BroadcastsPane({
           className="w-full resize-none rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
         />
 
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={target === 'all_clients'} onChange={() => setTarget('all_clients')} />
-            All clients
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input
-              type="radio"
-              checked={target === 'group'}
-              onChange={() => setTarget('group')}
-              disabled={groups.length === 0}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-zinc-500">To</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              label="Audience"
+              value={target}
+              onChange={setTarget}
+              options={[
+                { value: 'all_clients', label: 'All clients' },
+                { value: 'group', label: 'A group', disabled: groups.length === 0 },
+              ]}
             />
-            Group
-          </label>
-          {target === 'group' && (
-            <select
-              value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
-            >
-              {groups.length === 0 && <option value="">No groups yet</option>}
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name} ({g.memberIds.length})
-                </option>
-              ))}
-            </select>
-          )}
+            {target === 'group' && (
+              <select
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                className="rounded-xl border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/10"
+              >
+                {groups.length === 0 && <option value="">No groups yet</option>}
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} ({g.memberIds.length})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <span className="text-xs font-medium text-zinc-500">Channel:</span>
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={channel === 'message'} onChange={() => setChannel('message')} />
-            Message
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={channel === 'email'} onChange={() => setChannel('email')} />
-            Email
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={channel === 'both'} onChange={() => setChannel('both')} />
-            Both
-          </label>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-zinc-500">Send as</p>
+          <Segmented
+            label="Channel"
+            value={channel}
+            onChange={setChannel}
+            options={[
+              { value: 'message', label: 'Message' },
+              { value: 'email', label: 'Email' },
+              { value: 'both', label: 'Both' },
+            ]}
+          />
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={timing === 'now'} onChange={() => setTiming('now')} />
-            Send now
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="radio" checked={timing === 'later'} onChange={() => setTiming('later')} />
-            Schedule
-          </label>
-          {timing === 'later' && (
-            <input
-              type="datetime-local"
-              value={scheduleAt}
-              onChange={(e) => setScheduleAt(e.target.value)}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-zinc-500">When</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              label="Timing"
+              value={timing}
+              onChange={setTiming}
+              options={[
+                { value: 'now', label: 'Send now' },
+                { value: 'later', label: 'Schedule' },
+              ]}
             />
-          )}
+            {timing === 'later' && (
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="rounded-xl border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/10"
+              />
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-2">

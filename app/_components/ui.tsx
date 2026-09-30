@@ -148,3 +148,43 @@ export function ListRow({
   }
   return <div className={cls}>{inner}</div>;
 }
+
+// A pill switch for choosing one of a few options (replaces native radio buttons, which render in
+// the browser's default blue). `fill` stretches it to the full width on a phone.
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+  fill = false,
+}: {
+  options: { value: T; label: string; disabled?: boolean }[];
+  value: T;
+  onChange: (v: T) => void;
+  label: string;
+  fill?: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={`flex gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10 ${fill ? 'w-full sm:w-max' : 'w-max max-w-full'}`}
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          disabled={o.disabled}
+          onClick={() => onChange(o.value)}
+          className={`rounded-full px-3.5 py-1.5 text-center text-xs font-bold transition-colors disabled:opacity-40 ${fill ? 'flex-1' : ''} ${
+            value === o.value ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-200'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}

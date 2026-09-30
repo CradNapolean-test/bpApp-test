@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
+import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -363,21 +364,18 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
                   <p className="font-bold text-black dark:text-zinc-50">{group.name}</p>
                   <p className="mt-0.5 text-sm text-zinc-500">{formatScheduleSummary(group)}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
                     onClick={() => setEditingName(group.name)}
-                    className="text-sm font-semibold text-black hover:underline dark:text-zinc-50"
+                    className="rounded-full px-2.5 py-1 text-sm font-semibold text-accent hover:bg-accent/10"
                   >
                     Edit
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteGroup(group)}
-                    className="text-sm font-semibold text-danger hover:underline"
-                  >
-                    Delete
-                  </button>
+                  <DropdownMenu
+                    triggerLabel={`More actions for ${group.name}`}
+                    items={[{ label: 'Delete class', destructive: true, onSelect: () => handleDeleteGroup(group) }]}
+                  />
                 </div>
               </div>
             )
