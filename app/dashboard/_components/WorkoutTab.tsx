@@ -87,7 +87,7 @@ function StartFromTemplateForm({ clientId, templates }: { clientId: string; temp
 
 // Either party can record a tested/estimated max (RLS: owns_client) -- this is what makes
 // %1RM prescriptions resolve to an actual target load for a given client.
-function RecordMaxForm({ clientId, library }: { clientId: string; library: ExerciseLibraryRow[] }) {
+function RecordMaxForm({ clientId, library, bare = false }: { clientId: string; library: ExerciseLibraryRow[]; bare?: boolean }) {
   const { run, busy } = useAction();
   const [libraryId, setLibraryId] = useState('');
   const [max, setMax] = useState<number | ''>('');
@@ -110,16 +110,16 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
 
   if (library.length === 0) return null;
 
+  const inputBase = 'h-11 w-full min-w-0 rounded-xl border border-black/10 bg-transparent px-3 text-base dark:border-white/10';
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+    <form
+      onSubmit={handleSubmit}
+      className={`space-y-3 ${bare ? '' : 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10'}`}
+    >
       <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Record a tested max</label>
-        <select
-          required
-          className="rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-          value={libraryId}
-          onChange={(e) => setLibraryId(e.target.value)}
-        >
+        {!bare && <label className="text-xs font-medium text-zinc-500">Record a tested max</label>}
+        <select required className={inputBase} value={libraryId} onChange={(e) => setLibraryId(e.target.value)}>
           <option value="" disabled>
             Exercise…
           </option>
@@ -130,33 +130,42 @@ function RecordMaxForm({ clientId, library }: { clientId: string; library: Exerc
           ))}
         </select>
       </div>
-      <input
-        type="number"
-        required
-        placeholder="Weight"
-        className="rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-        value={max}
-        onChange={(e) => setMax(e.target.value === '' ? '' : Number(e.target.value))}
-      />
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Reps</label>
-        <input
-          type="number"
-          min={1}
-          required
-          title="1 = a true 1RM. More than 1 (e.g. a 3-rep or 5-rep max) gets converted to an estimated 1RM automatically."
-          className="w-16 rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-          value={reps}
-          onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))}
-        />
+      <div className="grid grid-cols-2 gap-2">
+        <label className="space-y-1">
+          <span className="block text-xs font-medium text-zinc-500">Weight</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            required
+            className={inputBase}
+            value={max}
+            onChange={(e) => setMax(e.target.value === '' ? '' : Number(e.target.value))}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs font-medium text-zinc-500">Reps</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            required
+            title="1 = a true 1RM. More than 1 (e.g. a 3-rep or 5-rep max) gets converted to an estimated 1RM automatically."
+            className={inputBase}
+            value={reps}
+            onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))}
+          />
+        </label>
       </div>
-      <label className="flex items-center gap-1.5 pb-2 text-xs text-zinc-500">
-        <input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} />
-        Estimated
-      </label>
-      <button type="submit" disabled={busy} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50">
-        Save
-      </button>
+      <div className="flex items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-zinc-500">
+          <input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} />
+          Estimated
+        </label>
+        <button type="submit" disabled={busy} className="h-11 rounded-full bg-accent px-6 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
     </form>
   );
 }
@@ -188,7 +197,6 @@ function LogSetForm({
   initialReps,
   initialLoad,
   lastSet,
-  lastLabel,
   priorBest,
 }: {
   clientId: string;
@@ -198,9 +206,8 @@ function LogSetForm({
   restSeconds: number | null;
   initialReps: number | null;
   initialLoad: number | null;
-  // What the member did for this same set number last time, and how to label it ("Last week").
+  // What the member did for this same set number last time.
   lastSet: { reps: number | null; load: number | null } | null;
-  lastLabel: string;
   // Heaviest load from earlier sessions of this exercise; a heavier set is a new best.
   priorBest: number | null;
 }) {
@@ -251,13 +258,13 @@ function LogSetForm({
   return (
     <div className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-sm font-bold text-black dark:text-zinc-50">
+        <span className="whitespace-nowrap text-sm font-bold text-black dark:text-zinc-50">
           Set {nextSetNumber}
           {totalSets ? <span className="font-medium text-zinc-500"> of {totalSets}</span> : null}
         </span>
         {lastSet && (lastSet.reps != null || lastSet.load != null) && (
-          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
-            {lastLabel}: {lastSet.reps ?? '—'} × {lastSet.load ?? '—'}
+          <span className="whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
+            Last: {lastSet.reps ?? '—'} × {lastSet.load ?? '—'}
           </span>
         )}
       </div>
@@ -959,7 +966,7 @@ export function WorkoutTab({
             <span className="text-xs font-semibold text-accent group-open:hidden">Add</span>
           </summary>
           <div className="px-4 pb-4">
-            <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
+            <RecordMaxForm clientId={clientId} library={exerciseLibrary} bare />
           </div>
         </details>
       )}
@@ -1048,12 +1055,14 @@ export function WorkoutTab({
                         {last.sets.map((l, i) => (
                           <span
                             key={l.id}
-                            className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs ${
+                            className={`flex items-center gap-1.5 rounded-lg border px-1.5 py-1 text-xs ${
                               i === logs.length ? 'border-accent/50 bg-accent-soft' : 'border-black/[.08] dark:border-white/10'
                             }`}
                           >
-                            <span className="text-[10px] font-bold uppercase text-zinc-400">Set {i + 1}</span>
-                            <span className="font-semibold text-black dark:text-zinc-100">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-black/10 text-[10px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                              {i + 1}
+                            </span>
+                            <span className="whitespace-nowrap font-semibold text-black dark:text-zinc-100">
                               {l.actual_reps ?? '—'} × {l.actual_load ?? '—'}
                             </span>
                           </span>
@@ -1088,7 +1097,6 @@ export function WorkoutTab({
                         initialReps={seed?.actual_reps ?? null}
                         initialLoad={seed?.actual_load ?? null}
                         lastSet={last ? lastFor(logs.length + 1) : null}
-                        lastLabel={last?.label ?? 'Last time'}
                         priorBest={priorBest}
                       />
                     </>
