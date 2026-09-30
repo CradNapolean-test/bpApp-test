@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import { CalendarDays, Camera, CheckSquare, Flame, Heart } from 'lucide-react';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -19,7 +18,8 @@ import type {
 } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
-import { BpHome } from './BpHome';
+import { BpHomeHero, BpHomeSections } from './BpHome';
+import { Card, IconChip } from '@/app/_components/ui';
 
 function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
   const loggedDates = new Set(historyLogs.filter(hasLoggedData).map((l) => l.log_date));
@@ -36,20 +36,6 @@ const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px
 const clickableCardCls = `${cardCls} w-full text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`;
 const labelCls = 'text-xs font-medium text-zinc-500';
 const valueCls = 'mt-1 text-xl font-semibold text-black dark:text-zinc-50';
-
-const TINTS = {
-  rose: 'bg-rose-50 text-rose-500 dark:bg-rose-500/10 dark:text-rose-400',
-  emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-  violet: 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400',
-} as const;
-
-function IconChip({ icon: Icon, tint }: { icon: LucideIcon; tint: keyof typeof TINTS }) {
-  return (
-    <span className={`mb-2 flex h-8 w-8 items-center justify-center rounded-lg ${TINTS[tint]}`}>
-      <Icon className="h-4 w-4" />
-    </span>
-  );
-}
 
 function MacroBar({ label, value, target }: { label: string; value: number; target: number }) {
   const pct = target > 0 ? Math.min(100, Math.max(0, (value / target) * 100)) : 0;
@@ -123,9 +109,6 @@ export function TodayTab({
     .filter((b) => b.status === 'booked' && b.booking_date >= todayIso)
     .sort((a, b) => (a.booking_date + (a.class?.start_time ?? '')).localeCompare(b.booking_date + (b.class?.start_time ?? '')))[0];
 
-  const nextClassLabel = nextClass
-    ? `${nextClass.class?.name} · ${new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short' })} ${formatClassTime(nextClass.class?.start_time)}`
-    : 'None booked';
 
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
   const greetingHour = new Date().getHours();
@@ -133,16 +116,7 @@ export function TodayTab({
 
   return (
     <div className="space-y-3">
-      {!isCoachView && (
-        <BpHome
-          profile={profile}
-          bookings={bookings}
-          membership={membership}
-          rewards={rewards}
-          onNavigate={onNavigate}
-          onNavigateClasses={onNavigateClasses}
-        />
-      )}
+      {!isCoachView && <BpHomeHero profile={profile} membership={membership} />}
 
       {isCoachView && (
       <>
@@ -196,42 +170,59 @@ export function TodayTab({
       </>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className={clickableCardCls}>
-          <IconChip icon={Flame} tint="rose" />
-          <p className={labelCls}>Current streak</p>
-          <p className={valueCls}>{streak} {streak === 1 ? 'day' : 'days'}</p>
-        </button>
-
-        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className={clickableCardCls}>
-          <IconChip icon={CheckSquare} tint="emerald" />
-          <p className={labelCls}>Habits today</p>
-          <p className={valueCls}>
-            {habits.length === 0 ? '—' : `${habitsDoneToday} of ${habits.length}`}
-          </p>
-        </button>
-      </div>
-
-      <div className={cardCls}>
-        {onNavigateClasses ? (
-          <button type="button" onClick={onNavigateClasses} className="w-full text-left">
-            <IconChip icon={CalendarDays} tint="violet" />
-            <p className={labelCls}>Next class</p>
-            <p className={valueCls}>{nextClassLabel}</p>
-          </button>
-        ) : (
-          <>
-            <IconChip icon={CalendarDays} tint="violet" />
-            <p className={labelCls}>Next class</p>
-            <p className={valueCls}>{nextClassLabel}</p>
-          </>
-        )}
+      <Card className="!p-3.5">
+        {(() => {
+          const body = (
+            <span className="flex items-center gap-3">
+              <IconChip icon={CalendarDays} size="lg" />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Next class</span>
+                <span className="block truncate text-base font-extrabold text-black dark:text-zinc-50">
+                  {nextClass ? nextClass.class?.name : 'None booked'}
+                </span>
+                <span className="block text-sm text-zinc-500">
+                  {nextClass
+                    ? `${new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })} · ${formatClassTime(nextClass.class?.start_time)}`
+                    : 'Tap to book a session'}
+                </span>
+              </span>
+            </span>
+          );
+          return onNavigateClasses ? (
+            <button type="button" onClick={onNavigateClasses} className="w-full text-left">
+              {body}
+            </button>
+          ) : (
+            body
+          );
+        })()}
         {nextClass && nextClass.booking_date === todayIso && (
-          <div className="mt-2">
+          <div className="mt-3">
             <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} />
           </div>
         )}
-      </div>
+      </Card>
+
+      <Card flush className="grid grid-cols-2 divide-x divide-black/5 dark:divide-white/10">
+        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
+          <IconChip icon={Flame} tone="muted" />
+          <span>
+            <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">
+              {streak} {streak === 1 ? 'day' : 'days'}
+            </span>
+            <span className="block text-xs text-zinc-500">Current streak</span>
+          </span>
+        </button>
+        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
+          <IconChip icon={CheckSquare} tone="muted" />
+          <span>
+            <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">
+              {habits.length === 0 ? '—' : `${habitsDoneToday} of ${habits.length}`}
+            </span>
+            <span className="block text-xs text-zinc-500">Habits today</span>
+          </span>
+        </button>
+      </Card>
 
       {(isCoachView || pendingForms > 0) && (
       <div className="grid grid-cols-2 gap-3">
@@ -267,6 +258,16 @@ export function TodayTab({
           <p className={valueCls}>{pendingForms}</p>
         </button>
       </div>
+      )}
+
+      {!isCoachView && (
+        <BpHomeSections
+          bookings={bookings}
+          membership={membership}
+          rewards={rewards}
+          onNavigate={onNavigate}
+          onNavigateClasses={onNavigateClasses}
+        />
       )}
     </div>
   );

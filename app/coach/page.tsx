@@ -4,6 +4,7 @@ import { getClientHealthStatuses, getMyClients, getRosterHabitAdherence } from '
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getRecentActivity } from '@/lib/data/activity';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { CoachNav } from './_components/CoachNav';
 import { CoachBottomTabBar } from './_components/CoachBottomTabBar';
 import { CoachBrand } from './_components/CoachBrand';
@@ -50,6 +51,7 @@ export default async function CoachPage() {
   );
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}
@@ -90,5 +92,6 @@ export default async function CoachPage() {
         </div>
       </div>
     </AppShell>
+    </ClientOnly>
   );
 }

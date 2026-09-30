@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bell, MessageSquare, User } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
@@ -418,6 +419,7 @@ export function DashboardShell({
   );
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={clientLabel}
       isCoachView={isCoachView}
@@ -711,5 +713,6 @@ export function DashboardShell({
       )}
 
     </AppShell>
+    </ClientOnly>
   );
 }

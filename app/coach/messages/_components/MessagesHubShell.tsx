@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquare } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { Logo } from '@/app/_components/Logo';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -101,6 +102,7 @@ export function MessagesHubShell({
   }
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}
@@ -127,5 +129,6 @@ export function MessagesHubShell({
         />
       )}
     </AppShell>
+    </ClientOnly>
   );
 }

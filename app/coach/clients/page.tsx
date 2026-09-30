@@ -4,6 +4,7 @@ import { getClientHealthStatuses, getMyClients, searchGymClients } from '@/lib/d
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getGroups } from '@/lib/data/clientGroups';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { CoachNav } from '../_components/CoachNav';
 import { CoachBottomTabBar } from '../_components/CoachBottomTabBar';
 import { CoachBrand } from '../_components/CoachBrand';
@@ -37,6 +38,7 @@ export default async function CoachClientsPage() {
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}
@@ -60,5 +62,6 @@ export default async function CoachClientsPage() {
         />
       </div>
     </AppShell>
+    </ClientOnly>
   );
 }

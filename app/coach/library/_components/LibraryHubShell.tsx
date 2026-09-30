@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Logo } from '@/app/_components/Logo';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
@@ -52,6 +53,7 @@ export function LibraryHubShell({
   const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Exercises');
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}
@@ -69,5 +71,6 @@ export function LibraryHubShell({
       {tab === 'Education' && <EducationPane initialCourses={initialCourses} />}
       {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}
     </AppShell>
+    </ClientOnly>
   );
 }

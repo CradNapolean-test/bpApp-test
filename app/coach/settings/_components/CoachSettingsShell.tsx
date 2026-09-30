@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
@@ -75,6 +76,7 @@ export function CoachSettingsShell({
     'flex w-full items-center justify-between border-b border-black/5 px-4 py-3.5 text-left last:border-b-0 dark:border-white/5';
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}
@@ -161,5 +163,6 @@ export function CoachSettingsShell({
         <LegalFooterLinks />
       </div>
     </AppShell>
+    </ClientOnly>
   );
 }

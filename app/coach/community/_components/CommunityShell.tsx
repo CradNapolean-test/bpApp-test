@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Gift, Star, Trash2, Users } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
+import { ClientOnly } from '@/app/_components/ClientOnly';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -234,6 +235,7 @@ export function CommunityShell({
   const avg = feedback.length ? feedback.reduce((s, f) => s + f.rating, 0) / feedback.length : null;
 
   return (
+    <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}
@@ -298,5 +300,6 @@ export function CommunityShell({
         </section>
       </div>
     </AppShell>
+    </ClientOnly>
   );
 }

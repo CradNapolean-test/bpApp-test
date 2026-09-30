@@ -298,7 +298,7 @@ export function ClassesArea({
                 >
                   <div className="flex items-center justify-between gap-2.5">
                     <div className="min-w-0">
-                      <p className="font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
+                      <p className="truncate font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
                       <p className="mt-0.5 text-sm text-zinc-500">
                         {new Date(b.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, {
                           weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
@@ -307,9 +307,6 @@ export function ClassesArea({
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {!waitlisted && b.booking_date === todayIso && (
-                        <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
-                      )}
                       <span
                         className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                           waitlisted ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 'bg-accent-soft text-accent'
@@ -326,6 +323,11 @@ export function ClassesArea({
                       </button>
                     </div>
                   </div>
+                  {!waitlisted && b.booking_date === todayIso && (
+                    <div className="mt-2">
+                      <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
+                    </div>
+                  )}
                   {deadline && (
                     <p className={`mt-2 text-[11px] ${late ? 'text-danger' : 'text-zinc-500'}`}>
                       {late ? 'Past the cancellation deadline — cancelling now forfeits your credit' : cancelNote(deadline)}
