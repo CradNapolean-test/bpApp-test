@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
+import { inputCls } from '@/app/_components/ui';
 import { grantCredits } from '@/lib/data/classes';
 import { assignMembership, grantCreditPack } from '@/lib/data/memberships';
 import { updateCheckinReminderDays } from '@/lib/data/clientProfile';
@@ -65,11 +66,10 @@ export function CreditsTab({
     });
   }
 
-  const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Credits</h3>
         <p className="mt-1 text-2xl font-semibold text-black dark:text-zinc-50">{creditsBalance}</p>
         <p className="mt-0.5 text-xs text-zinc-500">
@@ -77,18 +77,18 @@ export function CreditsTab({
           packs, carries over)
         </p>
 
-        <form onSubmit={handleGrant} className="mt-3 flex flex-wrap items-end gap-2">
+        <form onSubmit={handleGrant} className="mt-3 grid grid-cols-2 items-end gap-3">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Amount</label>
+            <label className="block text-xs font-medium text-zinc-500">Amount</label>
             <input
               type="number"
               value={grantAmount}
               onChange={(e) => setGrantAmount(Number(e.target.value))}
-              className={`${inputCls} w-20`}
+              className={inputCls}
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Reason</label>
+          <div className="col-span-2 space-y-1">
+            <label className="block text-xs font-medium text-zinc-500">Reason</label>
             <input
               type="text"
               value={grantReason}
@@ -97,7 +97,7 @@ export function CreditsTab({
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Expires (optional)</label>
+            <label className="block text-xs font-medium text-zinc-500">Expires (optional)</label>
             <input
               type="date"
               value={grantExpiresAt}
@@ -108,14 +108,14 @@ export function CreditsTab({
           <button
             type="submit"
             disabled={granting}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
           >
             {granting ? 'Granting…' : 'Grant credits'}
           </button>
         </form>
       </div>
 
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Membership package</h3>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           {membership?.package
@@ -124,7 +124,7 @@ export function CreditsTab({
         </p>
         <form onSubmit={handleAssign} className="mt-3 flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Assign package</label>
+            <label className="block text-xs font-medium text-zinc-500">Assign package</label>
             <select
               className={inputCls}
               value={selectedPackage}
@@ -141,14 +141,14 @@ export function CreditsTab({
           <button
             type="submit"
             disabled={assigning || !selectedPackage}
-            className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40"
           >
             {assigning ? 'Assigning…' : 'Assign'}
           </button>
         </form>
       </div>
 
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Grant a credit pack</h3>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           One-off bonus credits from the catalog (Classes → Credit Packs) -- doesn&apos;t recur, and expires on
@@ -156,7 +156,7 @@ export function CreditsTab({
         </p>
         <form onSubmit={handleGrantPack} className="mt-3 flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Pack</label>
+            <label className="block text-xs font-medium text-zinc-500">Pack</label>
             <select className={inputCls} value={selectedPack} onChange={(e) => setSelectedPack(e.target.value)}>
               <option value="">Select…</option>
               {creditPacks.map((p) => (
@@ -169,14 +169,14 @@ export function CreditsTab({
           <button
             type="submit"
             disabled={grantingPack || !selectedPack}
-            className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40"
           >
             {grantingPack ? 'Granting…' : 'Grant pack'}
           </button>
         </form>
       </div>
 
-      <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Check-in reminders</h3>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Nudge this client if they haven&apos;t logged a real Weekly Log entry in a while. Set to 0 to
@@ -187,19 +187,19 @@ export function CreditsTab({
         </p>
         <form onSubmit={handleSaveReminder} className="mt-3 flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Days of inactivity</label>
+            <label className="block text-xs font-medium text-zinc-500">Days of inactivity</label>
             <input
               type="number"
               min={0}
               value={reminderDays}
               onChange={(e) => setReminderDays(Number(e.target.value))}
-              className={`${inputCls} w-20`}
+              className={inputCls}
             />
           </div>
           <button
             type="submit"
             disabled={savingReminder}
-            className="rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40"
           >
             {savingReminder ? 'Saving…' : 'Save'}
           </button>
