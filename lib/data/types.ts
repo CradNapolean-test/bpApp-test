@@ -174,6 +174,8 @@ export interface ClassRow {
   gym_id: string;
   name: string;
   day_of_week: number | null;
+  // Set for a one-off session (happens on this date only); null for a weekly recurring slot.
+  specific_date: string | null;
   start_time: string | null;
   capacity: number;
   coach_note: string | null;

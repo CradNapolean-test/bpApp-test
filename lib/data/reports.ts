@@ -18,7 +18,7 @@ export async function getCoachReport(): Promise<CoachReport> {
 
   const { data: classes, error: classesError } = await supabase
     .from('classes')
-    .select('id, name, day_of_week, start_time')
+    .select('id, name, day_of_week, start_time, specific_date')
     .eq('gym_id', gymId);
   if (classesError) raise(classesError);
   if (!classes || classes.length === 0) {
@@ -42,7 +42,7 @@ export async function getCoachReport(): Promise<CoachReport> {
     classes.map((c) => [
       c.id,
       c.day_of_week != null && c.start_time
-        ? `${WEEKDAY_SHORT[c.day_of_week]} ${formatClassTime(c.start_time)} · ${c.name}`
+        ? `${c.specific_date ? `${WEEKDAY_SHORT[c.day_of_week]} ${c.specific_date.slice(8)}/${c.specific_date.slice(5, 7)}` : WEEKDAY_SHORT[c.day_of_week]} ${formatClassTime(c.start_time)} · ${c.name}`
         : c.name,
     ])
   );

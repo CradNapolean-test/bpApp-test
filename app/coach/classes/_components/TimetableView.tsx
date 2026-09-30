@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CalendarDays, Plus } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -13,8 +13,8 @@ import { formatClock } from '@/lib/utils/cancelDeadline';
 import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClassRow } from '@/lib/data/types';
 
-// The weekly timetable: every class row is one slot (a day, a time, a class). Pick a weekday, see
-// its sessions as cards, tap one to edit it in a sheet. Same look as the Sessions tab.
+// The timetable as a real week calendar: weekly recurring slots repeat every week, one-off sessions
+// appear only on their date. Tap a block to edit, tap an empty slot to add.
 
 // Monday first, and Sunday only if something is actually scheduled on it.
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -23,6 +23,8 @@ type Draft = {
   id: string | null; // null = new slot
   name: string;
   dayOfWeek: number;
+  kind: 'weekly' | 'once';
+  date: string; // one-off sessions: YYYY-MM-DD
   // New sessions only: every weekday this should repeat on (each becomes one weekly slot).
   repeatDays: number[];
   startTime: string; // HH:MM
@@ -32,11 +34,21 @@ type Draft = {
   note: string;
 };
 
+const isoAdd = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const dowOf = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+const mondayOf = (iso: string) => isoAdd(iso, -((dowOf(iso) + 6) % 7));
+function isoToday(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
 function toDraft(c: ClassRow): Draft {
   return {
     id: c.id,
     name: c.name,
     dayOfWeek: c.day_of_week ?? 1,
+    kind: c.specific_date ? 'once' : 'weekly',
+    date: c.specific_date ?? isoToday(),
     repeatDays: [c.day_of_week ?? 1],
     startTime: c.start_time?.slice(0, 5) ?? '06:00',
     capacity: c.capacity,
@@ -94,21 +106,32 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
   const [copyTo, setCopyTo] = useState<Set<number>>(new Set());
 
   const names = useMemo(() => [...new Set(classes.map((c) => c.name))].sort(), [classes]);
-  const days = useMemo(() => DAY_ORDER.filter((d) => d !== 0 || classes.some((c) => c.day_of_week === 0)), [classes]);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(isoToday()));
+  const todayIso = isoToday();
+  const dateFor = (d: number) => isoAdd(weekStart, (d + 6) % 7);
+  const byTime = (a: ClassRow, b: ClassRow) => (a.start_time ?? '').localeCompare(b.start_time ?? '');
+  // What's actually on a weekday of the week being shown: weekly slots plus that date's one-offs.
   const daySlots = (d: number) =>
-    classes.filter((c) => c.day_of_week === d).sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''));
-  const slots = daySlots(day);
+    classes.filter((c) => (c.specific_date ? c.specific_date === dateFor(d) : c.day_of_week === d)).sort(byTime);
+  // Weekly slots only -- what "copy a day" duplicates.
+  const weeklySlots = (d: number) => classes.filter((c) => !c.specific_date && c.day_of_week === d).sort(byTime);
+  const days = DAY_ORDER.filter((d) => d !== 0 || daySlots(0).length > 0);
+  const slots = weeklySlots(day);
+  const fmtShort = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const weekLabel = `${fmtShort(weekStart)} – ${fmtShort(isoAdd(weekStart, 6))}`;
   const startMins = classes.filter((c) => c.start_time).map((c) => toMin(c.start_time));
   const firstHour = startMins.length ? Math.min(5, Math.floor(Math.min(...startMins) / 60)) : 5;
   const lastHour = startMins.length ? Math.max(20, Math.ceil((Math.max(...startMins) + DURATION) / 60)) : 20;
   const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
 
   function newSlot(forDay: number = day, time = '06:00') {
-    const template = daySlots(forDay)[daySlots(forDay).length - 1] ?? classes[0];
+    const template = weeklySlots(forDay)[weeklySlots(forDay).length - 1] ?? classes[0];
     setDraft({
       id: null,
       name: template?.name ?? '',
       dayOfWeek: forDay,
+      kind: 'weekly',
+      date: dateFor(forDay),
       repeatDays: [forDay],
       startTime: time,
       capacity: template?.capacity ?? 12,
@@ -120,9 +143,11 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
 
   async function save() {
     if (!draft) return;
+    const once = draft.kind === 'once';
     const fields = {
       name: draft.name.trim(),
-      day_of_week: draft.dayOfWeek,
+      day_of_week: once ? dowOf(draft.date) : draft.dayOfWeek,
+      specific_date: once ? draft.date : null,
       start_time: draft.startTime,
       capacity: draft.capacity,
       credit_cost: draft.creditCost,
@@ -130,15 +155,19 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
       coach_note: draft.note.trim() || null,
     };
     const repeat = [...new Set(draft.repeatDays)].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
-    if (!draft.id && repeat.length === 0) return;
-    // Skip a day that already has this class at this time, so repeating twice never doubles up.
-    const isDup = (d: number) => daySlots(d).some((c) => c.start_time?.slice(0, 5) === draft.startTime && c.name === fields.name);
-    const toCreate = repeat.filter((d) => !isDup(d));
+    if (!draft.id && !once && repeat.length === 0) return;
+    // Skip anything already in the timetable at this time with this name, so saving twice never doubles up.
+    const sameSlot = (c: ClassRow) => c.start_time?.slice(0, 5) === draft.startTime && c.name === fields.name;
+    const toCreate: (number | null)[] = once
+      ? classes.some((c) => c.specific_date === draft.date && sameSlot(c))
+        ? []
+        : [null]
+      : repeat.filter((d) => !weeklySlots(d).some(sameSlot));
     await run(
       () =>
         draft.id
           ? updateClass(draft.id, fields)
-          : Promise.all(toCreate.map((d) => createClass({ ...fields, day_of_week: d }))),
+          : Promise.all(toCreate.map((d) => createClass(d === null ? fields : { ...fields, day_of_week: d }))),
       {
         success: draft.id
           ? 'Session updated'
@@ -148,7 +177,8 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
               ? 'Session added'
               : `Added to ${toCreate.length} days`,
         onDone: () => {
-          setDay(draft.dayOfWeek);
+          if (once) setWeekStart(mondayOf(draft.date));
+          else setDay(draft.dayOfWeek);
           setDraft(null);
         },
       }
@@ -159,7 +189,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
     if (!draft?.id) return;
     const ok = await confirm({
       title: 'Delete this session?',
-      body: 'Every booking for this weekly slot is removed too. This cannot be undone.',
+      body: draft.kind === 'once' ? 'Every booking for this session is removed too. This cannot be undone.' : 'Every booking for this weekly slot is removed too. This cannot be undone.',
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -172,7 +202,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
     if (slots.length === 0 || targets.length === 0) return;
     const jobs: Promise<unknown>[] = [];
     for (const target of targets) {
-      const existing = new Set(daySlots(target).map((c) => `${c.start_time?.slice(0, 5)}|${c.name}`));
+      const existing = new Set(weeklySlots(target).map((c) => `${c.start_time?.slice(0, 5)}|${c.name}`));
       for (const s of slots) {
         if (existing.has(`${s.start_time?.slice(0, 5)}|${s.name}`)) continue;
         jobs.push(
@@ -203,7 +233,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="px-1 text-sm font-extrabold text-black dark:text-zinc-50">
-          Weekly timetable · {classes.length} session{classes.length === 1 ? '' : 's'}
+          Timetable
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -221,6 +251,33 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
         </div>
       </div>
 
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Previous week"
+            onClick={() => setWeekStart((w) => isoAdd(w, -7))}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <p className="min-w-[8.5rem] text-center text-sm font-bold text-black dark:text-zinc-50">{weekLabel}</p>
+          <button
+            type="button"
+            aria-label="Next week"
+            onClick={() => setWeekStart((w) => isoAdd(w, 7))}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+        {weekStart !== mondayOf(todayIso) && (
+          <button type="button" onClick={() => setWeekStart(mondayOf(todayIso))} className="text-sm font-semibold text-accent">
+            This week
+          </button>
+        )}
+      </div>
+
       {classes.length === 0 ? (
         <EmptyState icon={CalendarDays} title="No sessions yet" hint="Add your first session, or tap any slot on the calendar once you have one." compact />
       ) : (
@@ -230,7 +287,13 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
             {days.map((d) => (
               <div key={d} className="border-b border-l border-black/[.06] py-2 text-center dark:border-white/10">
                 <p className="text-[11px] font-bold uppercase text-zinc-500">{WEEKDAY_SHORT[d]}</p>
-                <p className="text-[11px] text-zinc-400">{daySlots(d).length}</p>
+                <p
+                  className={`mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                    dateFor(d) === todayIso ? 'bg-accent text-accent-foreground' : 'text-black dark:text-zinc-100'
+                  }`}
+                >
+                  {Number(dateFor(d).slice(8))}
+                </p>
               </div>
             ))}
 
@@ -275,7 +338,9 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
                           setDraft(toDraft(row));
                         }}
                         aria-label={`${row.name} ${formatClassTime(row.start_time)} on ${WEEKDAY_LABELS[d]}`}
-                        className="absolute overflow-hidden rounded-lg bg-accent/20 px-1 py-0.5 text-left ring-1 ring-inset ring-accent/40 hover:bg-accent/30"
+                        className={`absolute overflow-hidden rounded-lg bg-accent/20 px-1 py-0.5 text-left hover:bg-accent/30 ${
+                          row.specific_date ? 'border border-dashed border-accent' : 'ring-1 ring-inset ring-accent/40'
+                        }`}
                         style={{
                           top: ((start - firstHour * 60) * HOUR_H) / 60 + 1,
                           height: (DURATION * HOUR_H) / 60 - 2,
@@ -296,7 +361,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
       )}
 
       <p className="px-1 text-xs text-zinc-500">
-        Times are the gym&apos;s local time. To cancel a single date (for example a bank holiday), use Sessions.
+        Solid blocks repeat every week; dashed blocks are one-off sessions. Times are the gym&apos;s local time. To cancel a single date (for example a bank holiday), use Sessions.
       </p>
 
       {draft && (
@@ -310,24 +375,48 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
           >
             {draft.id ? (
               <div className="grid grid-cols-2 gap-2">
-                <Field label="Day">
-                  <select className={inputCls} value={draft.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
-                    {DAY_ORDER.map((d) => (
-                      <option key={d} value={d}>
-                        {WEEKDAY_LABELS[d]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                {draft.kind === 'once' ? (
+                  <Field label="Date">
+                    <input type="date" required className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
+                  </Field>
+                ) : (
+                  <Field label="Day">
+                    <select className={inputCls} value={draft.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
+                      {DAY_ORDER.map((d) => (
+                        <option key={d} value={d}>
+                          {WEEKDAY_LABELS[d]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
                 <Field label="Start time">
                   <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
                 </Field>
               </div>
             ) : (
               <>
+                <div className="flex gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10">
+                  {([['weekly', 'Repeats weekly'], ['once', 'One-off']] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={draft.kind === key}
+                      onClick={() => set('kind', key)}
+                      className={`flex-1 rounded-full py-2 text-sm font-bold ${draft.kind === key ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <Field label="Start time">
                   <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
                 </Field>
+                {draft.kind === 'once' ? (
+                  <Field label="Date">
+                    <input type="date" required className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
+                  </Field>
+                ) : (
                 <Field label="Repeats every week on">
                   <div className="flex flex-wrap gap-1.5">
                     {DAY_ORDER.map((d) => {
@@ -359,6 +448,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
                     </button>
                   </div>
                 </Field>
+                )}
               </>
             )}
             <Field label="Class">
@@ -385,7 +475,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
             </Field>
             <button
               type="submit"
-              disabled={busy || !draft.name.trim() || (!draft.id && draft.repeatDays.length === 0)}
+              disabled={busy || !draft.name.trim() || (!draft.id && draft.kind === 'weekly' && draft.repeatDays.length === 0)}
               className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save session'}

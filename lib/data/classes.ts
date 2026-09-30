@@ -28,7 +28,9 @@ export async function getClasses(): Promise<ClassRow[]> {
   return data ?? [];
 }
 
-export async function createClass(fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id'>): Promise<void> {
+export async function createClass(
+  fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'specific_date'> & { specific_date?: string | null }
+): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -43,7 +45,7 @@ export async function createClass(fields: Omit<ClassRow, 'id' | 'coach_id' | 'gy
 // Creates one class row per {day_of_week, start_time} occurrence, sharing every other
 // field -- lets a coach set up "Yoga, Mon/Wed/Fri 6am" in one submit instead of three.
 export async function createClasses(
-  shared: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'day_of_week' | 'start_time'>,
+  shared: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'day_of_week' | 'start_time' | 'specific_date'>,
   occurrences: { day_of_week: number; start_time: string }[]
 ): Promise<void> {
   const supabase = await createClient();
@@ -66,7 +68,7 @@ export async function deleteClass(classId: string): Promise<void> {
 
 export async function updateClass(
   classId: string,
-  fields: Partial<Pick<ClassRow, 'name' | 'day_of_week' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>>
+  fields: Partial<Pick<ClassRow, 'name' | 'day_of_week' | 'specific_date' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>>
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').update(fields).eq('id', classId);
@@ -200,6 +202,24 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Pro
 
   const occurrences: Omit<ScheduleOccurrence, 'bookedCount' | 'unmarkedCount'>[] = [];
   for (const c of classes ?? []) {
+    if (c.specific_date) {
+      // One-off: a single occurrence, kept only if it falls inside the requested window.
+      const today = toIsoDate(new Date());
+      if (c.specific_date < toIsoDate(addDays(new Date(today + 'T00:00:00Z'), -weeksBack * 7))) continue;
+      if (c.specific_date >= toIsoDate(addDays(new Date(today + 'T00:00:00Z'), weeksAhead * 7))) continue;
+      occurrences.push({
+        classId: c.id,
+        className: c.name,
+        date: c.specific_date,
+        startTime: c.start_time,
+        capacity: c.capacity,
+        creditCost: c.credit_cost,
+        cutoffHours: c.cutoff_hours,
+        blackoutStart,
+        blackoutEnd,
+      });
+      continue;
+    }
     if (c.day_of_week == null) continue;
     const firstDate = new Date(nextDateForWeekday(c.day_of_week) + 'T00:00:00Z');
     for (let w = -weeksBack; w < weeksAhead; w++) {
