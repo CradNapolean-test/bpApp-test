@@ -498,6 +498,72 @@ function SortableExerciseRow<T extends EditableExercise>({
     menuItems.push({ label: 'Delete', onSelect: handleDelete, destructive: true });
   }
 
+  // A member's view: a roomy card with the name and prescription on top, and everything they act
+  // on (video, last time, logging) running full width underneath rather than squeezed beside a
+  // number and an icon.
+  if (!canEdit) {
+    const pill = 'rounded-full bg-black/[.06] px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
+    return (
+      <div ref={setNodeRef} style={style} className="rounded-2xl border border-black/[.06] bg-card p-4 shadow-sm dark:border-white/10">
+        <div className="flex items-start gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-extrabold text-accent">
+            {index + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-extrabold leading-snug text-black dark:text-zinc-50">{exercise.name}</p>
+            {!isCircuit && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {exercise.sets != null && (
+                  <span className={pill}>
+                    <span className="font-extrabold text-black dark:text-zinc-50">{exercise.sets}</span> sets
+                  </span>
+                )}
+                {exercise.reps != null && (
+                  <span className={pill}>
+                    <span className="font-extrabold text-black dark:text-zinc-50">{exercise.reps}</span> reps
+                  </span>
+                )}
+                {isPercent
+                  ? exercise.percent_1rm != null && (
+                      <span className={pill}>
+                        <span className="font-extrabold text-black dark:text-zinc-50">{exercise.percent_1rm}%</span> 1RM
+                      </span>
+                    )
+                  : exercise.load != null && (
+                      <span className={pill}>
+                        <span className="font-extrabold text-black dark:text-zinc-50">{exercise.load}</span> kg
+                      </span>
+                    )}
+                {exercise.rpe != null && (
+                  <span className={pill}>
+                    RPE <span className="font-extrabold text-black dark:text-zinc-50">{exercise.rpe}</span>
+                  </span>
+                )}
+              </div>
+            )}
+            {isPercent && resolvedMax != null && exercise.percent_1rm != null && (
+              <p className="mt-1.5 text-xs text-zinc-500">≈ {Math.round((resolvedMax.estimated1RM * exercise.percent_1rm) / 100)} kg</p>
+            )}
+          </div>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-white/10">
+            {libraryEntry?.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
+              <img src={libraryEntry.image_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Icon className="h-5 w-5 text-zinc-500" />
+            )}
+          </span>
+        </div>
+        {isCircuit && exercise.notes && (
+          <p className="mt-3 whitespace-pre-wrap rounded-xl bg-black/[.03] p-3 text-sm leading-relaxed text-zinc-600 dark:bg-white/[.04] dark:text-zinc-400">
+            {exercise.notes}
+          </p>
+        )}
+        {renderExtra?.(exercise)}
+      </div>
+    );
+  }
+
   return (
     <div ref={setNodeRef} style={style} className="rounded-xl border border-black/[.05] bg-black/[.02] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/5 dark:bg-white/[.03]">
       <div className="flex items-start gap-2">
@@ -660,18 +726,32 @@ export function ExerciseEditor<T extends EditableExercise>({
     <div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
-          <ul className="mt-2 space-y-2">
+          <ul className={`mt-2 ${canEdit ? 'space-y-2' : 'space-y-4'}`}>
             {supersetGroups.map((sg, sgIndex) => {
               const isSequenceable = sg.group && sg.exercises.length >= 2 && sg.exercises.every((e) => e.block_type === 'exercise');
               const minSets = isSequenceable ? Math.min(...sg.exercises.map((e) => e.sets ?? 1)) : 0;
               return (
-                <li key={sgIndex} className={sg.group ? 'space-y-2 rounded-md border-l-4 border-accent/40 bg-accent-soft/40 py-2 pl-3 pr-1' : 'space-y-2'}>
+                <li
+                  key={sgIndex}
+                  className={
+                    sg.group
+                      ? canEdit
+                        ? 'space-y-2 rounded-md border-l-4 border-accent/40 bg-accent-soft/40 py-2 pl-3 pr-1'
+                        : 'space-y-3 border-l-[3px] border-accent pl-3'
+                      : 'space-y-2'
+                  }
+                >
                   {sg.group && (
                     <div className="flex items-center gap-1.5 px-0.5">
                       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
                         {sg.group}
                       </span>
                       <span className="text-[10px] font-medium uppercase tracking-wide text-accent">Superset</span>
+                      {!canEdit && isSequenceable && (
+                        <span className="text-[11px] text-zinc-500">
+                          · alternate {sg.exercises.map((_, idx) => idx + 1).join(' → ')}
+                        </span>
+                      )}
                     </div>
                   )}
                   {sg.exercises.map((ex) => {
@@ -691,7 +771,7 @@ export function ExerciseEditor<T extends EditableExercise>({
                       />
                     );
                   })}
-                  {isSequenceable && (
+                  {isSequenceable && canEdit && (
                     <div className="flex flex-wrap gap-1 px-0.5">
                       {Array.from({ length: minSets }).map((_, i) => (
                         <span key={i} className="rounded-md bg-black/5 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-white/10">
