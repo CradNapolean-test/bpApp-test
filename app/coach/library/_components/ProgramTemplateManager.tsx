@@ -259,7 +259,7 @@ export function ProgramTemplateManager({
       </div>
 
       {addingTemplate && (
-        <form onSubmit={handleCreateTemplate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <form onSubmit={handleCreateTemplate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <div className="flex-1 space-y-1">
             <label className="text-xs font-medium text-zinc-500">New template name</label>
             <input
@@ -293,7 +293,7 @@ export function ProgramTemplateManager({
           return (
             <div
               key={template.id}
-              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
               <button
                 type="button"

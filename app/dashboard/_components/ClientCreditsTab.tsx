@@ -39,7 +39,7 @@ export function ClientCreditsTab({
           {ledger.map((entry) => (
             <div
               key={entry.id}
-              className="flex items-center justify-between rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10"
+              className="flex items-center justify-between rounded-2xl border border-black/[.05] bg-card p-3.5 dark:border-white/10"
             >
               <div>
                 <p className="text-sm font-semibold text-black dark:text-zinc-50">{entry.reason}</p>

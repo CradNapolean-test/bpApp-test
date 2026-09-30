@@ -42,7 +42,7 @@ function buildWeeklyTrend(logs: DailyLogRow[]): WeekPoint[] {
     });
 }
 
-const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
 // Plain inline SVG instead of a full Recharts axis/tooltip chart -- a compact "how's the trend
 // looking" glance, same custom-SVG-over-a-charting-library precedent as ProgressRing.

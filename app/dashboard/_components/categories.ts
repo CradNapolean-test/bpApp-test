@@ -1,4 +1,4 @@
-import { Apple, Bell, Users, CheckSquare, Dumbbell, House, MessageSquare, MessagesSquare, Settings, TrendingUp } from 'lucide-react';
+import { Apple, BookOpen, Bell, Users, CheckSquare, Dumbbell, House, MessageSquare, MessagesSquare, Settings, TrendingUp } from 'lucide-react';
 
 // Screens are grouped into categories rather than one flat tab bar.
 export type Screen =
@@ -29,8 +29,8 @@ export type Screen =
   | 'Messages'
   | 'Notifications';
 
-export type Category = 'Home' | 'Coach' | 'Community' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
-export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Messages', 'Account Settings', 'Notifications'];
+export type Category = 'Home' | 'Coach' | 'Community' | 'Learn' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
+export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Learn', 'Messages', 'Account Settings', 'Notifications'];
 
 // The mobile bottom tab bar shows only these 5 -- Messages, Account Settings and
 // Notifications move to header icons instead (see BottomTabBar.tsx / DashboardShell.tsx), a
@@ -41,12 +41,42 @@ export const BOTTOM_TAB_CATEGORIES: Category[] = ['Home', 'Nutrition', 'Training
 // 'Book' is the Classes area (not a category); 'Coach' is a hub that leads into the
 // coaching categories below, which then open as sub-screens with a back arrow to the hub.
 export const CLIENT_TAB_CATEGORIES: Category[] = ['Home', 'Coach', 'Account Settings'];
-export const COACH_HUB_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress', 'Messages'];
+export const COACH_HUB_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress', 'Learn', 'Messages'];
+
+// Only these show a row of sibling "pills" for a member. Everything else is a single page (or a
+// drill-in from a list) with its own title and a back arrow -- pills are for switching between
+// views of the same thing (e.g. Workout / Activity), not a substitute for a menu.
+export const CLIENT_PILL_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress'];
+
+export const CLIENT_CATEGORY_TITLE: Partial<Record<Category, string>> = {
+  Coach: 'My coaching',
+  Accountability: 'Check-in',
+  Progress: 'Progress & results',
+  Learn: 'Learn',
+  Community: 'Community',
+  'Account Settings': 'My profile',
+  Notifications: 'Notifications',
+};
+
+// Title for a single-page screen (shown in the header instead of its category).
+export const SCREEN_TITLE: Partial<Record<Screen, string>> = {
+  Setup: 'Personal details',
+  Credits: 'Credits & membership',
+  'Big Dog': 'Big Dog standards',
+  Events: 'Events',
+  Feedback: 'Feedback',
+  'Refer a Friend': 'Refer a friend',
+  Rewards: 'Rewards & clubs',
+  FAQs: 'FAQs & help',
+  Education: 'Learn',
+  'Weekly Log': 'Daily check-in',
+};
 
 export const CATEGORY_ICON: Record<Category, typeof House> = {
   Home: House,
   Coach: MessagesSquare,
   Community: Users,
+  Learn: BookOpen,
   Nutrition: Apple,
   Training: Dumbbell,
   Accountability: CheckSquare,
@@ -126,9 +156,11 @@ export function screensForCategory(
       case 'Training':
         return ['Workout', 'Activity'];
       case 'Accountability':
-        return ['Weekly Log', 'Forms', 'Education', 'Insights'];
+        return ['Weekly Log', 'Forms'];
       case 'Progress':
-        return ['Overview', 'Progress & Photos'];
+        return ['Overview', 'Insights', 'Progress & Photos'];
+      case 'Learn':
+        return ['Education'];
       case 'Messages':
         return ['Messages'];
       case 'Notifications':

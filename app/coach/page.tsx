@@ -66,18 +66,18 @@ export default async function CoachPage() {
             <p className="text-xs font-medium text-white/60">Active clients</p>
             <p className="mt-1 text-xl font-semibold">{clients.length}</p>
           </div>
-          <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
             <p className="text-xs font-medium text-zinc-500">Need attention</p>
             <p className="mt-1 text-xl font-semibold text-red-600 dark:text-red-400">{needsAttention}</p>
           </div>
-          <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
             <p className="text-xs font-medium text-zinc-500">Unread messages</p>
             <p className="mt-1 text-xl font-semibold text-black dark:text-zinc-50">{unreadCount}</p>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_20rem]">
           <ActivityFeed events={activity} clients={clients} />
-          <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
             <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
             <div className="mt-2">
               <AddClientForm />

@@ -8,7 +8,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { leaveEvent, signUpForEvent, submitFeedback } from '@/lib/data/community';
 import type { EventWithSignup, RewardsForMember } from '@/lib/data/types';
 
-const cardCls = 'rounded-2xl border border-black/[.06] bg-[var(--background)] p-4 dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
 
 // ---------------------------------------------------------------- Events
 
@@ -46,7 +46,7 @@ export function EventsTab({ events, readOnly }: { events: EventWithSignup[]; rea
           <div key={e.id} className={cardCls}>
             <div className="flex gap-3">
               <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-accent-soft text-accent">
-                <span className="text-[9px] font-bold uppercase">{start.toLocaleDateString(undefined, { month: 'short' })}</span>
+                <span className="text-[11px] font-bold uppercase">{start.toLocaleDateString(undefined, { month: 'short' })}</span>
                 <span className="text-lg font-black leading-none">{start.getDate()}</span>
               </div>
               <div className="min-w-0 flex-1">
@@ -231,7 +231,7 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
   return (
     <div className="space-y-3">
       <div className={cardCls}>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Session clubs</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">Session clubs</p>
         <p className="mt-1 text-sm font-extrabold text-black dark:text-zinc-50">
           {clubs > 0 ? `You're in the ${clubs * 100} club` : `${100 - sessions} sessions to the 100 club`}
         </p>
@@ -268,7 +268,7 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
                   </p>
                 </div>
                 <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
                     given
                       ? 'bg-success/15 text-success'
                       : earned

@@ -83,7 +83,7 @@ export function CoachSettingsShell({
       mobileHeader={mobileHeader}
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <div className="flex items-center gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <Avatar name={displayName || email} size="lg" variant="self" />
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-black dark:text-zinc-50">{displayName || 'Coach'}</p>
@@ -91,7 +91,7 @@ export function CoachSettingsShell({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/[.05] !p-0 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card !p-0 dark:border-white/10">
           <button type="button" onClick={() => setOpenRow(openRow === 'password' ? null : 'password')} className={rowCls}>
             <span className="font-semibold text-black dark:text-zinc-50">Change password</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
@@ -117,25 +117,25 @@ export function CoachSettingsShell({
         </div>
 
         {openRow === 'password' && (
-          <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <ChangePasswordForm />
           </div>
         )}
 
         {openRow === 'email' && (
-          <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <ChangeEmailForm currentEmail={email} />
           </div>
         )}
 
         {openRow === 'profile' && (
-          <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <CoachProfileForm initialName={displayName} logoUrl={logoUrl} />
           </div>
         )}
 
         {openRow === 'notifications' && (
-          <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Notification preferences</h3>
             <p className="mt-1 text-xs text-zinc-500">
               Per-channel notification controls aren&apos;t available yet — every alert type is on by default.
@@ -144,13 +144,13 @@ export function CoachSettingsShell({
         )}
 
         {showGymRow && openRow === 'gym' && (
-          <div className="space-y-4 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             {myGyms.length > 1 && <GymSwitcher gyms={myGyms} />}
             {isGymAdmin && <GymAdminSection gymName={gymName} roster={gymRoster} currentUserId={currentUserId} />}
           </div>
         )}
 
-        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <DefaultCheckinReminderForm initialDays={defaultCheckinReminderDays} />
         </div>
 

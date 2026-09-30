@@ -39,7 +39,7 @@ const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label:
 
 const LIGHT_DOT = { green: 'bg-success', amber: 'bg-warning', red: 'bg-danger' } as const;
 
-const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
 function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWithLogs[] }) {
   const confirm = useConfirm();

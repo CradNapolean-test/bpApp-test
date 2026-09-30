@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ChevronRight, FileText, HelpCircle, Lock } from 'lucide-react';
+import { FileText, Gift, HelpCircle, Lock, Mail, MessageSquare, UserCog, Wallet } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { Avatar } from '@/app/_components/Avatar';
@@ -12,6 +11,7 @@ import { ChangePasswordForm } from '@/app/_components/ChangePasswordForm';
 import { ChangeEmailForm } from '@/app/_components/ChangeEmailForm';
 import { ThemeToggle } from '@/app/_components/ThemeToggle';
 import { SignOutButton } from '@/app/_components/SignOutButton';
+import { Badge, Card, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import type { ThemePreference } from '@/app/_components/theme';
 import {
   cancelAccountDeletionRequest,
@@ -29,8 +29,6 @@ import { BigDogCard } from './BigDogTab';
 import type { BigDogResultRow, ClientProfileRow } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 
-const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
-
 type RowKey = 'password' | 'email';
 
 function formatDob(iso: string | null): string | null {
@@ -38,6 +36,20 @@ function formatDob(iso: string | null): string | null {
   return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
+function SwitchRow({ title, subtitle, checked, onChange, label }: { title: string; subtitle?: string; checked: boolean; onChange: () => void; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3 last:border-b-0 dark:border-white/5">
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-black dark:text-zinc-50">{title}</span>
+        {subtitle && <span className="block text-xs text-zinc-500">{subtitle}</span>}
+      </span>
+      <Switch checked={checked} onChange={onChange} label={label} />
+    </div>
+  );
+}
+
+// The member's Profile tab: a list that drills into personal details, credits, Big Dog and
+// rewards, with account settings below. Each drill-in is its own page with a back arrow.
 export function AccountTab({
   clientId,
   name,
@@ -130,132 +142,88 @@ export function AccountTab({
     });
   }
 
-  const rowCls =
-    'flex w-full items-center justify-between border-b border-black/5 px-4 py-3.5 text-left last:border-b-0 dark:border-white/5';
+  const dob = formatDob(profile?.date_of_birth ?? null);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col items-center gap-1 py-2 text-center">
+    <div className="space-y-5">
+      <div className="flex flex-col items-center gap-1 py-1 text-center">
         <Avatar name={name} size="lg" variant="self" />
-        <p className="mt-1 text-base font-extrabold text-black dark:text-zinc-50">{name}</p>
-        <p className="text-xs text-zinc-500">{email}</p>
+        <p className="mt-1 text-lg font-extrabold text-black dark:text-zinc-50">{name}</p>
+        <p className="text-sm text-zinc-500">{email}</p>
         {membershipName && (
-          <span className="mt-1 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[9px] font-extrabold uppercase tracking-wider text-accent">
-            {membershipName}
-          </span>
+          <div className="mt-1">
+            <Badge>{membershipName}</Badge>
+          </div>
+        )}
+        {(dob || profile?.phone) && (
+          <p className="mt-1 text-xs text-zinc-500">{[dob, profile?.phone].filter(Boolean).join(' · ')}</p>
         )}
       </div>
 
       <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Account Settings', 'Big Dog')} />
 
       <div>
-        <p className="px-1 pb-1.5 text-[9px] font-extrabold uppercase tracking-[2px] text-zinc-500">My details</p>
-        <div className={`${cardCls} !p-0`}>
-          {[
-            { label: 'Date of birth', value: formatDob(profile?.date_of_birth ?? null) },
-            { label: 'Phone', value: profile?.phone || null },
-          ].map((row) => (
-            <div key={row.label} className="border-b border-black/5 px-4 py-2.5 last:border-b-0 dark:border-white/5">
-              <p className="text-[10px] text-zinc-500">{row.label}</p>
-              <p className="text-xs font-semibold text-black dark:text-zinc-50">{row.value ?? 'Not set'}</p>
+        <SectionLabel>My account</SectionLabel>
+        <ListGroup>
+          <ListRow icon={UserCog} title="Personal details & goals" subtitle="Contact details, measurements, targets" onClick={() => onNavigate('Account Settings', 'Setup')} />
+          <ListRow icon={Wallet} title="Credits & membership" subtitle="Balance, history and your plan" onClick={() => onNavigate('Account Settings', 'Credits')} />
+          <ListRow icon={Gift} title="Rewards & clubs" subtitle="Milestones and loyalty gifts" onClick={() => onNavigate('Community', 'Rewards')} />
+          <ListRow icon={Lock} title="Change password" onClick={() => setOpenRow(openRow === 'password' ? null : 'password')} />
+          {openRow === 'password' && (
+            <div className="border-b border-black/5 p-4 dark:border-white/5">
+              <ChangePasswordForm />
             </div>
-          ))}
-        </div>
+          )}
+          <ListRow icon={Mail} title="Change email" onClick={() => setOpenRow(openRow === 'email' ? null : 'email')} />
+          {openRow === 'email' && (
+            <div className="p-4">
+              <ChangeEmailForm currentEmail={email} />
+            </div>
+          )}
+        </ListGroup>
       </div>
-
-      <div className={`${cardCls} !p-0`}>
-        <button type="button" onClick={() => setOpenRow(openRow === 'password' ? null : 'password')} className={rowCls}>
-          <span className="font-semibold text-black dark:text-zinc-50">Change password</span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-        </button>
-        <button type="button" onClick={() => setOpenRow(openRow === 'email' ? null : 'email')} className={rowCls}>
-          <span className="font-semibold text-black dark:text-zinc-50">Change email</span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-        </button>
-        <button type="button" onClick={() => onNavigate('Account Settings', 'Setup')} className={rowCls}>
-          <span className="font-semibold text-black dark:text-zinc-50">Setup / Profile details</span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-        </button>
-        <button type="button" onClick={() => onNavigate('Account Settings', 'Credits')} className={rowCls}>
-          <span className="font-semibold text-black dark:text-zinc-50">Credits &amp; Membership</span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-        </button>
-      </div>
-
-      {openRow === 'password' && (
-        <div className={cardCls}>
-          <ChangePasswordForm />
-        </div>
-      )}
-
-      {openRow === 'email' && (
-        <div className={cardCls}>
-          <ChangeEmailForm currentEmail={email} />
-        </div>
-      )}
-
-      <div className={`${cardCls} flex items-center justify-between gap-3`}>
-        <span className="font-semibold text-black dark:text-zinc-50">Check-in reminders</span>
-        <Switch checked={enabled} onChange={handleToggle} label="Toggle check-in reminders" />
-      </div>
-
-      {pushSupported && (
-        <div className={`${cardCls} flex items-center justify-between gap-3`}>
-          <div>
-            <span className="font-semibold text-black dark:text-zinc-50">Push notifications</span>
-            <p className="text-xs text-zinc-500">Get notified on this device, even when the app&apos;s closed.</p>
-          </div>
-          <Switch checked={pushEnabled} onChange={handlePushToggle} label="Toggle push notifications" />
-        </div>
-      )}
-
-      <div className={`${cardCls} flex items-center justify-between gap-3`}>
-        <div>
-          <span className="font-semibold text-black dark:text-zinc-50">Email notifications</span>
-          <p className="text-xs text-zinc-500">Messages your coach broadcasts by email.</p>
-        </div>
-        <Switch checked={emailEnabled} onChange={handleEmailToggle} label="Toggle email notifications" />
-      </div>
-
-      <ThemeToggle initial={themePreference} />
 
       <div>
-        <p className="px-1 pb-1.5 text-[9px] font-extrabold uppercase tracking-[2px] text-zinc-500">Help &amp; legal</p>
-        <div className={`${cardCls} !p-0`}>
-          <div className={`${rowCls} opacity-50`}>
-            <span className="flex items-center gap-3">
-              <HelpCircle className="h-4 w-4 text-accent" />
-              <span>
-                <span className="block text-sm font-semibold text-black dark:text-zinc-50">FAQs</span>
-                <span className="block text-[11px] text-zinc-500">Coming soon</span>
-              </span>
-            </span>
-          </div>
-          <Link href="/legal/terms" className={rowCls}>
-            <span className="flex items-center gap-3">
-              <FileText className="h-4 w-4 text-zinc-400" />
-              <span>
-                <span className="block text-sm font-semibold text-black dark:text-zinc-50">Terms &amp; conditions</span>
-                <span className="block text-[11px] text-zinc-500">Membership &amp; usage terms</span>
-              </span>
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-          </Link>
-          <Link href="/legal/privacy" className={rowCls}>
-            <span className="flex items-center gap-3">
-              <Lock className="h-4 w-4 text-zinc-400" />
-              <span>
-                <span className="block text-sm font-semibold text-black dark:text-zinc-50">Privacy policy</span>
-                <span className="block text-[11px] text-zinc-500">How we use your data</span>
-              </span>
-            </span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-          </Link>
-        </div>
+        <SectionLabel>Notifications</SectionLabel>
+        <ListGroup>
+          <SwitchRow title="Check-in reminders" checked={enabled} onChange={handleToggle} label="Toggle check-in reminders" />
+          {pushSupported && (
+            <SwitchRow
+              title="Push notifications"
+              subtitle="On this device, even when the app is closed"
+              checked={pushEnabled}
+              onChange={handlePushToggle}
+              label="Toggle push notifications"
+            />
+          )}
+          <SwitchRow
+            title="Email notifications"
+            subtitle="Messages your coach sends by email"
+            checked={emailEnabled}
+            onChange={handleEmailToggle}
+            label="Toggle email notifications"
+          />
+        </ListGroup>
       </div>
 
+      <div>
+        <SectionLabel>Appearance</SectionLabel>
+        <ThemeToggle initial={themePreference} />
+      </div>
 
-      <div className={cardCls}>
+      <div>
+        <SectionLabel>Help &amp; legal</SectionLabel>
+        <ListGroup>
+          <ListRow icon={MessageSquare} title="Message your coach" onClick={() => onNavigate('Messages')} />
+          <ListRow icon={HelpCircle} title="FAQs" subtitle="Common questions answered" onClick={() => onNavigate('Community', 'FAQs')} />
+          <ListRow icon={FileText} title="Terms & conditions" subtitle="Membership & usage terms" href="/legal/terms" />
+          <ListRow icon={Lock} title="Privacy policy" subtitle="How we use your data" href="/legal/privacy" />
+        </ListGroup>
+      </div>
+
+      <SignOutButton variant="danger-soft" className="w-full py-3 md:hidden" />
+
+      <Card>
         {deletionRequested ? (
           <>
             <p className="text-sm font-semibold text-black dark:text-zinc-50">Deletion requested</p>
@@ -277,20 +245,7 @@ export function AccountTab({
             </Button>
           </>
         )}
-      </div>
-
-      <SignOutButton variant="danger-soft" className="w-full py-3 md:hidden" />
-
-      <div className="space-y-2 text-center">
-        <button
-          type="button"
-          onClick={() => onNavigate('Messages')}
-          className="text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
-        >
-          Need help? Message your coach
-        </button>
-
-      </div>
+      </Card>
     </div>
   );
 }

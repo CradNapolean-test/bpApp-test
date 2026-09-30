@@ -122,7 +122,7 @@ export function RecipesTab({
             const totals = totalRecipeMacros(recipe.recipe_ingredients);
             const servings = recipe.servings || 1;
             return (
-              <div key={recipe.id} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+              <div key={recipe.id} className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
                 <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => {
@@ -191,7 +191,7 @@ export function RecipesTab({
 
       {!readOnly &&
         (addingRecipe ? (
-          <form onSubmit={handleCreate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <form onSubmit={handleCreate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <div className="flex-1 space-y-1">
               <label className="text-xs font-medium text-zinc-500">Recipe name</label>
               <input

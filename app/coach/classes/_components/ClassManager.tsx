@@ -180,7 +180,7 @@ function EditClassGroup({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
       <form onSubmit={handleSave} className="space-y-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Name</label>
@@ -247,7 +247,7 @@ function AddClassForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+    <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="col-span-2 space-y-1 sm:col-span-1">
           <label className="text-xs font-medium text-zinc-500">Name</label>
@@ -339,7 +339,7 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
             ) : (
               <div
                 key={group.name}
-                className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
               >
                 <div className="min-w-0">
                   <p className="font-bold text-black dark:text-zinc-50">{group.name}</p>

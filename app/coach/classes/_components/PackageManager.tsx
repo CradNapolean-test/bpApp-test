@@ -78,7 +78,7 @@ function EditPackageCard({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
       <form onSubmit={handleSave} className="space-y-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Name</label>
@@ -150,7 +150,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+    <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
       <div className="space-y-1">
         <label className="text-xs font-medium text-zinc-500">Package name</label>
         <input required autoFocus className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
@@ -237,7 +237,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
             ) : (
               <div
                 key={p.id}
-                className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-black dark:text-zinc-50">{p.name}</p>

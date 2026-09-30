@@ -32,7 +32,7 @@ function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
   return streak;
 }
 
-const cardCls = 'rounded-2xl border border-black/[.05] bg-[var(--background)] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 const clickableCardCls = `${cardCls} w-full text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`;
 const labelCls = 'text-xs font-medium text-zinc-500';
 const valueCls = 'mt-1 text-xl font-semibold text-black dark:text-zinc-50';

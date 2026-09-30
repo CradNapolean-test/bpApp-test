@@ -86,7 +86,7 @@ export function ProgressTab({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progress photos</h3>
 
         {initialPhotos.length === 0 && readOnly ? (
@@ -137,7 +137,7 @@ export function ProgressTab({
         )}
       </div>
 
-      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements</h3>
 
         {initialMeasurements.length === 0 ? (
@@ -171,7 +171,7 @@ export function ProgressTab({
       </div>
 
       {!readOnly && (
-        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Log new measurements</h3>
           <form onSubmit={handleSaveMeasurement} className="mt-3 space-y-3">
             <div className="grid grid-cols-2 gap-3">

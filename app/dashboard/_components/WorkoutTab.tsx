@@ -635,7 +635,7 @@ export function WorkoutTab({
       )}
 
       {programs.map((program) => (
-        <div key={program.id} className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+        <div key={program.id} className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-medium text-black dark:text-zinc-50">{program.name}</h3>
             <div className="flex items-center gap-2">

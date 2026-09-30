@@ -118,7 +118,7 @@ function CourseOverlay({
         {sortedModules.map((module) => {
           const sortedLessons = [...module.education_lessons].sort((a, b) => a.sort_order - b.sort_order);
           return (
-            <div key={module.id} className="space-y-2 rounded-2xl border border-black/[.05] p-3 dark:border-white/10">
+            <div key={module.id} className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-3 dark:border-white/10">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="font-bold text-black dark:text-zinc-50">{module.title}</h4>
                 <span className="shrink-0 text-sm text-zinc-500">
@@ -182,7 +182,7 @@ export function EducationTab({
   return (
     <div className="space-y-6">
       {isCoachView && !readOnly && (
-        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Assign a course</h3>
           <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
             <select
@@ -222,7 +222,7 @@ export function EducationTab({
               <li key={a.id}>
                 <button
                   onClick={() => setOpenAssignmentId(a.id)}
-                  className="w-full rounded-2xl border border-black/[.05] p-4 text-left dark:border-white/10"
+                  className="w-full rounded-2xl border border-black/[.05] bg-card p-4 text-left dark:border-white/10"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-bold text-black dark:text-zinc-50">{a.course.title}</p>

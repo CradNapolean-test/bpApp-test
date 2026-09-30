@@ -50,11 +50,11 @@ export function BigDogCard({ results, onOpen }: { results: BigDogResultLike[]; o
       <div className="mb-2.5 flex items-center justify-between">
         <div>
           <p className="text-xs font-extrabold text-black dark:text-zinc-50">{TIER_TITLE[tierForCount(count)]}</p>
-          <p className="mt-0.5 text-[10px] text-zinc-500">
+          <p className="mt-0.5 text-[11px] text-zinc-500">
             {count} of {EXERCISES.length} · {nextTierLabel(count)}
           </p>
         </div>
-        <span className="flex items-center gap-0.5 text-[10px] font-bold text-accent">
+        <span className="flex items-center gap-0.5 text-[11px] font-bold text-accent">
           View all <ChevronRight className="h-3.5 w-3.5" />
         </span>
       </div>
@@ -112,20 +112,20 @@ export function BigDogTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-2xl border border-accent/30 bg-[var(--background)] px-3.5 py-3">
+      <div className="flex items-center justify-between rounded-2xl border border-accent/30 bg-card px-3.5 py-3">
         <div>
-          <p className="text-[13px] font-extrabold text-black dark:text-zinc-50">{TIER_TITLE[tier]}</p>
-          <p className="mt-0.5 text-[10px] text-zinc-500">{nextTierLabel(count)}</p>
+          <p className="text-sm font-extrabold text-black dark:text-zinc-50">{TIER_TITLE[tier]}</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">{nextTierLabel(count)}</p>
         </div>
         <div className="text-right">
           <p className="text-xl font-black leading-none text-accent">{count}</p>
-          <p className="text-[10px] text-zinc-500">of {EXERCISES.length} BD</p>
+          <p className="text-[11px] text-zinc-500">of {EXERCISES.length} BD</p>
         </div>
       </div>
 
       <div>
         <TierPips count={count} className="mb-1.5" />
-        <div className="flex justify-between text-[8px] font-bold">
+        <div className="flex justify-between text-[11px] font-bold">
           <span className="text-zinc-400">Rookie</span>
           {tierLabels.map((t) => (
             <span key={t.label} className={count >= t.min ? 'text-accent' : 'text-zinc-400'}>
@@ -136,14 +136,14 @@ export function BigDogTab({
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="px-1 text-[9px] font-extrabold uppercase tracking-[2px] text-zinc-500">All exercises</p>
+        <p className="px-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">All exercises</p>
         <div className="flex gap-0.5 rounded-full border border-black/10 p-0.5 dark:border-white/10">
           {(['male', 'female'] as const).map((g) => (
             <button
               key={g}
               type="button"
               onClick={() => setGender(g)}
-              className={`rounded-full px-3 py-1 text-[10px] font-extrabold ${
+              className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
                 gender === g ? 'bg-accent text-accent-foreground' : 'text-zinc-500'
               }`}
             >
@@ -164,18 +164,18 @@ export function BigDogTab({
             <div
               key={ex.key}
               className={`rounded-2xl border p-3 ${
-                level === 'big_dog' ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-[var(--background)] dark:border-white/10'
+                level === 'big_dog' ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-card dark:border-white/10'
               }`}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-xs font-extrabold text-black dark:text-zinc-50">{ex.name}</p>
-                  <p className="text-[9px] text-zinc-500">
+                  <p className="text-[11px] text-zinc-500">
                     {ex.category}
                     {row?.result_text && level !== 'none' ? ` · best ${row.result_text}` : ''}
                   </p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[9px] font-extrabold ${LEVEL_BADGE[level]}`}>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${LEVEL_BADGE[level]}`}>
                   {LEVEL_LABEL[level]}
                 </span>
               </div>
@@ -193,8 +193,8 @@ export function BigDogTab({
                       n === 3 ? 'bg-accent/10' : 'bg-black/[.03] dark:bg-white/[.04]'
                     } ${reached >= n ? (n === 3 ? 'border-accent' : 'border-zinc-400') : 'border-transparent'}`}
                   >
-                    <p className={`text-[8px] font-bold uppercase tracking-wide ${n === 3 ? 'text-accent' : 'text-zinc-500'}`}>{label}</p>
-                    <p className={`text-[10px] font-extrabold ${n === 3 ? 'text-accent' : 'text-zinc-700 dark:text-zinc-300'}`}>{value}</p>
+                    <p className={`text-[11px] font-bold uppercase tracking-wide ${n === 3 ? 'text-accent' : 'text-zinc-500'}`}>{label}</p>
+                    <p className={`text-[11px] font-extrabold ${n === 3 ? 'text-accent' : 'text-zinc-700 dark:text-zinc-300'}`}>{value}</p>
                   </div>
                 ))}
               </div>
@@ -227,14 +227,14 @@ export function BigDogTab({
                             type="button"
                             disabled={busy}
                             onClick={() => save(ex.key, l)}
-                            className={`rounded-full px-3 py-1 text-[10px] font-extrabold disabled:opacity-50 ${
+                            className={`rounded-full px-3 py-1 text-[11px] font-extrabold disabled:opacity-50 ${
                               l === 'big_dog' ? 'bg-accent text-accent-foreground' : 'bg-black/10 text-zinc-700 dark:bg-white/10 dark:text-zinc-300'
                             }`}
                           >
                             {l === 'none' ? 'Clear' : LEVEL_LABEL[l]}
                           </button>
                         ))}
-                        <button type="button" onClick={() => setEditing(null)} className="px-2 text-[10px] font-bold text-zinc-500">
+                        <button type="button" onClick={() => setEditing(null)} className="px-2 text-[11px] font-bold text-zinc-500">
                           Cancel
                         </button>
                       </div>

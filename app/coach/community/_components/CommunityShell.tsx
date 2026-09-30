@@ -14,7 +14,7 @@ import { createReward, deleteReward, markRewardGiven } from '@/lib/data/rewards'
 import type { EventWithSignup, FeedbackRow, RewardOverview } from '@/lib/data/types';
 
 const inputCls = 'w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/15';
-const cardCls = 'rounded-2xl border border-black/[.05] p-4 dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10';
 
 function NewEventForm() {
   const { run, busy } = useAction();

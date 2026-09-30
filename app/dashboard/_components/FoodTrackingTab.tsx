@@ -676,7 +676,7 @@ export function FoodTrackingTab({
               Leave feedback on this day
             </Button>
           ) : (
-            <form onSubmit={handleSendFeedback} className="space-y-2 rounded-2xl border border-black/[.05] p-3 dark:border-white/10">
+            <form onSubmit={handleSendFeedback} className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-3 dark:border-white/10">
               <textarea
                 value={feedbackBody}
                 onChange={(e) => setFeedbackBody(e.target.value)}
@@ -698,7 +698,7 @@ export function FoodTrackingTab({
         </div>
       )}
 
-      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <p className="text-2xl font-bold text-black dark:text-zinc-50">
           {Math.round(totals.calories).toLocaleString()}
           <span className="text-base font-normal text-zinc-500">
@@ -773,7 +773,7 @@ export function FoodTrackingTab({
         const sectionManualEntries = manualEntries.filter((e) => e.meal_section_id === section.id);
         const sectionManualCalories = sectionManualEntries.reduce((sum, e) => sum + (e.calories ?? 0), 0);
         return (
-          <div key={section.id} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div key={section.id} className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1">
                 {/* Renaming/reordering/deleting a section is structural, coach-only setup --
@@ -883,7 +883,7 @@ export function FoodTrackingTab({
 
       {isManual
         ? otherManualEntries.length > 0 && (
-            <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+            <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
               <h4 className="font-medium text-black dark:text-zinc-50">Other</h4>
               <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
               <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
@@ -894,7 +894,7 @@ export function FoodTrackingTab({
             </div>
           )
         : otherEntries.length > 0 && (
-            <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+            <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
               <h4 className="font-medium text-black dark:text-zinc-50">Other</h4>
               <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
               <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">

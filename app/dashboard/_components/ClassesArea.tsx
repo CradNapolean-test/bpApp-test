@@ -126,7 +126,7 @@ export function ClassesArea({
       <div
         key={key}
         className={`rounded-2xl border p-3.5 ${
-          booked ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-[var(--background)] dark:border-white/10'
+          booked ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-card dark:border-white/10'
         }`}
       >
         <div className="flex items-center justify-between gap-3">
@@ -134,7 +134,7 @@ export function ClassesArea({
             <p className="text-sm font-extrabold text-black dark:text-zinc-50">
               {occ.startTime ? formatClassTime(occ.startTime) : occ.className}
             </p>
-            <p className="mt-0.5 text-[10px] text-zinc-500">
+            <p className="mt-0.5 text-[11px] text-zinc-500">
               {occ.className} · max {occ.capacity}
               {occ.creditCost !== 1 ? ` · ${occ.creditCost} credits` : ''}
             </p>
@@ -180,7 +180,7 @@ export function ClassesArea({
             )}
           </div>
         </div>
-        {note && <p className="mt-2 text-[10px] text-zinc-500">{note}</p>}
+        {note && <p className="mt-2 text-[11px] text-zinc-500">{note}</p>}
       </div>
     );
   }
@@ -196,14 +196,14 @@ export function ClassesArea({
         <div className="flex items-center gap-3">
           <Ticket className="h-5 w-5 text-accent" />
           <div>
-            <p className="text-[10px] text-zinc-500">Credits remaining</p>
+            <p className="text-[11px] text-zinc-500">Credits remaining</p>
             <p className="text-2xl font-black leading-none text-accent">{creditsBalance}</p>
           </div>
         </div>
         <div className="text-right">
           <p className="text-xs font-bold text-black dark:text-zinc-50">{membership?.package?.name ?? 'No membership'}</p>
           {membership?.package && (
-            <p className="text-[10px] text-zinc-500">
+            <p className="text-[11px] text-zinc-500">
               {membership.package.credits_per_week}/week · resets{' '}
               {new Date(nextReset + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
             </p>
@@ -244,7 +244,7 @@ export function ClassesArea({
                         : 'border-black/[.06] text-zinc-600 dark:border-white/10 dark:text-zinc-300'
                     }`}
                   >
-                    <span className="text-[9px] font-bold uppercase opacity-80">
+                    <span className="text-[11px] font-bold uppercase opacity-80">
                       {dt.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
                     </span>
                     <span className="text-sm font-black">{dt.getUTCDate()}</span>
@@ -254,7 +254,7 @@ export function ClassesArea({
             </div>
 
             {selectedDate && (
-              <p className="px-1 pb-1.5 pt-1 text-[9px] font-extrabold uppercase tracking-[2px] text-zinc-500">
+              <p className="px-1 pb-1.5 pt-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">
                 {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString(undefined, {
                   weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
                 })}
@@ -262,13 +262,13 @@ export function ClassesArea({
             )}
             {morning.length > 0 && (
               <div className="space-y-2">
-                <p className="px-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Morning</p>
+                <p className="px-1 text-[11px] font-bold uppercase tracking-widest text-zinc-400">Morning</p>
                 {morning.map(renderSlot)}
               </div>
             )}
             {evening.length > 0 && (
               <div className="mt-3 space-y-2">
-                <p className="px-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Evening</p>
+                <p className="px-1 text-[11px] font-bold uppercase tracking-widest text-zinc-400">Evening</p>
                 {evening.map(renderSlot)}
               </div>
             )}
@@ -294,7 +294,7 @@ export function ClassesArea({
               return (
                 <div
                   key={b.id}
-                  className="rounded-2xl border border-black/[.06] bg-[var(--background)] p-3.5 dark:border-white/10"
+                  className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10"
                 >
                   <div className="flex items-center justify-between gap-2.5">
                     <div className="min-w-0">
@@ -311,7 +311,7 @@ export function ClassesArea({
                         <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
                       )}
                       <span
-                        className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${
+                        className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                           waitlisted ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 'bg-accent-soft text-accent'
                         }`}
                       >
@@ -327,7 +327,7 @@ export function ClassesArea({
                     </div>
                   </div>
                   {deadline && (
-                    <p className={`mt-2 text-[10px] ${late ? 'text-danger' : 'text-zinc-500'}`}>
+                    <p className={`mt-2 text-[11px] ${late ? 'text-danger' : 'text-zinc-500'}`}>
                       {late ? 'Past the cancellation deadline — cancelling now forfeits your credit' : cancelNote(deadline)}
                     </p>
                   )}

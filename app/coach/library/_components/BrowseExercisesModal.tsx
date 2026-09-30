@@ -88,7 +88,7 @@ export function BrowseExercisesModal({
                 onPick(entry);
                 onClose();
               }}
-              className="rounded-2xl border border-black/[.05] p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+              className="rounded-2xl border border-black/[.05] bg-card p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
             >
               <p className="font-bold text-black dark:text-zinc-50">{entry.name}</p>
               <p className="mt-0.5 text-sm text-zinc-500">

@@ -154,7 +154,7 @@ export function MealPlannerTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <h3 className="text-sm text-zinc-500">Typical day totals</h3>
         <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(dayTotals.calories).toLocaleString()} kcal</p>
       </div>
@@ -162,7 +162,7 @@ export function MealPlannerTab({
       {SECTIONS.map(({ key, label }) => {
         const entries = initialEntries.filter((e) => e.section === key);
         return (
-          <div key={key} className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+          <div key={key} className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <h4 className="font-medium text-black dark:text-zinc-50">{label}</h4>
             <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
               {entries.map((entry) => (

@@ -288,7 +288,7 @@ export function AttendanceScheduler({ occurrences, clients }: { occurrences: Sch
           {(roster ?? []).map((entry) => (
             <div
               key={entry.bookingId}
-              className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              className="flex items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
               <div className="flex min-w-0 items-center gap-2.5">
                 <Avatar name={entry.clientName} size="sm" />

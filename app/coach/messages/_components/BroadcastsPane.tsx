@@ -59,7 +59,7 @@ export function BroadcastsPane({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
         <h2 className="text-sm font-bold text-black dark:text-zinc-50">Compose broadcast</h2>
         <textarea
           value={message}
@@ -161,7 +161,7 @@ export function BroadcastsPane({
           return (
             <div
               key={c.id}
-              className="flex items-start justify-between gap-3 rounded-2xl border border-black/[.05] p-3.5 text-sm shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              className="flex items-start justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-3.5 text-sm shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-zinc-900 dark:text-zinc-100">{c.message}</p>

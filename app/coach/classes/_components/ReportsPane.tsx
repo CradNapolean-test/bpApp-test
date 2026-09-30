@@ -56,23 +56,23 @@ export function ReportsPane({ report }: { report: CoachReport }) {
       <p className="mb-4 text-sm text-zinc-500">Last 30 days, across all your classes.</p>
 
       <div id="attendance" className="grid grid-cols-3 gap-2.5">
-        <div className="rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-3.5 dark:border-white/10">
           <p className="text-sm text-zinc-500">Attendance rate (30d)</p>
           <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">
             {report.attendanceRate == null ? '—' : `${report.attendanceRate}%`}
           </p>
         </div>
-        <div className="rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-3.5 dark:border-white/10">
           <p className="text-sm text-zinc-500">Booked</p>
           <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">{report.totalBooked}</p>
         </div>
-        <div className="rounded-2xl border border-black/[.05] p-3.5 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-3.5 dark:border-white/10">
           <p className="text-sm text-zinc-500">Attended</p>
           <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">{report.totalAttended}</p>
         </div>
       </div>
 
-      <div id="no-shows" className="mt-4 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div id="no-shows" className="mt-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">No-shows</h2>
           {report.noShows.length > 0 && (
@@ -96,7 +96,7 @@ export function ReportsPane({ report }: { report: CoachReport }) {
         </ul>
       </div>
 
-      <div id="popularity" className="mt-4 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div id="popularity" className="mt-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Class popularity</h2>
           {report.classPopularity.length > 0 && (

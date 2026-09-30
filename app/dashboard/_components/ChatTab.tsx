@@ -117,7 +117,7 @@ export function ChatTab({
   }
 
   return (
-    <div className="flex h-[75vh] flex-col rounded-2xl border border-black/[.05] shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="flex h-[75vh] flex-col rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && <EmptyState icon={MessageSquare} title="No messages yet" hint="Say hello to get the conversation started." />}
         {messages.map((m) => {

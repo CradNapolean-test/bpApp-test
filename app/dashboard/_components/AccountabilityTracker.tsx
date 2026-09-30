@@ -67,24 +67,24 @@ export function AccountabilityTracker({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-[var(--background)] p-3.5 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
             <Icon className="h-[18px] w-[18px]" />
           </span>
           <div>
-            <p className="text-[13px] font-extrabold text-black dark:text-zinc-50">{cfg.label}</p>
-            <p className="text-[10px] text-zinc-500">
+            <p className="text-sm font-extrabold text-black dark:text-zinc-50">{cfg.label}</p>
+            <p className="text-[11px] text-zinc-500">
               <span className="text-success">●</span> <span className="text-warning">●</span> <span className="text-danger">●</span>{' '}
               {cfg.hint}
             </p>
           </div>
         </div>
         {styles ? (
-          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold ${styles.badge}`}>{styles.label}</span>
+          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-extrabold ${styles.badge}`}>{styles.label}</span>
         ) : (
-          <span className="rounded-full border border-black/10 px-2.5 py-1 text-[10px] font-bold text-zinc-500 dark:border-white/15">
+          <span className="rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-bold text-zinc-500 dark:border-white/15">
             Not logged
           </span>
         )}
@@ -102,7 +102,7 @@ export function AccountabilityTracker({
                 key={u}
                 type="button"
                 onClick={() => setWaterUnit(u)}
-                className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
                   waterUnit === u ? 'bg-accent text-accent-foreground' : 'text-zinc-500'
                 }`}
               >

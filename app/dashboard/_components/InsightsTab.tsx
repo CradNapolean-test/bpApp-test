@@ -2,7 +2,7 @@ import { Activity, Gauge, Moon } from 'lucide-react';
 import { calcEngine, cycleDayFor, dayCalories, estimateAdaptiveTdee, isPlateaued } from '@/lib/calculations';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
-const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
 function InsightCard({
   icon: Icon, iconCls, title, children, flag,

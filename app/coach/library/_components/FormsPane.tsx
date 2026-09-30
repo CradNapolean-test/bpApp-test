@@ -269,7 +269,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
           {initialTemplates.map((t) => (
             <div
               key={t.id}
-              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
               <div className="min-w-0">
                 <p className="font-bold text-black dark:text-zinc-50">{t.name}</p>

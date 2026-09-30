@@ -16,7 +16,7 @@ export function HabitAdherence({ adherence }: { adherence: ClientHabitAdherence[
     .sort((a, b) => a.completedToday / a.totalHabits - b.completedToday / b.totalHabits);
 
   return (
-    <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-black dark:text-zinc-50">Habit adherence today</h3>
         <span className="text-sm text-zinc-400">{behind.length}</span>

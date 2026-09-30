@@ -13,6 +13,7 @@ import { BottomTabBar } from './BottomTabBar';
 import { ClientBottomTabBar } from './ClientBottomTabBar';
 import type { ClientTab } from './ClientBottomTabBar';
 import { CoachingHub } from './CoachingHub';
+import { ClientSideNav } from './ClientSideNav';
 import { SetupTab } from './SetupTab';
 import { WeeklyLogTab } from './WeeklyLogTab';
 import { FoodTrackingTab } from './FoodTrackingTab';
@@ -31,7 +32,7 @@ import { CategoryNav } from './CategoryNav';
 import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
-import { BOTTOM_TAB_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
+import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
@@ -196,6 +197,7 @@ export function DashboardShell({
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
   const [screen, setScreen] = useState<Screen>('Today');
+  const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen }[]>([]);
   const [focusDay, setFocusDay] = useState<{ dayId: string; nonce: number } | null>(null);
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
   const todayBodyweight =
@@ -213,22 +215,38 @@ export function DashboardShell({
   const categoryScreens = screensForCategory(category, isCoachView, disabledScreenSet, nutritionMode);
   const effectiveScreen: Screen = categoryScreens.includes(screen) ? screen : (categoryScreens[0] ?? 'Today');
 
+  // A tab / top-level switch: starts a fresh trail.
   function handleCategoryClick(c: Category) {
     // Categories only render while area === 'Coaching' (see showCoaching below) -- without
     // this, selecting a category while the client's Classes area is active would set
     // category/screen but never actually show anything.
+    setBackStack([]);
     setArea('Coaching');
     setCategory(c);
     setScreen(screensForCategory(c, isCoachView, disabledScreenSet, nutritionMode)[0]);
   }
 
-  // Home screen cards route here (and CheckInButton reuses handleCheckIn below) -- lets a
-  // card jump straight to a specific screen within a category, not just the category's
-  // default first screen the bottom tab bar/sidebar clicks land on.
+  // Tapping into something from a screen (a Home tile, a hub row, a profile row): remembers
+  // where we came from so the back arrow returns there, e.g. Home -> Events -> back to Home, or
+  // Coach hub -> Big Dog -> back to the Coach hub.
   function handleNavigate(c: Category, s?: Screen) {
+    setBackStack((stack) => [...stack, { area, category, screen: effectiveScreen }]);
     setArea('Coaching');
     setCategory(c);
     setScreen(s ?? screensForCategory(c, isCoachView, disabledScreenSet, nutritionMode)[0]);
+  }
+
+  function goBack() {
+    const prev = backStack[backStack.length - 1];
+    if (prev) {
+      setBackStack((stack) => stack.slice(0, -1));
+      setArea(prev.area);
+      setCategory(prev.category);
+      setScreen(prev.screen);
+      return;
+    }
+    // No trail (e.g. arrived via a tab): fall back to the logical parent.
+    handleCategoryClick(backCategory);
   }
 
   // From a classes check-in (Home or Classes tab) -- jumps straight into the Workout screen
@@ -249,29 +267,22 @@ export function DashboardShell({
     handleCategoryClick(tab === 'Home' ? 'Home' : tab === 'Coach' ? 'Coach' : 'Account Settings');
   }
 
-  const topBar = isCoachView ? (
-    <CoachNav />
-  ) : (
-    <div className="hidden gap-1 rounded-lg border border-black/10 p-1 md:flex dark:border-white/10">
-      {(['Coaching', 'Classes'] as Area[]).map((a) => (
-        <button
-          key={a}
-          onClick={() => setArea(a)}
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            area === a
-              ? 'bg-accent text-accent-foreground'
-              : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
-          }`}
-        >
-          {a}
-        </button>
-      ))}
-    </div>
-  );
+  const topBar = isCoachView ? <CoachNav /> : undefined;
+
+  const activeClientTab: ClientTab =
+    area === 'Classes' ? 'Book'
+    : category === 'Home' || category === 'Notifications' || category === 'Community' ? 'Home'
+    : category === 'Account Settings' ? 'Profile'
+    : 'Coach';
 
   const showCoaching = isCoachView || area === 'Coaching';
 
-  const sidebar = showCoaching ? (
+  // Categories whose every screen is switched off for this member (tier or coach toggle).
+  const disabledCategories = new Set<Category>(
+    COACH_HUB_CATEGORIES.filter((c) => screensForCategory(c, false, disabledScreenSet, nutritionMode).length === 0)
+  );
+
+  const sidebar = isCoachView ? (
     <CategoryNav
       category={category}
       screen={effectiveScreen}
@@ -281,7 +292,15 @@ export function DashboardShell({
       onSelectCategory={handleCategoryClick}
       onSelectScreen={setScreen}
     />
-  ) : undefined;
+  ) : (
+    <ClientSideNav
+      activeTab={activeClientTab}
+      category={category}
+      disabledCategories={disabledCategories}
+      onSelectTab={handleClientTab}
+      onNavigate={handleNavigate}
+    />
+  );
 
   // Compact per-screen header shown on mobile only (AppShell hides it at md+ and keeps the
   // logo+title bar there instead) -- avatar chip + date + greeting on Home, matching the
@@ -308,29 +327,31 @@ export function DashboardShell({
   // key off `category` in that case or the header shows whatever Coaching category was last
   // active before switching tabs.
   const tabCategories = isCoachView ? BOTTOM_TAB_CATEGORIES : CLIENT_TAB_CATEGORIES;
-  const isSubScreen = area === 'Coaching' && !tabCategories.includes(category);
-  // Coaching drill-ins (nutrition, training, chat...) go back to the Coach hub; other
-  // drill-ins (notifications) go back Home. The coach's view of a client keeps going Home.
-  const backCategory: Category = !isCoachView && COACH_HUB_CATEGORIES.includes(category) ? 'Coach' : 'Home';
-  const activeClientTab: ClientTab =
-    area === 'Classes' ? 'Book'
-    : category === 'Home' || category === 'Notifications' ? 'Home'
-    : category === 'Account Settings' ? 'Profile'
-    : 'Coach';
-  const mobileHeaderTitle =
-    category === 'Messages'
+  // A member's profile pages (personal details, credits, Big Dog) are drill-ins from the
+  // profile list, not tabs of their own, so they get a back arrow like any other sub-screen.
+  const isProfileSubpage = !isCoachView && category === 'Account Settings' && effectiveScreen !== 'Account';
+  const isSubScreen = area === 'Coaching' && (!tabCategories.includes(category) || isProfileSubpage);
+  // Logical parent when there is no trail to go back along.
+  const backCategory: Category = !isCoachView && COACH_HUB_CATEGORIES.includes(category)
+    ? 'Coach'
+    : isProfileSubpage
+      ? 'Account Settings'
+      : 'Home';
+  const showPills =
+    showCoaching && categoryScreens.length > 1 && (isCoachView || CLIENT_PILL_CATEGORIES.includes(category));
+  // Header title: a member sees the page they're on ("Big Dog standards"), or the area when the
+  // page is one of several pills ("Nutrition"). A coach viewing a client sees the client's name.
+  const mobileHeaderTitle = isCoachView
+    ? clientLabel
+    : category === 'Messages'
       ? otherPartyName
-      : isCoachView
-        ? clientLabel
-        : category === 'Account Settings'
-          ? 'My profile'
-          : category === 'Coach'
-            ? 'My coaching'
-            : category;
+      : showPills
+        ? (CLIENT_CATEGORY_TITLE[category] ?? category)
+        : (SCREEN_TITLE[effectiveScreen] ?? CLIENT_CATEGORY_TITLE[category] ?? category);
   const mobileHeader = isSubScreen ? (
     <button
       type="button"
-      onClick={() => handleCategoryClick(backCategory)}
+      onClick={goBack}
       className="flex min-w-0 items-center gap-2.5 text-left"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
@@ -419,7 +440,7 @@ export function DashboardShell({
           </button>
           )}
           <button
-            onClick={() => handleCategoryClick('Notifications')}
+            onClick={() => handleNavigate('Notifications')}
             aria-label="Notifications"
             className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
@@ -431,7 +452,7 @@ export function DashboardShell({
           {isCoachView && <CoachMessagesButton unreadCount={coachUnreadCount} />}
           {!isCoachView && area === 'Coaching' && category === 'Home' && (
             <button
-              onClick={() => handleCategoryClick('Account Settings')}
+              onClick={() => handleNavigate('Account Settings')}
               aria-label="My profile"
               className="rounded-full bg-accent p-2 text-accent-foreground md:hidden"
             >
@@ -448,17 +469,17 @@ export function DashboardShell({
         )
       }
     >
-      {showCoaching && !BOTTOM_TAB_CATEGORIES.includes(category) && (
+      {showCoaching && (isCoachView ? !BOTTOM_TAB_CATEGORIES.includes(category) : isSubScreen) && (
         <button
-          onClick={() => handleCategoryClick('Home')}
+          onClick={isCoachView ? () => handleCategoryClick('Home') : goBack}
           className="mb-3 hidden items-center gap-1 text-sm font-medium text-zinc-500 hover:text-black md:flex dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
       )}
-      {showCoaching && categoryScreens.length > 1 && (
-        <div className="mb-3 flex gap-2 overflow-x-auto md:hidden">
+      {showPills && (
+        <div className={`mb-3 flex gap-2 overflow-x-auto ${isCoachView ? 'md:hidden' : ''}`}>
           {categoryScreens.map((s) => (
             <button
               key={s}
@@ -504,6 +525,8 @@ export function DashboardShell({
               programs={programs}
               bigDogResults={bigDogResults}
               unreadMessageCount={unreadMessageCount}
+              pendingForms={formAssignments.filter((f) => !f.completed_at).length}
+              hiddenCategories={disabledCategories}
               onNavigate={handleNavigate}
             />
           )}

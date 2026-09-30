@@ -34,7 +34,7 @@ export function ActivityTab({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+      <div className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className={labelCls}>Min per 1000 steps</label>
@@ -54,7 +54,7 @@ export function ActivityTab({
         </div>
       </div>
 
-      <ul className="divide-y divide-black/5 rounded-2xl border border-black/[.05] dark:divide-white/5 dark:border-white/10">
+      <ul className="divide-y divide-black/5 rounded-2xl border border-black/[.05] bg-card dark:divide-white/5 dark:border-white/10">
         {rows.map((row) => (
           <li key={row.id} className="flex items-center justify-between p-3.5 text-sm">
             <span className="text-black dark:text-zinc-50">{row.name}</span>

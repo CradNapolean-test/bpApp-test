@@ -134,7 +134,7 @@ function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: num
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-black/[.05] bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <p className="mb-2 text-xs text-zinc-500">
         For something not in the food database — a restaurant meal, an estimate. Calories or macros (whatever you know).
       </p>
@@ -224,7 +224,7 @@ export function FoodSearchPicker({
 
   if (recipes && mode === 'recipes') {
     return (
-      <div className="rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+      <div className="rounded-2xl border border-black/[.05] bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
         <div className="flex gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/5">
           {modes.map((m) => (
             <button
@@ -269,7 +269,7 @@ export function FoodSearchPicker({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.05] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       {modes.length > 1 && (
         <div className="mb-2 flex gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/5">
           {modes.map((m) => (

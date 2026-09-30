@@ -15,7 +15,7 @@ export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) 
   const unmonitoredCount = statuses.filter((s) => s.status === 'unmonitored').length;
 
   return (
-    <div className="rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-black dark:text-zinc-50">Program health</h3>
         <span className="text-sm text-zinc-400">{flagged.length}</span>

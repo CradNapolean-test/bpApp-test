@@ -27,7 +27,7 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{assignment.template.name}</h3>
         <button type="button" onClick={onClose} className="text-xs font-medium text-zinc-500 hover:underline">
@@ -107,7 +107,7 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
 
 function ReadOnlyResponses({ assignment }: { assignment: FormAssignmentWithDetails }) {
   return (
-    <div className="space-y-2 rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex items-center gap-2.5">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
           <CheckCircle2 className="h-4 w-4" />
@@ -172,7 +172,7 @@ export function FormsTab({
   return (
     <div className="space-y-6">
       {isCoachView && !readOnly && (
-        <div className="rounded-2xl border border-black/[.05] p-4 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Assign a form</h3>
           <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
             <select
@@ -207,7 +207,7 @@ export function FormsTab({
             ? pending.map((a) => (
                 <div
                   key={a.id}
-                  className="flex items-center gap-2.5 rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                  className="flex items-center gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
                     <FileText className="h-4 w-4" />
@@ -220,7 +220,7 @@ export function FormsTab({
                 openFormId === a.id ? (
                   <FillableForm key={a.id} assignment={a} onClose={() => setOpenFormId(null)} />
                 ) : (
-                  <div key={a.id} className="rounded-2xl border border-black/[.05] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+                  <div key={a.id} className="rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
                     <div className="flex items-center gap-2.5">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
                         <Camera className="h-4 w-4" />
