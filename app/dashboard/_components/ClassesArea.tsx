@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Check, Clock, Info, Ticket, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CalendarDays, Check, Clock, Info, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Badge, Card, Segmented } from '@/app/_components/ui';
+import { BottomSheet } from '@/app/_components/BottomSheet';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, startOfWeek, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { cancelDeadline, cancelNote, formatClock, nowLocalMs } from '@/lib/utils/cancelDeadline';
@@ -36,29 +37,6 @@ function dayLabel(iso: string, todayIso: string): string {
 
 function longDay(iso: string): string {
   return parseDay(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-}
-
-function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center md:items-center" role="dialog" aria-modal="true" aria-label={title}>
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60" />
-      <div className="relative w-full max-w-md rounded-t-3xl border border-black/10 bg-card p-5 pb-8 shadow-2xl md:rounded-3xl md:pb-5 dark:border-white/10">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 function SummaryRow({ label, value, tone }: { label: string; value: string; tone?: 'warn' | 'good' }) {

@@ -11,18 +11,20 @@ import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { ClassManager } from './ClassManager';
-import { AttendanceScheduler } from './AttendanceScheduler';
+import { SessionsView } from './SessionsView';
 import { ReportsPane } from './ReportsPane';
 import type { ClassRow, CoachReport, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
-const TABS = ['Schedule', 'Attendance', 'Reports'] as const;
+const TABS = ['Sessions', 'Timetable', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_PARAM: Record<string, Tab> = {
-  manage: 'Schedule',
-  schedule: 'Schedule',
-  attendance: 'Attendance',
+  manage: 'Timetable',
+  schedule: 'Timetable',
+  timetable: 'Timetable',
+  sessions: 'Sessions',
+  attendance: 'Sessions',
   reports: 'Reports',
 };
 
@@ -42,7 +44,7 @@ export function ClassesHubShell({
   clients: CoachClientRow[];
 }) {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Schedule');
+  const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Sessions');
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -56,9 +58,9 @@ export function ClassesHubShell({
       <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Classes</h1>
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
-      {tab === 'Schedule' && <ClassManager initialClasses={initialClasses} />}
-      {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} clients={clients} />}
-      {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Attendance')} />}
+      {tab === 'Sessions' && <SessionsView occurrences={occurrences} clients={clients} />}
+      {tab === 'Timetable' && <ClassManager initialClasses={initialClasses} />}
+      {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} />}
     </AppShell>
     </ClientOnly>
   );

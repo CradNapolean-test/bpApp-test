@@ -386,7 +386,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
 
       <p className="text-xs text-zinc-500">
         Members can book each session up to its capacity; times are the gym&apos;s local time. To cancel a single date
-        (for example a bank holiday), use Attendance.
+        (for example a bank holiday), use Sessions.
       </p>
     </div>
   );
