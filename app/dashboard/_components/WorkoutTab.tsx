@@ -29,7 +29,7 @@ import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
-import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, todayIsoInTz } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
   ClientProfileRow,
@@ -178,8 +178,6 @@ function RestTimer({ seconds }: { seconds: number }) {
   return <p className="mt-1 text-xs font-medium text-accent">Rest: {mm}:{ss}</p>;
 }
 
-const SET_TYPES: SetType[] = ['working', 'warmup', 'failure', 'drop'];
-
 function LogSetForm({
   clientId,
   exerciseId,
@@ -188,6 +186,8 @@ function LogSetForm({
   restSeconds,
   initialReps,
   initialLoad,
+  lastSet,
+  lastLabel,
 }: {
   clientId: string;
   exerciseId: string;
@@ -196,6 +196,9 @@ function LogSetForm({
   restSeconds: number | null;
   initialReps: number | null;
   initialLoad: number | null;
+  // What the member did for this same set number last time, and how to label it ("Last week").
+  lastSet: { reps: number | null; load: number | null } | null;
+  lastLabel: string;
 }) {
   const { run, busy } = useAction();
   // Reps and load carry over between sets (they're usually the same), so after logging only the
@@ -203,7 +206,6 @@ function LogSetForm({
   const [reps, setReps] = useState<number | ''>(initialReps ?? '');
   const [load, setLoad] = useState<number | ''>(initialLoad ?? '');
   const [rpe, setRpe] = useState<number | ''>('');
-  const [setType, setSetType] = useState<SetType>('working');
   const [timerKey, setTimerKey] = useState(0);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -215,7 +217,7 @@ function LogSetForm({
           actual_reps: reps === '' ? null : reps,
           actual_load: load === '' ? null : load,
           actual_rpe: rpe === '' ? null : rpe,
-          set_type: setType,
+          set_type: 'working' as SetType,
         }),
       {
         success: `Set ${nextSetNumber} logged`,
@@ -248,18 +250,11 @@ function LogSetForm({
           Set {nextSetNumber}
           {totalSets ? <span className="font-medium text-zinc-500"> of {totalSets}</span> : null}
         </span>
-        <select
-          aria-label="Set type"
-          value={setType}
-          onChange={(e) => setSetType(e.target.value as SetType)}
-          className="rounded-full border border-black/10 bg-card px-3 py-1 text-xs font-semibold capitalize dark:border-white/10"
-        >
-          {SET_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+        {lastSet && (lastSet.reps != null || lastSet.load != null) && (
+          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
+            {lastLabel}: {lastSet.reps ?? '—'} × {lastSet.load ?? '—'}
+          </span>
+        )}
       </div>
       <form onSubmit={handleSubmit} className="space-y-2.5">
         <div className="grid grid-cols-3 gap-2">
@@ -607,17 +602,36 @@ export function WorkoutTab({
     return acc;
   }, {});
 
-  // Most recent WORKING-set log for a library exercise, from any instance other than the
-  // current one -- surfaced to the client as "Last time: ...". Excludes warmup/failure/drop
-  // sets so they don't pollute the headline number, and excludes the current exercise's own
-  // logs since those already show in its "Logged: ..." summary line.
-  function lastTimeFor(libraryId: string | null, excludeExerciseId: string): WorkoutLogRow | null {
-    if (!libraryId) return null;
-    const candidates = workoutLogs.filter(
-      (l) => l.exercise_library_id === libraryId && l.exercise_id !== excludeExerciseId && l.set_type === 'working'
-    );
+  // The member's previous session of the same library exercise (a different programme day/week
+  // than the one open): its working sets in order, with a "Last week" / "Last time" label. Shown
+  // next to each set and as a summary line, so they know what to beat.
+  // Same exercise = same library entry when it has one, otherwise the same name (custom exercises).
+  const exerciseById = new Map(programs.flatMap((p) => p.workout_program_days.flatMap((d) => d.workout_exercises)).map((e) => [e.id, e]));
+  function lastSessionFor(
+    libraryId: string | null,
+    name: string,
+    excludeExerciseId: string
+  ): { sets: WorkoutLogRow[]; label: string; date: string } | null {
+    const wantName = name.trim().toLowerCase();
+    const candidates = workoutLogs.filter((l) => {
+      if (!l.exercise_id || l.exercise_id === excludeExerciseId || l.set_type !== 'working') return false;
+      const logged = exerciseById.get(l.exercise_id);
+      const logLib = l.exercise_library_id ?? logged?.exercise_library_id ?? null;
+      if (libraryId && logLib === libraryId) return true;
+      return !!wantName && logged?.name.trim().toLowerCase() === wantName;
+    });
     if (candidates.length === 0) return null;
-    return [...candidates].sort((a, b) => b.logged_at.localeCompare(a.logged_at))[0];
+    const latest = [...candidates].sort((a, b) => b.logged_at.localeCompare(a.logged_at))[0];
+    const sets = candidates
+      .filter((l) => l.exercise_id === latest.exercise_id)
+      .sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0) || a.logged_at.localeCompare(b.logged_at));
+    const tz = profile?.timezone ?? DEFAULT_TIMEZONE;
+    const daysAgo = daysBetween(isoDateInTz(new Date(latest.logged_at), tz), todayIsoInTz(tz));
+    return {
+      sets,
+      label: daysAgo >= 4 && daysAgo <= 10 ? 'Last week' : 'Last time',
+      date: new Date(latest.logged_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+    };
   }
 
   // Today's weekday in the member's timezone, and which programme week is current -- used to flag
@@ -625,6 +639,9 @@ export function WorkoutTab({
   const todayIsoLocal = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayDow = new Date(`${todayIsoLocal}T00:00:00Z`).getUTCDay();
   const currentWeek = (program: WorkoutProgramRow) => resolveActiveProgram([program], todayIsoLocal)?.weekNum ?? -1;
+
+  const libraryVideo = (libraryId: string | null) =>
+    (libraryId ? exerciseLibrary.find((l) => l.id === libraryId)?.video_url : null) ?? null;
 
   const openDay = openDayId
     ? programs.flatMap((p) => p.workout_program_days).find((d) => d.id === openDayId)
@@ -912,15 +929,25 @@ export function WorkoutTab({
             onReorder={reorderExercises}
             renderExtra={(ex) => {
               const logs = logsByExercise[ex.id] ?? [];
-              const lastTime = lastTimeFor(ex.exercise_library_id, ex.id);
+              const last = lastSessionFor(ex.exercise_library_id, ex.name, ex.id);
+              // Use the exercise's own video link, else the one on its library entry.
+              const videoUrl = ex.video_url || libraryVideo(ex.exercise_library_id);
+              const lastFor = (setNumber: number) => {
+                const l = last?.sets[setNumber - 1] ?? last?.sets[last.sets.length - 1];
+                return l ? { reps: l.actual_reps, load: l.actual_load } : null;
+              };
+              const seed = logs.length > 0 ? logs[logs.length - 1] : (last?.sets[0] ?? null);
               return (
                 <>
-                  {(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://')) && (
-                    <VideoDemo videoUrl={ex.video_url} title={ex.name} alwaysOpen />
+                  {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && (
+                    <VideoDemo videoUrl={videoUrl} title={ex.name} alwaysOpen />
                   )}
-                  {lastTime && (
-                    <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                      Last time: {lastTime.actual_reps ?? '—'}×{lastTime.actual_load ?? '—'} · {new Date(lastTime.logged_at).toLocaleDateString()}
+                  {last && (
+                    <p className="mt-1.5 text-xs text-zinc-500">
+                      <span className="font-semibold text-accent">
+                        {last.label} ({last.date}):
+                      </span>{' '}
+                      {last.sets.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(' · ')}
                     </p>
                   )}
                   {!isCoachView && ex.block_type === 'exercise' && (
@@ -940,8 +967,10 @@ export function WorkoutTab({
                         nextSetNumber={logs.length + 1}
                         totalSets={Number(ex.sets) > 0 ? Number(ex.sets) : null}
                         restSeconds={ex.rest_seconds}
-                        initialReps={logs.length > 0 ? (logs[logs.length - 1].actual_reps ?? null) : (lastTime?.actual_reps ?? null)}
-                        initialLoad={logs.length > 0 ? (logs[logs.length - 1].actual_load ?? null) : (lastTime?.actual_load ?? null)}
+                        initialReps={seed?.actual_reps ?? null}
+                        initialLoad={seed?.actual_load ?? null}
+                        lastSet={last ? lastFor(logs.length + 1) : null}
+                        lastLabel={last?.label ?? 'Last time'}
                       />
                     </>
                   )}
