@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Award, Gift, HelpCircle, PlayCircle, Star, Ticket, Trophy, Users } from 'lucide-react';
+import { Award, CalendarDays, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Ticket, Trophy, Users } from 'lucide-react';
 import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
 import { Card, IconChip, SectionLabel } from '@/app/_components/ui';
 import type { Category, Screen } from './categories';
@@ -16,7 +16,7 @@ function monthsSince(isoDate: string): number {
   return Math.max(0, (now.getUTCFullYear() - start.getUTCFullYear()) * 12 + (now.getUTCMonth() - start.getUTCMonth()));
 }
 
-function Tile({
+export function Tile({
   icon,
   title,
   subtitle,
@@ -47,6 +47,22 @@ function Tile({
         <span className="block truncate text-xs text-zinc-500">{subtitle}</span>
       </span>
     </button>
+  );
+}
+
+// The two main doors into the app, shown right under today's session card.
+export function BpMainTiles({
+  onNavigate,
+  onNavigateClasses,
+}: {
+  onNavigate: (category: Category, screen?: Screen) => void;
+  onNavigateClasses?: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <Tile icon={CalendarDays} title="My bookings" subtitle="Book & manage" highlight onClick={onNavigateClasses} />
+      <Tile icon={MessagesSquare} title="My coaching" subtitle="Chat & nutrition" highlight onClick={() => onNavigate('Coach')} />
+    </div>
   );
 }
 

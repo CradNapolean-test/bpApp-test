@@ -27,7 +27,7 @@ export function ActivityFeed({
     () => new Map<string, string>([...Object.entries(extraNames), ...clients.map((c): [string, string] => [c.id, c.name ?? c.email])]),
     [clients, extraNames]
   );
-  const items = useMemo(() => groupActivity(events).slice(0, 20), [events]);
+  const items = useMemo(() => groupActivity(events).slice(0, 5), [events]);
 
   return (
     <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">

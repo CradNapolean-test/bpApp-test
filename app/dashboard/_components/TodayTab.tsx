@@ -19,7 +19,7 @@ import type {
 } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
-import { BpHomeHero, BpHomeSections } from './BpHome';
+import { BpHomeHero, BpHomeSections, BpMainTiles } from './BpHome';
 import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
 
@@ -212,6 +212,8 @@ export function TodayTab({
           )}
         </div>
       )}
+
+      {!isCoachView && <BpMainTiles onNavigate={onNavigate} onNavigateClasses={onNavigateClasses} />}
 
       {isCoachView && <Card className="!p-3.5">
         {(() => {
