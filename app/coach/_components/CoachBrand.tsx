@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useCoachLogoUrl } from './CoachBrandingContext';
+import { GymSwitcherMenu } from './GymSwitcherMenu';
 
 // Two-tone wordmark shown in place of a generic page title on every coach desktop page
 // (Dashboard/Clients/Classes/Library/Messages/Settings) -- matches the design handoff's
@@ -13,13 +14,21 @@ import { useCoachLogoUrl } from './CoachBrandingContext';
 export function CoachBrand() {
   const logoUrl = useCoachLogoUrl();
 
-  if (logoUrl) {
-    return <Image src={logoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-auto rounded" />;
-  }
-
-  return (
+  const mark = logoUrl ? (
+    <Image src={logoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-auto rounded" />
+  ) : (
     <>
       Ballistic <span className="text-accent">Performance</span>
+    </>
+  );
+
+  // The site switcher only renders for a coach who belongs to more than one gym.
+  return (
+    <>
+      {mark}
+      <span className="ml-3 hidden align-middle md:inline-block">
+        <GymSwitcherMenu />
+      </span>
     </>
   );
 }

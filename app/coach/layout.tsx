@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { MessagesDrawerProvider } from './_components/MessagesDrawerContext';
 import { CoachBrandingProvider } from './_components/CoachBrandingContext';
+import { CoachGymsProvider } from './_components/CoachGymsContext';
+import { getMyGyms } from '@/lib/data/gym';
 
 // Mounts the shared MessagesDrawer overlay once for every /coach/** page (Next's nested-layout
 // composition), so CoachMessagesButton can open it from anywhere without each page threading a
@@ -18,7 +20,10 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   } = await supabase.auth.getUser();
 
   let logoUrl: string | null = null;
+  let gyms: Awaited<ReturnType<typeof getMyGyms>> = [];
   if (user) {
+    // The sites this coach belongs to, for the header switcher. Never worth failing the page over.
+    gyms = await getMyGyms().catch(() => []);
     const { data: profile } = await supabase.from('profiles').select('logo_path').eq('id', user.id).maybeSingle();
     if (profile?.logo_path) {
       logoUrl = supabase.storage.from('coach-branding').getPublicUrl(profile.logo_path).data.publicUrl;
@@ -27,7 +32,9 @@ export default async function CoachLayout({ children }: { children: React.ReactN
 
   return (
     <CoachBrandingProvider logoUrl={logoUrl}>
-      <MessagesDrawerProvider currentUserId={user?.id ?? ''}>{children}</MessagesDrawerProvider>
+      <CoachGymsProvider gyms={gyms}>
+        <MessagesDrawerProvider currentUserId={user?.id ?? ''}>{children}</MessagesDrawerProvider>
+      </CoachGymsProvider>
     </CoachBrandingProvider>
   );
 }
