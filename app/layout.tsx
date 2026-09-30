@@ -17,7 +17,7 @@ const THEME_INIT_SCRIPT = `
 (function () {
   try {
     var stored = localStorage.getItem('theme');
-    var pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+    var pref = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'dark';
     var effective = pref === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : pref;
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#141414",
+  themeColor: "#111111",
 };
 
 export default async function RootLayout({
@@ -52,7 +52,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  let themePreference: ThemePreference = 'system';
+  let themePreference: ThemePreference = 'dark';
   const supabase = await createClient();
   const {
     data: { user },

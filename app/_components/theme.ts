@@ -20,5 +20,5 @@ export function applyTheme(preference: ThemePreference): void {
 
 export function readStoredTheme(): ThemePreference {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'dark';
 }

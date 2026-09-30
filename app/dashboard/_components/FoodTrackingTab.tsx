@@ -82,6 +82,64 @@ function ManualMacroForm({ onAdd }: { onAdd: (fields: { calories: number | null;
   );
 }
 
+// Shown when a barcode scan hits a real Open Food Facts product that's missing one or more
+// macros (common for smaller/private-label brands where a contributor never filled in the
+// full nutrition panel) -- lets the user complete just what's missing instead of the scan
+// silently failing as if OFF had no record of the product at all. Inputs are per-100g (what's
+// on the packaging) and converted to the foods table's per-gram storage on save.
+function CompleteScannedFoodForm({
+  product,
+  onCancel,
+  onSave,
+}: {
+  product: { name: string; protein: number | null; carbs: number | null; fat: number | null };
+  onCancel: () => void;
+  onSave: (macros: { protein: number; carbs: number; fat: number }) => void;
+}) {
+  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
+  const toPer100 = (v: number | null) => (v != null ? String(Math.round(v * 100 * 10) / 10) : '');
+  const [protein, setProtein] = useState(toPer100(product.protein));
+  const [carbs, setCarbs] = useState(toPer100(product.carbs));
+  const [fat, setFat] = useState(toPer100(product.fat));
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (protein === '' || carbs === '' || fat === '') return;
+    onSave({ protein: Number(protein) / 100, carbs: Number(carbs) / 100, fat: Number(fat) / 100 });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2 rounded-xl border border-black/10 p-3 dark:border-white/10">
+      <p className="text-sm font-medium text-black dark:text-zinc-50">{product.name}</p>
+      <p className="text-xs text-zinc-500">
+        Found on Open Food Facts, but missing some nutrition info — fill in the rest (per 100g) to save it.
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        <label className="space-y-0.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Protein g</span>
+          <input type="number" step="0.1" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
+        </label>
+        <label className="space-y-0.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Carbs g</span>
+          <input type="number" step="0.1" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
+        </label>
+        <label className="space-y-0.5">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Fat g</span>
+          <input type="number" step="0.1" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" variant="primary" size="sm">
+          Save &amp; add
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function ManualMacroRow({ entry, readOnly, onRemove }: { entry: ManualMacroEntryRow; readOnly: boolean; onRemove: (id: string) => void }) {
   return (
     <li className="flex items-center justify-between gap-2 p-3">
@@ -299,6 +357,16 @@ export function FoodTrackingTab({
   // directly in a meal instead of always going to "Other" for a manual re-file afterward.
   const [scanTarget, setScanTarget] = useState<{ id: string | null; label: string } | null>(null);
   const [scanStatus, setScanStatus] = useState<string | null>(null);
+  // Set when a scan hits an OFF product missing one or more macros -- holds everything needed
+  // to finish the save once CompleteScannedFoodForm collects the rest (see handleBarcodeDetected).
+  const [pendingScanProduct, setPendingScanProduct] = useState<{
+    barcode: string;
+    name: string;
+    protein: number | null;
+    carbs: number | null;
+    fat: number | null;
+    target: { id: string | null; label: string } | null;
+  } | null>(null);
   // Shared bottom-sheet "Add food" target -- null means closed; { id: null } targets the
   // unfiled "Other" bucket (the header's "Search foods" button), a section id targets that
   // section's own "+ Add food" button. One sheet for all entry points, matching the
@@ -456,15 +524,42 @@ export function FoodTrackingTab({
       if (!food) {
         const product = await lookupBarcode(barcode);
         if (!product) {
-          setScanStatus(`No product found for barcode ${barcode} — try search below.`);
+          setScanStatus(`No product found for barcode ${barcode} — try search below, or add it manually.`);
           return;
         }
-        food = await upsertFoodFromBarcode(barcode, { ...product, portion: '1 gram' });
+        if (product.protein == null || product.carbs == null || product.fat == null) {
+          // OFF has this product but a contributor never filled in every nutrient -- ask for
+          // just what's missing rather than discarding a real match as if it were a total miss.
+          setScanStatus(null);
+          setPendingScanProduct({ barcode, name: product.name, protein: product.protein, carbs: product.carbs, fat: product.fat, target });
+          return;
+        }
+        food = await upsertFoodFromBarcode(barcode, {
+          name: product.name,
+          portion: '1 gram',
+          protein: product.protein,
+          carbs: product.carbs,
+          fat: product.fat,
+        });
       }
       await handleAdd(food, 100, target?.id ?? null);
       setScanStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
     } catch (err) {
       setScanStatus(err instanceof Error ? err.message : 'Lookup failed.');
+    }
+  }
+
+  async function handleCompleteScannedFood(macros: { protein: number; carbs: number; fat: number }) {
+    if (!pendingScanProduct) return;
+    const { barcode, name, target } = pendingScanProduct;
+    setPendingScanProduct(null);
+    setScanStatus('Saving…');
+    try {
+      const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros });
+      await handleAdd(food, 100, target?.id ?? null);
+      setScanStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
+    } catch (err) {
+      setScanStatus(err instanceof Error ? err.message : 'Save failed.');
     }
   }
 
@@ -653,6 +748,13 @@ export function FoodTrackingTab({
           )}
           {scanTarget && (
             <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanTarget(null)} />
+          )}
+          {pendingScanProduct && (
+            <CompleteScannedFoodForm
+              product={pendingScanProduct}
+              onCancel={() => setPendingScanProduct(null)}
+              onSave={handleCompleteScannedFood}
+            />
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
           <p className="text-xs text-zinc-500">This scans into &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;Scan&quot; or &quot;+ Add food&quot; link to file directly into that meal instead.</p>

@@ -18,6 +18,8 @@ import {
 } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getClientExerciseMaxes } from './clientExerciseMaxes';
+import { getBigDogResults } from './bigDog';
+import { getUpcomingEvents } from './community';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getCreditPacks, getMyMembership, getPackages } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
@@ -81,6 +83,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     unreadMessageCount,
     mealSections,
     disabledScreens,
+    bigDogResults,
+    events,
   ] = await Promise.all([
     getDailyLogs(clientId, dates[0], dates[6]),
     getDailyLogs(clientId, historyStart, todayIso),
@@ -114,6 +118,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getClientUnreadCount(clientId),
     canWrite ? getOrCreateMealSections(clientId) : getMealSections(clientId),
     getDisabledScreens(clientId),
+    getBigDogResults(clientId),
+    getUpcomingEvents(clientId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
@@ -164,5 +170,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     unreadMessageCount,
     mealSections,
     disabledScreens,
+    bigDogResults,
+    events,
   };
 }

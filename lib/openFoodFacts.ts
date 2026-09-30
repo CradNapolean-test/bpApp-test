@@ -2,9 +2,12 @@
 // BarcodeScanner, a 'use client' component) since it's just a public read-only GET.
 export interface OpenFoodFactsProduct {
   name: string;
-  protein: number;
-  carbs: number;
-  fat: number;
+  // null (rather than a total lookup miss) means OFF has this product but a contributor never
+  // filled in that nutrient -- common for smaller/private-label brands. The caller prompts for
+  // whatever's missing instead of treating an existing-but-incomplete entry as "not found".
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
 }
 
 export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProduct | null> {
@@ -18,15 +21,12 @@ export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProdu
   const nutriments = product.nutriments ?? {};
   // Open Food Facts reports per-100g; the app's foods table stores per-1g throughout, so
   // divide down here rather than carrying a "100g" special case through the rest of the code.
-  const protein = nutriments.proteins_100g;
-  const carbs = nutriments.carbohydrates_100g;
-  const fat = nutriments.fat_100g;
-  if (protein == null || carbs == null || fat == null) return null;
+  const perGram = (value: unknown): number | null => (typeof value === 'number' ? value / 100 : null);
 
   return {
     name: product.product_name || product.generic_name || `Unknown product (${barcode})`,
-    protein: Number(protein) / 100,
-    carbs: Number(carbs) / 100,
-    fat: Number(fat) / 100,
+    protein: perGram(nutriments.proteins_100g),
+    carbs: perGram(nutriments.carbohydrates_100g),
+    fat: perGram(nutriments.fat_100g),
   };
 }

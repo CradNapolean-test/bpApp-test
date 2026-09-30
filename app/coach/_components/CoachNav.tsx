@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, Dumbbell, LayoutDashboard, MessageSquare, Settings, Users } from 'lucide-react';
+import { CalendarDays, Dumbbell, LayoutDashboard, MessageSquare, PartyPopper, Settings, Users } from 'lucide-react';
 
 const LINKS = [
   { href: '/coach', label: 'Dashboard', Icon: LayoutDashboard },
@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
   { href: '/coach/library', label: 'Library', Icon: Dumbbell },
   { href: '/coach/messages', label: 'Messages', Icon: MessageSquare },
+  { href: '/coach/community', label: 'Community', Icon: PartyPopper },
   { href: '/coach/settings', label: 'Settings', Icon: Settings },
 ] as const;
 

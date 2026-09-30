@@ -2,18 +2,21 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, Dumbbell, Settings, Users } from 'lucide-react';
+import { CalendarDays, Dumbbell, LayoutDashboard, Users } from 'lucide-react';
 
 const TABS = [
-  { href: '/coach', label: 'Coaching', Icon: Users },
+  { href: '/coach', label: 'Dashboard', Icon: LayoutDashboard },
+  { href: '/coach/clients', label: 'Clients', Icon: Users },
   { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
   { href: '/coach/library', label: 'Library', Icon: Dumbbell },
-  { href: '/coach/settings', label: 'Account', Icon: Settings },
 ] as const;
 
 // Coach-side mobile nav -- replaces the hamburger drawer on small screens (see AppShell's
 // bottomBar prop), mirroring BottomTabBar.tsx's client-dashboard pattern. Unlike that one,
-// these are real routes (Link + usePathname), not in-page category state.
+// these are real routes (Link + usePathname), not in-page category state. Account/Settings
+// is deliberately not one of these tabs -- same reasoning as BottomTabBar.tsx's client-side
+// equivalent -- it's already reachable at every width via the header avatar (CoachHeaderExtras
+// links it to /coach/settings), so a 5th tab here would just duplicate that.
 export function CoachBottomTabBar() {
   const pathname = usePathname();
 
@@ -21,7 +24,11 @@ export function CoachBottomTabBar() {
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
       {TABS.map(({ href, label, Icon }) => {
         const active =
-          href === '/coach' ? pathname === '/coach' || pathname?.startsWith('/coach/clients') : pathname?.startsWith(href);
+          href === '/coach'
+            ? pathname === '/coach'
+            : href === '/coach/clients'
+              ? pathname === '/coach/clients' || pathname?.startsWith('/coach/clients/')
+              : pathname?.startsWith(href);
         return (
           <Link
             key={href}

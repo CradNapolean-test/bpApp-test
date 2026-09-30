@@ -15,6 +15,7 @@ import { PackageManager } from './PackageManager';
 import { CreditPackManager } from './CreditPackManager';
 import { ReportsPane } from './ReportsPane';
 import type { ClassRow, CoachReport, CreditPackRow, MembershipPackageRow, ScheduleOccurrence } from '@/lib/data/types';
+import type { CoachClientRow } from '@/lib/data/coach';
 
 const TABS = ['Manage', 'Attendance', 'Packages', 'Credit Packs', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
@@ -35,6 +36,7 @@ export function ClassesHubShell({
   report,
   unreadCount,
   email,
+  clients,
 }: {
   initialClasses: ClassRow[];
   occurrences: ScheduleOccurrence[];
@@ -43,6 +45,7 @@ export function ClassesHubShell({
   report: CoachReport;
   unreadCount: number;
   email: string;
+  clients: CoachClientRow[];
 }) {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Manage');
@@ -59,7 +62,7 @@ export function ClassesHubShell({
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
       {tab === 'Manage' && <ClassManager initialClasses={initialClasses} />}
-      {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} />}
+      {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} clients={clients} />}
       {tab === 'Packages' && <PackageManager initialPackages={initialPackages} />}
       {tab === 'Credit Packs' && <CreditPackManager initialPacks={initialCreditPacks} />}
       {tab === 'Reports' && <ReportsPane report={report} />}

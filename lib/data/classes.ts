@@ -102,6 +102,19 @@ export async function cancelBooking(bookingId: string): Promise<ActionResult> {
   return error ? fail(error, 'Could not cancel that booking') : ok();
 }
 
+// Coach-initiated counterpart to bookClass -- book_class_for_client (0062) checks
+// is_coach_of(p_client_id) server-side rather than trusting auth.uid(), for a coach booking a
+// client into a class on their behalf (e.g. over the phone, or filling a spot in person).
+export async function bookClassForClient(classId: string, clientId: string, bookingDate: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('book_class_for_client', {
+    p_class_id: classId,
+    p_client_id: clientId,
+    p_booking_date: bookingDate,
+  });
+  return error ? fail(error, 'Could not book that class') : ok();
+}
+
 export async function getCreditsBalance(clientId: string): Promise<number> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -177,6 +190,12 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
     .eq('gym_id', gymId);
   if (classesError) raise(classesError);
 
+  // Gym blackout window (0064). If the migration hasn't been applied yet the columns don't
+  // exist -- fall back to no blackout rather than failing the whole dashboard load.
+  const { data: gym } = await supabase.from('gyms').select('blackout_start, blackout_end').eq('id', gymId).maybeSingle();
+  const blackoutStart: string | null = gym?.blackout_start ?? null;
+  const blackoutEnd: string | null = gym?.blackout_end ?? null;
+
   const occurrences: Omit<ScheduleOccurrence, 'bookedCount'>[] = [];
   for (const c of classes ?? []) {
     if (c.day_of_week == null) continue;
@@ -189,6 +208,9 @@ export async function getScheduleOccurrences(weeksAhead = 3): Promise<ScheduleOc
         startTime: c.start_time,
         capacity: c.capacity,
         creditCost: c.credit_cost,
+        cutoffHours: c.cutoff_hours,
+        blackoutStart,
+        blackoutEnd,
       });
     }
   }

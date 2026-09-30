@@ -18,6 +18,7 @@ import type {
 } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
+import { BpHome } from './BpHome';
 
 function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
   const loggedDates = new Set(historyLogs.filter(hasLoggedData).map((l) => l.log_date));
@@ -79,6 +80,7 @@ export function TodayTab({
   onCheckIn,
   onNavigate,
   onNavigateClasses,
+  isCoachView = false,
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -94,6 +96,7 @@ export function TodayTab({
   onCheckIn: (dayId: string) => void;
   onNavigate: (category: Category, screen?: Screen) => void;
   onNavigateClasses?: () => void;
+  isCoachView?: boolean;
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -127,6 +130,16 @@ export function TodayTab({
 
   return (
     <div className="space-y-3">
+      {!isCoachView && (
+        <BpHome
+          profile={profile}
+          bookings={bookings}
+          membership={membership}
+          onNavigate={onNavigate}
+          onNavigateClasses={onNavigateClasses}
+        />
+      )}
+
       {/* Hidden on mobile -- DashboardShell's mobileHeader shows this same greeting there
           (avatar chip + date), to match the redesign's compact per-screen mobile header. */}
       <p className="hidden text-sm font-medium text-zinc-500 md:block">{timeGreeting}, {firstName}</p>

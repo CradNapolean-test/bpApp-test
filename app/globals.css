@@ -48,12 +48,14 @@
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --accent: #2dd4bf;
-  --accent-strong: #5eead4;
-  --accent-foreground: #042f2e;
-  --accent-soft: rgb(45 212 191 / 0.1);
+  /* Ballistic Performance brand: black background, teal #2ABFBF (from the owner's logo files
+     and BP app mockups). */
+  --background: #111111;
+  --foreground: #f0f0f0;
+  --accent: #2abfbf;
+  --accent-strong: #5fd6d6;
+  --accent-foreground: #041f1f;
+  --accent-soft: rgb(42 191 191 / 0.12);
   --danger: #f87171;
   --muted: #a1a1aa;
   --border: rgb(255 255 255 / 0.1);
@@ -91,4 +93,34 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 0.25rem;
+}
+
+/* Accountability tracker slider (see AccountabilityTracker.tsx). The filled portion is drawn
+   by an inline gradient on the input itself; this only styles the thumb. */
+.bp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.bp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+.bp-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid var(--accent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
 }

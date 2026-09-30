@@ -59,6 +59,7 @@ function EditPackageCard({
   const [name, setName] = useState(pkg.name);
   const [creditsPerWeek, setCreditsPerWeek] = useState(pkg.credits_per_week);
   const [description, setDescription] = useState(pkg.description ?? '');
+  const [advanceDays, setAdvanceDays] = useState<string>(pkg.advance_booking_days?.toString() ?? '');
   const [screens, setScreens] = useState<Set<string>>(new Set(pkg.included_screens ?? DISABLEABLE_SCREENS));
 
   async function handleSave(e: React.FormEvent) {
@@ -69,6 +70,7 @@ function EditPackageCard({
           name,
           credits_per_week: creditsPerWeek,
           description: description || null,
+          advance_booking_days: advanceDays ? Number(advanceDays) : null,
           included_screens: screensToIncludedScreens(screens),
         }),
       { success: 'Package updated', onDone: onClose }
@@ -90,6 +92,17 @@ function EditPackageCard({
             className={inputCls}
             value={creditsPerWeek}
             onChange={(e) => setCreditsPerWeek(Number(e.target.value))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500">Book up to (days ahead, blank = no limit)</label>
+          <input
+            type="number"
+            min={1}
+            className={inputCls}
+            value={advanceDays}
+            onChange={(e) => setAdvanceDays(e.target.value)}
+            placeholder="e.g. 14"
           />
         </div>
         <div className="space-y-1">
@@ -118,6 +131,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('');
   const [creditsPerWeek, setCreditsPerWeek] = useState(4);
   const [description, setDescription] = useState('');
+  const [advanceDays, setAdvanceDays] = useState('');
   const [screens, setScreens] = useState<Set<string>>(new Set(DISABLEABLE_SCREENS));
 
   async function handleCreate(e: React.FormEvent) {
@@ -128,6 +142,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
           name,
           credits_per_week: creditsPerWeek,
           description: description || null,
+          advance_booking_days: advanceDays ? Number(advanceDays) : null,
           included_screens: screensToIncludedScreens(screens),
         }),
       { success: 'Package added', onDone }

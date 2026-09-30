@@ -1,4 +1,4 @@
-import { Apple, Bell, CheckSquare, Dumbbell, House, MessageSquare, Settings, TrendingUp } from 'lucide-react';
+import { Apple, Bell, Users, CheckSquare, Dumbbell, House, MessageSquare, MessagesSquare, Settings, TrendingUp } from 'lucide-react';
 
 // Screens are grouped into categories rather than one flat tab bar.
 export type Screen =
@@ -6,6 +6,11 @@ export type Screen =
   | 'Setup'
   | 'Account'
   | 'Info'
+  | 'Big Dog'
+  | 'Coaching'
+  | 'Events'
+  | 'Feedback'
+  | 'Refer a Friend'
   | 'Weekly Log'
   | 'Forms'
   | 'Education'
@@ -22,7 +27,7 @@ export type Screen =
   | 'Messages'
   | 'Notifications';
 
-export type Category = 'Home' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
+export type Category = 'Home' | 'Coach' | 'Community' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
 export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Messages', 'Account Settings', 'Notifications'];
 
 // The mobile bottom tab bar shows only these 5 -- Messages, Account Settings and
@@ -30,8 +35,16 @@ export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Acc
 // tab bar can't comfortably fit 8.
 export const BOTTOM_TAB_CATEGORIES: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress'];
 
+// The client's own mobile app follows the owner's BP mockups: Home / Book / Coach / Profile.
+// 'Book' is the Classes area (not a category); 'Coach' is a hub that leads into the
+// coaching categories below, which then open as sub-screens with a back arrow to the hub.
+export const CLIENT_TAB_CATEGORIES: Category[] = ['Home', 'Coach', 'Account Settings'];
+export const COACH_HUB_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress', 'Messages'];
+
 export const CATEGORY_ICON: Record<Category, typeof House> = {
   Home: House,
+  Coach: MessagesSquare,
+  Community: Users,
   Nutrition: Apple,
   Training: Dumbbell,
   Accountability: CheckSquare,
@@ -97,6 +110,10 @@ export function screensForCategory(
     switch (category) {
       case 'Home':
         return ['Today'];
+      case 'Coach':
+        return ['Coaching'];
+      case 'Community':
+        return ['Events', 'Feedback', 'Refer a Friend'];
       case 'Nutrition':
         // manual_import shows the same Food Tracking screen, but FoodTrackingTab branches
         // internally to a simple per-section macro-entry form instead of the food-search
@@ -120,7 +137,7 @@ export function screensForCategory(
         // must never see it: clicking "change password" would silently change the COACH's own
         // password, not the client's, since supabase.auth.updateUser() always targets whoever
         // is actually signed in.
-        return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Account', 'Setup', 'Credits'];
+        return isCoachView ? ['Setup', 'Credits', 'Info', 'Big Dog'] : ['Account', 'Setup', 'Credits', 'Big Dog'];
     }
   })();
   return screens.filter((s) => !disabledScreens.has(s));

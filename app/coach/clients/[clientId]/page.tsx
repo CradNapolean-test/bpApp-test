@@ -100,6 +100,8 @@ export default async function CoachClientPage({
       educationCourses={bundle.educationCourses}
       educationAssignments={bundle.educationAssignments}
       unreadMessageCount={bundle.unreadMessageCount}
+      bigDogResults={bundle.bigDogResults}
+      events={bundle.events}
     />
   );
 }

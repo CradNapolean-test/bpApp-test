@@ -9,6 +9,9 @@ import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
 import { BottomTabBar } from './BottomTabBar';
+import { ClientBottomTabBar } from './ClientBottomTabBar';
+import type { ClientTab } from './ClientBottomTabBar';
+import { CoachingHub } from './CoachingHub';
 import { SetupTab } from './SetupTab';
 import { WeeklyLogTab } from './WeeklyLogTab';
 import { FoodTrackingTab } from './FoodTrackingTab';
@@ -27,18 +30,22 @@ import { CategoryNav } from './CategoryNav';
 import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
-import { BOTTOM_TAB_CATEGORIES, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
+import { BOTTOM_TAB_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
 import { ClientCreditsTab } from './ClientCreditsTab';
 import { WorkoutTab } from './WorkoutTab';
+import { BigDogTab } from './BigDogTab';
+import { EventsTab, FeedbackTab, ReferTab } from './CommunityTabs';
 import type { ClientHealthStatus } from '@/lib/data/coach';
 import type { ThemePreference } from '@/app/_components/theme';
 import type {
   ActivityRow,
+  BigDogResultRow,
   BookingRow,
+  EventWithSignup,
   ChatMessage,
   ClientExerciseMaxRow,
   ClientMembershipRow,
@@ -118,6 +125,8 @@ export function DashboardShell({
   educationAssignments,
   disabledScreens = [],
   journalEntries = [],
+  bigDogResults = [],
+  events = [],
   unreadMessageCount = 0,
   healthStatus = null,
   coachUnreadCount = 0,
@@ -168,6 +177,8 @@ export function DashboardShell({
   educationAssignments: EducationCourseAssignmentWithDetails[];
   disabledScreens?: string[];
   journalEntries?: ClientJournalEntryRow[];
+  bigDogResults?: BigDogResultRow[];
+  events?: EventWithSignup[];
   unreadMessageCount?: number;
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
@@ -226,10 +237,18 @@ export function DashboardShell({
     setFocusDay((prev) => ({ dayId, nonce: (prev?.nonce ?? 0) + 1 }));
   }
 
+  function handleClientTab(tab: ClientTab) {
+    if (tab === 'Book') {
+      setArea('Classes');
+      return;
+    }
+    handleCategoryClick(tab === 'Home' ? 'Home' : tab === 'Coach' ? 'Coach' : 'Account Settings');
+  }
+
   const topBar = isCoachView ? (
     <CoachNav />
   ) : (
-    <div className="flex gap-1 rounded-lg border border-black/10 p-1 dark:border-white/10">
+    <div className="hidden gap-1 rounded-lg border border-black/10 p-1 md:flex dark:border-white/10">
       {(['Coaching', 'Classes'] as Area[]).map((a) => (
         <button
           key={a}
@@ -284,19 +303,30 @@ export function DashboardShell({
   // is stale while area === 'Classes' since setArea() alone doesn't touch it, so this must not
   // key off `category` in that case or the header shows whatever Coaching category was last
   // active before switching tabs.
-  const isSubScreen = area === 'Coaching' && !BOTTOM_TAB_CATEGORIES.includes(category);
+  const tabCategories = isCoachView ? BOTTOM_TAB_CATEGORIES : CLIENT_TAB_CATEGORIES;
+  const isSubScreen = area === 'Coaching' && !tabCategories.includes(category);
+  // Coaching drill-ins (nutrition, training, chat...) go back to the Coach hub; other
+  // drill-ins (notifications) go back Home. The coach's view of a client keeps going Home.
+  const backCategory: Category = !isCoachView && COACH_HUB_CATEGORIES.includes(category) ? 'Coach' : 'Home';
+  const activeClientTab: ClientTab =
+    area === 'Classes' ? 'Book'
+    : category === 'Home' || category === 'Notifications' ? 'Home'
+    : category === 'Account Settings' ? 'Profile'
+    : 'Coach';
   const mobileHeaderTitle =
     category === 'Messages'
       ? otherPartyName
       : isCoachView
         ? clientLabel
         : category === 'Account Settings'
-          ? 'Account'
-          : category;
+          ? 'My profile'
+          : category === 'Coach'
+            ? 'My coaching'
+            : category;
   const mobileHeader = isSubScreen ? (
     <button
       type="button"
-      onClick={() => handleCategoryClick('Home')}
+      onClick={() => handleCategoryClick(backCategory)}
       className="flex min-w-0 items-center gap-2.5 text-left"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
@@ -319,7 +349,7 @@ export function DashboardShell({
           </>
         ) : (
           <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
-            {isCoachView ? clientLabel : area === 'Classes' ? 'Classes' : category}
+            {isCoachView ? clientLabel : area === 'Classes' ? 'Book a session' : mobileHeaderTitle}
           </p>
         )}
       </div>
@@ -376,7 +406,13 @@ export function DashboardShell({
           {isCoachView && <CoachMessagesButton unreadCount={coachUnreadCount} />}
         </>
       }
-      bottomBar={<BottomTabBar category={category} onSelectCategory={handleCategoryClick} />}
+      bottomBar={
+        isCoachView ? (
+          <BottomTabBar category={category} onSelectCategory={handleCategoryClick} />
+        ) : (
+          <ClientBottomTabBar active={activeClientTab} onSelect={handleClientTab} />
+        )
+      }
     >
       {showCoaching && !BOTTOM_TAB_CATEGORIES.includes(category) && (
         <button
@@ -422,6 +458,18 @@ export function DashboardShell({
               onCheckIn={handleCheckIn}
               onNavigate={handleNavigate}
               onNavigateClasses={isCoachView ? undefined : () => setArea('Classes')}
+              isCoachView={isCoachView}
+            />
+          )}
+          {effectiveScreen === 'Coaching' && !isCoachView && (
+            <CoachingHub
+              profile={profile}
+              programWeek={programWeek}
+              weekLogs={weekLogs}
+              programs={programs}
+              bigDogResults={bigDogResults}
+              unreadMessageCount={unreadMessageCount}
+              onNavigate={handleNavigate}
             />
           )}
           {effectiveScreen === 'Setup' && (
@@ -441,6 +489,9 @@ export function DashboardShell({
               emailNotificationsEnabled={profile?.email_notifications_enabled ?? true}
               deletionRequestedAt={profile?.deletion_requested_at ?? null}
               themePreference={themePreference}
+              profile={profile}
+              membershipName={membership?.package?.name ?? null}
+              bigDogResults={bigDogResults}
               onNavigate={handleNavigate}
             />
           )}
@@ -557,6 +608,19 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Info' && isCoachView && (
             <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} readOnly={!isOwnClient} />
+          )}
+          {effectiveScreen === 'Events' && <EventsTab events={events} readOnly={isCoachView} />}
+          {effectiveScreen === 'Feedback' && <FeedbackTab readOnly={isCoachView} />}
+          {effectiveScreen === 'Refer a Friend' && !isCoachView && (
+            <ReferTab clientId={clientId} name={profile?.name ?? clientLabel} />
+          )}
+          {effectiveScreen === 'Big Dog' && (
+            <BigDogTab
+              clientId={clientId}
+              profile={profile}
+              results={bigDogResults}
+              canRecord={isCoachView && isOwnClient}
+            />
           )}
           {effectiveScreen === 'Notifications' && (
             <NotificationsTab notifications={notifications} />

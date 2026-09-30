@@ -67,6 +67,8 @@ export default async function DashboardPage() {
       educationCourses={bundle.educationCourses}
       educationAssignments={bundle.educationAssignments}
       disabledScreens={bundle.disabledScreens}
+      bigDogResults={bundle.bigDogResults}
+      events={bundle.events}
       unreadMessageCount={bundle.unreadMessageCount}
     />
   );

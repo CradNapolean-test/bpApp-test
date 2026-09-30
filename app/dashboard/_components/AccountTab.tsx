@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, FileText, HelpCircle, Lock } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { Avatar } from '@/app/_components/Avatar';
@@ -11,7 +12,6 @@ import { ChangePasswordForm } from '@/app/_components/ChangePasswordForm';
 import { ChangeEmailForm } from '@/app/_components/ChangeEmailForm';
 import { ThemeToggle } from '@/app/_components/ThemeToggle';
 import { SignOutButton } from '@/app/_components/SignOutButton';
-import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
 import type { ThemePreference } from '@/app/_components/theme';
 import {
   cancelAccountDeletionRequest,
@@ -25,11 +25,18 @@ import {
   getExistingPushSubscription,
   isPushSupported,
 } from '@/app/_components/pushNotifications';
+import { BigDogCard } from './BigDogTab';
+import type { BigDogResultRow, ClientProfileRow } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 
 const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
 type RowKey = 'password' | 'email';
+
+function formatDob(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
 
 export function AccountTab({
   clientId,
@@ -39,6 +46,9 @@ export function AccountTab({
   emailNotificationsEnabled,
   deletionRequestedAt,
   themePreference,
+  profile = null,
+  membershipName = null,
+  bigDogResults = [],
   onNavigate,
 }: {
   clientId: string;
@@ -48,6 +58,9 @@ export function AccountTab({
   emailNotificationsEnabled: boolean;
   deletionRequestedAt: string | null;
   themePreference: ThemePreference;
+  profile?: ClientProfileRow | null;
+  membershipName?: string | null;
+  bigDogResults?: BigDogResultRow[];
   onNavigate: (category: Category, screen?: Screen) => void;
 }) {
   const { run } = useAction();
@@ -122,11 +135,32 @@ export function AccountTab({
 
   return (
     <div className="space-y-4">
-      <div className={`${cardCls} flex items-center gap-3`}>
+      <div className="flex flex-col items-center gap-1 py-2 text-center">
         <Avatar name={name} size="lg" variant="self" />
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-black dark:text-zinc-50">{name}</p>
-          <p className="truncate text-xs text-zinc-500">{email}</p>
+        <p className="mt-1 text-base font-extrabold text-black dark:text-zinc-50">{name}</p>
+        <p className="text-xs text-zinc-500">{email}</p>
+        {membershipName && (
+          <span className="mt-1 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[9px] font-extrabold uppercase tracking-wider text-accent">
+            {membershipName}
+          </span>
+        )}
+      </div>
+
+      <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Account Settings', 'Big Dog')} />
+
+      <div>
+        <p className="px-1 pb-1.5 text-[9px] font-extrabold uppercase tracking-[2px] text-zinc-500">My details</p>
+        <div className={`${cardCls} !p-0`}>
+          {[
+            { label: 'Date of birth', value: formatDob(profile?.date_of_birth ?? null) },
+            { label: 'Phone', value: profile?.phone || null },
+            { label: 'Membership', value: membershipName },
+          ].map((row) => (
+            <div key={row.label} className="border-b border-black/5 px-4 py-2.5 last:border-b-0 dark:border-white/5">
+              <p className="text-[10px] text-zinc-500">{row.label}</p>
+              <p className="text-xs font-semibold text-black dark:text-zinc-50">{row.value ?? 'Not set'}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -186,6 +220,42 @@ export function AccountTab({
 
       <ThemeToggle initial={themePreference} />
 
+      <div>
+        <p className="px-1 pb-1.5 text-[9px] font-extrabold uppercase tracking-[2px] text-zinc-500">Help &amp; legal</p>
+        <div className={`${cardCls} !p-0`}>
+          <div className={`${rowCls} opacity-50`}>
+            <span className="flex items-center gap-3">
+              <HelpCircle className="h-4 w-4 text-accent" />
+              <span>
+                <span className="block text-sm font-semibold text-black dark:text-zinc-50">FAQs</span>
+                <span className="block text-[11px] text-zinc-500">Coming soon</span>
+              </span>
+            </span>
+          </div>
+          <Link href="/legal/terms" className={rowCls}>
+            <span className="flex items-center gap-3">
+              <FileText className="h-4 w-4 text-zinc-400" />
+              <span>
+                <span className="block text-sm font-semibold text-black dark:text-zinc-50">Terms &amp; conditions</span>
+                <span className="block text-[11px] text-zinc-500">Membership &amp; usage terms</span>
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+          </Link>
+          <Link href="/legal/privacy" className={rowCls}>
+            <span className="flex items-center gap-3">
+              <Lock className="h-4 w-4 text-zinc-400" />
+              <span>
+                <span className="block text-sm font-semibold text-black dark:text-zinc-50">Privacy policy</span>
+                <span className="block text-[11px] text-zinc-500">How we use your data</span>
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+          </Link>
+        </div>
+      </div>
+
+
       <div className={cardCls}>
         {deletionRequested ? (
           <>
@@ -220,7 +290,7 @@ export function AccountTab({
         >
           Need help? Message your coach
         </button>
-        <LegalFooterLinks />
+
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, CalendarDays, Check, UserX, X } from 'lucide-react';
+import { Ban, CalendarDays, Check, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Button } from '@/app/_components/Button';
 import { ClassCalendar } from '@/app/_components/ClassCalendar';
@@ -9,9 +9,10 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
-import { cancelClassOccurrence, getRoster, markAttendanceStatus } from '@/lib/data/classes';
+import { bookClassForClient, cancelClassOccurrence, getRoster, markAttendanceStatus } from '@/lib/data/classes';
 import { formatClassTime } from '@/lib/utils/dates';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
+import type { CoachClientRow } from '@/lib/data/coach';
 
 function statusOf(entry: RosterEntry): AttendanceStatus {
   if (entry.attended) return 'attended';
@@ -52,10 +53,62 @@ function formatOccurrenceLabel(o: ScheduleOccurrence): string {
   return `${o.className}${timeLabel ? ` · ${timeLabel}` : ''}`;
 }
 
-export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccurrence[] }) {
+// Inline picker for AttendanceScheduler's "Add client" control -- a plain select is enough
+// here (a coach's own roster tops out in the dozens, not hundreds), so no search input.
+function AddClientForm({
+  clients,
+  onCancel,
+  onBook,
+  booking,
+}: {
+  clients: CoachClientRow[];
+  onCancel: () => void;
+  onBook: (clientId: string) => void;
+  booking: boolean;
+}) {
+  const [clientId, setClientId] = useState('');
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!clientId) return;
+    onBook(clientId);
+  }
+
+  if (clients.length === 0) {
+    return <p className="text-sm text-zinc-500">No clients to add -- every client is already booked or waitlisted.</p>;
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
+      <select
+        value={clientId}
+        onChange={(e) => setClientId(e.target.value)}
+        autoFocus
+        className="min-w-0 flex-1 rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+      >
+        <option value="">Select a client…</option>
+        {clients.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name ?? c.email}
+          </option>
+        ))}
+      </select>
+      <Button type="submit" variant="primary" size="sm" disabled={!clientId || booking}>
+        {booking ? 'Booking…' : 'Book'}
+      </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
+
+export function AttendanceScheduler({ occurrences, clients }: { occurrences: ScheduleOccurrence[]; clients: CoachClientRow[] }) {
   const toast = useToast();
   const confirm = useConfirm();
   const { run: runCancel, busy: cancelling } = useAction();
+  const { run: runBook, busy: booking } = useAction();
+  const [addingClient, setAddingClient] = useState(false);
   // Picking a day is the primary nav (a calendar, not a flat list of every upcoming
   // occurrence across every date at once -- that wall of chips is what made this screen
   // unusable once a single class started running several times a day). Defaults to the
@@ -71,10 +124,13 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     .filter((o) => o.date === selectedDate)
     .sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const selected = occurrences.find((o) => occKey(o) === selectedKey) ?? null;
+  const bookedClientIds = new Set((roster ?? []).map((r) => r.clientId));
+  const availableClients = clients.filter((c) => !bookedClientIds.has(c.id));
 
   async function openOccurrence(occ: ScheduleOccurrence) {
     setSelectedKey(occKey(occ));
     setLoading(true);
+    setAddingClient(false);
     try {
       const r = await getRoster(occ.classId, occ.date);
       setRoster(r);
@@ -89,10 +145,26 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
     setSelectedDate(date);
     setSelectedKey(null);
     setRoster(null);
+    setAddingClient(false);
     // Only one class that day -- open its roster straight away, same zero-extra-click feel
     // as before. With more than one, an explicit pick avoids guessing which time was meant.
     const dayOccs = occurrences.filter((o) => o.date === date);
     if (dayOccs.length === 1) void openOccurrence(dayOccs[0]);
+  }
+
+  async function handleBookClient(clientId: string) {
+    if (!selected) return;
+    await runBook(
+      async () => {
+        const result = await bookClassForClient(selected.classId, clientId, selected.date);
+        if (result.ok) {
+          setAddingClient(false);
+          await openOccurrence(selected);
+        }
+        return result;
+      },
+      { success: 'Client added' }
+    );
   }
 
   async function cycleStatus(entry: RosterEntry) {
@@ -184,12 +256,27 @@ export function AttendanceScheduler({ occurrences }: { occurrences: ScheduleOccu
       )}
 
       {selected && !loading && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!addingClient && (
+            <Button variant="outline" size="sm" onClick={() => setAddingClient(true)} className="flex items-center gap-1.5">
+              <UserPlus className="h-3.5 w-3.5" />
+              Add client
+            </Button>
+          )}
           <Button variant="danger" size="sm" onClick={handleCancelOccurrence} disabled={cancelling} className="flex items-center gap-1.5">
             <Ban className="h-3.5 w-3.5" />
             Cancel this occurrence
           </Button>
         </div>
+      )}
+
+      {selected && !loading && addingClient && (
+        <AddClientForm
+          clients={availableClients}
+          onCancel={() => setAddingClient(false)}
+          onBook={handleBookClient}
+          booking={booking}
+        />
       )}
 
       {loading && <p className="text-sm text-zinc-500">Loading roster…</p>}

@@ -469,6 +469,8 @@ export interface MembershipPackageRow {
   // screen names a client on this package can see, enforced live -- see
   // categories.ts's toEffectiveDisabledScreenSet.
   included_screens: string[] | null;
+  // How many days ahead a member on this package may book; null = no limit (migration 0064).
+  advance_booking_days: number | null;
 }
 
 export interface ClientMembershipRow {
@@ -501,6 +503,11 @@ export interface ScheduleOccurrence {
   capacity: number;
   creditCost: number;
   bookedCount: number;
+  // Cancellation rule for this class's gym (migration 0064): refund if cancelled before
+  // start - cutoffHours, with a deadline inside the blackout window moved to its start.
+  cutoffHours: number;
+  blackoutStart: string | null;
+  blackoutEnd: string | null;
 }
 
 export interface RosterEntry {
@@ -660,4 +667,41 @@ export interface ScheduledCommunicationRow {
   channel: 'message' | 'email' | 'both';
   email_sent_at: string | null;
   created_at: string;
+}
+
+export interface BigDogResultRow {
+  id: string;
+  client_id: string;
+  exercise_key: string;
+  level: 'none' | 'rookie' | 'strong' | 'big_dog';
+  result_text: string | null;
+  tested_date: string;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+export interface GymEventRow {
+  id: string;
+  gym_id: string;
+  created_by: string | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  starts_at: string;
+  capacity: number | null;
+  created_at: string;
+}
+
+export interface EventWithSignup extends GymEventRow {
+  signups: number;
+  signedUp: boolean;
+}
+
+export interface FeedbackRow {
+  id: string;
+  client_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  clientName: string;
 }

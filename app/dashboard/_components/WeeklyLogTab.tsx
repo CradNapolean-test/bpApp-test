@@ -12,6 +12,8 @@ import { upsertDailyLog } from '@/lib/data/dailyLogs';
 import { createHabit, deleteHabit, toggleHabitLog } from '@/lib/data/habits';
 import { adherencePercent } from '@/lib/utils/habitStats';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { dayTrafficLight } from '@/lib/utils/accountability';
+import { AccountabilityTracker } from './AccountabilityTracker';
 import type { ClientProfileRow, DailyLogRow, HabitWithLogs } from '@/lib/data/types';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
@@ -34,6 +36,8 @@ const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label:
   { key: 'motivation', label: 'Motivation' },
   { key: 'stress', label: 'Stress' },
 ];
+
+const LIGHT_DOT = { green: 'bg-success', amber: 'bg-warning', red: 'bg-danger' } as const;
 
 const cardCls = 'rounded-2xl border border-black/[.05] p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
@@ -198,10 +202,12 @@ export function WeeklyLogTab({
     return weekTarget.dailyFlat ?? null;
   }
 
-  async function saveDay(date: string) {
+  // `patch` lets slider/button commits save the value they just set -- React state from the
+  // updateDay() call immediately before hasn't landed yet, so days[date] would still be stale.
+  async function saveDay(date: string, patch: Partial<DayForm> = {}) {
     setSavingDate(date);
     try {
-      await run(() => upsertDailyLog(clientId, date, days[date]), {
+      await run(() => upsertDailyLog(clientId, date, { ...days[date], ...patch }), {
         onDone: () => setSavedDates((s) => ({ ...s, [date]: true })),
       });
     } finally {
@@ -269,6 +275,7 @@ export function WeeklyLogTab({
         {weekDates.map((date) => {
           const dayData = days[date];
           const logged = dayData.protein != null || dayData.carbs != null || dayData.fat != null;
+          const light = dayTrafficLight(dayData);
           const dateObj = new Date(date + 'T00:00:00Z');
           const isFocused = date === focusedDate;
           return (
@@ -288,7 +295,9 @@ export function WeeklyLogTab({
               <span className="text-sm font-bold">{dateObj.toLocaleDateString(undefined, { day: 'numeric', timeZone: 'UTC' })}</span>
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
-                  logged ? (isFocused ? 'bg-accent-foreground' : 'bg-success') : 'bg-transparent'
+                  light
+                    ? isFocused ? 'bg-accent-foreground' : LIGHT_DOT[light]
+                    : logged ? (isFocused ? 'bg-accent-foreground' : 'bg-zinc-400') : 'bg-transparent'
                 }`}
               />
             </button>
@@ -344,6 +353,21 @@ export function WeeklyLogTab({
           </div>
         )}
 
+        <div className="mt-3 space-y-2">
+          {(['sleep', 'steps', 'water'] as const).map((metric) => (
+            <AccountabilityTracker
+              key={metric}
+              metric={metric}
+              value={d[metric]}
+              disabled={readOnly}
+              onChange={(v) => updateDay(focusedDate, { [metric]: v } as Partial<DayForm>)}
+              onCommit={(v) => {
+                if (!readOnly) saveDay(focusedDate, { [metric]: v } as Partial<DayForm>);
+              }}
+            />
+          ))}
+        </div>
+
         <fieldset
           disabled={readOnly}
           onBlur={() => {
@@ -372,24 +396,9 @@ export function WeeklyLogTab({
               onChange={(e) => updateDay(focusedDate, { fibre: numOrNull(e.target.value) })} />
           </div>
           <div className="space-y-1">
-            <label className={labelCls}>Water (L)</label>
-            <input type="number" step="0.1" className={inputCls} value={d.water ?? ''}
-              onChange={(e) => updateDay(focusedDate, { water: numOrNull(e.target.value) })} />
-          </div>
-          <div className="space-y-1">
             <label className={labelCls}>Bodyweight (kg)</label>
             <input type="number" step="0.1" className={inputCls} value={d.bodyweight ?? ''}
               onChange={(e) => updateDay(focusedDate, { bodyweight: numOrNull(e.target.value) })} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Steps</label>
-            <input type="number" className={inputCls} value={d.steps ?? ''}
-              onChange={(e) => updateDay(focusedDate, { steps: numOrNull(e.target.value) })} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Sleep (hrs)</label>
-            <input type="number" step="0.1" className={inputCls} value={d.sleep ?? ''}
-              onChange={(e) => updateDay(focusedDate, { sleep: numOrNull(e.target.value) })} />
           </div>
 
           {SCALE_FIELDS.map(({ key, label }) => (
