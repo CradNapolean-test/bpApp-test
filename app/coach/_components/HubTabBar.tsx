@@ -16,7 +16,7 @@ export function HubTabBar<T extends string>({
   onSelect: (tab: T) => void;
 }) {
   return (
-    <div className="mb-4 flex w-max max-w-full gap-5 overflow-x-auto border-b border-black/[.06] dark:border-white/10">
+    <div className="mb-4 flex w-max max-w-full gap-5 overflow-x-auto border-b border-black/[.06] [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => {
         const isActive = active === tab;
         return (

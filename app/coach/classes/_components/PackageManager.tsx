@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Ticket } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
+import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -241,13 +242,14 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-black dark:text-zinc-50">{p.name}</p>
-                  <div className="flex shrink-0 gap-2.5 text-sm font-semibold">
-                    <button type="button" onClick={() => setEditingId(p.id)} className="text-black hover:underline dark:text-zinc-50">
+                  <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
+                    <button type="button" onClick={() => setEditingId(p.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
                       Edit
                     </button>
-                    <button type="button" onClick={() => handleDelete(p.id, p.name)} className="text-danger hover:underline">
-                      Delete
-                    </button>
+                    <DropdownMenu
+                      triggerLabel={`More actions for ${p.name}`}
+                      items={[{ label: 'Delete plan', destructive: true, onSelect: () => handleDelete(p.id, p.name) }]}
+                    />
                   </div>
                 </div>
                 <p className="mt-2 text-2xl font-extrabold text-accent">

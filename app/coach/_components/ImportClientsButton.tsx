@@ -87,16 +87,16 @@ export function ImportClientsButton() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex shrink-0 items-center gap-1.5 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+        className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/5"
       >
         <Upload className="h-3.5 w-3.5" />
-        Import clients
+        Import
       </button>
       {open && (
         <div
           role="dialog"
           aria-label="Import clients"
-          className="absolute right-0 z-20 mt-2 w-96 rounded-2xl border border-black/[.05] bg-[var(--background)] p-4 shadow-xl dark:border-white/10"
+          className="absolute right-0 z-20 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-black/[.05] bg-card p-4 shadow-xl dark:border-white/10"
         >
           {results ? (
             <div className="space-y-3">

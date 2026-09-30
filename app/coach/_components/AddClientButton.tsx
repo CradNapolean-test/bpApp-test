@@ -26,7 +26,7 @@ export function AddClientButton() {
         <div
           role="dialog"
           aria-label="Add client"
-          className="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-black/[.05] bg-[var(--background)] p-4 shadow-xl dark:border-white/10"
+          className="absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-black/[.05] bg-card p-4 shadow-xl dark:border-white/10"
         >
           <AddClientForm />
         </div>

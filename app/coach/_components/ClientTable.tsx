@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpDown, Download, Search, Users } from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, Search, Users } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
+import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow, GymClientRow } from '@/lib/data/coach';
@@ -109,7 +110,7 @@ export function ClientTable({
   }
 
 const scopeBtnCls = (active: boolean) =>
-  `rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+  `rounded-full px-4 py-1.5 text-center text-xs font-bold transition-colors ${
     active
       ? 'bg-accent text-accent-foreground'
       : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
@@ -131,7 +132,7 @@ const scopeBtnCls = (active: boolean) =>
   return (
     <div className="space-y-2">
       {gymClients && (
-        <div className="flex w-max gap-1 rounded-lg bg-black/[.03] p-1 dark:bg-white/[.05]">
+        <div className="grid w-full grid-cols-2 gap-1 rounded-full border border-black/10 p-0.5 sm:w-max dark:border-white/10">
           <button onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
             My clients
           </button>
@@ -147,56 +148,53 @@ const scopeBtnCls = (active: boolean) =>
         </div>
       ) : (
       <>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search clients"
-            className="w-full rounded-md border border-black/10 bg-transparent py-1.5 pl-8 pr-2 text-sm dark:border-white/10"
+            className="w-full rounded-xl border border-black/10 bg-transparent py-2 pl-9 pr-3 text-sm dark:border-white/10"
           />
         </div>
-        <select
-          value={groupId}
-          onChange={(e) => setGroupId(e.target.value)}
-          className="rounded-md border border-black/10 bg-transparent py-1.5 px-2 text-sm dark:border-white/10"
-        >
-          <option value="">All clients</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => setManagingGroups(true)}
-          className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          Manage groups
-        </button>
-        <button
-          onClick={handleExport}
-          title="Export the clients currently shown (respects search/group/scope filters) as CSV"
-          className="flex items-center gap-1.5 rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export CSV
-        </button>
-        {pendingDeletionCount > 0 && (
-          <button
-            onClick={() => setPendingDeletionOnly((v) => !v)}
-            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
-              pendingDeletionOnly
-                ? 'border-danger/30 bg-danger/10 text-danger'
-                : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-            }`}
+        {groups.length > 0 && (
+          <select
+            value={groupId}
+            onChange={(e) => setGroupId(e.target.value)}
+            aria-label="Filter by group"
+            className="max-w-[8.5rem] rounded-xl border border-black/10 bg-transparent px-2.5 py-2 text-sm dark:border-white/10"
           >
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Pending deletion ({pendingDeletionCount})
-          </button>
+            <option value="">All groups</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
         )}
+        <DropdownMenu
+          variant="header"
+          triggerLabel="More client actions"
+          items={[
+            { label: 'Manage groups', onSelect: () => setManagingGroups(true) },
+            { label: 'Export CSV', onSelect: handleExport },
+          ]}
+        />
       </div>
+      {pendingDeletionCount > 0 && (
+        <button
+          onClick={() => setPendingDeletionOnly((v) => !v)}
+          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
+            pendingDeletionOnly
+              ? 'border-danger/30 bg-danger/10 text-danger'
+              : 'border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Pending deletion ({pendingDeletionCount})
+        </button>
+      )}
       {managingGroups && (
         <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
       )}

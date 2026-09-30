@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronRight, ClipboardList, Download, Upload } from 'lucide-react';
+import { ChevronRight, ClipboardList, Download } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -238,16 +238,7 @@ export function ProgramTemplateManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap justify-end gap-2">
-        <button
-          type="button"
-          disabled={importing}
-          onClick={() => importFileRef.current?.click()}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Upload className="h-3.5 w-3.5" />
-          {importing ? 'Importing…' : 'Import template'}
-        </button>
+      <div className="flex items-center justify-end gap-2">
         <input ref={importFileRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />
         <button
           type="button"
@@ -256,6 +247,11 @@ export function ProgramTemplateManager({
         >
           + New template
         </button>
+        <DropdownMenu
+          variant="header"
+          triggerLabel="More template actions"
+          items={[{ label: importing ? 'Importing…' : 'Import template', onSelect: () => importFileRef.current?.click(), disabled: importing }]}
+        />
       </div>
 
       {addingTemplate && (
@@ -309,25 +305,17 @@ export function ProgramTemplateManager({
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
               </button>
-              <div className="flex shrink-0 items-center gap-2.5 text-sm font-semibold">
-                <button type="button" onClick={() => setPreviewId(template.id)} className="text-black hover:underline dark:text-zinc-50">
+              <div className="flex shrink-0 items-center gap-1 text-sm font-semibold">
+                <button type="button" onClick={() => setPreviewId(template.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
                   Edit
                 </button>
-                <button
-                  type="button"
-                  title="Download as a JSON file you can import into another gym"
-                  onClick={() => exportTemplate(template)}
-                  className="text-black hover:underline dark:text-zinc-50"
-                >
-                  Export
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteTemplate(template.id, template.name)}
-                  className="text-danger hover:underline"
-                >
-                  Delete
-                </button>
+                <DropdownMenu
+                  triggerLabel={`More actions for ${template.name}`}
+                  items={[
+                    { label: 'Export as JSON', onSelect: () => exportTemplate(template) },
+                    { label: 'Delete template', destructive: true, onSelect: () => handleDeleteTemplate(template.id, template.name) },
+                  ]}
+                />
               </div>
             </div>
           );

@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Dumbbell, Download, Upload } from 'lucide-react';
+import { Dumbbell } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
+import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
@@ -349,25 +350,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => exportExercises(initialExercises)}
-          disabled={initialExercises.length === 0}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export CSV
-        </button>
-        <button
-          type="button"
-          disabled={importing}
-          onClick={() => fileRef.current?.click()}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Upload className="h-3.5 w-3.5" />
-          {importing ? 'Importing…' : 'Import CSV'}
-        </button>
+      <div className="flex items-center justify-end gap-2">
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         <button
           type="button"
@@ -376,6 +359,14 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         >
           + Add exercise
         </button>
+        <DropdownMenu
+          variant="header"
+          triggerLabel="More library actions"
+          items={[
+            { label: 'Export CSV', onSelect: () => exportExercises(initialExercises), disabled: initialExercises.length === 0 },
+            { label: importing ? 'Importing…' : 'Import CSV', onSelect: () => fileRef.current?.click(), disabled: importing },
+          ]}
+        />
       </div>
 
       {addingExercise && <AddExerciseCard onDone={() => setAddingExercise(false)} />}
@@ -444,13 +435,14 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-black dark:text-zinc-50">{ex.name}</p>
-                  <div className="flex shrink-0 gap-2.5 text-sm font-semibold">
-                    <button type="button" onClick={() => setEditingId(ex.id)} className="text-black hover:underline dark:text-zinc-50">
+                  <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
+                    <button type="button" onClick={() => setEditingId(ex.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
                       Edit
                     </button>
-                    <button type="button" onClick={() => handleDelete(ex.id, ex.name)} className="text-danger hover:underline">
-                      Delete
-                    </button>
+                    <DropdownMenu
+                      triggerLabel={`More actions for ${ex.name}`}
+                      items={[{ label: 'Delete exercise', destructive: true, onSelect: () => handleDelete(ex.id, ex.name) }]}
+                    />
                   </div>
                 </div>
                 <p className="mt-0.5 text-sm text-zinc-500">
