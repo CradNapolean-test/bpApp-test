@@ -80,14 +80,22 @@ export default async function CoachPage() {
             <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">{unreadCount}</p>
           </Card>
         </div>
-        <TodaySessions occurrences={occurrences} />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_20rem]">
-          <ActivityFeed events={activity} clients={clients} extraNames={extraNames} />
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
-            <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
-            <div className="mt-2">
-              <AddClientForm />
-            </div>
+        {/* One grid, three blocks: on a phone they stack (today's classes, activity, add client); on
+            a wide screen activity takes the left column and the other two share the right. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem] lg:grid-rows-[auto_1fr]">
+          <div className="lg:col-start-2 lg:row-start-1">
+            <TodaySessions occurrences={occurrences} />
+          </div>
+          <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1">
+            <ActivityFeed events={activity} clients={clients} extraNames={extraNames} />
+          </div>
+          <div className="lg:col-start-2 lg:row-start-2">
+            <Card>
+              <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
+              <div className="mt-2">
+                <AddClientForm />
+              </div>
+            </Card>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
