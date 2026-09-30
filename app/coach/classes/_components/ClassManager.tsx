@@ -8,6 +8,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createClass, createClasses, deleteClass, updateClass } from '@/lib/data/classes';
 import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { TimetableView } from './TimetableView';
 import type { ClassRow } from '@/lib/data/types';
 
 type OccurrenceRow = { rowId: number; classId: string | null; dayOfWeek: number; startTime: string };
@@ -289,6 +290,7 @@ function AddClassForm({ onDone }: { onDone: () => void }) {
 export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
+  const [view, setView] = useState<'timetable' | 'classes'>('timetable');
   const [addingClass, setAddingClass] = useState(false);
   const [editingName, setEditingName] = useState<string | null>(null);
 
@@ -309,20 +311,36 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-zinc-500">
-        A client booked into a class gets an automatic check-in button when their programme has
-        a workout day set for that same day of the week — no separate linking step needed.
-      </p>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setAddingClass(true)}
-          className="shrink-0 rounded-full bg-[#141414] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
-        >
-          + Add class
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex w-max gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10">
+          {([['timetable', 'Timetable'], ['classes', 'By class']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
+                view === key ? 'bg-accent text-accent-foreground' : 'text-zinc-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {view === 'classes' && (
+          <button
+            type="button"
+            onClick={() => setAddingClass(true)}
+            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          >
+            + Add class
+          </button>
+        )}
       </div>
 
+      {view === 'timetable' ? (
+        <TimetableView classes={initialClasses} />
+      ) : (
+        <>
       {addingClass && <AddClassForm onDone={() => setAddingClass(false)} />}
 
       {groups.length === 0 ? (
@@ -365,6 +383,8 @@ export function ClassManager({ initialClasses }: { initialClasses: ClassRow[] })
             )
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
