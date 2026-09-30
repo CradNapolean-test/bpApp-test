@@ -1,18 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Gift, Star, Trash2, Users } from 'lucide-react';
+import { Star, Trash2, Users } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
 import { createEvent, deleteEvent, getEventAttendees } from '@/lib/data/community';
 import { createReward, deleteReward, markRewardGiven } from '@/lib/data/rewards';
 import type { EventWithSignup, FeedbackRow, RewardOverview } from '@/lib/data/types';
+
+const TABS = ['Events', 'Rewards', 'Feedback'] as const;
+type Tab = (typeof TABS)[number];
 
 const inputCls = 'w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/15';
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10';
@@ -232,6 +236,7 @@ export function CommunityShell({
   rewards: RewardOverview[];
   unreadCount: number;
 }) {
+  const [tab, setTab] = useState<Tab>('Events');
   const avg = feedback.length ? feedback.reduce((s, f) => s + f.rating, 0) / feedback.length : null;
 
   return (
@@ -242,43 +247,43 @@ export function CommunityShell({
       bottomBar={<CoachBottomTabBar />}
       headerAction={<CoachMessagesButton unreadCount={unreadCount} />}
     >
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-3">
-          <h2 className="text-lg font-bold text-black dark:text-zinc-50">Events</h2>
+      <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Community</h1>
+      <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
+
+      {tab === 'Events' && (
+        <section className="grid gap-3 lg:grid-cols-2">
           <NewEventForm />
-          {events.length === 0 ? (
-            <p className="text-sm text-zinc-500">No upcoming events yet.</p>
-          ) : (
-            events.map((e) => <EventRow key={e.id} event={e} />)
-          )}
-        </section>
-
-        <section className="space-y-3 lg:col-span-2">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-black dark:text-zinc-50">
-            <Gift className="h-5 w-5 text-accent" /> Rewards
-          </h2>
-          <div className="grid gap-3 lg:grid-cols-2">
-            <NewRewardForm />
-            <div className="space-y-3">
-              {rewards.length === 0 ? (
-                <p className="text-sm text-zinc-500">No rewards set up yet — add your first one.</p>
-              ) : (
-                rewards.map((r) => <RewardCard key={r.id} reward={r} />)
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-bold text-black dark:text-zinc-50">Member feedback</h2>
-            {avg != null && (
-              <p className="flex items-center gap-1 text-sm text-zinc-500">
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                {avg.toFixed(1)} avg · {feedback.length}
-              </p>
+          <div className="space-y-3">
+            {events.length === 0 ? (
+              <p className="text-sm text-zinc-500">No upcoming events yet.</p>
+            ) : (
+              events.map((e) => <EventRow key={e.id} event={e} />)
             )}
           </div>
+        </section>
+      )}
+
+      {tab === 'Rewards' && (
+        <section className="grid gap-3 lg:grid-cols-2">
+          <NewRewardForm />
+          <div className="space-y-3">
+            {rewards.length === 0 ? (
+              <p className="text-sm text-zinc-500">No rewards set up yet — add your first one.</p>
+            ) : (
+              rewards.map((r) => <RewardCard key={r.id} reward={r} />)
+            )}
+          </div>
+        </section>
+      )}
+
+      {tab === 'Feedback' && (
+        <section className="max-w-2xl space-y-3">
+          {avg != null && (
+            <p className="flex items-center gap-1 text-sm text-zinc-500">
+              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+              {avg.toFixed(1)} average from {feedback.length} {feedback.length === 1 ? 'response' : 'responses'}
+            </p>
+          )}
           {feedback.length === 0 ? (
             <p className="text-sm text-zinc-500">No feedback yet.</p>
           ) : (
@@ -293,12 +298,12 @@ export function CommunityShell({
                   </p>
                 </div>
                 {f.comment && <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">{f.comment}</p>}
-                <p className="mt-1 text-[11px] text-zinc-400">{new Date(f.created_at).toLocaleDateString()}</p>
+                <p className="mt-1 text-xs text-zinc-400">{new Date(f.created_at).toLocaleDateString()}</p>
               </div>
             ))
           )}
         </section>
-      </div>
+      )}
     </AppShell>
     </ClientOnly>
   );

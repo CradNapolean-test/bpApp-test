@@ -1,6 +1,6 @@
 'use client';
 
-import { CATEGORY_ICON, CATEGORY_ORDER, screensForCategory } from './categories';
+import { CATEGORY_ICON, CATEGORY_ORDER, COACH_CATEGORY_LABEL, COACH_SCREEN_LABEL, screensForCategory } from './categories';
 import type { Category, NutritionTrackingMode, Screen } from './categories';
 
 export function CategoryNav({
@@ -22,7 +22,7 @@ export function CategoryNav({
 }) {
   return (
     <nav className="space-y-1">
-      {CATEGORY_ORDER.map((c) => {
+      {CATEGORY_ORDER.filter((c) => !(isCoachView && c === 'Notifications')).map((c) => {
         const screens = screensForCategory(c, isCoachView, disabledScreens, nutritionMode);
         const active = category === c;
         const Icon = CATEGORY_ICON[c];
@@ -43,7 +43,7 @@ export function CategoryNav({
               >
                 <Icon className="h-4 w-4" />
               </span>
-              {c}
+              {isCoachView ? (COACH_CATEGORY_LABEL[c] ?? c) : c}
             </button>
             {active && screens.length > 1 && (
               <div className="ml-3 mt-2 space-y-0.5 border-l-2 border-accent/30 pl-3.5">
@@ -57,7 +57,7 @@ export function CategoryNav({
                         : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
                     }`}
                   >
-                    {s}
+                    {isCoachView ? (COACH_SCREEN_LABEL[s] ?? s) : s}
                   </button>
                 ))}
               </div>

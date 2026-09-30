@@ -18,11 +18,12 @@ import { ReportsPane } from './ReportsPane';
 import type { ClassRow, CoachReport, CreditPackRow, MembershipPackageRow, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
-const TABS = ['Manage', 'Attendance', 'Packages', 'Credit Packs', 'Reports'] as const;
+const TABS = ['Schedule', 'Attendance', 'Packages', 'Credit Packs', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_PARAM: Record<string, Tab> = {
-  manage: 'Manage',
+  manage: 'Schedule',
+  schedule: 'Schedule',
   attendance: 'Attendance',
   packages: 'Packages',
   'credit-packs': 'Credit Packs',
@@ -49,7 +50,7 @@ export function ClassesHubShell({
   clients: CoachClientRow[];
 }) {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Manage');
+  const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Schedule');
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -63,7 +64,7 @@ export function ClassesHubShell({
       <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Classes</h1>
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
-      {tab === 'Manage' && <ClassManager initialClasses={initialClasses} />}
+      {tab === 'Schedule' && <ClassManager initialClasses={initialClasses} />}
       {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} clients={clients} />}
       {tab === 'Packages' && <PackageManager initialPackages={initialPackages} />}
       {tab === 'Credit Packs' && <CreditPackManager initialPacks={initialCreditPacks} />}

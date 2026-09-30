@@ -33,7 +33,7 @@ import { CategoryNav } from './CategoryNav';
 import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
-import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
+import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, COACH_SCREEN_LABEL, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
@@ -492,7 +492,7 @@ export function DashboardShell({
                   : 'border border-black/[.08] bg-[var(--background)] text-zinc-700 hover:bg-black/5 dark:border-white/[.12] dark:text-zinc-300 dark:hover:bg-white/5'
               }`}
             >
-              {s}
+              {isCoachView ? (COACH_SCREEN_LABEL[s] ?? s) : s}
             </button>
           ))}
         </div>

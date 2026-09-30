@@ -2,22 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, Dumbbell, LayoutDashboard, MessageSquare, PartyPopper, Settings, Users } from 'lucide-react';
+import { COACH_NAV, isCoachNavActive } from './coachNavItems';
 
-const LINKS = [
-  { href: '/coach', label: 'Dashboard', Icon: LayoutDashboard },
-  { href: '/coach/clients', label: 'Clients', Icon: Users },
-  { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
-  { href: '/coach/library', label: 'Library', Icon: Dumbbell },
-  { href: '/coach/messages', label: 'Messages', Icon: MessageSquare },
-  { href: '/coach/community', label: 'Community', Icon: PartyPopper },
-  { href: '/coach/settings', label: 'Settings', Icon: Settings },
-] as const;
-
-// Desktop-only -- CoachBottomTabBar is the mobile equivalent (see AppShell's bottomBar
-// prop), and stays at its own 4-item set (Coaching/Classes/Library/Account) -- this desktop
-// nav is the only one that grew to 6 items with Clients and Messages split out as their own
-// destinations (Messages also still has the quick-access CoachMessagesButton overlay).
+// Desktop top nav. The destinations come from coachNavItems.ts, shared with the phone bottom bar
+// (CoachBottomTabBar) so the two always list the same pages.
 export function CoachNav() {
   const pathname = usePathname();
 
@@ -30,13 +18,8 @@ export function CoachNav() {
 
   return (
     <div className="hidden w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 md:flex dark:bg-white/[.03]">
-      {LINKS.map(({ href, label, Icon }) => {
-        const active =
-          href === '/coach'
-            ? pathname === '/coach'
-            : href === '/coach/clients'
-              ? pathname === '/coach/clients' || pathname?.startsWith('/coach/clients/')
-              : pathname?.startsWith(href);
+      {COACH_NAV.map(({ href, label, Icon }) => {
+        const active = isCoachNavActive(pathname, href);
         return (
           <Link key={href} href={href} className={linkCls(Boolean(active))}>
             <Icon className="h-4 w-4" />

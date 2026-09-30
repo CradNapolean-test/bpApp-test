@@ -1,6 +1,6 @@
 'use client';
 
-import { BOTTOM_TAB_CATEGORIES, CATEGORY_ICON } from './categories';
+import { BOTTOM_TAB_CATEGORIES, CATEGORY_ICON, COACH_CATEGORY_LABEL } from './categories';
 import type { Category } from './categories';
 
 // Client-dashboard-only mobile nav -- replaces the hamburger drawer on small screens (see
@@ -30,7 +30,7 @@ export function BottomTabBar({
             <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${active ? 'bg-accent-soft' : ''}`}>
               <Icon className="h-5 w-5" />
             </span>
-            {c}
+            {COACH_CATEGORY_LABEL[c] ?? c}
           </button>
         );
       })}

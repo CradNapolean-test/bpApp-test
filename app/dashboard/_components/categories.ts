@@ -58,6 +58,21 @@ export const CLIENT_CATEGORY_TITLE: Partial<Record<Category, string>> = {
   Notifications: 'Notifications',
 };
 
+// Names a coach sees when looking at a client's workspace. The client's own "Account Settings" is
+// really "the client's profile" from the coach's side, and Home is an overview of them.
+export const COACH_CATEGORY_LABEL: Partial<Record<Category, string>> = {
+  Home: 'Overview',
+  Messages: 'Chat',
+  'Account Settings': 'Client profile',
+};
+export const COACH_SCREEN_LABEL: Partial<Record<Screen, string>> = {
+  Today: 'Overview',
+  Setup: 'Details',
+  Credits: 'Credits & plan',
+  Info: 'Notes',
+  'Weekly Log': 'Daily check-in',
+};
+
 // Title for a single-page screen (shown in the header instead of its category).
 export const SCREEN_TITLE: Partial<Record<Screen, string>> = {
   Setup: 'Personal details',
