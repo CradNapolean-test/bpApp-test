@@ -46,6 +46,8 @@ function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWit
   const { run: runCreate, busy: creating } = useAction();
   const { run: runDelete } = useAction();
   const [newHabitName, setNewHabitName] = useState('');
+  // Collapsed once habits exist, so the day's data (not the setup form) leads the screen.
+  const [open, setOpen] = useState(habits.length === 0);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +69,21 @@ function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWit
 
   return (
     <div className={cardCls}>
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Manage habits</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-black dark:text-zinc-50">
+          Habits <span className="font-normal text-zinc-500">· {habits.length} tracked</span>
+        </h3>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+        >
+          {open ? 'Done' : 'Manage'}
+        </button>
+      </div>
+      {open && (
+      <>
       <form onSubmit={handleCreate} className="mt-2 flex items-end gap-2">
         <div className="flex-1 space-y-1">
           <label className="text-xs font-medium text-zinc-500">New habit</label>
@@ -76,7 +92,7 @@ function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWit
             value={newHabitName}
             onChange={(e) => setNewHabitName(e.target.value)}
             placeholder="e.g. 10,000 steps"
-            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
           />
         </div>
         <Button type="submit" variant="primary" disabled={creating}>
@@ -102,6 +118,8 @@ function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWit
             </li>
           ))}
         </ul>
+      )}
+      </>
       )}
     </div>
   );
@@ -271,7 +289,7 @@ export function WeeklyLogTab({
         {totals.bwCount ? (totals.bodyweight / totals.bwCount).toFixed(1) : '—'}kg
       </p>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {weekDates.map((date) => {
           const dayData = days[date];
           const logged = dayData.protein != null || dayData.carbs != null || dayData.fat != null;

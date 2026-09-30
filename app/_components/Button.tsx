@@ -52,7 +52,7 @@ export function Button({
       ? 'flex items-center justify-center rounded-md'
       : variant === 'danger-soft'
         ? 'rounded-full text-center font-bold'
-        : 'rounded-md font-medium';
+        : 'rounded-full font-semibold';
   return (
     <button
       className={`${shapeCls} ${VARIANT_CLS[variant]} ${sizeCls} shrink-0 whitespace-nowrap transition-colors disabled:opacity-50 disabled:pointer-events-none ${className}`}

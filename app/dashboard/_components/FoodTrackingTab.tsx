@@ -873,9 +873,9 @@ export function FoodTrackingTab({
             value={newSectionLabel}
             onChange={(e) => setNewSectionLabel(e.target.value)}
             placeholder="e.g. Meal 5, Pre-workout…"
-            className="flex-1 rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm dark:border-white/10"
+            className="min-w-0 flex-1 rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
           />
-          <Button type="submit" variant="outline" disabled={addingSection}>
+          <Button type="submit" variant="outline" size="sm" disabled={addingSection}>
             + Add section
           </Button>
         </form>

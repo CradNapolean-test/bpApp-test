@@ -113,6 +113,10 @@ export function AccountabilityTracker({
         )}
       </div>
 
+      {/* A coach (or anyone read-only) just sees the value and status -- greyed-out controls that
+          can't be used only add noise. */}
+      {!disabled && (
+        <>
       <input
         type="range"
         aria-label={cfg.label}
@@ -151,6 +155,8 @@ export function AccountabilityTracker({
           <Plus className="h-6 w-6" strokeWidth={3} />
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }

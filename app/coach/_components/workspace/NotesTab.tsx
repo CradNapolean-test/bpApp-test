@@ -54,7 +54,7 @@ function JournalSection({
   }
 
   return (
-    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-black dark:text-zinc-50">
           {label} <span className="font-normal text-zinc-500">({entries.length})</span>
@@ -76,7 +76,7 @@ function JournalSection({
             onChange={(e) => setBody(e.target.value)}
             placeholder={placeholder}
             rows={2}
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+            className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
             autoFocus
           />
           <button
@@ -154,38 +154,38 @@ function AdminDetailsSection({
   if (!profile) return null;
 
   return (
-    <form onSubmit={handleSave} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <form onSubmit={handleSave} className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
       <h3 className="text-sm font-semibold text-black dark:text-zinc-50">Client details</h3>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Join date</label>
+          <label className="block text-xs font-medium text-zinc-500">Join date</label>
           <input
             type="date"
             value={joinDate}
             onChange={(e) => setJoinDate(e.target.value)}
             disabled={readOnly}
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10 disabled:opacity-60"
+            className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10 disabled:opacity-60"
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Referral source</label>
+          <label className="block text-xs font-medium text-zinc-500">Referral source</label>
           <input
             value={referralSource}
             onChange={(e) => setReferralSource(e.target.value)}
             placeholder="e.g. Word of mouth"
             disabled={readOnly}
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10 disabled:opacity-60"
+            className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10 disabled:opacity-60"
           />
         </div>
-        <div className="col-span-2 space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Contract / agreement notes</label>
+        <div className="space-y-1 sm:col-span-2">
+          <label className="block text-xs font-medium text-zinc-500">Contract / agreement notes</label>
           <textarea
             value={adminNotes}
             onChange={(e) => setAdminNotes(e.target.value)}
             rows={2}
             placeholder="Business/admin notes -- never shown to the client"
             disabled={readOnly}
-            className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10 disabled:opacity-60"
+            className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10 disabled:opacity-60"
           />
         </div>
       </div>
@@ -193,7 +193,7 @@ function AdminDetailsSection({
         <button
           type="submit"
           disabled={busy}
-          className="mt-3 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50"
+          className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
         >
           Save
         </button>
