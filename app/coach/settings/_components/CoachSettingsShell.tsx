@@ -32,6 +32,9 @@ export function CoachSettingsShell({
   unreadCount,
   isGymAdmin = false,
   gymName = '',
+  gymTimezone = 'UTC',
+  blackoutStart = null,
+  blackoutEnd = null,
   gymRoster = [],
   myGyms = [],
   currentUserId = '',
@@ -43,6 +46,9 @@ export function CoachSettingsShell({
   unreadCount: number;
   isGymAdmin?: boolean;
   gymName?: string;
+  gymTimezone?: string;
+  blackoutStart?: string | null;
+  blackoutEnd?: string | null;
   gymRoster?: GymCoachRow[];
   myGyms?: MyGymRow[];
   currentUserId?: string;
@@ -148,7 +154,14 @@ export function CoachSettingsShell({
         {showGymRow && openRow === 'gym' && (
           <div className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             {myGyms.length > 1 && <GymSwitcher gyms={myGyms} />}
-            {isGymAdmin && <GymAdminSection gymName={gymName} roster={gymRoster} currentUserId={currentUserId} />}
+            {isGymAdmin && <GymAdminSection
+                gymName={gymName}
+                timezone={gymTimezone}
+                blackoutStart={blackoutStart}
+                blackoutEnd={blackoutEnd}
+                roster={gymRoster}
+                currentUserId={currentUserId}
+              />}
           </div>
         )}
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAction } from '@/app/_components/useAction';
 import { useToast } from '@/app/_components/ToastProvider';
-import { renameGym, setCoachAdmin, type GymCoachRow } from '@/lib/data/gym';
+import { renameGym, setCoachAdmin, updateGymBookingSettings, type GymCoachRow } from '@/lib/data/gym';
 
 function GymNameForm({ initialName }: { initialName: string }) {
   const { run, busy } = useAction();
@@ -29,6 +29,90 @@ function GymNameForm({ initialName }: { initialName: string }) {
         className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50"
       >
         Save
+      </button>
+    </form>
+  );
+}
+
+const TIMEZONES = [
+  'Europe/London',
+  'Europe/Dublin',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+  'Pacific/Auckland',
+  'UTC',
+];
+
+// Timezone + cancellation blackout window. Class start times are wall-clock times at the gym, so
+// the timezone decides when a cancellation deadline actually falls; the blackout (default
+// 11pm-5am) is the overnight stretch a deadline can't land inside.
+function BookingRulesForm({
+  timezone,
+  blackoutStart,
+  blackoutEnd,
+}: {
+  timezone: string;
+  blackoutStart: string | null;
+  blackoutEnd: string | null;
+}) {
+  const { run, busy } = useAction();
+  const [tz, setTz] = useState(timezone);
+  const [useBlackout, setUseBlackout] = useState(blackoutStart != null && blackoutEnd != null);
+  const [start, setStart] = useState(blackoutStart?.slice(0, 5) ?? '23:00');
+  const [end, setEnd] = useState(blackoutEnd?.slice(0, 5) ?? '05:00');
+  const zones = TIMEZONES.includes(tz) ? TIMEZONES : [tz, ...TIMEZONES];
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await run(() => updateGymBookingSettings(tz, useBlackout ? start : null, useBlackout ? end : null), {
+      success: 'Booking rules saved',
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-zinc-500">Timezone</label>
+        <select
+          value={tz}
+          onChange={(e) => setTz(e.target.value)}
+          className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+        >
+          {zones.map((z) => (
+            <option key={z} value={z}>
+              {z}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={useBlackout} onChange={(e) => setUseBlackout(e.target.checked)} />
+        Overnight blackout for cancellations
+      </label>
+      {useBlackout && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">From</label>
+            <input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Until</label>
+            <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10" />
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-zinc-500">
+        A cancellation deadline that would fall inside the blackout moves back to its start, so an early-morning class
+        must be cancelled the evening before.
+      </p>
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50"
+      >
+        Save booking rules
       </button>
     </form>
   );
@@ -171,10 +255,16 @@ function AddCoachForm() {
 // boundary, just where the affordance lives.
 export function GymAdminSection({
   gymName,
+  timezone,
+  blackoutStart,
+  blackoutEnd,
   roster,
   currentUserId,
 }: {
   gymName: string;
+  timezone: string;
+  blackoutStart: string | null;
+  blackoutEnd: string | null;
   roster: GymCoachRow[];
   currentUserId: string;
 }) {
@@ -183,6 +273,11 @@ export function GymAdminSection({
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Gym name</h3>
         <GymNameForm initialName={gymName} />
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Booking rules</h3>
+        <BookingRulesForm timezone={timezone} blackoutStart={blackoutStart} blackoutEnd={blackoutEnd} />
       </div>
 
       <div className="space-y-2">

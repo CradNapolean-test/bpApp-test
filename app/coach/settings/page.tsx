@@ -13,7 +13,7 @@ export default async function CoachSettingsPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, theme_preference, display_name, default_checkin_reminder_days, is_gym_admin, gym:gym_id(name)')
+    .select('role, theme_preference, display_name, default_checkin_reminder_days, is_gym_admin, gym:gym_id(name, timezone, blackout_start, blackout_end)')
     .eq('id', user.id)
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
@@ -35,6 +35,9 @@ export default async function CoachSettingsPage() {
       unreadCount={unreadCount}
       isGymAdmin={profile.is_gym_admin}
       gymName={gym?.name ?? ''}
+      gymTimezone={gym?.timezone ?? 'UTC'}
+      blackoutStart={gym?.blackout_start ?? null}
+      blackoutEnd={gym?.blackout_end ?? null}
       gymRoster={gymRoster}
       myGyms={myGyms}
       currentUserId={user.id}

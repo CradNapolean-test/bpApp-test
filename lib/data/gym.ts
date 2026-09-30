@@ -96,6 +96,22 @@ export async function renameGym(name: string): Promise<ActionResult> {
   return error ? fail(error, 'Could not rename the gym') : ok();
 }
 
+// Timezone and the cancellation blackout window (migration 0064 columns, 0069 RPC). A null
+// blackout means no blackout window.
+export async function updateGymBookingSettings(
+  timezone: string,
+  blackoutStart: string | null,
+  blackoutEnd: string | null
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_gym_booking_settings', {
+    p_timezone: timezone,
+    p_blackout_start: blackoutStart,
+    p_blackout_end: blackoutEnd,
+  });
+  return error ? fail(error, 'Could not save the booking rules') : ok();
+}
+
 export async function setCoachAdmin(coachId: string, isAdmin: boolean): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('set_gym_admin', { p_coach_id: coachId, p_is_admin: isAdmin });

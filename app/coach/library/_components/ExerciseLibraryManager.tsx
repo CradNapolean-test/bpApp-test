@@ -289,6 +289,8 @@ function AddExerciseCard({ onDone }: { onDone: () => void }) {
   );
 }
 
+const PAGE_SIZE = 60;
+
 export function ExerciseLibraryManager({ initialExercises }: { initialExercises: ExerciseLibraryRow[] }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -297,6 +299,9 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
   const [addingExercise, setAddingExercise] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterGroup, setFilterGroup] = useState('');
+  const [search, setSearch] = useState('');
+  // The library can hold hundreds of exercises -- render a page at a time so the tab stays fast.
+  const [visible, setVisible] = useState(PAGE_SIZE);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleDelete(id: string, exerciseName: string) {
@@ -333,10 +338,14 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
     reader.readAsText(file);
   }
 
-  const filteredExercises = useMemo(
-    () => (filterGroup ? initialExercises.filter((ex) => ex.muscle_group === filterGroup) : initialExercises),
-    [initialExercises, filterGroup]
-  );
+  const filteredExercises = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return initialExercises.filter(
+      (ex) =>
+        (!filterGroup || ex.muscle_group === filterGroup) &&
+        (!q || ex.name.toLowerCase().includes(q) || (ex.equipment ?? '').toLowerCase().includes(q))
+    );
+  }, [initialExercises, filterGroup, search]);
 
   return (
     <div className="space-y-4">
@@ -372,10 +381,23 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
       {addingExercise && <AddExerciseCard onDone={() => setAddingExercise(false)} />}
 
       {initialExercises.length > 0 && (
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setVisible(PAGE_SIZE);
+          }}
+          placeholder={`Search ${initialExercises.length} exercises…`}
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm md:max-w-sm dark:border-white/10"
+        />
+      )}
+
+      {initialExercises.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-medium text-zinc-500">Filter:</span>
           <button
-            onClick={() => setFilterGroup('')}
+            onClick={() => { setFilterGroup(''); setVisible(PAGE_SIZE); }}
             className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
               filterGroup === ''
                 ? 'border-accent bg-accent-soft text-accent'
@@ -387,7 +409,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
           {MUSCLE_GROUPS.map((g) => (
             <button
               key={g}
-              onClick={() => setFilterGroup(g)}
+              onClick={() => { setFilterGroup(g); setVisible(PAGE_SIZE); }}
               className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                 filterGroup === g
                   ? 'border-accent bg-accent-soft text-accent'
@@ -403,16 +425,16 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
       {filteredExercises.length === 0 ? (
         <EmptyState
           icon={Dumbbell}
-          title={initialExercises.length === 0 ? 'No library exercises yet' : 'No exercises match that filter'}
+          title={initialExercises.length === 0 ? 'No library exercises yet' : 'No exercises match'}
           hint={
             initialExercises.length === 0
               ? 'Add exercises here once and pick them when building any client\'s program or a programme template.'
-              : 'Try a different muscle group, or clear the filter.'
+              : 'Try a different search or muscle group.'
           }
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {filteredExercises.map((ex) =>
+          {filteredExercises.slice(0, visible).map((ex) =>
             editingId === ex.id ? (
               <EditExerciseCard key={ex.id} exercise={ex} onClose={() => setEditingId(null)} onDelete={handleDelete} />
             ) : (
@@ -448,6 +470,21 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
               </div>
             )
           )}
+        </div>
+      )}
+
+      {filteredExercises.length > visible && (
+        <div className="flex flex-col items-center gap-1 pt-1">
+          <p className="text-xs text-zinc-500">
+            Showing {visible} of {filteredExercises.length}
+          </p>
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + PAGE_SIZE)}
+            className="rounded-full border border-black/10 px-4 py-1.5 text-sm font-semibold text-accent dark:border-white/10"
+          >
+            Show {Math.min(PAGE_SIZE, filteredExercises.length - visible)} more
+          </button>
         </div>
       )}
     </div>
