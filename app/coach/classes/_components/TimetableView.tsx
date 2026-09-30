@@ -23,6 +23,8 @@ type Draft = {
   id: string | null; // null = new slot
   name: string;
   dayOfWeek: number;
+  // New sessions only: every weekday this should repeat on (each becomes one weekly slot).
+  repeatDays: number[];
   startTime: string; // HH:MM
   capacity: number;
   creditCost: number;
@@ -35,6 +37,7 @@ function toDraft(c: ClassRow): Draft {
     id: c.id,
     name: c.name,
     dayOfWeek: c.day_of_week ?? 1,
+    repeatDays: [c.day_of_week ?? 1],
     startTime: c.start_time?.slice(0, 5) ?? '06:00',
     capacity: c.capacity,
     creditCost: c.credit_cost,
@@ -106,6 +109,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
       id: null,
       name: template?.name ?? '',
       dayOfWeek: forDay,
+      repeatDays: [forDay],
       startTime: time,
       capacity: template?.capacity ?? 12,
       creditCost: template?.credit_cost ?? 1,
@@ -125,13 +129,30 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
       cutoff_hours: draft.cutoffHours,
       coach_note: draft.note.trim() || null,
     };
-    await run(() => (draft.id ? updateClass(draft.id, fields) : createClass(fields)), {
-      success: draft.id ? 'Session updated' : 'Session added',
-      onDone: () => {
-        setDay(draft.dayOfWeek);
-        setDraft(null);
-      },
-    });
+    const repeat = [...new Set(draft.repeatDays)].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
+    if (!draft.id && repeat.length === 0) return;
+    // Skip a day that already has this class at this time, so repeating twice never doubles up.
+    const isDup = (d: number) => daySlots(d).some((c) => c.start_time?.slice(0, 5) === draft.startTime && c.name === fields.name);
+    const toCreate = repeat.filter((d) => !isDup(d));
+    await run(
+      () =>
+        draft.id
+          ? updateClass(draft.id, fields)
+          : Promise.all(toCreate.map((d) => createClass({ ...fields, day_of_week: d }))),
+      {
+        success: draft.id
+          ? 'Session updated'
+          : toCreate.length === 0
+            ? 'Already in the timetable'
+            : toCreate.length === 1
+              ? 'Session added'
+              : `Added to ${toCreate.length} days`,
+        onDone: () => {
+          setDay(draft.dayOfWeek);
+          setDraft(null);
+        },
+      }
+    );
   }
 
   async function remove() {
@@ -287,20 +308,59 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
             }}
             className="space-y-3"
           >
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Day">
-                <select className={inputCls} value={draft.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
-                  {DAY_ORDER.map((d) => (
-                    <option key={d} value={d}>
-                      {WEEKDAY_LABELS[d]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Start time">
-                <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
-              </Field>
-            </div>
+            {draft.id ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Day">
+                  <select className={inputCls} value={draft.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
+                    {DAY_ORDER.map((d) => (
+                      <option key={d} value={d}>
+                        {WEEKDAY_LABELS[d]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Start time">
+                  <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
+                </Field>
+              </div>
+            ) : (
+              <>
+                <Field label="Start time">
+                  <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
+                </Field>
+                <Field label="Repeats every week on">
+                  <div className="flex flex-wrap gap-1.5">
+                    {DAY_ORDER.map((d) => {
+                      const on = draft.repeatDays.includes(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => set('repeatDays', on ? draft.repeatDays.filter((x) => x !== d) : [...draft.repeatDays, d])}
+                          className={`rounded-full px-3.5 py-2 text-sm font-bold ${
+                            on ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                          }`}
+                        >
+                          {WEEKDAY_SHORT[d]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex gap-3 text-xs font-semibold text-accent">
+                    <button type="button" onClick={() => set('repeatDays', [1, 2, 3, 4, 5])}>
+                      Weekdays
+                    </button>
+                    <button type="button" onClick={() => set('repeatDays', [...DAY_ORDER])}>
+                      Every day
+                    </button>
+                    <button type="button" onClick={() => set('repeatDays', [draft.dayOfWeek])}>
+                      Just {WEEKDAY_SHORT[draft.dayOfWeek]}
+                    </button>
+                  </div>
+                </Field>
+              </>
+            )}
             <Field label="Class">
               <input required list="class-names" className={inputCls} value={draft.name} onChange={(e) => set('name', e.target.value)} />
               <datalist id="class-names">
@@ -325,7 +385,7 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
             </Field>
             <button
               type="submit"
-              disabled={busy || !draft.name.trim()}
+              disabled={busy || !draft.name.trim() || (!draft.id && draft.repeatDays.length === 0)}
               className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save session'}
