@@ -389,7 +389,7 @@ export function ClassesArea({
                     )}
                     {!waitlisted && b.booking_date === todayIso && (
                       <div className="mt-2.5">
-                        <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} />
+                        <CheckInButton classRow={b.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={timezone} date={b.booking_date} />
                       </div>
                     )}
                   </div>
