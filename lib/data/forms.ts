@@ -125,7 +125,8 @@ export async function getClientFormAssignments(clientId: string): Promise<FormAs
 
   // form_questions is a grandchild of form_assignments (via form_templates), and PostgREST's
   // order(..., { foreignTable }) only reaches directly embedded resources -- sort here instead.
-  const assignments = (data ?? []) as unknown as FormAssignmentWithDetails[];
+  // An assignment whose template is gone (deleted, or not visible under RLS) can't be filled in, so skip it.
+  const assignments = ((data ?? []) as unknown as FormAssignmentWithDetails[]).filter((a) => a.template);
   for (const assignment of assignments) {
     assignment.template.questions.sort((a, b) => a.order_index - b.order_index);
   }
