@@ -184,16 +184,24 @@ function LogSetForm({
   clientId,
   exerciseId,
   nextSetNumber,
+  totalSets,
   restSeconds,
+  initialReps,
+  initialLoad,
 }: {
   clientId: string;
   exerciseId: string;
   nextSetNumber: number;
+  totalSets: number | null;
   restSeconds: number | null;
+  initialReps: number | null;
+  initialLoad: number | null;
 }) {
   const { run, busy } = useAction();
-  const [reps, setReps] = useState<number | ''>('');
-  const [load, setLoad] = useState<number | ''>('');
+  // Reps and load carry over between sets (they're usually the same), so after logging only the
+  // RPE is cleared. First set starts from what was done last time, if anything.
+  const [reps, setReps] = useState<number | ''>(initialReps ?? '');
+  const [load, setLoad] = useState<number | ''>(initialLoad ?? '');
   const [rpe, setRpe] = useState<number | ''>('');
   const [setType, setSetType] = useState<SetType>('working');
   const [timerKey, setTimerKey] = useState(0);
@@ -212,8 +220,6 @@ function LogSetForm({
       {
         success: `Set ${nextSetNumber} logged`,
         onDone: () => {
-          setReps('');
-          setLoad('');
           setRpe('');
           if (restSeconds != null) setTimerKey((k) => k + 1);
         },
@@ -221,36 +227,52 @@ function LogSetForm({
     );
   }
 
-  const pillInputCls =
-    'w-full min-w-0 rounded-full border border-black/10 bg-transparent px-3 py-1.5 text-center text-sm dark:border-white/10';
+  const numberInput = (label: string, value: number | '', set: (v: number | '') => void, inputMode: 'numeric' | 'decimal') => (
+    <label className="block">
+      <span className="mb-1 block text-center text-[11px] font-medium text-zinc-500">{label}</span>
+      <input
+        type="number"
+        inputMode={inputMode}
+        step="any"
+        className="h-11 w-full min-w-0 rounded-xl border border-black/10 bg-card px-2 text-center text-base font-semibold dark:border-white/10"
+        value={value}
+        onChange={(e) => set(e.target.value === '' ? '' : Number(e.target.value))}
+      />
+    </label>
+  );
 
   return (
-    <div className="mt-2">
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+    <div className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-sm font-bold text-black dark:text-zinc-50">
           Set {nextSetNumber}
+          {totalSets ? <span className="font-medium text-zinc-500"> of {totalSets}</span> : null}
         </span>
-        {SET_TYPES.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setSetType(t)}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize transition-colors ${
-              setType === t
-                ? 'bg-accent text-accent-foreground'
-                : 'text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        <select
+          aria-label="Set type"
+          value={setType}
+          onChange={(e) => setSetType(e.target.value as SetType)}
+          className="rounded-full border border-black/10 bg-card px-3 py-1 text-xs font-semibold capitalize dark:border-white/10"
+        >
+          {SET_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
       </div>
-      <form onSubmit={handleSubmit} className="mt-1.5 flex items-center gap-1.5">
-        <input type="number" placeholder="Reps" className={pillInputCls} value={reps} onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))} />
-        <input type="number" placeholder="Load" className={pillInputCls} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
-        <input type="number" placeholder="RPE" className={pillInputCls} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-        <button type="submit" disabled={busy} className="shrink-0 flex-[2] rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-accent-foreground disabled:opacity-50">
-          {busy ? 'Logging…' : 'Log set'}
+      <form onSubmit={handleSubmit} className="space-y-2.5">
+        <div className="grid grid-cols-3 gap-2">
+          {numberInput('Reps', reps, setReps, 'numeric')}
+          {numberInput('Load', load, setLoad, 'decimal')}
+          {numberInput('RPE', rpe, setRpe, 'decimal')}
+        </div>
+        <button
+          type="submit"
+          disabled={busy}
+          className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+        >
+          {busy ? 'Logging…' : `Log set ${nextSetNumber}`}
         </button>
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
@@ -598,6 +620,12 @@ export function WorkoutTab({
     return [...candidates].sort((a, b) => b.logged_at.localeCompare(a.logged_at))[0];
   }
 
+  // Today's weekday in the member's timezone, and which programme week is current -- used to flag
+  // "Today" on the matching workout.
+  const todayIsoLocal = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+  const todayDow = new Date(`${todayIsoLocal}T00:00:00Z`).getUTCDay();
+  const currentWeek = (program: WorkoutProgramRow) => resolveActiveProgram([program], todayIsoLocal)?.weekNum ?? -1;
+
   const openDay = openDayId
     ? programs.flatMap((p) => p.workout_program_days).find((d) => d.id === openDayId)
     : undefined;
@@ -642,9 +670,7 @@ export function WorkoutTab({
             </div>
           )}
         </div>
-      ) : (
-        <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
-      )}
+) : null}
 
       {programs.length === 0 && (
         <EmptyState
@@ -690,6 +716,8 @@ export function WorkoutTab({
               exerciseCount: day.workout_exercises.length,
               exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
               done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
+              dayPosition: day.day_position,
+              isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
             }))}
             renderDayControls={
               isCoachView
@@ -833,6 +861,18 @@ export function WorkoutTab({
         </div>
       ))}
 
+      {!isCoachView && (
+        <details className="group rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold text-black dark:text-zinc-50">
+            Record a tested max
+            <span className="text-xs font-semibold text-accent group-open:hidden">Add</span>
+          </summary>
+          <div className="px-4 pb-4">
+            <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
+          </div>
+        </details>
+      )}
+
       {openDay && (
         <FocusOverlay
           title={openDay.day_label}
@@ -885,12 +925,24 @@ export function WorkoutTab({
                   )}
                   {!isCoachView && ex.block_type === 'exercise' && (
                     <>
-                      <LogSetForm clientId={clientId} exerciseId={ex.id} nextSetNumber={logs.length + 1} restSeconds={ex.rest_seconds} />
                       {logs.length > 0 && (
-                        <p className="mt-1 text-xs text-zinc-500">
-                          Logged: {logs.map((l) => `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`).join(', ')}
-                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {logs.map((l, i) => (
+                            <span key={l.id} className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
+                              ✓ {i + 1} · {l.actual_reps ?? '—'}×{l.actual_load ?? '—'}
+                            </span>
+                          ))}
+                        </div>
                       )}
+                      <LogSetForm
+                        clientId={clientId}
+                        exerciseId={ex.id}
+                        nextSetNumber={logs.length + 1}
+                        totalSets={Number(ex.sets) > 0 ? Number(ex.sets) : null}
+                        restSeconds={ex.rest_seconds}
+                        initialReps={logs.length > 0 ? (logs[logs.length - 1].actual_reps ?? null) : (lastTime?.actual_reps ?? null)}
+                        initialLoad={logs.length > 0 ? (logs[logs.length - 1].actual_load ?? null) : (lastTime?.actual_load ?? null)}
+                      />
                     </>
                   )}
                 </>

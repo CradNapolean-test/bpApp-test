@@ -13,6 +13,10 @@ export interface ProgramDaySummary {
   exerciseLibraryIds: (string | null)[];
   exerciseCount: number;
   done?: boolean;
+  // Weekday the day is linked to (0 = Sunday .. 6 = Saturday); orders the list Monday-first.
+  dayPosition?: number | null;
+  // This is today's workout in the current week.
+  isToday?: boolean;
 }
 
 // Shared week-pill/day-row list used by both the per-client program view (WorkoutTab) and the
@@ -60,7 +64,11 @@ export function ProgramDayList({
   }
 
   const activeIndex = weekNums.indexOf(activeWeek);
-  const days_ = [...days.filter((d) => d.weekNum === activeWeek)].sort((a, b) => a.dayLabel.localeCompare(b.dayLabel));
+  // Monday-first by linked weekday; days with no weekday sort last, then by label.
+  const weekdayRank = (p: number | null | undefined) => (p == null ? 9 : (p + 6) % 7);
+  const days_ = [...days.filter((d) => d.weekNum === activeWeek)].sort(
+    (a, b) => weekdayRank(a.dayPosition) - weekdayRank(b.dayPosition) || a.dayLabel.localeCompare(b.dayLabel)
+  );
 
   if (weekNums.length === 0) return null;
 
@@ -109,7 +117,9 @@ export function ProgramDayList({
           return (
             <div
               key={day.id}
-              className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-black/[.06] bg-card-muted p-3 dark:border-white/5"
+              className={`mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 ${
+                day.isToday ? 'border-accent/50 bg-accent-soft' : 'border-black/[.06] bg-card-muted dark:border-white/5'
+              }`}
             >
               <button
                 type="button"
@@ -120,7 +130,12 @@ export function ProgramDayList({
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-black dark:text-zinc-50">{day.dayLabel}</p>
+                  <p className="flex items-center gap-2 font-semibold text-black dark:text-zinc-50">
+                    {day.dayLabel}
+                    {day.isToday && (
+                      <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-accent-foreground">Today</span>
+                    )}
+                  </p>
                   <p className="text-xs text-zinc-500">
                     {day.exerciseCount} exercise{day.exerciseCount === 1 ? '' : 's'}
                   </p>
