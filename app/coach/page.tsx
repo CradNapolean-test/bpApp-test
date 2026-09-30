@@ -67,17 +67,17 @@ export default async function CoachPage() {
           <CoachTimeGreeting />
         </h1>
         <div className="grid grid-cols-3 gap-3">
-          <Card tone="accent" className="!p-3.5">
-            <p className="text-xs font-medium text-zinc-500">Active clients</p>
-            <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">{clients.length}</p>
+          <Card tone="accent" className="!p-3">
+            <p className="text-xs font-medium text-zinc-500">Clients</p>
+            <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{clients.length}</p>
           </Card>
-          <Card className="!p-3.5">
-            <p className="text-xs font-medium text-zinc-500">Need attention</p>
-            <p className="mt-1 text-2xl font-extrabold text-danger">{needsAttention}</p>
+          <Card className="!p-3">
+            <p className="text-xs font-medium text-zinc-500">Attention</p>
+            <p className="text-2xl font-extrabold text-danger">{needsAttention}</p>
           </Card>
-          <Card className="!p-3.5">
-            <p className="text-xs font-medium text-zinc-500">Unread messages</p>
-            <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">{unreadCount}</p>
+          <Card className="!p-3">
+            <p className="text-xs font-medium text-zinc-500">Unread</p>
+            <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{unreadCount}</p>
           </Card>
         </div>
         {/* One grid, three blocks: on a phone they stack (today's classes, activity, add client); on
@@ -89,7 +89,7 @@ export default async function CoachPage() {
           <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1">
             <ActivityFeed events={activity} clients={clients} extraNames={extraNames} />
           </div>
-          <div className="lg:col-start-2 lg:row-start-2">
+          <div className="hidden lg:col-start-2 lg:row-start-2 lg:block">
             <Card>
               <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
               <div className="mt-2">

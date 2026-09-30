@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { ExpandableList } from '@/app/_components/ExpandableList';
 import { Avatar } from '@/app/_components/Avatar';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import type { ClientHealthStatus } from '@/lib/data/coach';
@@ -20,26 +23,30 @@ export function ProgramHealth({ statuses }: { statuses: ClientHealthStatus[] }) 
         <h3 className="font-bold text-black dark:text-zinc-50">Program health</h3>
         <span className="text-sm text-zinc-400">{flagged.length}</span>
       </div>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2">
         {flagged.length === 0 && <p className="text-sm text-zinc-500">Everyone&apos;s on track.</p>}
-        {flagged.slice(0, PREVIEW_LIMIT).map((c) => (
-          <Link
-            key={c.clientId}
-            href={`/coach/clients/${c.clientId}`}
-            className="flex items-center gap-3 rounded-xl border border-black/[.05] p-3 hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
-          >
-            <Avatar name={c.name} size="md" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold text-black dark:text-zinc-50">{c.name}</p>
-              <p className="truncate text-sm text-zinc-500">
-                {c.lastActiveDate ? `No log in ${c.daysSinceActive} days` : 'Never logged'}
-              </p>
-            </div>
-            <StatusBadge status={c.status} />
-          </Link>
-        ))}
+        <ExpandableList
+          items={flagged.slice(0, PREVIEW_LIMIT)}
+          phoneLimit={3}
+          itemKey={(c) => c.clientId}
+          render={(c) => (
+            <Link
+              href={`/coach/clients/${c.clientId}`}
+              className="flex items-center gap-3 rounded-xl border border-black/[.05] p-3 hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+            >
+              <Avatar name={c.name} size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-black dark:text-zinc-50">{c.name}</p>
+                <p className="truncate text-sm text-zinc-500">
+                  {c.lastActiveDate ? `No log in ${c.daysSinceActive} days` : 'Never logged'}
+                </p>
+              </div>
+              <StatusBadge status={c.status} />
+            </Link>
+          )}
+        />
         {flagged.length > PREVIEW_LIMIT && (
-          <p className="text-xs text-zinc-400">+{flagged.length - PREVIEW_LIMIT} more — see the full list below.</p>
+          <p className="mt-2 text-xs text-zinc-400">+{flagged.length - PREVIEW_LIMIT} more — see the full list on the Clients page.</p>
         )}
       </div>
       {unmonitoredCount > 0 && (

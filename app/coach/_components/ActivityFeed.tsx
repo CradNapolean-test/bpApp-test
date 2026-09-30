@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { Activity } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
+import { ExpandableList } from '@/app/_components/ExpandableList';
 import { groupActivity } from '@/lib/utils/activityFeed';
 import { formatRelativeTime } from '@/lib/utils/dates';
 import type { ActivityEventRow } from '@/lib/data/types';
@@ -34,11 +35,15 @@ export function ActivityFeed({
       {items.length === 0 ? (
         <EmptyState icon={Activity} title="Nothing recent" hint="Client activity will show up here as it happens." compact />
       ) : (
-        <ul className="mt-2 space-y-1.5">
-          {items.map((item, i) => {
-            const name = nameById.get(item.clientId) ?? 'A client';
-            return (
-              <li key={i}>
+        <div className="mt-2">
+          <ExpandableList
+            items={items}
+            phoneLimit={5}
+            className="space-y-1.5"
+            itemKey={(item, i) => `${item.clientId}-${i}`}
+            render={(item) => {
+              const name = nameById.get(item.clientId) ?? 'A client';
+              return (
                 <Link
                   href={`/coach/clients/${item.clientId}`}
                   className="flex items-start gap-2 rounded-lg py-0.5 text-sm hover:bg-black/5 dark:hover:bg-white/5"
@@ -50,10 +55,10 @@ export function ActivityFeed({
                   </p>
                   <span className="shrink-0 text-xs text-zinc-400">{formatRelativeTime(item.occurredAt)}</span>
                 </Link>
-              </li>
-            );
-          })}
-        </ul>
+              );
+            }}
+          />
+        </div>
       )}
     </div>
   );
