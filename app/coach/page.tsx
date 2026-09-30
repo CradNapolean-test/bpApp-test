@@ -12,10 +12,9 @@ import { CoachBrand } from './_components/CoachBrand';
 import { CoachHeaderExtras } from './_components/CoachHeaderExtras';
 import { CoachTimeGreeting } from './_components/CoachGreeting';
 import { AddClientForm } from './_components/AddClientForm';
-import { ProgramHealth } from './_components/ProgramHealth';
 import { HabitAdherence } from './_components/HabitAdherence';
 import { ActivityFeed } from './_components/ActivityFeed';
-import { TodaySessions } from './_components/TodaySessions';
+import { TodayOverview } from './_components/TodayOverview';
 import { CoachMobileBrand } from './_components/CoachMobileBrand';
 import { Card } from '@/app/_components/ui';
 
@@ -38,7 +37,7 @@ export default async function CoachPage() {
     getRosterHabitAdherence(supabase, user.id),
     getCoachChatOverview(),
     getRecentActivity(),
-    getScheduleOccurrences(),
+    getScheduleOccurrences(1, 2),
   ]);
 
   // The activity feed is gym-wide, so it includes clients of other coaches -- look their names up
@@ -51,7 +50,6 @@ export default async function CoachPage() {
   const extraNames: Record<string, string> = {};
   for (const p of extraProfiles ?? []) if (p.name) extraNames[p.client_id] = p.name;
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
-  const needsAttention = healthStatuses.filter((s) => s.status === 'red' || s.status === 'amber').length;
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -66,42 +64,28 @@ export default async function CoachPage() {
         <h1 className="text-2xl font-bold text-black dark:text-zinc-50">
           <CoachTimeGreeting />
         </h1>
-        <div className="grid grid-cols-3 gap-3">
-          <Card tone="accent" className="!p-3">
-            <p className="text-xs font-medium text-zinc-500">Clients</p>
-            <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{clients.length}</p>
-          </Card>
-          <Card className="!p-3">
-            <p className="text-xs font-medium text-zinc-500">Attention</p>
-            <p className="text-2xl font-extrabold text-danger">{needsAttention}</p>
-          </Card>
-          <Card className="!p-3">
-            <p className="text-xs font-medium text-zinc-500">Unread</p>
-            <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{unreadCount}</p>
-          </Card>
-        </div>
-        {/* One grid, three blocks: on a phone they stack (today's classes, activity, add client); on
-            a wide screen activity takes the left column and the other two share the right. */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_22rem] lg:grid-rows-[auto_1fr]">
-          <div className="lg:col-start-2 lg:row-start-1">
-            <TodaySessions occurrences={occurrences} />
-          </div>
-          <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1">
+        {/* Phone: one column -- today, attention, activity, habits. Wide screen: today and attention on
+            the left, activity and "add client" on the right. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_24rem]">
+          <TodayOverview
+            occurrences={occurrences}
+            unreadCount={unreadCount}
+            clientCount={clients.length}
+            flagged={healthStatuses.filter((s) => s.status === 'red' || s.status === 'amber')}
+          />
+          <div className="space-y-4">
             <ActivityFeed events={activity} clients={clients} extraNames={extraNames} />
-          </div>
-          <div className="hidden lg:col-start-2 lg:row-start-2 lg:block">
-            <Card>
-              <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
-              <div className="mt-2">
-                <AddClientForm />
-              </div>
-            </Card>
+            <div className="hidden lg:block">
+              <Card>
+                <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
+                <div className="mt-2">
+                  <AddClientForm />
+                </div>
+              </Card>
+            </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ProgramHealth statuses={healthStatuses} />
-          <HabitAdherence adherence={habitAdherence} />
-        </div>
+        <HabitAdherence adherence={habitAdherence} />
       </div>
     </AppShell>
     </ClientOnly>
