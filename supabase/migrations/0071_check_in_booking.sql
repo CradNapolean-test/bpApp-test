@@ -7,7 +7,7 @@ returns bookings
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_booking bookings;
   v_tz text;
@@ -25,7 +25,7 @@ begin
     raise exception 'You can only check in on the day of the session';
   end if;
 
-  update bookings
+  update public.bookings
   set
     attended = true,
     no_show = false,
@@ -42,7 +42,7 @@ begin
 
   return v_booking;
 end;
-$$;
+$fn$;
 
 revoke all on function public.check_in_booking(uuid, date) from public;
 grant execute on function public.check_in_booking(uuid, date) to authenticated;
