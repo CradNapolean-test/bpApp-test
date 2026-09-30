@@ -34,7 +34,7 @@ export function ReportsPane({ report }: { report: CoachReport }) {
 
   function exportPopularity() {
     downloadCsv('class-popularity.csv', [
-      ['Class', 'Bookings (30d)'],
+      ['Session', 'Bookings (30d)'],
       ...report.classPopularity.map((c) => [c.className, c.bookingCount]),
     ]);
   }
@@ -49,7 +49,7 @@ export function ReportsPane({ report }: { report: CoachReport }) {
           No-shows
         </a>
         <a href="#popularity" className="rounded-full bg-black/[.04] px-3 py-1.5 text-sm font-medium dark:bg-white/[.06]">
-          Class popularity
+          Busiest sessions
         </a>
       </div>
 
@@ -98,7 +98,7 @@ export function ReportsPane({ report }: { report: CoachReport }) {
 
       <div id="popularity" className="mt-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Class popularity</h2>
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Busiest sessions</h2>
           {report.classPopularity.length > 0 && (
             <button type="button" onClick={exportPopularity} className="text-xs font-medium text-accent hover:underline">
               Export CSV
@@ -106,10 +106,12 @@ export function ReportsPane({ report }: { report: CoachReport }) {
           )}
         </div>
         <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/5">
-          {report.classPopularity.map((c) => (
-            <li key={c.className} className="flex items-center justify-between py-2">
-              <span>{c.className}</span>
-              <span className="text-zinc-500">{c.bookingCount} bookings</span>
+          {report.classPopularity.slice(0, 10).map((c) => (
+            <li key={c.className} className="flex items-center justify-between gap-3 py-2">
+              <span className="min-w-0 truncate">{c.className}</span>
+              <span className="shrink-0 text-zinc-500">
+                {c.bookingCount} booking{c.bookingCount === 1 ? '' : 's'}
+              </span>
             </li>
           ))}
           {report.classPopularity.length === 0 && (

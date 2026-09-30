@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
+import { formatClassTime, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { CoachReport } from './types';
 
 const WINDOW_DAYS = 30;
@@ -17,7 +18,7 @@ export async function getCoachReport(): Promise<CoachReport> {
 
   const { data: classes, error: classesError } = await supabase
     .from('classes')
-    .select('id, name')
+    .select('id, name, day_of_week, start_time')
     .eq('gym_id', gymId);
   if (classesError) raise(classesError);
   if (!classes || classes.length === 0) {
@@ -33,6 +34,17 @@ export async function getCoachReport(): Promise<CoachReport> {
     };
   }
   const classMap = new Map(classes.map((c) => [c.id, c.name]));
+  // Each class row is one weekly slot (a day and a time), so several rows share a name. Popularity
+  // is counted per slot and must be labelled with the day and time, or every row just repeats the
+  // class name.
+  const slotLabel = new Map(
+    classes.map((c) => [
+      c.id,
+      c.day_of_week != null && c.start_time
+        ? `${WEEKDAY_SHORT[c.day_of_week]} ${formatClassTime(c.start_time)} · ${c.name}`
+        : c.name,
+    ])
+  );
 
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - WINDOW_DAYS);
@@ -94,7 +106,7 @@ export async function getCoachReport(): Promise<CoachReport> {
     popularityMap.set(b.class_id, (popularityMap.get(b.class_id) ?? 0) + 1);
   }
   const classPopularity = [...popularityMap.entries()]
-    .map(([classId, count]) => ({ className: classMap.get(classId) ?? 'Unknown class', bookingCount: count }))
+    .map(([classId, count]) => ({ className: slotLabel.get(classId) ?? 'Unknown class', bookingCount: count }))
     .sort((a, b) => b.bookingCount - a.bookingCount);
 
   return {
