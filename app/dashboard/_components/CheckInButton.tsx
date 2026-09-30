@@ -42,23 +42,32 @@ export function CheckInButton({
     const id = setInterval(() => setTick((t) => t + 1), 15_000);
     return () => clearInterval(id);
   }, []);
-  const resolution = resolveCheckinTarget(programs, workoutLogs, classRow?.day_of_week ?? null, todayIso, tz);
+  const resolution = resolveCheckinTarget(
+    programs,
+    workoutLogs,
+    // Fall back to the booking date's weekday so a session with no weekday set still works.
+    classRow?.day_of_week ?? new Date(`${date ?? todayIso}T00:00:00Z`).getUTCDay(),
+    todayIso,
+    tz
+  );
 
   if (resolution.status === 'already_logged') {
     return <p className="text-xs font-medium text-accent">Already logged today ✓</p>;
   }
   if (resolution.status === 'ready') {
+    // No start time on the session: nothing to gate on, so check-in is open all day.
+    const hasTime = !!classRow?.start_time;
     const [h, m] = (classRow?.start_time ?? '00:00').split(':').map(Number);
     const startMs = Date.parse(`${date ?? todayIso}T00:00:00Z`) + (h * 60 + (m || 0)) * 60_000;
     const now = nowLocalMs(tz);
-    if (now < startMs - CHECKIN_OPENS_BEFORE_MIN * 60_000) {
+    if (hasTime && now < startMs - CHECKIN_OPENS_BEFORE_MIN * 60_000) {
       return (
         <p className="text-xs text-zinc-500">
           Check-in opens at {formatClock(new Date(startMs - CHECKIN_OPENS_BEFORE_MIN * 60_000).toISOString().slice(11, 16))}
         </p>
       );
     }
-    if (now > startMs + CHECKIN_CLOSES_AFTER_MIN * 60_000) {
+    if (hasTime && now > startMs + CHECKIN_CLOSES_AFTER_MIN * 60_000) {
       return <p className="text-xs text-zinc-500">Check-in has closed for this session.</p>;
     }
     return (

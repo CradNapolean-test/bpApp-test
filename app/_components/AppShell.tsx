@@ -52,7 +52,7 @@ export function AppShell({
   return (
     <div
       data-view={isCoachView ? 'coach' : undefined}
-      className={`mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 ${bottomBar ? 'pb-20 md:pb-10' : ''}`}
+      className={`mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 ${bottomBar ? 'pb-32 md:pb-10' : ''}`}
     >
       <div className={`flex flex-col ${topBar ? 'gap-4' : ''}`}>
         <div className={`flex items-center justify-between gap-3 ${mobileHeader ? 'order-2 md:order-1' : ''}`}>

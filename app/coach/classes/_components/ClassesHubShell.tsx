@@ -10,7 +10,7 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
-import { ClassManager } from './ClassManager';
+import { TimetableView } from './TimetableView';
 import { SessionsView } from './SessionsView';
 import { ReportsPane } from './ReportsPane';
 import type { ClassRow, CoachReport, ScheduleOccurrence } from '@/lib/data/types';
@@ -59,7 +59,7 @@ export function ClassesHubShell({
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
       {tab === 'Sessions' && <SessionsView occurrences={occurrences} clients={clients} />}
-      {tab === 'Timetable' && <ClassManager initialClasses={initialClasses} />}
+      {tab === 'Timetable' && <TimetableView classes={initialClasses} />}
       {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} />}
     </AppShell>
     </ClientOnly>
