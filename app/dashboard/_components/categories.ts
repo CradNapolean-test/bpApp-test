@@ -1,4 +1,4 @@
-import { Apple, BookOpen, Bell, Users, CheckSquare, Dumbbell, House, MessageSquare, MessagesSquare, Settings, TrendingUp } from 'lucide-react';
+import { Apple, Award, BookOpen, Bell, Users, CheckSquare, Dumbbell, House, MessageSquare, MessagesSquare, Settings, TrendingUp } from 'lucide-react';
 
 // Screens are grouped into categories rather than one flat tab bar.
 export type Screen =
@@ -29,8 +29,8 @@ export type Screen =
   | 'Messages'
   | 'Notifications';
 
-export type Category = 'Home' | 'Coach' | 'Community' | 'Learn' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
-export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Learn', 'Messages', 'Account Settings', 'Notifications'];
+export type Category = 'Home' | 'Coach' | 'Community' | 'Learn' | 'Achievements' | 'Nutrition' | 'Training' | 'Accountability' | 'Progress' | 'Messages' | 'Account Settings' | 'Notifications';
+export const CATEGORY_ORDER: Category[] = ['Home', 'Nutrition', 'Training', 'Accountability', 'Progress', 'Achievements', 'Learn', 'Messages', 'Account Settings', 'Notifications'];
 
 // The mobile bottom tab bar shows only these 5 -- Messages, Account Settings and
 // Notifications move to header icons instead (see BottomTabBar.tsx / DashboardShell.tsx), a
@@ -63,6 +63,7 @@ export const CLIENT_CATEGORY_TITLE: Partial<Record<Category, string>> = {
 export const COACH_CATEGORY_LABEL: Partial<Record<Category, string>> = {
   Home: 'Overview',
   Messages: 'Chat',
+  Achievements: 'Big Dog',
   'Account Settings': 'Client profile',
 };
 export const COACH_SCREEN_LABEL: Partial<Record<Screen, string>> = {
@@ -92,6 +93,7 @@ export const CATEGORY_ICON: Record<Category, typeof House> = {
   Coach: MessagesSquare,
   Community: Users,
   Learn: BookOpen,
+  Achievements: Award,
   Nutrition: Apple,
   Training: Dumbbell,
   Accountability: CheckSquare,
@@ -176,6 +178,10 @@ export function screensForCategory(
         return ['Overview', 'Insights', 'Progress & Photos'];
       case 'Learn':
         return ['Education'];
+      case 'Achievements':
+        // A coach's own tab for recording a client's Big Dog results. Members reach the same page
+        // from their Profile, so this category is coach-only.
+        return isCoachView ? ['Big Dog'] : [];
       case 'Messages':
         return ['Messages'];
       case 'Notifications':
@@ -186,7 +192,7 @@ export function screensForCategory(
         // must never see it: clicking "change password" would silently change the COACH's own
         // password, not the client's, since supabase.auth.updateUser() always targets whoever
         // is actually signed in.
-        return isCoachView ? ['Setup', 'Credits', 'Info', 'Big Dog'] : ['Account', 'Setup', 'Credits', 'Big Dog'];
+        return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Account', 'Setup', 'Credits', 'Big Dog'];
     }
   })();
   return screens.filter((s) => !disabledScreens.has(s));

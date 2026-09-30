@@ -517,6 +517,7 @@ export function DashboardShell({
               onNavigateClasses={isCoachView ? undefined : () => setArea('Classes')}
               isCoachView={isCoachView}
               rewards={rewardsData.rewards}
+              bigDogResults={bigDogResults}
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (

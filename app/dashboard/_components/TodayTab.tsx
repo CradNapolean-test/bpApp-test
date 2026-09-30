@@ -12,6 +12,7 @@ import type {
   DailyLogRow,
   FormAssignmentWithDetails,
   HabitWithLogs,
+  BigDogResultRow,
   RewardRow,
   WorkoutLogRow,
   WorkoutProgramRow,
@@ -19,6 +20,7 @@ import type {
 import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
 import { BpHomeHero, BpHomeSections } from './BpHome';
+import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
 
 function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
@@ -69,6 +71,7 @@ export function TodayTab({
   onNavigateClasses,
   isCoachView = false,
   rewards = [],
+  bigDogResults = [],
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -86,6 +89,7 @@ export function TodayTab({
   onNavigateClasses?: () => void;
   isCoachView?: boolean;
   rewards?: RewardRow[];
+  bigDogResults?: BigDogResultRow[];
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -259,6 +263,8 @@ export function TodayTab({
         </button>
       </div>
       )}
+
+      {isCoachView && <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Achievements')} />}
 
       {!isCoachView && (
         <BpHomeSections

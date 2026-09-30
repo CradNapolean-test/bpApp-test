@@ -12,29 +12,23 @@ import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { ClassManager } from './ClassManager';
 import { AttendanceScheduler } from './AttendanceScheduler';
-import { PackageManager } from './PackageManager';
-import { CreditPackManager } from './CreditPackManager';
 import { ReportsPane } from './ReportsPane';
-import type { ClassRow, CoachReport, CreditPackRow, MembershipPackageRow, ScheduleOccurrence } from '@/lib/data/types';
+import type { ClassRow, CoachReport, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
-const TABS = ['Schedule', 'Attendance', 'Packages', 'Credit Packs', 'Reports'] as const;
+const TABS = ['Schedule', 'Attendance', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_PARAM: Record<string, Tab> = {
   manage: 'Schedule',
   schedule: 'Schedule',
   attendance: 'Attendance',
-  packages: 'Packages',
-  'credit-packs': 'Credit Packs',
   reports: 'Reports',
 };
 
 export function ClassesHubShell({
   initialClasses,
   occurrences,
-  initialPackages,
-  initialCreditPacks,
   report,
   unreadCount,
   email,
@@ -42,8 +36,6 @@ export function ClassesHubShell({
 }: {
   initialClasses: ClassRow[];
   occurrences: ScheduleOccurrence[];
-  initialPackages: MembershipPackageRow[];
-  initialCreditPacks: CreditPackRow[];
   report: CoachReport;
   unreadCount: number;
   email: string;
@@ -66,8 +58,6 @@ export function ClassesHubShell({
 
       {tab === 'Schedule' && <ClassManager initialClasses={initialClasses} />}
       {tab === 'Attendance' && <AttendanceScheduler occurrences={occurrences} clients={clients} />}
-      {tab === 'Packages' && <PackageManager initialPackages={initialPackages} />}
-      {tab === 'Credit Packs' && <CreditPackManager initialPacks={initialCreditPacks} />}
       {tab === 'Reports' && <ReportsPane report={report} />}
     </AppShell>
     </ClientOnly>

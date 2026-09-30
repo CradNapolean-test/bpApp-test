@@ -1,4 +1,4 @@
-import { CalendarDays, Dumbbell, LayoutDashboard, MessageSquare, PartyPopper, Settings, Users } from 'lucide-react';
+import { CalendarDays, Dumbbell, LayoutDashboard, MessageSquare, PartyPopper, Settings, Users, Wallet } from 'lucide-react';
 
 // One list of coach destinations, used by both the desktop top nav and the phone's bottom bar
 // so the two can never drift apart. On a phone the first MOBILE_PRIMARY_COUNT sit on the bar and
@@ -8,6 +8,7 @@ export const COACH_NAV = [
   { href: '/coach/clients', label: 'Clients', Icon: Users },
   { href: '/coach/classes', label: 'Classes', Icon: CalendarDays },
   { href: '/coach/messages', label: 'Messages', Icon: MessageSquare },
+  { href: '/coach/memberships', label: 'Memberships', Icon: Wallet },
   { href: '/coach/library', label: 'Library', Icon: Dumbbell },
   { href: '/coach/community', label: 'Community', Icon: PartyPopper },
   { href: '/coach/settings', label: 'Settings', Icon: Settings },
