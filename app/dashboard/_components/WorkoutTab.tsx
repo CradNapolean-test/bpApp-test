@@ -783,9 +783,14 @@ export function WorkoutTab({
       )}
 
       {programs.map((program) => (
-        <div key={program.id} className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+        <div
+          key={program.id}
+          className={isCoachView ? 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10' : ''}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-medium text-black dark:text-zinc-50">{program.name}</h3>
+            <h3 className={isCoachView ? 'font-medium text-black dark:text-zinc-50' : 'px-1 text-xl font-black text-black dark:text-zinc-50'}>
+              {program.name}
+            </h3>
             <div className="flex items-center gap-2">
               {isCoachView && <ProgramStartDateInput programId={program.id} initial={program.start_date} />}
               {isCoachView && (
@@ -805,6 +810,7 @@ export function WorkoutTab({
             showPhaseLabel={!isCoachView}
             onOpenDay={setOpenDayId}
             activeWeek={activeWeeks[program.id]}
+            currentWeek={currentWeek(program) > 0 ? currentWeek(program) : undefined}
             onChangeWeek={(week) => setActiveWeeks((s) => ({ ...s, [program.id]: week }))}
             days={program.workout_program_days.map((day) => ({
               id: day.id,
@@ -814,6 +820,13 @@ export function WorkoutTab({
               exerciseCount: day.workout_exercises.length,
               exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
               done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
+              liftCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise').length,
+              highlights: [...day.workout_exercises]
+                .filter((ex) => ex.block_type === 'exercise')
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .slice(0, 2)
+                .map((ex) => ex.name),
+              loggedCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise' && (logsByExercise[ex.id]?.length ?? 0) > 0).length,
               dayPosition: day.day_position,
               isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
             }))}
