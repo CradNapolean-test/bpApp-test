@@ -202,7 +202,7 @@ export function TodayTab({
         })()}
         {nextClass && nextClass.booking_date === todayIso && (
           <div className="mt-3">
-            <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} date={nextClass.booking_date} />
+            <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} date={nextClass.booking_date} attended={nextClass.attended} />
           </div>
         )}
       </Card>

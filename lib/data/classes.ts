@@ -104,6 +104,13 @@ export async function cancelBooking(bookingId: string): Promise<ActionResult> {
   return error ? fail(error, 'Could not cancel that booking') : ok();
 }
 
+// A member checking in to their own booking on the day: marks it attended (migration 0071).
+export async function checkInToSession(classId: string, bookingDate: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('check_in_booking', { p_class_id: classId, p_booking_date: bookingDate });
+  return error ? fail(error, 'Could not check you in') : ok();
+}
+
 // Coach-initiated counterpart to bookClass -- book_class_for_client (0062) checks
 // is_coach_of(p_client_id) server-side rather than trusting auth.uid(), for a coach booking a
 // client into a class on their behalf (e.g. over the phone, or filling a spot in person).
