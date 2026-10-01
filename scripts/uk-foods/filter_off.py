@@ -48,6 +48,12 @@ BRAND_RE = re.compile("|".join(re.escape(b) for b in BRANDS), re.I)
 RETAIL_RE = {k: re.compile(v, re.I) for k, v in RETAILERS.items()}
 
 
+# What goes in the `brand` column (searched along with the name) for the retailer labels.
+BRAND_LONG = {"M&S": "Marks & Spencer", "Co-op": "Co-operative Co-op"}
+# Names written in non-Latin scripts (Cyrillic, Greek, CJK...) are dropped; accented Latin is kept.
+NON_LATIN = re.compile(r"[^\u0000-\u024F\u2010-\u2027\u20AC]")
+
+
 def num(x):
     if x is None or x == "":
         return None
@@ -69,6 +75,7 @@ def main(src, dst):
     stats = Counter()
     rejected = Counter()
     seen = set()
+    seen_products = set()
     out = open(dst, "w", encoding="utf-8")
     with gzip.open(src, "rt", encoding="utf-8", errors="replace", newline="") as f:
         reader = csv.reader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
@@ -91,6 +98,9 @@ def main(src, dst):
                 continue
             stats["uk_matching"] += 1
             name = clean(name)
+            if NON_LATIN.search(name):
+                rejected["non-Latin name"] += 1
+                continue
             if len(name) < 2:
                 rejected["no name"] += 1
                 continue
@@ -100,7 +110,7 @@ def main(src, dst):
             if code in seen:
                 rejected["duplicate barcode"] += 1
                 continue
-            k, p, c, fa = num(kcal), num(prot), num(carb), num(fat)
+            k, p, c, fa = (None if v is None else round(v, 1) for v in (num(kcal), num(prot), num(carb), num(fat)))
             if None in (k, p, c, fa):
                 rejected["incomplete macros"] += 1
                 continue
@@ -115,9 +125,14 @@ def main(src, dst):
             display_brand = label if label not in ("brand",) else first_brand
             if display_brand and alnum(display_brand) not in alnum(name):
                 name = f"{display_brand} {name}"
+            dupe_key = (name.lower(), p, c, fa)
+            if dupe_key in seen_products:
+                rejected["same name and macros as another product"] += 1
+                continue
+            seen_products.add(dupe_key)
             seen.add(code)
             stats[label] += 1
-            out.write(json.dumps({"code": code, "name": name[:140], "brand": display_brand[:60] or None, "kcal": k, "protein": p, "carbs": c, "fat": fa, "group": label}, ensure_ascii=False) + "\n")
+            out.write(json.dumps({"code": code, "name": name[:140], "brand": (BRAND_LONG.get(display_brand) or display_brand)[:60] or None, "kcal": k, "protein": p, "carbs": c, "fat": fa, "group": label}, ensure_ascii=False) + "\n")
             if n % 500000 == 0:
                 print(f"  ...{n:,} rows read, {sum(v for kk, v in stats.items() if kk not in ('uk_matching',)):,} kept", flush=True)
     out.close()

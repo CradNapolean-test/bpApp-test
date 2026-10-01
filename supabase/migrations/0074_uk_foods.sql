@@ -14,7 +14,14 @@ alter table public.foods add constraint foods_source_check check (source in ('se
 
 update public.foods set source = 'scan' where barcode is not null and source = 'seed';
 
-create index if not exists foods_name_trgm_idx on public.foods using gin (name gin_trgm_ops);
+-- Lower-cased name + brand with punctuation removed, so "sainsburys" finds "Sainsbury's" and
+-- "m&s" matches "M&S". Generated, so imports never have to fill it in.
+alter table public.foods
+  add column if not exists search_text text generated always as (
+    regexp_replace(lower(name || ' ' || coalesce(brand, '')), '[^a-z0-9 ]', '', 'g')
+  ) stored;
+
+create index if not exists foods_search_trgm_idx on public.foods using gin (search_text gin_trgm_ops);
 create index if not exists foods_source_idx on public.foods (source);
 
 -- Data fixes in the seed. Butter had 10g protein and 10g carbs per 100g (real: about 0.5g / 0.6g).
@@ -36,7 +43,8 @@ as $fn$
     and not exists (
       select 1
       from unnest(string_to_array(lower(trim(p_query)), ' ')) as w(word)
-      where w.word <> '' and f.name not ilike '%' || w.word || '%'
+      where regexp_replace(w.word, '[^a-z0-9]', '', 'g') <> ''
+        and f.search_text not like '%' || regexp_replace(w.word, '[^a-z0-9]', '', 'g') || '%'
     )
   order by
     (lower(f.name) = lower(trim(p_query))) desc,
