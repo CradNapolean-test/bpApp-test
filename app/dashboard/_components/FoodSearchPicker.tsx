@@ -289,13 +289,20 @@ export function FoodSearchPicker({
           ))}
         </div>
       )}
+      {/* No search fires on focus: swapping the list under a fingertip the instant the box is tapped
+          makes some phone browsers drop the keyboard. Results appear as soon as something is typed;
+          until then the favourites / recently logged lists (or a prompt) are shown. */}
       <input
         type="text"
+        inputMode="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
         placeholder="Search foods…"
-        className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+        className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-base dark:border-white/10"
         value={query}
         onChange={(e) => handleQueryChange(e.target.value)}
-        onFocus={() => query === '' && handleQueryChange('')}
       />
       {isPending && <p className="mt-2 text-xs text-zinc-500">Searching…</p>}
 
