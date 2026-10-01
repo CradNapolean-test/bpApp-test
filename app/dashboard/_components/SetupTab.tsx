@@ -28,6 +28,7 @@ type SetupFields = Omit<
   | 'referral_source'
   | 'admin_notes'
   | 'deletion_requested_at'
+  | 'minutes_per_1000_steps'
 >;
 
 const BLANK: SetupFields = {

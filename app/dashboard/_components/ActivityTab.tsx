@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { equivalentMinutesForActivity, STANDARD_STEP_TARGET } from '@/lib/calculations';
 import { Card, inputCls } from '@/app/_components/ui';
+import { useAction } from '@/app/_components/useAction';
+import { updateMinutesPer1000Steps } from '@/lib/data/clientProfile';
 import type { ActivityRow } from '@/lib/data/types';
 
 // "Step swap": what the step target is worth in other activities. The maths is
@@ -33,11 +35,19 @@ function splitName(name: string): { title: string; detail: string | null } {
 export function ActivityTab({
   activities,
   bodyWeightKg,
+  clientId,
+  savedMinutesPer1000,
+  canSave,
 }: {
   activities: ActivityRow[];
   bodyWeightKg: number | null;
+  clientId: string;
+  // The member's saved "minutes per 1,000 steps" (null until migration 0073 / first save).
+  savedMinutesPer1000: number | null;
+  canSave: boolean;
 }) {
-  const [minutesPer1000, setMinutesPer1000] = useState<number | ''>(10);
+  const { run } = useAction();
+  const [minutesPer1000, setMinutesPer1000] = useState<number | ''>(savedMinutesPer1000 ?? 10);
   const [stepTarget, setStepTarget] = useState<number | ''>(STANDARD_STEP_TARGET);
   const [category, setCategory] = useState<Category>('All');
   const [query, setQuery] = useState('');
@@ -54,7 +64,20 @@ export function ActivityTab({
       .sort((a, b) => a.minutes - b.minutes);
   }, [activities, steps, mp1000, bodyWeightKg, category, query]);
 
-  const numberField = (label: string, hint: string, value: number | '', set: (v: number | '') => void, step?: string) => (
+  // Remember the member's own figure: saved when they leave the field, if it changed.
+  function saveMinutes() {
+    if (!canSave || minutesPer1000 === '' || minutesPer1000 === (savedMinutesPer1000 ?? 10)) return;
+    void run(() => updateMinutesPer1000Steps(clientId, minutesPer1000), { success: 'Saved to your profile' });
+  }
+
+  const numberField = (
+    label: string,
+    hint: string,
+    value: number | '',
+    set: (v: number | '') => void,
+    step?: string,
+    onBlur?: () => void
+  ) => (
     <label className="block space-y-1">
       <span className="block text-xs font-bold text-black dark:text-zinc-50">{label}</span>
       <input
@@ -64,6 +87,7 @@ export function ActivityTab({
         className={`${inputCls} text-base font-semibold`}
         value={value}
         onChange={(e) => set(e.target.value === '' ? '' : Number(e.target.value))}
+        onBlur={onBlur}
       />
       <span className="block text-[11px] leading-snug text-zinc-500">{hint}</span>
     </label>
@@ -79,7 +103,7 @@ export function ActivityTab({
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {numberField('Minutes per 1,000 steps', 'How long you take to walk 1,000 steps', minutesPer1000, setMinutesPer1000, '0.5')}
+          {numberField('Minutes per 1,000 steps', 'How long you take to walk 1,000 steps (we\'ll remember it)', minutesPer1000, setMinutesPer1000, '0.5', saveMinutes)}
           {numberField('Step target', 'Our standard daily goal', stepTarget, setStepTarget)}
         </div>
         <p className="rounded-xl bg-black/[.04] px-3 py-2 text-sm text-zinc-700 dark:bg-white/[.06] dark:text-zinc-300">

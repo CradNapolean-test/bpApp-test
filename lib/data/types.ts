@@ -28,6 +28,8 @@ export interface ClientProfileRow {
   email_notifications_enabled: boolean;
   nutrition_tracking_mode: 'full_tracking' | 'manual_import' | 'photo_diary';
   timezone: string;
+  // Minutes this member takes to walk 1,000 steps (Activity swap screen).
+  minutes_per_1000_steps: number;
   // Client-editable contact/personal fields.
   phone: string | null;
   emergency_contact_name: string | null;

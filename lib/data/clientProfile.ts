@@ -31,6 +31,7 @@ export async function upsertClientProfile(
     | 'referral_source'
     | 'admin_notes'
     | 'deletion_requested_at'
+    | 'minutes_per_1000_steps'
   >
 ): Promise<void> {
   const supabase = await createClient();
@@ -106,6 +107,14 @@ export async function updateEmailNotificationsEnabled(clientId: string, enabled:
 // through set_client_admin_details (0046) rather than a raw update, same reasoning as
 // updateCheckinReminderDays: client_profiles' RLS update policy is is_self-scoped only, so a
 // direct update from the coach's session would silently match zero rows.
+// Client-owned (migration 0073): the Activity swap screen remembers how long they take per 1,000 steps.
+export async function updateMinutesPer1000Steps(clientId: string, minutes: number): Promise<ActionResult> {
+  if (!(minutes > 0 && minutes <= 60)) return fail(new Error('Enter between 1 and 60 minutes'), 'Enter between 1 and 60 minutes');
+  const supabase = await createClient();
+  const { error } = await supabase.from('client_profiles').update({ minutes_per_1000_steps: minutes }).eq('client_id', clientId);
+  return error ? fail(error, 'Could not save that') : ok();
+}
+
 // Client-owned request flag, not a real delete -- the coach sees deletion_requested_at set
 // (ClientTable.tsx surfaces it as a badge/filter) and handles the actual delete themselves.
 // Symmetric cancel alongside it so a client who changes their mind isn't stuck.

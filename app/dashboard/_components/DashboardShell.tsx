@@ -626,7 +626,13 @@ export function DashboardShell({
             <RecipesTab clientId={clientId} initialRecipes={recipes} readOnly={isCoachView} />
           )}
           {effectiveScreen === 'Activity' && (
-            <ActivityTab activities={activities} bodyWeightKg={todayBodyweight} />
+            <ActivityTab
+              activities={activities}
+              bodyWeightKg={todayBodyweight}
+              clientId={clientId}
+              savedMinutesPer1000={profile?.minutes_per_1000_steps ?? null}
+              canSave={!isCoachView}
+            />
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
           {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
