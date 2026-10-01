@@ -1,57 +1,46 @@
 'use client';
 
 import { ProgressRing } from '@/app/_components/ProgressRing';
+import { Card } from '@/app/_components/ui';
 
 type Macros = { calories: number; protein: number; carbs: number; fat: number };
 
-// The top of Food Tracking: calories left as a ring, and each macro against its daily target.
-// Without a target (profile not finished) it falls back to plain totals.
-export function NutritionSummary({ totals, target }: { totals: Macros; target: Macros | null }) {
-  const eaten = Math.round(totals.calories);
-  const remaining = target ? Math.round(target.calories) - eaten : null;
-  const over = remaining != null && remaining < 0;
-
-  const bar = (label: string, value: number, goal: number | null) => {
-    const pct = goal && goal > 0 ? Math.min(100, Math.round((value / goal) * 100)) : 0;
-    return (
-      <div key={label}>
-        <div className="mb-1 flex items-baseline justify-between text-xs">
-          <span className="font-semibold text-black dark:text-zinc-50">{label}</span>
-          <span className="text-zinc-500">
-            <span className="font-semibold text-black dark:text-zinc-50">{Math.round(value)}</span>
-            {goal != null && ` / ${Math.round(goal)}`} g
-          </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-    );
-  };
-
+function MacroRing({ label, unit, value, target }: { label: string; unit: string; value: number; target: number | null }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
-      <div className="relative shrink-0">
-        <ProgressRing value={totals.calories} target={target?.calories ?? 0} label="kcal" size={104} strokeWidth={9} hideValue />
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className={`text-xl font-black leading-none ${over ? 'text-warning' : 'text-black dark:text-zinc-50'}`}>
-            {(remaining != null ? Math.abs(remaining) : eaten).toLocaleString()}
-          </span>
-          <span className="mt-0.5 text-[11px] leading-tight text-zinc-500">
-            {remaining == null ? 'kcal eaten' : over ? 'kcal over' : 'kcal left'}
-          </span>
-        </div>
-      </div>
-      <div className="min-w-0 flex-1 space-y-2.5">
-        {bar('Protein', totals.protein, target?.protein ?? null)}
-        {bar('Carbs', totals.carbs, target?.carbs ?? null)}
-        {bar('Fat', totals.fat, target?.fat ?? null)}
-        {target && (
-          <p className="pt-0.5 text-[11px] text-zinc-500">
-            {eaten.toLocaleString()} of {Math.round(target.calories).toLocaleString()} kcal
-          </p>
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-1 text-center">
+      <ProgressRing value={value} target={target ?? 0} label="" size={64} strokeWidth={6} hideValue />
+      <p className="text-sm font-black leading-none text-black dark:text-zinc-50">
+        {Math.round(value)}
+        <span className="text-[11px] font-bold text-zinc-500">{unit}</span>
+      </p>
+      <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="text-[11px] text-zinc-400">{target != null ? `of ${Math.round(target)}${unit}` : '—'}</p>
     </div>
+  );
+}
+
+// The four rings from the owner's "My coaching" overview: calories, protein, carbs and fats, each
+// with what's been eaten and its daily target. Shared so Food Tracking and the overview match.
+export function TargetRings({ totals, target }: { totals: Macros; target: Macros | null }) {
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      <MacroRing label="Calories" unit="" value={totals.calories} target={target?.calories ?? null} />
+      <MacroRing label="Protein" unit="g" value={totals.protein} target={target?.protein ?? null} />
+      <MacroRing label="Carbs" unit="g" value={totals.carbs} target={target?.carbs ?? null} />
+      <MacroRing label="Fats" unit="g" value={totals.fat} target={target?.fat ?? null} />
+    </div>
+  );
+}
+
+// The top of Food Tracking: the same "targets" card as the My coaching overview.
+export function NutritionSummary({ totals, target, title, dateLabel }: { totals: Macros; target: Macros | null; title: string; dateLabel: string }) {
+  return (
+    <Card>
+      <div className="mb-3 flex items-baseline justify-between">
+        <p className="text-sm font-bold text-black dark:text-zinc-50">{title}</p>
+        <p className="text-xs text-zinc-500">{dateLabel}</p>
+      </div>
+      <TargetRings totals={totals} target={target} />
+    </Card>
   );
 }

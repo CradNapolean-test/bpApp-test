@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
-import { ProgressRing } from '@/app/_components/ProgressRing';
+import { TargetRings } from './NutritionSummary';
 import { Badge, Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -16,20 +16,6 @@ import type { Category, Screen } from './categories';
 // accountability numbers, progress & results, and learning material.
 
 const LIGHT_TEXT: Record<TrafficLight, string> = { green: 'text-success', amber: 'text-warning', red: 'text-danger' };
-
-function MacroRing({ label, unit, value, target }: { label: string; unit: string; value: number; target: number | null }) {
-  return (
-    <div className="flex flex-col items-center gap-1 text-center">
-      <ProgressRing value={value} target={target ?? 0} label="" size={64} strokeWidth={6} hideValue />
-      <p className="text-sm font-black leading-none text-black dark:text-zinc-50">
-        {Math.round(value)}
-        <span className="text-[11px] font-bold text-zinc-500">{unit}</span>
-      </p>
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="text-[11px] text-zinc-400">{target != null ? `of ${Math.round(target)}${unit}` : '—'}</p>
-    </div>
-  );
-}
 
 function TrackerStat({ label, display, light }: { label: string; display: string; light: TrafficLight | null }) {
   return (
@@ -118,12 +104,7 @@ export function CoachingHub({
                 {new Date(todayIso + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
               </p>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              <MacroRing label="Calories" unit="" value={calories} target={dayTarget?.calories ?? null} />
-              <MacroRing label="Protein" unit="g" value={protein} target={dayTarget?.protein ?? null} />
-              <MacroRing label="Carbs" unit="g" value={carbs} target={dayTarget?.carbs ?? null} />
-              <MacroRing label="Fats" unit="g" value={fat} target={dayTarget?.fat ?? null} />
-            </div>
+            <TargetRings totals={{ calories, protein, carbs, fat }} target={dayTarget} />
             <button
               type="button"
               onClick={() => onNavigate('Nutrition')}

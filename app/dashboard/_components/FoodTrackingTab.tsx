@@ -712,7 +712,7 @@ export function FoodTrackingTab({
         </div>
       )}
 
-      <NutritionSummary totals={totals} target={dayTarget} />
+      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} />
 
       {!readOnly && !isManual && (
         <div className="space-y-2">
