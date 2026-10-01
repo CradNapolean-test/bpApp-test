@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bell, MessageSquare, User } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
+import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -198,6 +199,43 @@ export function DashboardShell({
   const [screen, setScreen] = useState<Screen>('Today');
   const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen }[]>([]);
   const [focusDay, setFocusDay] = useState<{ dayId: string; nonce: number } | null>(null);
+
+  // Live unread-message count for the member, so the header badge appears the moment the coach
+  // replies, on whatever screen they're on. Seeded from the server count (which refreshes after
+  // any action) and bumped by a realtime subscription; viewing the thread clears it.
+  const [liveUnread, setLiveUnread] = useState(unreadMessageCount);
+  const [seenServerUnread, setSeenServerUnread] = useState(unreadMessageCount);
+  if (seenServerUnread !== unreadMessageCount) {
+    setSeenServerUnread(unreadMessageCount);
+    setLiveUnread(unreadMessageCount);
+  }
+  const viewingMessagesRef = useRef(false);
+  useEffect(() => {
+    if (isCoachView) return;
+    const supabase = createClient();
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    // Wait for the session first -- see ChatTab: an early subscribe silently never delivers.
+    supabase.auth.getSession().then(() => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`unread-${clientId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `client_id=eq.${clientId}` },
+          (payload) => {
+            const row = payload.new as { sender_id: string };
+            if (row.sender_id === currentUserId || viewingMessagesRef.current) return;
+            setLiveUnread((n) => n + 1);
+          }
+        )
+        .subscribe();
+    });
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [clientId, currentUserId, isCoachView]);
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
@@ -213,6 +251,16 @@ export function DashboardShell({
   // first still-enabled screen, or 'Today' only if every screen in the category is disabled.
   const categoryScreens = screensForCategory(category, isCoachView, disabledScreenSet, nutritionMode);
   const effectiveScreen: Screen = categoryScreens.includes(screen) ? screen : (categoryScreens[0] ?? 'Today');
+
+  const viewingMessages = !isCoachView && area === 'Coaching' && effectiveScreen === 'Messages';
+  const [wasViewingMessages, setWasViewingMessages] = useState(false);
+  if (viewingMessages !== wasViewingMessages) {
+    setWasViewingMessages(viewingMessages);
+    if (viewingMessages) setLiveUnread(0);
+  }
+  useEffect(() => {
+    viewingMessagesRef.current = viewingMessages;
+  }, [viewingMessages]);
 
   // A tab / top-level switch: starts a fresh trail.
   function handleCategoryClick(c: Category) {
@@ -441,6 +489,24 @@ export function DashboardShell({
           )}
           {!isCoachView && (
           <button
+            onClick={() => handleNavigate('Messages')}
+            aria-label={liveUnread > 0 ? `Messages, ${liveUnread} unread` : 'Messages'}
+            className={`relative rounded-xl p-2 ${
+              liveUnread > 0
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-black/5 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15'
+            }`}
+          >
+            <MessageSquare className="h-5 w-5" />
+            {liveUnread > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-[var(--background)] bg-danger px-1 text-[10px] font-extrabold leading-none text-white">
+                {liveUnread > 9 ? '9+' : liveUnread}
+              </span>
+            )}
+          </button>
+          )}
+          {!isCoachView && (
+          <button
             onClick={() => handleNavigate('Notifications')}
             aria-label="Notifications"
             className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
@@ -471,7 +537,7 @@ export function DashboardShell({
         isCoachView ? (
           <BottomTabBar category={category} onSelectCategory={handleCategoryClick} />
         ) : (
-          <ClientBottomTabBar active={activeClientTab} onSelect={handleClientTab} coachUnread={unreadMessageCount > 0} />
+          <ClientBottomTabBar active={activeClientTab} onSelect={handleClientTab} coachUnread={liveUnread > 0} />
         )
       }
     >
