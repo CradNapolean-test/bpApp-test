@@ -25,7 +25,7 @@ export function ClientBottomTabBar({
   coachUnread?: boolean;
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] pb-[env(safe-area-inset-bottom)] md:hidden dark:border-white/10">
       {TABS.map(({ tab, label, icon: Icon }) => {
         const isActive = active === tab;
         return (

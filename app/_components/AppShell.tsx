@@ -52,7 +52,7 @@ export function AppShell({
   return (
     <div
       data-view={isCoachView ? 'coach' : undefined}
-      className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${bottomBar ? 'pb-32 pt-6 sm:pt-10 md:pb-10' : 'py-6 sm:py-10'}`}
+      className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${bottomBar ? 'pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-10 md:pb-10' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:py-10'}`}
     >
       <div className={`flex flex-col ${topBar ? 'gap-4' : ''}`}>
         <div className={`flex items-center justify-between gap-3 ${mobileHeader ? 'order-2 md:order-1' : ''}`}>

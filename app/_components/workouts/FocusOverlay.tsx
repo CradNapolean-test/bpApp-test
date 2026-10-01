@@ -22,7 +22,7 @@ export function FocusOverlay({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]">
-      <div className="flex items-center justify-between gap-2 border-b border-black/10 p-4 dark:border-white/10">
+      <div className="flex items-center justify-between gap-2 border-b border-black/10 p-4 pt-[max(1rem,env(safe-area-inset-top))] dark:border-white/10">
         <button
           onClick={onClose}
           className="flex shrink-0 items-center gap-1 text-sm font-medium text-zinc-500 hover:text-black dark:hover:text-zinc-300"
@@ -36,7 +36,7 @@ export function FocusOverlay({
         </div>
         <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
     </div>
   );
 }

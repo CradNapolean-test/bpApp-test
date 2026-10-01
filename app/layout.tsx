@@ -7,6 +7,7 @@ import { ConfirmProvider } from "./_components/ConfirmDialog";
 import { ThemeSync } from "./_components/ThemeSync";
 import { ServiceWorkerRegister } from "./_components/ServiceWorkerRegister";
 import { SplashScreen } from "./_components/SplashScreen";
+import { OfflineBanner } from "./_components/OfflineBanner";
 import { createClient } from "@/lib/supabase/server";
 import type { ThemePreference } from "./_components/theme";
 
@@ -42,10 +43,22 @@ export const metadata: Metadata = {
   title: "Ballistic Performance",
   description: "Coaching platform",
   manifest: "/manifest.json",
+  applicationName: "Ballistic",
+  // iPhone home-screen app: full screen, own title, black status bar (matches the dark app).
+  appleWebApp: { capable: true, title: "Ballistic", statusBarStyle: "black" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#111111",
+  // Browser/Android toolbar colour follows the OS theme; content extends under the notch and home
+  // indicator (viewport-fit=cover) and the layout pads itself with the safe-area insets.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fdfcfb" },
+    { media: "(prefers-color-scheme: dark)", color: "#111111" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
@@ -82,6 +95,7 @@ export default async function RootLayout({
             <ThemeSync dbPreference={themePreference} />
             <ServiceWorkerRegister />
             <SplashScreen />
+            <OfflineBanner />
             {children}
           </ConfirmProvider>
         </ToastProvider>

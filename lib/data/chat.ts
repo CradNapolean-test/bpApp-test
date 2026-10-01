@@ -16,7 +16,7 @@ async function pushMemberIfFromCoach(senderId: string, clientId: string, preview
     await sendPushToClient(clientId, {
       title: 'New message from your coach',
       body: preview.length > 120 ? `${preview.slice(0, 117)}...` : preview,
-      url: '/dashboard',
+      url: '/dashboard?open=messages',
     });
   } catch {
     /* ignore */

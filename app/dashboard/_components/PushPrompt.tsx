@@ -73,7 +73,7 @@ export function PushPrompt({ clientId }: { clientId: string }) {
   }
 
   return (
-    <div className="fixed inset-x-3 bottom-24 z-[55] mx-auto max-w-md rounded-2xl border border-accent/30 bg-card p-4 shadow-xl md:bottom-6">
+    <div className="fixed inset-x-3 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[55] mx-auto max-w-md rounded-2xl border border-accent/30 bg-card p-4 shadow-xl md:bottom-6">
       <button type="button" aria-label="Not now" onClick={notNow} className="absolute right-2.5 top-2.5 rounded-full p-1.5 text-zinc-400">
         <X className="h-4 w-4" />
       </button>

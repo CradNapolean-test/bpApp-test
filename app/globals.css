@@ -81,6 +81,32 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+/* App-like touch behaviour (this is installed as a home-screen app): no grey flash on tap, no
+   double-tap zoom delay, no iOS text inflation, and no pull-to-refresh / rubber-band chaining that
+   would reload the app mid-task. Text boxes stay selectable. */
+html {
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+}
+button,
+[role='button'],
+a {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* The app had no focus styling at all -- keyboard users got the browser default or
    nothing. One global rule beats adding a ring class to every interactive element. */
 :focus-visible {

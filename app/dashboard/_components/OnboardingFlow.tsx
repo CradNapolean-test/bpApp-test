@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, PlusSquare, Share } from 'lucide-react';
 import { Logo } from '@/app/_components/Logo';
+import { useInstall } from '@/app/_components/useInstall';
 import { Button } from '@/app/_components/Button';
 import { completeOnboarding, completeShortOnboarding } from '@/lib/data/onboarding';
 import { ACTIVITY_OPTIONS, ageFromDob, buildOnboardingPlan, TRACKING_OPTIONS } from '@/lib/onboarding';
@@ -187,34 +188,6 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   );
 }
 
-interface InstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-// What the final "install the app" step needs: is this already the installed app, is it an iPhone
-// (which has no install button, so we show the Share -> Add to Home Screen steps), and on Android
-// the browser's own install prompt if it offered one.
-function useInstallState() {
-  const [standalone, setStandalone] = useState(false);
-  const [ios, setIos] = useState(false);
-  const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
-  useEffect(() => {
-    // Read the device after mount (it can't be known during server rendering).
-    Promise.resolve().then(() => {
-      setStandalone(window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true);
-      setIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
-    });
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallEvent(e as InstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
-  }, []);
-  return { standalone, ios, installEvent };
-}
-
 export function OnboardingFlow({
   clientId,
   email,
@@ -253,7 +226,7 @@ export function OnboardingFlow({
   const [knowsBf, setKnowsBf] = useState(false);
   const [bf, setBf] = useState('');
   const [mode, setMode] = useState<TrackingMode>(existing?.nutrition_tracking_mode ?? 'full_tracking');
-  const install = useInstallState();
+  const install = useInstall();
 
   const age = dob ? ageFromDob(dob) : null;
   const bfNumber = knowsBf && bf !== '' ? Number(bf) : null;
@@ -355,7 +328,7 @@ export function OnboardingFlow({
   }
 
   const shell = (children: React.ReactNode) => (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-8 pt-6">{children}</div>
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">{children}</div>
   );
 
   if (step === -1) {

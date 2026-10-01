@@ -9,6 +9,7 @@ import { Avatar } from '@/app/_components/Avatar';
 import { createClient } from '@/lib/supabase/client';
 import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
+import { InstallBanner } from './InstallBanner';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -316,6 +317,30 @@ export function DashboardShell({
     handleCategoryClick(tab === 'Home' ? 'Home' : tab === 'Coach' ? 'Coach' : 'Account Settings');
   }
 
+  // Deep links: home-screen shortcuts and push notifications open /dashboard?open=<where>.
+  // Runs once on load, then removes the parameter so a refresh doesn't repeat it.
+  useEffect(() => {
+    if (isCoachView) return;
+    Promise.resolve().then(() => {
+      const url = new URL(window.location.href);
+      const open = url.searchParams.get('open');
+      if (!open) return;
+      if (open === 'messages') handleCategoryClick('Messages');
+      else if (open === 'book') handleClientTab('Book');
+      else if (open === 'checkin') handleCategoryClick('Accountability');
+      url.searchParams.delete('open');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Red number on the home-screen icon = unread messages (where the phone supports it).
+  useEffect(() => {
+    if (isCoachView || !('setAppBadge' in navigator)) return;
+    const nav = navigator as Navigator & { setAppBadge: (n?: number) => Promise<void>; clearAppBadge: () => Promise<void> };
+    (liveUnread > 0 ? nav.setAppBadge(liveUnread) : nav.clearAppBadge()).catch(() => {});
+  }, [liveUnread, isCoachView]);
+
   const topBar = isCoachView ? <CoachNav /> : undefined;
 
   const activeClientTab: ClientTab =
@@ -576,6 +601,11 @@ export function DashboardShell({
       )}
       {showCoaching && (
         <>
+          {!isCoachView && effectiveScreen === 'Today' && (
+            <div className="mb-4 empty:hidden">
+              <InstallBanner />
+            </div>
+          )}
           {effectiveScreen === 'Today' && (
             <TodayTab
               profile={profile}

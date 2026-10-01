@@ -115,7 +115,7 @@ export function ChatTab({
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
@@ -169,7 +169,8 @@ export function ChatTab({
   }, [clientId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll just the message list (scrollIntoView would also scroll the whole page).
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
@@ -231,7 +232,7 @@ export function ChatTab({
   }
 
   return (
-    <div className="flex h-[calc(100dvh-10.5rem)] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="flex h-[calc(100dvh-10.5rem-env(safe-area-inset-bottom))] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <div className="flex items-center gap-3 border-b border-black/[.05] px-4 py-3 dark:border-white/10">
         <Avatar name={otherPartyName} size="md" />
         <div>
@@ -239,7 +240,7 @@ export function ChatTab({
           <p className="text-[11px] text-zinc-500">{readOnly ? 'Read-only' : 'Messages, photos and voice notes'}</p>
         </div>
       </div>
-      <div className="flex-1 space-y-2.5 overflow-y-auto px-3.5 py-4">
+      <div ref={listRef} className="flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3.5 py-4">
         {messages.length === 0 && (
           <EmptyState icon={MessageSquare} title="No messages yet" hint="Say hello to get the conversation started." />
         )}
@@ -297,7 +298,6 @@ export function ChatTab({
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
       {!readOnly && (
         <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-black/[.05] p-2.5 dark:border-white/10">

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<title>Offline · Ballistic Performance</title>
+<style>
+  html,body{margin:0;height:100%;background:#111;color:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;box-sizing:border-box}
+  img{width:88px;height:88px;border-radius:20px}
+  h1{margin:6px 0 0;font-size:22px;font-weight:800}
+  p{margin:0;max-width:300px;color:#9a9a9a;font-size:15px;line-height:1.5}
+  button{margin-top:10px;border:0;border-radius:999px;background:#19adb1;color:#fff;font-weight:800;font-size:15px;padding:13px 28px}
+</style>
+</head>
+<body>
+<main>
+  <img src="/icons/icon-192.png" alt="">
+  <h1>You&rsquo;re offline</h1>
+  <p>Ballistic needs a connection to load your sessions, food and messages. Check your signal or Wi&#8209;Fi and try again.</p>
+  <button onclick="location.reload()">Try again</button>
+</main>
+<script>window.addEventListener('online',function(){location.reload()})</script>
+</body>
+</html>

@@ -11,6 +11,6 @@ export const config = {
     // response for a service worker's top-level script fetch is rejected outright by the
     // browser per spec, so leaving these caught by the auth redirect silently broke push
     // registration even for logged-in users, not just anonymous visitors.
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
