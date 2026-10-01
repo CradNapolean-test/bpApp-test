@@ -86,7 +86,7 @@ export function ConversationList({
                     {c.unread_count > 0 && <span className="h-2 w-2 rounded-full bg-accent" aria-label="Unread" />}
                   </span>
                 </div>
-                <p className="truncate text-xs text-zinc-500">{c.last_message ?? 'No messages yet'}</p>
+                <p className="truncate text-xs text-zinc-500">{c.last_message ?? (c.last_message_at ? 'Attachment' : 'No messages yet')}</p>
               </div>
             </div>
           </button>

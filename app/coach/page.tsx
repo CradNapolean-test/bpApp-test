@@ -4,6 +4,8 @@ import { getClientHealthStatuses, getMyClients } from '@/lib/data/coach';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getRecentActivity } from '@/lib/data/activity';
 import { getScheduleOccurrences } from '@/lib/data/classes';
+import { getBigDogToVerify, getDeletionRequests } from '@/lib/data/coachAttention';
+import { getClientsNeedingReview } from '@/lib/data/onboarding';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { CoachNav } from './_components/CoachNav';
@@ -30,12 +32,15 @@ export default async function CoachPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (!profile || profile.role !== 'coach') redirect('/');
 
-  const [clients, healthStatuses, chatOverview, activity, occurrences] = await Promise.all([
+  const [clients, healthStatuses, chatOverview, activity, occurrences, newMembers, toVerify, deletionRequests] = await Promise.all([
     getMyClients(supabase, user.id),
     getClientHealthStatuses(supabase, user.id),
     getCoachChatOverview(),
     getRecentActivity(),
     getScheduleOccurrences(1, 2),
+    getClientsNeedingReview(),
+    getBigDogToVerify(),
+    getDeletionRequests(),
   ]);
 
   // The activity feed is gym-wide, so it includes clients of other coaches -- look their names up
@@ -69,6 +74,9 @@ export default async function CoachPage() {
             occurrences={occurrences}
             unreadCount={unreadCount}
             flagged={healthStatuses.filter((s) => s.status === 'red' || s.status === 'amber')}
+            newMembers={newMembers}
+            toVerify={toVerify}
+            deletionRequests={deletionRequests}
           />
           <div className="space-y-4">
             <ActivityFeed events={activity} clients={clients} extraNames={extraNames} />

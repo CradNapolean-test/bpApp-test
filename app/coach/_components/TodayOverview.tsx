@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { CalendarCheck, ChevronRight, MessageSquare } from 'lucide-react';
+import { CalendarCheck, ChevronRight, ClipboardCheck, MessageSquare, Trash2, Trophy } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Card, SectionLabel } from '@/app/_components/ui';
 import { formatClassTime } from '@/lib/utils/dates';
 import type { ClientHealthStatus } from '@/lib/data/coach';
+import type { BigDogToVerify, DeletionRequest } from '@/lib/data/coachAttention';
+import type { ReviewQueueItem } from '@/lib/data/onboarding';
 import type { ScheduleOccurrence } from '@/lib/data/types';
 
 // The coach's "start of the day" block: what's on now/next, how full today is, and everything that
@@ -61,10 +63,19 @@ export function TodayOverview({
   occurrences,
   unreadCount,
   flagged,
+  newMembers = [],
+  toVerify = [],
+  deletionRequests = [],
 }: {
   occurrences: ScheduleOccurrence[];
   unreadCount: number;
   flagged: ClientHealthStatus[];
+  // New members whose starting plan is waiting for a look (onboarding).
+  newMembers?: ReviewQueueItem[];
+  // Peak week scores members logged themselves, waiting to be verified.
+  toVerify?: BigDogToVerify[];
+  // Members who asked for their account to be deleted.
+  deletionRequests?: DeletionRequest[];
 }) {
   const now = new Date();
   const todayIso = localTodayIso(now);
@@ -77,7 +88,8 @@ export function TodayOverview({
   const toMark = occurrences.filter((o) => (o.unmarkedCount ?? 0) > 0);
   const toMarkPeople = toMark.reduce((n, o) => n + (o.unmarkedCount ?? 0), 0);
   const worst = [...flagged].sort((a, b) => (a.status === b.status ? b.daysSinceActive - a.daysSinceActive : a.status === 'red' ? -1 : 1));
-  const attentionCount = (toMark.length > 0 ? 1 : 0) + (unreadCount > 0 ? 1 : 0) + worst.length;
+  const attentionCount =
+    (toMark.length > 0 ? 1 : 0) + (unreadCount > 0 ? 1 : 0) + worst.length + (newMembers.length > 0 ? 1 : 0) + (toVerify.length > 0 ? 1 : 0) + deletionRequests.length;
 
   return (
     <div className="space-y-4">
@@ -143,6 +155,31 @@ export function TodayOverview({
             <p className="py-3 text-sm text-zinc-500">All clear — nothing needs you right now. ✓</p>
           ) : (
             <div className="divide-y divide-black/5 dark:divide-white/10">
+              {deletionRequests.map((r) => (
+                <AttentionRow
+                  key={r.clientId}
+                  href={`/coach/clients/${r.clientId}`}
+                  icon={Trash2}
+                  title={`${r.name} asked to delete their account`}
+                  hint="Their data needs removing"
+                />
+              ))}
+              {newMembers.length > 0 && (
+                <AttentionRow
+                  href={newMembers.length === 1 ? `/coach/clients/${newMembers[0].clientId}` : '/coach/clients'}
+                  icon={ClipboardCheck}
+                  title={`${newMembers.length} new member${newMembers.length === 1 ? '' : 's'} to review`}
+                  hint={newMembers.length === 1 ? `${newMembers[0].name}: check their starting plan` : 'Check their starting plans'}
+                />
+              )}
+              {toVerify.length > 0 && (
+                <AttentionRow
+                  href={`/coach/clients/${toVerify[0].clientId}`}
+                  icon={Trophy}
+                  title={`${toVerify.length} peak week score${toVerify.length === 1 ? '' : 's'} to verify`}
+                  hint={`${toVerify[0].name}: ${toVerify[0].exercise}${toVerify[0].result ? ` ${toVerify[0].result}` : ''}${new Set(toVerify.map((t) => t.clientId)).size > 1 ? ` and ${new Set(toVerify.map((t) => t.clientId)).size - 1} other${new Set(toVerify.map((t) => t.clientId)).size - 1 === 1 ? '' : 's'}` : ''}`}
+                />
+              )}
               {toMark.length > 0 && (
                 <AttentionRow
                   href={sessionHref(toMark[0])}
