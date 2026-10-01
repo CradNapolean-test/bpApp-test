@@ -8,6 +8,8 @@ export interface OpenFoodFactsProduct {
   protein: number | null;
   carbs: number | null;
   fat: number | null;
+  // Grams of fibre per gram; null when OFF has no figure (the food then adds no fibre).
+  fibre: number | null;
 }
 
 export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProduct | null> {
@@ -28,5 +30,6 @@ export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProdu
     protein: perGram(nutriments.proteins_100g),
     carbs: perGram(nutriments.carbohydrates_100g),
     fat: perGram(nutriments.fat_100g),
+    fibre: perGram(nutriments.fiber_100g),
   };
 }

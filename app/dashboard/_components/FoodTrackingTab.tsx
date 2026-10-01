@@ -554,6 +554,7 @@ export function FoodTrackingTab({
           protein: product.protein,
           carbs: product.carbs,
           fat: product.fat,
+          fibre: product.fibre,
         });
       }
       await handleAdd(food, 100, target?.id ?? null);

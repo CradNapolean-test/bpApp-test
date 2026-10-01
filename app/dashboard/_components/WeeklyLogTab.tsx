@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Checkbox } from '@/app/_components/Checkbox';
+import { Check, Dumbbell } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { dayCalories, cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
@@ -50,7 +51,7 @@ function MoodDots({ label, value, onChange, disabled }: { label: string; value: 
             onClick={() => onChange(n)}
             aria-label={`${label} ${n} of 5`}
             className={`h-7 flex-1 rounded-full transition-colors disabled:opacity-60 ${
-              value != null && n === value
+              value != null && n <= value
                 ? 'bg-accent'
                 : 'bg-black/[.04] hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20'
             }`}
@@ -176,6 +177,7 @@ export function WeeklyLogTab({
   const cycleDay = gender === 'Female' ? cycleDayFor(periodStartDates, focusedDate) : null;
   const dayTarget = targetForDayType(d.day_type);
   const attendedToday = attendedSessions.find((a) => a.date === focusedDate) ?? null;
+  const gymOn = d.gym_session || attendedToday != null;
 
   return (
     <div className="space-y-6">
@@ -337,37 +339,64 @@ export function WeeklyLogTab({
               </div>
             </>
           )}
-          <div className="space-y-1">
-            <label className={labelCls}>Bodyweight (kg)</label>
-            <input type="number" step="0.1" className={inputCls} value={d.bodyweight ?? ''}
-              onChange={(e) => updateDay(focusedDate, { bodyweight: numOrNull(e.target.value) })} />
-          </div>
+          <label className="col-span-2 flex h-16 items-center justify-between gap-3 rounded-full border border-black/10 bg-card px-6 transition-colors focus-within:border-accent disabled:opacity-60 dark:border-white/10 sm:col-span-4">
+            <span className="text-sm font-extrabold text-black dark:text-zinc-50">Bodyweight</span>
+            <span className="flex items-baseline gap-1.5">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                placeholder="—"
+                aria-label="Bodyweight in kilograms"
+                className="w-28 bg-transparent text-right text-3xl font-black text-black outline-none placeholder:text-zinc-400 dark:text-zinc-50"
+                value={d.bodyweight ?? ''}
+                onChange={(e) => updateDay(focusedDate, { bodyweight: numOrNull(e.target.value) })}
+              />
+              <span className="text-base font-bold text-zinc-500">kg</span>
+            </span>
+          </label>
+
+          <p className="col-span-2 -mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-4">
+            How are you feeling? <span className="font-medium normal-case tracking-normal">1 = low, 5 = high</span>
+          </p>
 
           {SCALE_FIELDS.map(({ key, label }) => (
             <MoodDots
               key={key}
-              label={`${label} (1-5)`}
+              label={label}
               value={d[key]}
               disabled={readOnly}
               onChange={(n) => {
                 updateDay(focusedDate, { [key]: n } as Partial<DayForm>);
-                if (!readOnly) saveDay(focusedDate);
+                if (!readOnly) saveDay(focusedDate, { [key]: n } as Partial<DayForm>);
               }}
             />
           ))}
 
-          <label className="col-span-2 flex items-center gap-2 text-sm sm:col-span-4">
-            <Checkbox
-              checked={d.gym_session || attendedToday != null}
-              disabled={attendedToday != null}
-              onChange={(e) => updateDay(focusedDate, { gym_session: e.target.checked })}
-            />
-            <span>
-              Gym session
-              {attendedToday != null && <span className="ml-1.5 text-xs font-semibold text-success">· from your booking: {attendedToday.label}</span>}
-              {attendedToday == null && <span className="ml-1.5 text-xs text-zinc-500">· ticks itself when a class is marked attended</span>}
+          <button
+            type="button"
+            aria-pressed={gymOn}
+            disabled={attendedToday != null}
+            onClick={() => {
+              const next = !d.gym_session;
+              updateDay(focusedDate, { gym_session: next });
+              if (!readOnly) saveDay(focusedDate, { gym_session: next });
+            }}
+            className={`col-span-2 flex h-16 w-full items-center justify-between gap-3 rounded-full px-6 text-left transition-colors disabled:cursor-default sm:col-span-4 ${
+              gymOn ? 'bg-accent text-accent-foreground' : 'border border-black/10 bg-card text-black hover:bg-black/[.03] dark:border-white/10 dark:text-zinc-50 dark:hover:bg-white/[.04]'
+            }`}
+          >
+            <span className="flex items-center gap-3">
+              <Dumbbell className="h-6 w-6 shrink-0" />
+              <span>
+                <span className="block text-sm font-extrabold">Gym session</span>
+                <span className={`block text-xs font-medium ${gymOn ? 'opacity-80' : 'text-zinc-500'}`}>
+                  {attendedToday != null ? `From your booking · ${attendedToday.label}` : gymOn ? 'Logged for today' : 'Tap if you trained'}
+                </span>
+              </span>
             </span>
-          </label>
+            {gymOn && <Check className="h-6 w-6 shrink-0" strokeWidth={3} />}
+          </button>
           {gender === 'Female' && (
             <label className="flex items-center gap-2 pt-5 text-sm">
               <Checkbox checked={d.period_started}

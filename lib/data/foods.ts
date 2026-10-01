@@ -38,12 +38,12 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null>
 // already there rather than risk clobbering curated macros with a lower-quality OFF entry.
 export async function upsertFoodFromBarcode(
   barcode: string,
-  fields: { name: string; portion: string; protein: number; carbs: number; fat: number }
+  fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null }
 ): Promise<FoodRow> {
   const supabase = await createClient();
   const { error: insertError } = await supabase
     .from('foods')
-    .insert({ barcode, ...fields })
+    .insert({ barcode, source: 'scan', ...fields })
     .select()
     .maybeSingle();
   // Conflict on the unique barcode column is expected/harmless when another session (or a
