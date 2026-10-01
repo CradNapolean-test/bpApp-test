@@ -9,7 +9,7 @@ import { useToast } from '@/app/_components/ToastProvider';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
-import { bookClassForClient, cancelClassOccurrence, getRoster, markAttendanceStatus } from '@/lib/data/classes';
+import { bookClassForClient, cancelClassOccurrence, getRoster, markAttendanceStatus, removeFromSession } from '@/lib/data/classes';
 import { formatClassTime, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
@@ -52,6 +52,8 @@ export function SessionsView({
   const toast = useToast();
   const confirm = useConfirm();
   const { run: runCancel, busy: cancelling } = useAction();
+  const { run: runRemove, busy: removing } = useAction();
+  const [removeEntry, setRemoveEntry] = useState<RosterEntry | null>(null);
   const { run: runBook, busy: booking } = useAction();
 
   const todayIso = localTodayIso();
@@ -137,6 +139,18 @@ export function SessionsView({
       },
       { success: 'Client added' }
     );
+  }
+
+  async function removeMember(refund: boolean) {
+    if (!removeEntry || !open) return;
+    const entry = removeEntry;
+    await runRemove(() => removeFromSession(entry.bookingId, refund), {
+      success: refund ? `${entry.clientName} removed and refunded` : `${entry.clientName} removed`,
+      onDone: async () => {
+        setRemoveEntry(null);
+        setRoster(await getRoster(open.classId, open.date));
+      },
+    });
   }
 
   async function cancelOccurrence() {
@@ -278,6 +292,14 @@ export function SessionsView({
                         {waitlisted && <p className="text-[11px] font-semibold text-warning">Waitlist</p>}
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${entry.clientName} from this session`}
+                      onClick={() => setRemoveEntry(entry)}
+                      className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:text-danger"
+                    >
+                      <UserX className="h-4 w-4" />
+                    </button>
                     {!waitlisted && (
                       <button
                         type="button"
@@ -341,6 +363,32 @@ export function SessionsView({
               )}
             </div>
           )}
+        </BottomSheet>
+      )}
+
+      {removeEntry && (
+        <BottomSheet title={`Remove ${removeEntry.clientName}?`} onClose={() => setRemoveEntry(null)}>
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              They are taken off this session and told. Choose whether their credit goes back.
+            </p>
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => removeMember(true)}
+              className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+            >
+              Remove and refund the credit
+            </button>
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => removeMember(false)}
+              className="w-full rounded-full border border-black/10 py-3 text-sm font-bold text-zinc-700 disabled:opacity-50 dark:border-white/15 dark:text-zinc-200"
+            >
+              Remove, no refund
+            </button>
+          </div>
         </BottomSheet>
       )}
     </div>

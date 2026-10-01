@@ -299,6 +299,13 @@ export async function cancelClassOccurrence(classId: string, date: string): Prom
   return { ...ok(), count: data as number };
 }
 
+// A coach takes one member off a session; `refund` says whether their credit goes back.
+export async function removeFromSession(bookingId: string, refund: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('coach_cancel_booking', { p_booking_id: bookingId, p_refund: refund });
+  return error ? fail(error, 'Could not remove them from the session') : ok();
+}
+
 // Roster for one specific occurrence (class + date), with each booked client's name and
 // current attendance state.
 export async function getRoster(classId: string, date: string): Promise<RosterEntry[]> {
