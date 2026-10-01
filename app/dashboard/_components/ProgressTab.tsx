@@ -186,9 +186,10 @@ export function ProgressTab({
               </div>
               {MEASUREMENT_FIELDS.map(({ key, label }) => {
                 const latest = initialMeasurements[0][key];
-                // Start is the first measurement ever logged (members no longer type a start figure).
-                const first = initialMeasurements[initialMeasurements.length - 1];
-                const start = initialMeasurements.length > 1 ? first?.[key] ?? null : null;
+                // Start is the first measurement ever logged for this body part (members no longer
+                // type a start figure), so the very first entry becomes Start automatically.
+                const oldest = [...initialMeasurements].reverse().find((m) => m[key] != null);
+                const start = oldest?.[key] ?? null;
                 const last = initialMeasurements[1]?.[key] ?? null;
                 const vsStart = latest != null && start != null ? latest - start : null;
                 const vsPrevious = latest != null && last != null ? latest - last : null;
@@ -205,7 +206,7 @@ export function ProgressTab({
                       <span className="text-right text-sm text-zinc-500">{last ?? '—'}</span>
                       <span className="text-right text-sm font-bold text-black dark:text-zinc-50">{latest ?? '—'}</span>
                     </div>
-                    {deltaLabel && (
+                    {deltaLabel && initialMeasurements.length > 1 && (
                       <p className={`mt-0.5 text-[11px] font-medium ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-success' : 'text-danger'}`}>
                         {deltaLabel}cm since your first measurement
                         {formatDelta(vsPrevious) ? ` · ${formatDelta(vsPrevious)}cm since last time` : ''}

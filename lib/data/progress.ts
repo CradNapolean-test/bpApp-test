@@ -89,4 +89,18 @@ export async function addMeasurementLog(
     .from('measurement_logs')
     .upsert({ client_id: clientId, log_date: logDate, ...fields }, { onConflict: 'client_id,log_date' });
   if (error) raise(error);
+
+  // The first time a measurement is entered it becomes that member's Start figure (a figure they
+  // already have, or a coach set, is never overwritten).
+  const { data: profile } = await supabase.from('client_profiles').select('*').eq('client_id', clientId).maybeSingle();
+  if (profile) {
+    const starts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      const column = `meas_${key}_start`;
+      if (typeof value === 'number' && column in profile && profile[column] == null) starts[column] = value;
+    }
+    if (Object.keys(starts).length > 0) {
+      await supabase.from('client_profiles').update(starts).eq('client_id', clientId);
+    }
+  }
 }

@@ -3,7 +3,9 @@
 //  - Offline: precaches a small offline page, shown only when a page load fails with no network.
 //  - Speed: caches the app's static build files and icons (never pages, API calls or user data, so
 //    nothing signed-in is ever stored or served stale).
-const VERSION = 'bp-v3';
+const VERSION = 'bp-v4';
+// Dev servers reuse the same build-file URLs for changing code, so never cache them there.
+const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 const STATIC_CACHE = `${VERSION}-static`;
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png'];
@@ -34,7 +36,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Hashed build files and icons never change for a given URL: serve from cache, fill on first use.
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) {
+  if (!IS_LOCAL && (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/'))) {
     event.respondWith(
       caches.match(request).then(
         (hit) =>
