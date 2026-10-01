@@ -60,6 +60,22 @@ export async function upsertClientProfile(
     }
   }
 
+  // A coach saving a client's form (migration 0081 lets them update, not insert) uses a plain
+  // update; the member's own save keeps the upsert so a first-time profile can be created.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user && user.id !== clientId) {
+    const { data: updated, error } = await supabase
+      .from('client_profiles')
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq('client_id', clientId)
+      .select('client_id');
+    if (error) raise(error);
+    if (!updated?.length) throw new Error('Could not save — this client has no profile yet or you do not coach them.');
+    return;
+  }
+
   const { error } = await supabase
     .from('client_profiles')
     .upsert({ client_id: clientId, ...fields, ...seed, updated_at: new Date().toISOString() });

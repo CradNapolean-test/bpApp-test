@@ -86,11 +86,14 @@ export function SetupTab({
   clientId,
   initialProfile,
   readOnly,
+  isCoachView = false,
   measurementLogs,
 }: {
   clientId: string;
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
+  // Coach-only controls (nutrition tracking method, calculation detail) show for a coach.
+  isCoachView?: boolean;
   measurementLogs: MeasurementLogRow[];
 }) {
   const { run, busy: saving } = useAction();
@@ -150,7 +153,7 @@ export function SetupTab({
       return;
     }
     setError(null);
-    await run(() => upsertClientProfile(clientId, form), { success: 'Setup saved' });
+    await run(() => upsertClientProfile(clientId, form), { success: 'Details saved' });
   }
 
   const inputCls =
@@ -160,30 +163,33 @@ export function SetupTab({
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       {engine && week1Target && (
-        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Calculated targets</h3>
-          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-            <div><dt className="text-zinc-500">BMR</dt><dd>{Math.round(engine.bmr)} kcal</dd></div>
-            <div><dt className="text-zinc-500">TDEE</dt><dd>{Math.round(engine.tdee)} kcal</dd></div>
-            <div><dt className="text-zinc-500">Protein/day</dt><dd>{Math.round(engine.protein)} g</dd></div>
-            <div><dt className="text-zinc-500">Fat/day</dt><dd>{Math.round(engine.fat)} g</dd></div>
-          </dl>
-          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-            Week 1 daily target: {Math.round((week1Target.calories) / 7)} kcal ·{' '}
-            {Math.round(week1Target.protein / 7)}g protein ·{' '}
-            {Math.round(week1Target.carbs / 7)}g carbs ·{' '}
-            {Math.round(week1Target.fat / 7)}g fat
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your daily targets</h3>
+          <p className="mt-2 text-3xl font-extrabold text-black dark:text-zinc-50">
+            {Math.round(week1Target.calories / 7)} <span className="text-base font-bold text-zinc-500">kcal</span>
           </p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            {Math.round(week1Target.protein / 7)}g protein · {Math.round(week1Target.carbs / 7)}g carbs ·{' '}
+            {Math.round(week1Target.fat / 7)}g fat <span className="text-zinc-400">(starting week)</span>
+          </p>
+          {isCoachView && (
+            <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-black/[.05] pt-3 text-sm dark:border-white/10 sm:grid-cols-4">
+              <div><dt className="text-zinc-500">BMR</dt><dd>{Math.round(engine.bmr)} kcal</dd></div>
+              <div><dt className="text-zinc-500">TDEE</dt><dd>{Math.round(engine.tdee)} kcal</dd></div>
+              <div><dt className="text-zinc-500">Protein/day</dt><dd>{Math.round(engine.protein)} g</dd></div>
+              <div><dt className="text-zinc-500">Fat/day</dt><dd>{Math.round(engine.fat)} g</dd></div>
+            </dl>
+          )}
           {week1Target.calories / 7 < CALORIE_FLOOR && (
             <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-              Daily target is below {CALORIE_FLOOR} kcal — worth a coach review.
+              Daily target is below {CALORIE_FLOOR} kcal — worth a chat with your coach.
             </p>
           )}
         </div>
       )}
 
-      {readOnly && (
-        <div className="space-y-2 rounded-lg border border-black/10 p-4 dark:border-white/10">
+      {isCoachView && !readOnly && (
+        <div className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <label className={labelCls}>Nutrition tracking method</label>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {NUTRITION_MODES.map((m) => (
@@ -207,7 +213,7 @@ export function SetupTab({
       )}
 
       <fieldset disabled={readOnly} className="space-y-6">
-        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Contact details</h3>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1">
@@ -256,7 +262,9 @@ export function SetupTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">About you &amp; your goal</h3>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <label className={labelCls}>Name</label>
             <input
@@ -354,6 +362,13 @@ export function SetupTab({
               onChange={(e) => setForm({ ...form, goal_weight: Number(e.target.value) })}
             />
           </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Nutrition plan</h3>
+          <p className="mt-1 text-xs text-zinc-500">These set your calorie and macro targets. Check with your coach before changing them.</p>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <label className={labelCls}>Activity level multiplier</label>
             <input
@@ -363,6 +378,7 @@ export function SetupTab({
               value={form.activity_level}
               onChange={(e) => setForm({ ...form, activity_level: Number(e.target.value) })}
             />
+            <p className="text-xs text-zinc-500">1.2 mostly desk-based · 1.5 moderately active · 1.75 very active.</p>
           </div>
           <div className="space-y-1">
             <label className={labelCls}>Diet approach</label>
@@ -397,13 +413,20 @@ export function SetupTab({
             />
             Calorie cycling
           </label>
+          </div>
         </div>
 
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements (current / start / goal)</h3>
+          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements (cm)</h3>
           <p className="mb-2 text-xs text-zinc-500">
             Current comes from the latest entry logged under Progress &amp; Photos.
           </p>
+          <div className="mb-1 grid grid-cols-4 gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            <span />
+            <span className="px-3">Now</span>
+            <span>Start</span>
+            <span>Goal</span>
+          </div>
           <div className="space-y-2">
             {MEASUREMENTS.map(({ key, label }) => {
               const current = measurementLogs[0]?.[key] ?? null;
@@ -439,6 +462,11 @@ export function SetupTab({
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Strength lifts (start / goal)</h3>
+          <div className="mb-1 grid grid-cols-3 gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            <span />
+            <span>Start (kg)</span>
+            <span>Goal (kg)</span>
+          </div>
           <div className="space-y-2">
             {LIFTS.map(({ key, label }) => (
               <div key={key} className="grid grid-cols-3 items-center gap-2">

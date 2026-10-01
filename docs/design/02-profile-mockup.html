@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BP App — Member Profile</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+  :root{--t:#2ABFBF;--td:rgba(42,191,191,0.12);--tb:rgba(42,191,191,0.28);--bk:#111;--c1:#1e1e1e;--mu:#666;--wh:#f0f0f0;--sp:#1e1e1e;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#1a1a2e;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:2rem 0;font-family:'Helvetica Neue',Arial,sans-serif;}
+  .frame{width:340px;background:var(--bk);border-radius:42px;border:2.5px solid #2a2a2a;overflow:hidden;color:var(--wh);}
+  .nbar{display:flex;justify-content:space-between;align-items:center;padding:14px 22px 0;font-size:11px;font-weight:700;}
+  .notch{width:80px;height:22px;background:var(--bk);border-radius:0 0 14px 14px;margin:0 auto;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 8px;}
+  .back{width:32px;height:32px;border-radius:50%;background:var(--c1);border:0.5px solid #2e2e2e;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .back i{font-size:16px;color:#aaa;}
+  .topbar h1{font-size:15px;font-weight:800;}
+  .edit-btn{font-size:11px;font-weight:700;color:var(--t);background:var(--td);border:0.5px solid var(--tb);padding:5px 12px;border-radius:20px;cursor:pointer;}
+  .avatar-area{text-align:center;padding:12px 0 10px;}
+  .avatar{width:68px;height:68px;border-radius:50%;background:var(--td);border:2px solid var(--t);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:22px;font-weight:900;color:var(--t);}
+  .av-name{font-size:16px;font-weight:800;margin-bottom:3px;}
+  .av-email{font-size:11px;color:var(--mu);margin-bottom:7px;}
+  .mem-badge{display:inline-block;background:var(--td);color:var(--t);font-size:9px;font-weight:800;letter-spacing:1px;padding:4px 12px;border-radius:20px;border:0.5px solid var(--tb);text-transform:uppercase;}
+  .bigdog-card{margin:10px 14px 4px;border-radius:14px;padding:12px 14px;border:0.5px solid rgba(42,191,191,0.3);background:rgba(42,191,191,0.05);cursor:pointer;}
+  .bd-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+  .bd-left{display:flex;align-items:center;gap:8px;}
+  .bd-icon{width:32px;height:32px;border-radius:9px;background:var(--td);display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .bd-title{font-size:12px;font-weight:800;}
+  .bd-sub{font-size:10px;color:var(--mu);margin-top:1px;}
+  .bd-arrow{display:flex;align-items:center;gap:4px;}
+  .bd-arrow span{font-size:9px;color:var(--t);font-weight:700;}
+  .bd-arrow i{font-size:13px;color:var(--t);}
+  .pip-row{display:flex;gap:4px;margin-bottom:5px;}
+  .pip{flex:1;height:4px;border-radius:2px;background:#2a2a2a;}
+  .pip.tq{background:var(--t);}
+  .pip.wt{background:#e8e8e8;}
+  .tier-lbls{display:flex;justify-content:space-between;}
+  .tier-lbls span{font-size:8px;color:#444;font-weight:700;}
+  .tier-lbls span.on{color:var(--t);}
+  .sec-lbl{font-size:9px;font-weight:800;letter-spacing:2px;color:var(--mu);padding:10px 16px 5px;text-transform:uppercase;}
+  .info-card{margin:0 14px 4px;background:var(--c1);border-radius:14px;border:0.5px solid #2a2a2a;overflow:hidden;}
+  .info-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--sp);}
+  .info-row:last-child{border-bottom:none;}
+  .il{font-size:10px;color:var(--mu);margin-bottom:2px;}
+  .iv{font-size:12px;font-weight:600;}
+  .menu-card{margin:0 14px 6px;background:var(--c1);border-radius:14px;border:0.5px solid #2a2a2a;overflow:hidden;}
+  .mrow{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:0.5px solid var(--sp);cursor:pointer;}
+  .mrow:last-child{border-bottom:none;}
+  .mleft{display:flex;align-items:center;gap:9px;}
+  .mico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;}
+  .mico i{font-size:15px;}
+  .mi-t{background:var(--td);color:var(--t);}
+  .mi-d{background:rgba(255,255,255,0.05);color:#aaa;}
+  .mi-r{background:rgba(224,85,85,0.1);color:#e05555;}
+  .mt{font-size:12px;font-weight:600;}
+  .ms{font-size:10px;color:var(--mu);margin-top:1px;}
+  .logout .mt{color:#e05555;}
+  .scroll-body{max-height:580px;overflow-y:auto;scrollbar-width:none;}
+  .scroll-body::-webkit-scrollbar{display:none;}
+  .navbar{display:flex;justify-content:space-around;padding:10px 0 22px;border-top:0.5px solid #1e1e1e;margin-top:6px;}
+  .ni{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;}
+  .ni i{font-size:20px;color:#444;}
+  .ni span{font-size:9px;color:#444;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
+  .ni.on i,.ni.on span{color:var(--t);}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="nbar"><span>9:41</span><div class="notch"></div><div style="display:flex;gap:4px;align-items:center;"><i class="ti ti-wifi" style="font-size:12px"></i><i class="ti ti-battery" style="font-size:12px"></i></div></div>
+  <div class="topbar">
+    <div class="back"><i class="ti ti-arrow-left"></i></div>
+    <h1>My profile</h1>
+    <div class="edit-btn">Edit</div>
+  </div>
+  <div class="scroll-body">
+    <div class="avatar-area">
+      <div class="avatar">JT</div>
+      <div class="av-name">Jamie Thornton</div>
+      <div class="av-email">jamie@email.com</div>
+      <span class="mem-badge">Big Dog · Worsley</span>
+    </div>
+    <div class="bigdog-card">
+      <div class="bd-top">
+        <div class="bd-left">
+          <div class="bd-icon">🐕</div>
+          <div><div class="bd-title">Turquoise Big Dog</div><div class="bd-sub">4 of 12 · Next: Silver (6+)</div></div>
+        </div>
+        <div class="bd-arrow"><span>View all</span><i class="ti ti-chevron-right"></i></div>
+      </div>
+      <div class="pip-row">
+        <div class="pip wt"></div><div class="pip tq"></div><div class="pip tq"></div><div class="pip tq"></div><div class="pip tq"></div>
+        <div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div>
+      </div>
+      <div class="tier-lbls"><span>Rookie</span><span class="on">White</span><span class="on">Turquoise</span><span>Silver</span><span>Gold</span></div>
+    </div>
+    <p class="sec-lbl">My details</p>
+    <div class="info-card">
+      <div class="info-row"><div><div class="il">Date of birth</div><div class="iv">14 March 1990</div></div></div>
+      <div class="info-row"><div><div class="il">Phone</div><div class="iv">07700 900 123</div></div></div>
+      <div class="info-row"><div><div class="il">Membership</div><div class="iv">Big Dog — renews Sat 6 Jun</div></div></div>
+      <div class="info-row"><div><div class="il">Site</div><div class="iv">Worsley</div></div></div>
+    </div>
+    <p class="sec-lbl">Notifications</p>
+    <div class="menu-card">
+      <div class="mrow"><div class="mleft"><div class="mico mi-d"><i class="ti ti-bell"></i></div><div><div class="mt">Push notifications</div><div class="ms">Session reminders &amp; updates</div></div></div><i class="ti ti-chevron-right" style="font-size:14px;color:#444"></i></div>
+    </div>
+    <p class="sec-lbl">Help &amp; legal</p>
+    <div class="menu-card">
+      <div class="mrow"><div class="mleft"><div class="mico mi-t"><i class="ti ti-help"></i></div><div><div class="mt">FAQs</div><div class="ms">Common questions answered</div></div></div><i class="ti ti-chevron-right" style="font-size:14px;color:#444"></i></div>
+      <div class="mrow"><div class="mleft"><div class="mico mi-d"><i class="ti ti-file-text"></i></div><div><div class="mt">Terms &amp; conditions</div><div class="ms">Membership &amp; usage terms</div></div></div><i class="ti ti-chevron-right" style="font-size:14px;color:#444"></i></div>
+      <div class="mrow"><div class="mleft"><div class="mico mi-d"><i class="ti ti-lock"></i></div><div><div class="mt">Privacy policy</div><div class="ms">How we use your data</div></div></div><i class="ti ti-chevron-right" style="font-size:14px;color:#444"></i></div>
+    </div>
+    <div class="menu-card" style="margin-bottom:14px;">
+      <div class="mrow logout"><div class="mleft"><div class="mico mi-r"><i class="ti ti-logout"></i></div><div><div class="mt">Log out</div></div></div></div>
+    </div>
+  </div>
+  <div class="navbar">
+    <div class="ni"><i class="ti ti-home"></i><span>Home</span></div>
+    <div class="ni"><i class="ti ti-calendar"></i><span>Book</span></div>
+    <div class="ni"><i class="ti ti-messages"></i><span>Coach</span></div>
+    <div class="ni on"><i class="ti ti-user"></i><span>Profile</span></div>
+  </div>
+</div>
+</body>
+</html>

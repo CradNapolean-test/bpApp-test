@@ -542,7 +542,8 @@ export function DashboardShell({
             <SetupTab
               clientId={clientId}
               initialProfile={profile}
-              readOnly={isCoachView}
+              readOnly={isCoachView && !isOwnClient}
+              isCoachView={isCoachView}
               measurementLogs={measurementLogs}
             />
           )}
