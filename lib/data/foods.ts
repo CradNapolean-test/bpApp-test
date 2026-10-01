@@ -6,10 +6,16 @@ import type { ActivityRow, FoodRow } from './types';
 
 export async function searchFoods(query: string): Promise<FoodRow[]> {
   const supabase = await createClient();
-  let request = supabase.from('foods').select('*').order('name').limit(25);
-  if (query.trim()) {
-    request = request.ilike('name', `%${query.trim()}%`);
+  const q = query.trim();
+  if (q) {
+    // Ranked multi-word search over the whole UK database (migration 0074): exact and starts-with
+    // matches first, then UK generics, scanned/imported products, and the old seed last.
+    const ranked = await supabase.rpc('search_foods', { p_query: q, p_limit: 25 });
+    if (!ranked.error) return (ranked.data ?? []) as FoodRow[];
+    // Not applied yet (or any other failure): fall back to the plain name search below.
   }
+  let request = supabase.from('foods').select('*').order('name').limit(25);
+  if (q) request = request.ilike('name', `%${q}%`);
   const { data, error } = await request;
   if (error) raise(error);
   return data ?? [];
