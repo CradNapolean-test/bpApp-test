@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
 import { InstallBanner } from './InstallBanner';
+import { BodyScansTab } from './BodyScansTab';
 import { OfflineSnapshot } from './OfflineSnapshot';
 import { closeTopOverlay } from '@/app/_components/useBackHandler';
 import { Logo } from '@/app/_components/Logo';
@@ -53,6 +54,7 @@ import type { ThemePreference } from '@/app/_components/theme';
 import type {
   ActivityRow,
   BigDogResultRow,
+  BodyScan,
   BookingRow,
   EventWithSignup,
   RewardsForMember,
@@ -122,6 +124,7 @@ export function DashboardShell({
   packages,
   creditPacks,
   photos,
+  bodyScans,
   measurementLogs,
   notifications,
   formTemplates,
@@ -174,6 +177,7 @@ export function DashboardShell({
   packages: MembershipPackageRow[];
   creditPacks: CreditPackRow[];
   photos: ProgressPhoto[];
+  bodyScans: BodyScan[];
   measurementLogs: MeasurementLogRow[];
   habits: HabitWithLogs[];
   notifications: NotificationRow[];
@@ -779,6 +783,9 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
           {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} />}
+          {effectiveScreen === 'Body Scans' && (
+            <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} />
+          )}
           {effectiveScreen === 'Progress & Photos' && (
             <ProgressTab
               clientId={clientId}

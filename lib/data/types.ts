@@ -387,6 +387,27 @@ export interface ProgressPhoto extends ProgressPhotoRow {
   signedUrl: string | null;
 }
 
+// InBody (body composition) scan -- migration 0084.
+export interface BodyScanRow {
+  id: string;
+  client_id: string;
+  scan_date: string;
+  weight_kg: number | null;
+  skeletal_muscle_kg: number | null;
+  body_fat_pct: number | null;
+  body_fat_kg: number | null;
+  visceral_fat_level: number | null;
+  bmr_kcal: number | null;
+  inbody_score: number | null;
+  notes: string | null;
+  printout_path: string | null;
+  created_at: string;
+}
+
+export interface BodyScan extends BodyScanRow {
+  signedPrintoutUrl: string | null;
+}
+
 export interface FoodPhotoEntryRow {
   id: string;
   daily_log_id: string;
