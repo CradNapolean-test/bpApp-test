@@ -183,7 +183,7 @@ export function CreditsTab({
           turn off.
         </p>
         <p className="mt-1 text-xs text-zinc-500">
-          Last reminded: {lastCheckinReminderAt ? new Date(lastCheckinReminderAt).toLocaleString() : 'Never'}
+          Last reminded: {lastCheckinReminderAt ? new Date(lastCheckinReminderAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }) : 'Never'}
         </p>
         <form onSubmit={handleSaveReminder} className="mt-3 flex flex-wrap items-end gap-2">
           <div className="space-y-1">

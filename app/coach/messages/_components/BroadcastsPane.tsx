@@ -168,7 +168,7 @@ export function BroadcastsPane({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-zinc-900 dark:text-zinc-100">{c.message}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {targetLabel} · {isSent ? 'Sent' : 'Scheduled'} {new Date(c.send_at).toLocaleDateString()}
+                  {targetLabel} · {isSent ? 'Sent' : 'Scheduled'} {new Date(c.send_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   {showsMessage && (
                     <>
                       {' · Message: '}

@@ -103,7 +103,7 @@ function JournalSection({
                 </p>
               )}
               <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{entry.body}</p>
-              <p className="mt-1 text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString()}</p>
+              <p className="mt-1 text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             </div>
             {!readOnly && (
               <button

@@ -831,7 +831,7 @@ export function DashboardShell({
             />
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
-          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} />}
+          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
           {effectiveScreen === 'Body Scans' && (
             <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} />
           )}

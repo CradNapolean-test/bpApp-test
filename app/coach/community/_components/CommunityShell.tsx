@@ -275,7 +275,7 @@ export function FeedbackPane({ feedback }: { feedback: FeedbackRow[] }) {
               </p>
             </div>
             {f.comment && <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">{f.comment}</p>}
-            <p className="mt-1 text-xs text-zinc-400">{new Date(f.created_at).toLocaleDateString()}</p>
+            <p className="mt-1 text-xs text-zinc-400">{new Date(f.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
           </div>
         ))
       )}

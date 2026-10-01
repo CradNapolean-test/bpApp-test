@@ -55,7 +55,7 @@ export function TrendChart({
   labels,
   color,
   formatter,
-  emptyText = 'Log a second week to see your trend',
+  emptyText = 'Needs a second week of data for a trend',
 }: {
   values: number[];
   labels: string[];
@@ -150,7 +150,7 @@ function TrendCard({
 }
 
 // Start -> now -> goal for bodyweight, from the profile's start/goal weights and the latest logged weight.
-function WeightGoalCard({ profile, latest }: { profile: ClientProfileRow | null; latest: number | null }) {
+function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfileRow | null; latest: number | null; coachView: boolean }) {
   const start = profile?.start_weight ?? null;
   const goal = profile?.goal_weight ?? null;
   if (start == null || goal == null || start === goal) return null;
@@ -162,7 +162,7 @@ function WeightGoalCard({ profile, latest }: { profile: ClientProfileRow | null;
   return (
     <div className={cardCls}>
       <div className="flex items-baseline justify-between gap-2">
-        <h3 className="font-bold text-black dark:text-zinc-50">Your goal</h3>
+        <h3 className="font-bold text-black dark:text-zinc-50">{coachView ? 'Goal' : 'Your goal'}</h3>
         <span className="text-sm font-bold text-accent">{pct}% there</span>
       </div>
       <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/10">
@@ -183,13 +183,13 @@ function WeightGoalCard({ profile, latest }: { profile: ClientProfileRow | null;
         </div>
       </div>
       <p className="mt-2 text-xs text-zinc-500">
-        {toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : 'Goal weight reached — nice work.'}
+        {toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : coachView ? 'Goal weight reached.' : 'Goal weight reached — nice work.'}
       </p>
     </div>
   );
 }
 
-export function OverviewTab({ historyLogs, profile }: { historyLogs: DailyLogRow[]; profile: ClientProfileRow | null }) {
+export function OverviewTab({ historyLogs, profile, isCoachView = false }: { historyLogs: DailyLogRow[]; profile: ClientProfileRow | null; isCoachView?: boolean }) {
   const weeks = buildWeeklyTrend(historyLogs).slice(-8);
   const latestWeight = [...historyLogs].reverse().find((l) => l.bodyweight != null)?.bodyweight ?? null;
 
@@ -205,7 +205,7 @@ export function OverviewTab({ historyLogs, profile }: { historyLogs: DailyLogRow
 
   return (
     <div className="space-y-4">
-      <WeightGoalCard profile={profile} latest={latestWeight} />
+      <WeightGoalCard profile={profile} latest={latestWeight} coachView={isCoachView} />
       <TrendCard
         weeks={weeks}
         title="Bodyweight"

@@ -274,7 +274,7 @@ function ScoreSheet({
                 <span className="min-w-0">
                   <span className="block font-bold text-black dark:text-zinc-50">{r.result_text ?? LEVEL_LABEL[r.level]}</span>
                   <span className="block text-xs text-zinc-500">
-                    {fmtDate(r.tested_date)} · {r.self_reported ? 'logged by you' : 'verified by coach'}
+                    {fmtDate(r.tested_date)} · {r.self_reported ? (mode === 'coach' ? 'logged by the member' : 'logged by you') : 'verified by coach'}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">

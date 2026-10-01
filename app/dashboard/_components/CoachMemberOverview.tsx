@@ -10,6 +10,10 @@ import {
   Dumbbell,
   FileText,
   Footprints,
+  GraduationCap,
+  NotebookPen,
+  UserCog,
+  Wallet,
   MessageSquare,
   Moon,
   Scale,
@@ -17,7 +21,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
-import { Card, IconChip, SectionLabel } from '@/app/_components/ui';
+import { Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { getReviews } from '@/lib/data/coachReviews';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -399,6 +403,17 @@ export function CoachMemberOverview({
           </Card>
         </div>
       )}
+
+      {/* ---- manage ---- */}
+      <div>
+        <SectionLabel>Manage</SectionLabel>
+        <ListGroup>
+          <ListRow icon={UserCog} title="Details, goals & targets" subtitle="Contact details, goal, calorie and macro targets" onClick={() => onNavigate('Account Settings', 'Setup')} />
+          <ListRow icon={Wallet} title="Credits & plan" subtitle="Membership, credits and check-in reminders" onClick={() => onNavigate('Account Settings', 'Credits')} />
+          <ListRow icon={NotebookPen} title="Notes" subtitle="Your private notes on this member" onClick={() => onNavigate('Account Settings', 'Info')} />
+          <ListRow icon={GraduationCap} title="Courses" subtitle="Resources assigned to them" onClick={() => onNavigate('Learn')} />
+        </ListGroup>
+      </div>
 
       {/* ---- big dog ---- */}
       <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Achievements', 'Big Dog')} />
