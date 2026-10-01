@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Columns2, X } from 'lucide-react';
 import { ImageIcon, Plus } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -46,6 +46,17 @@ export function ProgressTab({
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewing, setViewing] = useState<ProgressPhoto | null>(null);
+  const [comparing, setComparing] = useState(false);
+  // Photos arrive newest-first; default the comparison to oldest (before) vs newest (after).
+  const [beforeId, setBeforeId] = useState<string | null>(null);
+  const [afterId, setAfterId] = useState<string | null>(null);
+  const withImage = initialPhotos.filter((p) => p.signedUrl);
+  const beforePhoto = withImage.find((p) => p.id === beforeId) ?? withImage[withImage.length - 1];
+  const afterPhoto = withImage.find((p) => p.id === afterId) ?? withImage[0];
+  const daysBetween =
+    beforePhoto && afterPhoto
+      ? Math.round((Date.parse(afterPhoto.photo_date) - Date.parse(beforePhoto.photo_date)) / 86400000)
+      : 0;
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.currentTarget;
@@ -92,7 +103,18 @@ export function ProgressTab({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progress photos</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progress photos</h3>
+          {withImage.length >= 2 && (
+            <button
+              type="button"
+              onClick={() => setComparing(true)}
+              className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
+            >
+              <Columns2 className="h-3.5 w-3.5" /> Compare
+            </button>
+          )}
+        </div>
 
         {initialPhotos.length === 0 && readOnly ? (
           <div className="mt-4">
@@ -155,16 +177,17 @@ export function ProgressTab({
               <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] gap-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
                 <span />
                 <span className="text-right">Start</span>
+                <span className="text-right">Last</span>
                 <span className="text-right">Now</span>
-                <span className="text-right">Goal</span>
               </div>
               {MEASUREMENT_FIELDS.map(({ key, label }) => {
                 const latest = initialMeasurements[0][key];
                 const start = profile?.[`meas_${key}_start` as keyof ClientProfileRow] as number | null | undefined;
-                const goal = profile?.[`meas_${key}_goal` as keyof ClientProfileRow] as number | null | undefined;
-                const { vsStart } = measurementDelta(initialMeasurements, profile, key);
+                const last = initialMeasurements[1]?.[key] ?? null;
+                const { vsStart, vsPrevious } = measurementDelta(initialMeasurements, profile, key);
                 const deltaLabel = formatDelta(vsStart);
                 // Good = moving towards the goal (waist/hips usually down, arm/chest/quad usually up).
+                const goal = profile?.[`meas_${key}_goal` as keyof ClientProfileRow] as number | null | undefined;
                 const towardsGoal = vsStart != null && start != null && goal != null && Math.abs(vsStart) >= 0.05
                   ? (goal - start) * vsStart > 0
                   : null;
@@ -173,12 +196,13 @@ export function ProgressTab({
                     <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] items-center gap-1">
                       <span className="text-sm font-medium text-black dark:text-zinc-50">{label}</span>
                       <span className="text-right text-sm text-zinc-500">{start ?? '—'}</span>
+                      <span className="text-right text-sm text-zinc-500">{last ?? '—'}</span>
                       <span className="text-right text-sm font-bold text-black dark:text-zinc-50">{latest ?? '—'}</span>
-                      <span className="text-right text-sm text-zinc-500">{goal ?? '—'}</span>
                     </div>
                     {deltaLabel && (
                       <p className={`mt-0.5 text-[11px] font-medium ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-success' : 'text-danger'}`}>
                         {deltaLabel}cm since you started
+                        {formatDelta(vsPrevious) ? ` · ${formatDelta(vsPrevious)}cm since last time` : ''}
                       </p>
                     )}
                   </div>
@@ -216,6 +240,37 @@ export function ProgressTab({
               {savingMeasurement ? 'Saving…' : 'Save measurements'}
             </button>
           </form>
+        </div>
+      )}
+      {comparing && beforePhoto && afterPhoto && (
+        <div className="fixed inset-0 z-[70] flex flex-col overflow-y-auto bg-background p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-black dark:text-zinc-50">Before &amp; after</h3>
+            <button type="button" aria-label="Close comparison" onClick={() => setComparing(false)} className="rounded-full bg-black/5 p-2 dark:bg-white/10">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {([['Before', beforePhoto, setBeforeId], ['After', afterPhoto, setAfterId]] as const).map(([label, photo, setId]) => (
+              <div key={label} className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.signedUrl!} alt={`${label} photo ${photo.photo_date}`} className="aspect-[3/4] w-full rounded-xl object-cover" />
+                <select
+                  value={photo.id}
+                  onChange={(e) => setId(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 bg-card px-2 py-2 text-sm dark:border-white/10"
+                >
+                  {withImage.map((p) => (
+                    <option key={p.id} value={p.id}>{longDate(p.photo_date)}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-center text-sm font-semibold text-zinc-500">
+            {daysBetween === 0 ? 'Same day' : daysBetween > 0 ? `${daysBetween} days between photos` : 'Before photo is later than the after photo'}
+          </p>
         </div>
       )}
       {viewing?.signedUrl && (

@@ -175,7 +175,8 @@ export function screensForCategory(
       case 'Accountability':
         return ['Weekly Log', 'Forms'];
       case 'Progress':
-        return ['Overview', 'Insights', 'Progress & Photos'];
+        // Insights (adaptive maintenance / plateau checks) is coach-only for now.
+        return isCoachView ? ['Overview', 'Insights', 'Progress & Photos'] : ['Overview', 'Progress & Photos'];
       case 'Learn':
         return ['Education'];
       case 'Achievements':
