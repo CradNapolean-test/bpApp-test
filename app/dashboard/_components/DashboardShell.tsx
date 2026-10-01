@@ -537,6 +537,7 @@ export function DashboardShell({
               pendingForms={formAssignments.filter((f) => !f.completed_at).length}
               hiddenCategories={disabledCategories}
               onNavigate={handleNavigate}
+              onOpenWorkoutDay={handleCheckIn}
             />
           )}
           {effectiveScreen === 'Setup' && (

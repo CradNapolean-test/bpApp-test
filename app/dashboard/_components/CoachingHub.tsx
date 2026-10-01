@@ -4,7 +4,8 @@ import { TargetRings } from './NutritionSummary';
 import { Badge, Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
-import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/dates';
+import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
 import { trafficLight } from '@/lib/utils/accountability';
 import type { TrafficLight } from '@/lib/utils/accountability';
 import { bigDogCount, TIER_TITLE, tierForCount } from '@/lib/bigDog';
@@ -36,6 +37,7 @@ export function CoachingHub({
   pendingForms,
   hiddenCategories,
   onNavigate,
+  onOpenWorkoutDay,
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -47,6 +49,8 @@ export function CoachingHub({
   // Areas the member's plan (or coach) has switched off entirely -- their rows are hidden.
   hiddenCategories: Set<Category>;
   onNavigate: (category: Category, screen?: Screen) => void;
+  // Opens a specific programme day in the Workout screen (today's workout from the Training card).
+  onOpenWorkoutDay: (dayId: string) => void;
 }) {
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
@@ -62,6 +66,17 @@ export function CoachingHub({
   const calories = protein * 4 + carbs * 4 + fat * 9;
 
   const program = programs[0] ?? null;
+  // Today's workout: the active programme's day for today's weekday (if there is one).
+  const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
+  const activeBlock = resolveActiveProgram(programs, todayIso);
+  const todaysDay = activeBlock ? resolveProgramDayByPosition(activeBlock.program, activeBlock.weekNum, todayDow) : null;
+  const todaysLifts = todaysDay
+    ? [...todaysDay.workout_exercises]
+        .filter((e) => e.block_type === 'exercise')
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .slice(0, 2)
+        .map((e) => e.name)
+    : [];
   const sleep = todayLog?.sleep ?? null;
   const steps = todayLog?.steps ?? null;
   const water = todayLog?.water ?? null;
@@ -123,12 +138,32 @@ export function CoachingHub({
         <div>
           <SectionLabel>Training</SectionLabel>
           <ListGroup>
-            <ListRow
-              icon={Dumbbell}
-              title="This week's program"
-              subtitle={program ? program.name : 'No program assigned yet'}
-              onClick={() => onNavigate('Training', 'Workout')}
-            />
+            {todaysDay ? (
+              <ListRow
+                icon={Dumbbell}
+                title={`Today's workout · ${WEEKDAY_LABELS[todayDow]}`}
+                subtitle={todaysLifts.length > 0 ? todaysLifts.join(' · ') : `${todaysDay.workout_exercises.length} exercises`}
+                badge={<Badge>Week {activeBlock?.weekNum}</Badge>}
+                onClick={() => onOpenWorkoutDay(todaysDay.id)}
+              />
+            ) : (
+              <ListRow
+                icon={Dumbbell}
+                title={activeBlock ? 'Rest day · no workout today' : program ? 'Your programme' : "This week's program"}
+                subtitle={
+                  activeBlock
+                    ? `${program?.name ?? 'Programme'} · Week ${activeBlock.weekNum} — tap to see the week`
+                    : program
+                      ? !program.start_date
+                        ? `${program.name} · no start date yet — ask your coach`
+                        : program.start_date > todayIso
+                          ? `${program.name} · starts ${new Date(program.start_date + 'T00:00:00Z').toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+                          : `${program.name} · this block has finished`
+                      : 'No program assigned yet'
+                }
+                onClick={() => onNavigate('Training', 'Workout')}
+              />
+            )}
           </ListGroup>
         </div>
       )}
