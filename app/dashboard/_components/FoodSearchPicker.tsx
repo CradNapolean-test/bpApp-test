@@ -58,7 +58,11 @@ function FoodResultRow({
           )}
           <div className="min-w-0">
             <p className="truncate font-medium text-black dark:text-zinc-50">{food.name}</p>
-            <p className="text-xs text-zinc-500">per {food.portion}</p>
+            <p className="text-xs text-zinc-500">
+              {isPerGram
+                ? `per 100 g · ${Math.round(dayCalories(food.protein * 100, food.carbs * 100, food.fat * 100))} kcal`
+                : `per ${food.portion}`}
+            </p>
           </div>
         </div>
         <Button variant="primary" size="sm" onClick={() => onAdd(food, qty)}>

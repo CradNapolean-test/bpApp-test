@@ -36,6 +36,7 @@ import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
+import { NutritionSummary } from './NutritionSummary';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { NutritionTrackingMode } from './categories';
 import type {
@@ -284,6 +285,12 @@ function EntryRow({
 }) {
   const [editing, setEditing] = useState(false);
   const macros = entryMacros(entry);
+  // "150 g" for per-gram foods, "2 × 1 Egg" for unit foods; nothing for quick-adds.
+  const amount = entry.food
+    ? entry.food.portion === '1 gram'
+      ? `${Math.round(entry.portions * 10) / 10} g`
+      : `${Math.round(entry.portions * 100) / 100} × ${entry.food.portion}`
+    : null;
   return (
     <li>
       <button
@@ -292,8 +299,15 @@ function EntryRow({
         onClick={() => setEditing(true)}
         className="flex w-full items-center justify-between gap-2 p-3 text-left disabled:cursor-default"
       >
-        <p className="truncate text-sm text-black dark:text-zinc-50">{entry.food?.name ?? entry.quick_add_name ?? 'Unknown food'}</p>
-        <span className="shrink-0 text-sm text-zinc-500">{Math.round(macros.calories)} kcal</span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">
+            {entry.food?.name ?? entry.quick_add_name ?? 'Unknown food'}
+          </span>
+          {amount && <span className="block text-xs text-zinc-500">{amount}</span>}
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-black dark:text-zinc-50">
+          {Math.round(macros.calories)} <span className="text-xs font-normal text-zinc-500">kcal</span>
+        </span>
       </button>
       {editing && !readOnly && (
         <EditEntrySheet
@@ -698,57 +712,11 @@ export function FoodTrackingTab({
         </div>
       )}
 
-      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-        <p className="text-2xl font-bold text-black dark:text-zinc-50">
-          {Math.round(totals.calories).toLocaleString()}
-          <span className="text-base font-normal text-zinc-500">
-            {dayTarget ? ` / ${Math.round(dayTarget.calories).toLocaleString()} kcal` : ' kcal'}
-          </span>
-        </p>
-        <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
-          <div>
-            <dt className="text-zinc-500">Protein</dt>
-            <dd className="font-semibold text-black dark:text-zinc-50">{Math.round(totals.protein)}g</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Carbs</dt>
-            <dd className="font-semibold text-black dark:text-zinc-50">{Math.round(totals.carbs)}g</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Fat</dt>
-            <dd className="font-semibold text-black dark:text-zinc-50">{Math.round(totals.fat)}g</dd>
-          </div>
-        </dl>
-      </div>
+      <NutritionSummary totals={totals} target={dayTarget} />
 
       {!readOnly && !isManual && (
         <div className="space-y-2">
-          {!scanTarget && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex flex-1 items-center justify-center gap-1.5"
-                onClick={() => {
-                  setScanTarget({ id: null, label: 'Other' });
-                  setScanStatus(null);
-                }}
-              >
-                <Barcode className="h-4 w-4" />
-                Scan barcode
-              </Button>
-              <Button
-                variant="outline"
-                className="flex flex-1 items-center justify-center gap-1.5"
-                onClick={() => setAddFoodTarget({ id: null, label: 'Other' })}
-              >
-                <Search className="h-4 w-4" />
-                Search foods
-              </Button>
-            </div>
-          )}
-          {scanTarget && (
-            <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanTarget(null)} />
-          )}
+          {scanTarget && <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanTarget(null)} />}
           {pendingScanProduct && (
             <CompleteScannedFoodForm
               product={pendingScanProduct}
@@ -757,10 +725,11 @@ export function FoodTrackingTab({
             />
           )}
           {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
-          <p className="text-xs text-zinc-500">This scans into &quot;Other&quot; below, unfiled — use a section&apos;s own &quot;Scan&quot; or &quot;+ Add food&quot; link to file directly into that meal instead.</p>
-          <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-medium text-accent hover:underline">
-            Copy from yesterday
-          </button>
+          {entries.length === 0 && (
+            <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-semibold text-accent hover:underline">
+              Copy yesterday&apos;s food
+            </button>
+          )}
         </div>
       )}
       {!readOnly && isManual && (
@@ -841,23 +810,25 @@ export function FoodTrackingTab({
                   )}
                 </ul>
                 {!readOnly && (
-                  <div className="mt-2 flex items-center gap-3">
+                  <div className="mt-3 flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
-                      className="text-sm font-medium text-accent hover:underline"
+                      className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent-soft text-sm font-bold text-accent"
                     >
-                      + Add food
+                      <Search className="h-4 w-4" />
+                      Add food
                     </button>
                     <button
                       type="button"
+                      aria-label={`Scan a barcode into ${section.label}`}
                       onClick={() => {
                         setScanTarget({ id: section.id, label: section.label });
                         setScanStatus(null);
                       }}
-                      className="text-sm font-medium text-accent hover:underline"
+                      className="flex h-10 w-12 items-center justify-center rounded-full border border-black/10 text-zinc-600 dark:border-white/10 dark:text-zinc-300"
                     >
-                      Scan
+                      <Barcode className="h-4 w-4" />
                     </button>
                   </div>
                 )}
@@ -914,9 +885,32 @@ export function FoodTrackingTab({
               ? 'No food entries for this day.'
               : isManual
                 ? 'Add a section above, then log macros against it.'
-                : 'Scan a barcode or search below to add the first one.'
+                : 'Search for a food or scan a barcode to add the first one.'
           }
         />
+      )}
+      {!readOnly && !isManual && sections.length === 0 && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddFoodTarget({ id: null, label: 'Other' })}
+            className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent text-sm font-extrabold text-accent-foreground"
+          >
+            <Search className="h-4 w-4" />
+            Add food
+          </button>
+          <button
+            type="button"
+            aria-label="Scan a barcode"
+            onClick={() => {
+              setScanTarget({ id: null, label: 'Other' });
+              setScanStatus(null);
+            }}
+            className="flex h-11 w-12 items-center justify-center rounded-full border border-black/10 text-zinc-600 dark:border-white/10 dark:text-zinc-300"
+          >
+            <Barcode className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
       {addFoodTarget && (
