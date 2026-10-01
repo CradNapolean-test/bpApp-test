@@ -93,38 +93,40 @@ export function InsightsTab({
 
   const divergenceFlag =
     adaptiveInsight && Math.abs(adaptiveInsight.divergence) > DIVERGENCE_FLAG_KCAL
-      ? `${Math.round(Math.abs(adaptiveInsight.divergence))} kcal divergence — worth a review`
+      ? `${Math.round(Math.abs(adaptiveInsight.divergence))} kcal off your plan — ask your coach to review`
       : undefined;
 
   return (
     <div className="space-y-3">
-      <InsightCard icon={Gauge} iconCls="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400" title="Adaptive maintenance check" flag={divergenceFlag}>
+      <InsightCard icon={Gauge} iconCls="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400" title="Your real-world maintenance calories" flag={divergenceFlag}>
         {adaptiveInsight ? (
           <p>
-            Formula TDEE: {Math.round(adaptiveInsight.formulaTdee)} kcal · Real-world estimate:{' '}
-            {Math.round(adaptiveInsight.adaptiveTdee)} kcal
+            Maintenance calories are what you eat to stay the same weight. Your plan assumes about{' '}
+            <b className="text-black dark:text-zinc-50">{Math.round(adaptiveInsight.formulaTdee)} kcal</b>; going by what you have
+            actually eaten and how your weight moved, it looks closer to{' '}
+            <b className="text-black dark:text-zinc-50">{Math.round(adaptiveInsight.adaptiveTdee)} kcal</b>.
           </p>
         ) : (
-          <p>Need at least 5 logged days with 2+ bodyweight entries to estimate.</p>
+          <p>Keep logging your food and weighing in. Once you have 5 logged days and at least 2 weigh-ins we can estimate this for you.</p>
         )}
       </InsightCard>
 
-      <InsightCard icon={Activity} iconCls="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400" title="Plateau check">
+      <InsightCard icon={Activity} iconCls="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400" title="Is your weight stalling?">
         <p>
           {bodyweightSeries.length < 6
-            ? 'Not enough bodyweight entries yet.'
+            ? 'Weigh in a few more times (6 or more) and we will tell you if your weight has stalled.'
             : plateaued
-              ? 'Bodyweight has moved less than 0.3kg over the recent window — possible plateau.'
-              : 'Bodyweight is trending, no plateau detected.'}
+              ? 'Your weight has barely moved (under 0.3kg) recently. This can be normal — mention it to your coach.'
+              : 'Your weight is moving, so no stall detected.'}
         </p>
       </InsightCard>
 
       {profile?.gender === 'Female' && (
-        <InsightCard icon={Moon} iconCls="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400" title="Cycle-aware note">
+        <InsightCard icon={Moon} iconCls="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400" title="Cycle note">
           <p>
             {cycleNote
-              ? `Latest entry falls on cycle day ${cycleNote} — likely water retention, not fat gain.`
-              : 'No cycle-related note for the latest entry.'}
+              ? `Latest entry falls on cycle day ${cycleNote} — weight is often higher from water retention at this point, not fat gain.`
+              : 'Nothing to flag from your latest entry.'}
           </p>
         </InsightCard>
       )}

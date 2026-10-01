@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { ImageIcon, Plus } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -9,6 +10,9 @@ import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta, measurementDelta } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
+
+const longDate = (iso: string) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 const MEASUREMENT_FIELDS: { key: keyof Omit<MeasurementLogRow, 'id' | 'client_id' | 'log_date' | 'created_at'>; label: string }[] = [
   { key: 'arm', label: 'Arm' },
@@ -41,6 +45,7 @@ export function ProgressTab({
   const today = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [viewing, setViewing] = useState<ProgressPhoto | null>(null);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const input = e.currentTarget;
@@ -60,7 +65,7 @@ export function ProgressTab({
 
   async function handleDeletePhoto(id: string, date: string) {
     const ok = await confirm({
-      title: `Delete the photo from ${date}?`,
+      title: `Delete the photo from ${longDate(date)}?`,
       body: 'This cannot be undone.',
       destructive: true,
     });
@@ -116,14 +121,15 @@ export function ProgressTab({
                   <img
                     src={photo.signedUrl}
                     alt={`Progress photo ${photo.photo_date}`}
-                    className="aspect-square w-full rounded-xl object-cover"
+                    onClick={() => setViewing(photo)}
+                    className="aspect-square w-full cursor-pointer rounded-xl object-cover"
                   />
                 ) : (
                   <div className="aspect-square w-full rounded-xl bg-black/5 dark:bg-white/5" />
                 )}
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-zinc-500">
-                    {new Date(photo.photo_date + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                    {longDate(photo.photo_date)}
                   </span>
                   {!readOnly && (
                     <button onClick={() => handleDeletePhoto(photo.id, photo.photo_date)} className="font-bold text-danger hover:underline">
@@ -144,28 +150,42 @@ export function ProgressTab({
           <p className="mt-4 text-sm text-zinc-500">No measurements logged yet.</p>
         ) : (
           <>
-            <p className="mt-3 text-xs text-zinc-500">Last logged {initialMeasurements[0].log_date}</p>
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <p className="mt-3 text-xs text-zinc-500">Last logged {longDate(initialMeasurements[0].log_date)}</p>
+            <div className="mt-2 divide-y divide-black/[.05] dark:divide-white/10">
+              <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] gap-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <span />
+                <span className="text-right">Start</span>
+                <span className="text-right">Now</span>
+                <span className="text-right">Goal</span>
+              </div>
               {MEASUREMENT_FIELDS.map(({ key, label }) => {
                 const latest = initialMeasurements[0][key];
+                const start = profile?.[`meas_${key}_start` as keyof ClientProfileRow] as number | null | undefined;
+                const goal = profile?.[`meas_${key}_goal` as keyof ClientProfileRow] as number | null | undefined;
                 const { vsStart } = measurementDelta(initialMeasurements, profile, key);
                 const deltaLabel = formatDelta(vsStart);
+                // Good = moving towards the goal (waist/hips usually down, arm/chest/quad usually up).
+                const towardsGoal = vsStart != null && start != null && goal != null && Math.abs(vsStart) >= 0.05
+                  ? (goal - start) * vsStart > 0
+                  : null;
                 return (
-                  <div
-                    key={key}
-                    className="flex items-center justify-between rounded-xl border border-black/[.05] p-3 dark:border-white/10"
-                  >
-                    <span className="text-sm font-medium text-black dark:text-zinc-50">{label}</span>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-black dark:text-zinc-50">
-                        {latest != null ? `${latest}cm` : '—'}
-                      </p>
-                      {deltaLabel && <p className="text-[10px] font-medium text-success">{deltaLabel} vs start</p>}
+                  <div key={key} className="py-2.5">
+                    <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] items-center gap-1">
+                      <span className="text-sm font-medium text-black dark:text-zinc-50">{label}</span>
+                      <span className="text-right text-sm text-zinc-500">{start ?? '—'}</span>
+                      <span className="text-right text-sm font-bold text-black dark:text-zinc-50">{latest ?? '—'}</span>
+                      <span className="text-right text-sm text-zinc-500">{goal ?? '—'}</span>
                     </div>
+                    {deltaLabel && (
+                      <p className={`mt-0.5 text-[11px] font-medium ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-success' : 'text-danger'}`}>
+                        {deltaLabel}cm since you started
+                      </p>
+                    )}
                   </div>
                 );
               })}
             </div>
+            <p className="mt-1 text-[11px] text-zinc-400">All in cm.</p>
           </>
         )}
       </div>
@@ -196,6 +216,16 @@ export function ProgressTab({
               {savingMeasurement ? 'Saving…' : 'Save measurements'}
             </button>
           </form>
+        </div>
+      )}
+      {viewing?.signedUrl && (
+        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 p-4" onClick={() => setViewing(null)}>
+          <button type="button" aria-label="Close photo" className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white">
+            <X className="h-5 w-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={viewing.signedUrl} alt={`Progress photo ${viewing.photo_date}`} className="max-h-[80vh] max-w-full rounded-xl object-contain" />
+          <p className="mt-3 text-sm font-semibold text-white">{longDate(viewing.photo_date)}</p>
         </div>
       )}
     </div>

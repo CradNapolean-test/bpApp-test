@@ -637,7 +637,7 @@ export function DashboardShell({
             />
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
-          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} />}
+          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} />}
           {effectiveScreen === 'Progress & Photos' && (
             <ProgressTab
               clientId={clientId}
