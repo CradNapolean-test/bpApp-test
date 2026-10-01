@@ -3,7 +3,18 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
+import { dayCalories } from '@/lib/calculations';
 import type { ManualMacroEntryRow } from './types';
+
+type MacroFields = { calories: number | null; protein: number | null; carbs: number | null; fat: number | null };
+
+// Calories are always worked out from protein/carbs/fat (like everywhere else in the app), so a
+// typed number can never disagree with the macros. Only an entry with no macros at all keeps
+// whatever calories it was given.
+function withDerivedCalories(f: MacroFields): MacroFields {
+  if (f.protein == null && f.carbs == null && f.fat == null) return f;
+  return { ...f, calories: Math.round(dayCalories(f.protein ?? 0, f.carbs ?? 0, f.fat ?? 0)) };
+}
 
 // Same date-nav resolver shape as getFoodDiaryForDate (lib/data/foodDiary.ts): create:true
 // (client) backfills a blank daily_logs row, create:false (coach) never does.
@@ -38,8 +49,9 @@ export async function getManualMacroEntries(dailyLogId: string): Promise<ManualM
 export async function addManualMacroEntry(
   dailyLogId: string,
   mealSectionId: string | null,
-  fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+  rawFields: MacroFields
 ): Promise<void> {
+  const fields = withDerivedCalories(rawFields);
   const supabase = await createClient();
   const { error } = await supabase.from('manual_macro_entries').insert({
     daily_log_id: dailyLogId,
@@ -56,8 +68,9 @@ export async function addManualMacroEntry(
 export async function updateManualMacroEntry(
   id: string,
   dailyLogId: string,
-  fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+  rawFields: MacroFields
 ): Promise<void> {
+  const fields = withDerivedCalories(rawFields);
   const supabase = await createClient();
   const { error } = await supabase
     .from('manual_macro_entries')

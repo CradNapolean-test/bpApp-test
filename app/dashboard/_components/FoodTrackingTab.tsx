@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Barcode, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Utensils } from 'lucide-react';
+import { Barcode, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -31,7 +31,7 @@ import { logRecipeToDiary } from '@/lib/data/recipes';
 import { addJournalEntry } from '@/lib/data/clientJournal';
 import { fail, ok } from '@/lib/data/result';
 import { lookupBarcode } from '@/lib/openFoodFacts';
-import { weeklyTarget } from '@/lib/calculations';
+import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
@@ -49,36 +49,57 @@ import type {
 } from '@/lib/data/types';
 
 function ManualMacroForm({ onAdd }: { onAdd: (fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => void }) {
-  const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
-  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
+  const p = Number(protein) || 0;
+  const c = Number(carbs) || 0;
+  const f = Number(fat) || 0;
+  const kcal = Math.round(dayCalories(p, c, f));
+  const empty = protein === '' && carbs === '' && fat === '';
+  const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
+  const labelCls = 'text-[11px] font-bold uppercase tracking-wide';
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!calories && !protein && !carbs && !fat) return;
+    if (empty) return;
     onAdd({
-      calories: calories === '' ? null : Number(calories),
-      protein: protein === '' ? null : Number(protein),
-      carbs: carbs === '' ? null : Number(carbs),
-      fat: fat === '' ? null : Number(fat),
+      calories: kcal,
+      protein: protein === '' ? null : p,
+      carbs: carbs === '' ? null : c,
+      fat: fat === '' ? null : f,
     });
-    setCalories('');
     setProtein('');
     setCarbs('');
     setFat('');
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
-      <input type="number" placeholder="kcal" value={calories} onChange={(e) => setCalories(e.target.value)} className={inputCls} />
-      <input type="number" placeholder="protein g" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
-      <input type="number" placeholder="carbs g" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
-      <input type="number" placeholder="fat g" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
-      <Button type="submit" variant="ghost" size="sm" className="col-span-2 sm:col-span-1">
-        Add
-      </Button>
+    <form onSubmit={handleSubmit} className="mt-3 space-y-2.5 rounded-xl bg-black/[.03] p-3 dark:bg-white/[.04]">
+      <div className="grid grid-cols-3 gap-2">
+        <label className="space-y-1">
+          <span className={labelCls} style={{ color: '#a07aff' }}>Protein</span>
+          <input type="number" inputMode="decimal" step="0.1" placeholder="g" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
+        </label>
+        <label className="space-y-1">
+          <span className={labelCls} style={{ color: '#e8a020' }}>Carbs</span>
+          <input type="number" inputMode="decimal" step="0.1" placeholder="g" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
+        </label>
+        <label className="space-y-1">
+          <span className={labelCls} style={{ color: '#2ecc71' }}>Fat</span>
+          <input type="number" inputMode="decimal" step="0.1" placeholder="g" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
+        </label>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500">{empty ? 'Calories are worked out for you' : <><b className="text-black dark:text-zinc-50">{kcal}</b> kcal</>}</p>
+        <button
+          type="submit"
+          disabled={empty}
+          className="rounded-full bg-accent px-5 py-2 text-sm font-extrabold text-accent-foreground disabled:opacity-40"
+        >
+          Add
+        </button>
+      </div>
     </form>
   );
 }
@@ -142,16 +163,21 @@ function CompleteScannedFoodForm({
 }
 
 function ManualMacroRow({ entry, readOnly, onRemove }: { entry: ManualMacroEntryRow; readOnly: boolean; onRemove: (id: string) => void }) {
+  const kcal = Math.round(dayCalories(entry.protein ?? 0, entry.carbs ?? 0, entry.fat ?? 0)) || Math.round(entry.calories ?? 0);
   return (
-    <li className="flex items-center justify-between gap-2 p-3">
-      <p className="text-sm text-zinc-700 dark:text-zinc-300">
-        {entry.calories != null ? `${Math.round(entry.calories)} kcal` : '—'} ·{' '}
-        {Math.round(entry.protein ?? 0)}P / {Math.round(entry.carbs ?? 0)}C / {Math.round(entry.fat ?? 0)}F
-      </p>
+    <li className="flex items-center justify-between gap-2 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-black dark:text-zinc-50">{kcal} kcal</p>
+        <p className="text-xs text-zinc-500">
+          <span style={{ color: '#a07aff' }}>P {Math.round(entry.protein ?? 0)}g</span> ·{' '}
+          <span style={{ color: '#e8a020' }}>C {Math.round(entry.carbs ?? 0)}g</span> ·{' '}
+          <span style={{ color: '#2ecc71' }}>F {Math.round(entry.fat ?? 0)}g</span>
+        </p>
+      </div>
       {!readOnly && (
-        <Button variant="danger" size="sm" onClick={() => onRemove(entry.id)}>
-          Remove
-        </Button>
+        <button type="button" aria-label="Remove entry" onClick={() => onRemove(entry.id)} className="rounded-full p-2 text-zinc-400 hover:text-danger">
+          <Trash2 className="h-4 w-4" />
+        </button>
       )}
     </li>
   );
@@ -423,10 +449,10 @@ export function FoodTrackingTab({
   const totals = isManual
     ? manualEntries.reduce(
         (acc, e) => {
-          acc.calories += e.calories ?? 0;
           acc.protein += e.protein ?? 0;
           acc.carbs += e.carbs ?? 0;
           acc.fat += e.fat ?? 0;
+          acc.calories = dayCalories(acc.protein, acc.carbs, acc.fat);
           return acc;
         },
         { calories: 0, protein: 0, carbs: 0, fat: 0 }
@@ -734,14 +760,14 @@ export function FoodTrackingTab({
         </div>
       )}
       {!readOnly && isManual && (
-        <p className="text-xs text-zinc-500">No food search in this mode — enter macros directly per section below.</p>
+        <p className="text-xs text-zinc-500">Enter the protein, carbs and fat for each meal. Calories are worked out for you.</p>
       )}
 
       {sections.map((section, index) => {
         const sectionEntries = entries.filter((e) => e.meal_section_id === section.id);
         const sectionTotals = totalMacros(sectionEntries);
         const sectionManualEntries = manualEntries.filter((e) => e.meal_section_id === section.id);
-        const sectionManualCalories = sectionManualEntries.reduce((sum, e) => sum + (e.calories ?? 0), 0);
+        const sectionManualCalories = sectionManualEntries.reduce((sum, e) => sum + (dayCalories(e.protein ?? 0, e.carbs ?? 0, e.fat ?? 0) || (e.calories ?? 0)), 0);
         return (
           <div key={section.id} className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <div className="flex flex-wrap items-center justify-between gap-2">

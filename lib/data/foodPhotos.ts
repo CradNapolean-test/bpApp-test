@@ -4,8 +4,22 @@ import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { estimateFoodPhoto } from '@/lib/ai/estimateFoodPhoto';
 import type { FoodPhotoEntry, FoodPhotoEntryRow } from './types';
+import { dayCalories } from '@/lib/calculations';
+import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
+
+// Date-nav resolver, same shape as getManualMacrosForDate: create:true (member) backfills a blank
+// daily_logs row for that day, create:false (coach) never does.
+export async function getFoodPhotosForDate(
+  clientId: string,
+  date: string,
+  create: boolean
+): Promise<{ dailyLogId: string | null; photos: FoodPhotoEntry[] }> {
+  const dailyLog = create ? await getOrCreateDailyLog(clientId, date) : await getDailyLog(clientId, date);
+  if (!dailyLog) return { dailyLogId: null, photos: [] };
+  return { dailyLogId: dailyLog.id, photos: await getFoodPhotos(dailyLog.id) };
+}
 
 export async function getFoodPhotos(dailyLogId: string): Promise<FoodPhotoEntry[]> {
   const supabase = await createClient();
@@ -87,10 +101,15 @@ export async function updateFoodPhotoMacros(
   fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
 ): Promise<void> {
   const supabase = await createClient();
+  // Calories follow the macros (as everywhere else), so the two can never disagree.
+  const calories =
+    fields.protein == null && fields.carbs == null && fields.fat == null
+      ? fields.calories
+      : Math.round(dayCalories(fields.protein ?? 0, fields.carbs ?? 0, fields.fat ?? 0));
   const { error } = await supabase
     .from('food_photo_entries')
     .update({
-      estimated_calories: fields.calories,
+      estimated_calories: calories,
       estimated_protein: fields.protein,
       estimated_carbs: fields.carbs,
       estimated_fat: fields.fat,
