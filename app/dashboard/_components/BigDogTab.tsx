@@ -45,6 +45,47 @@ export function TierPips({ count, className = '' }: { count: number; className?:
   );
 }
 
+// The T-shirt ladder: one pip per exercise, tinted by the tier that pip belongs to, with each tier's
+// name sitting under the pip where it starts (White at 1, Turquoise at 3, Silver at 6, Gold at 13).
+// Pips fill as exercises reach Big Dog; empty ones keep a faint tint so the whole ladder shows.
+const ZONE: { tier: Exclude<BigDogTier, 'none'>; label: string; from: number; fill: string; faint: string }[] = [
+  { tier: 'white', label: 'White', from: TIER_THRESHOLDS.white, fill: 'bg-zinc-200', faint: 'bg-zinc-300/60 dark:bg-zinc-200/25' },
+  { tier: 'turquoise', label: 'Turquoise', from: TIER_THRESHOLDS.turquoise, fill: 'bg-accent', faint: 'bg-accent/35' },
+  { tier: 'silver', label: 'Silver', from: TIER_THRESHOLDS.silver, fill: 'bg-zinc-400', faint: 'bg-zinc-400/35' },
+  { tier: 'gold', label: 'Gold', from: TIER_THRESHOLDS.gold, fill: 'bg-amber-500', faint: 'bg-amber-500/35' },
+];
+
+export function TierScale({ count }: { count: number }) {
+  const total = EXERCISES.length;
+  const zoneOf = (n: number) => [...ZONE].reverse().find((z) => n >= z.from) ?? ZONE[0];
+  return (
+    <div>
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
+        {Array.from({ length: total }, (_, i) => {
+          const z = zoneOf(i + 1);
+          return <div key={i} className={`h-2.5 rounded-full ${i < count ? z.fill : z.faint}`} />;
+        })}
+      </div>
+      <div className="mt-1.5 grid gap-1" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
+        {ZONE.map((z, i) => {
+          const reached = count >= z.from;
+          const last = i === ZONE.length - 1;
+          return (
+            <div
+              key={z.tier}
+              style={{ gridColumnStart: z.from }}
+              className={`whitespace-nowrap ${last ? 'justify-self-end text-right' : 'justify-self-start'}`}
+            >
+              <p className={`text-[11px] font-extrabold leading-tight ${reached ? 'text-black dark:text-zinc-50' : 'text-zinc-400'}`}>{z.label}</p>
+              <p className={`text-[11px] leading-tight ${reached ? 'text-accent' : 'text-zinc-400'}`}>{last ? `all ${total}` : `${z.from}+`}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Compact card shown on the profile -- taps through to the full standards screen.
 export function BigDogCard({ results, onOpen }: { results: BigDogResultLike[]; onOpen: () => void }) {
   const count = bigDogCount(results);
@@ -298,13 +339,6 @@ export function BigDogTab({
     });
   }
 
-  const tierLabels: { label: string; min: number }[] = [
-    { label: 'White', min: TIER_THRESHOLDS.white },
-    { label: 'Turquoise', min: TIER_THRESHOLDS.turquoise },
-    { label: 'Silver', min: TIER_THRESHOLDS.silver },
-    { label: 'Gold', min: TIER_THRESHOLDS.gold },
-  ];
-
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between rounded-2xl border border-accent/30 bg-card px-3.5 py-3">
@@ -318,17 +352,7 @@ export function BigDogTab({
         </div>
       </div>
 
-      <div>
-        <TierPips count={count} className="mb-1.5" />
-        <div className="flex justify-between text-[11px] font-bold">
-          <span className="text-zinc-400">Rookie</span>
-          {tierLabels.map((t) => (
-            <span key={t.label} className={count >= t.min ? 'text-accent' : 'text-zinc-400'}>
-              {t.label}
-            </span>
-          ))}
-        </div>
-      </div>
+      <TierScale count={count} />
 
       <div className="flex items-center justify-between gap-2 px-1">
         <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">All exercises</p>
