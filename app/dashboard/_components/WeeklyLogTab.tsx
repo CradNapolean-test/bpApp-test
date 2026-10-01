@@ -1,21 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button } from '@/app/_components/Button';
 import { Checkbox } from '@/app/_components/Checkbox';
 import { useAction } from '@/app/_components/useAction';
-import { useConfirm } from '@/app/_components/ConfirmDialog';
-import { EmptyState } from '@/app/_components/EmptyState';
 import { dayCalories, cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
 import { upsertDailyLog } from '@/lib/data/dailyLogs';
-import { createHabit, deleteHabit, toggleHabitLog } from '@/lib/data/habits';
-import { adherencePercent } from '@/lib/utils/habitStats';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
-import type { ClientProfileRow, DailyLogRow, HabitWithLogs } from '@/lib/data/types';
+import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
 
@@ -41,90 +36,6 @@ const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label:
 const LIGHT_DOT = { green: 'bg-success', amber: 'bg-warning', red: 'bg-danger' } as const;
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
-
-function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWithLogs[] }) {
-  const confirm = useConfirm();
-  const { run: runCreate, busy: creating } = useAction();
-  const { run: runDelete } = useAction();
-  const [newHabitName, setNewHabitName] = useState('');
-  // Collapsed once habits exist, so the day's data (not the setup form) leads the screen.
-  const [open, setOpen] = useState(habits.length === 0);
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    await runCreate(() => createHabit(clientId, newHabitName), {
-      success: 'Habit added',
-      onDone: () => setNewHabitName(''),
-    });
-  }
-
-  async function handleDelete(habitId: string, name: string) {
-    const ok = await confirm({
-      title: `Delete “${name}”?`,
-      body: 'The habit and its whole completion history are removed.',
-      destructive: true,
-    });
-    if (!ok) return;
-    await runDelete(() => deleteHabit(habitId), { success: 'Habit deleted' });
-  }
-
-  return (
-    <div className={cardCls}>
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-black dark:text-zinc-50">
-          Habits <span className="font-normal text-zinc-500">· {habits.length} tracked</span>
-        </h3>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
-        >
-          {open ? 'Done' : 'Manage'}
-        </button>
-      </div>
-      {open && (
-      <>
-      <form onSubmit={handleCreate} className="mt-2 flex items-end gap-2">
-        <div className="flex-1 space-y-1">
-          <label className="text-xs font-medium text-zinc-500">New habit</label>
-          <input
-            required
-            value={newHabitName}
-            onChange={(e) => setNewHabitName(e.target.value)}
-            placeholder="e.g. 8,000 steps"
-            className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
-          />
-        </div>
-        <Button type="submit" variant="primary" disabled={creating}>
-          {creating ? 'Adding…' : 'Add habit'}
-        </Button>
-      </form>
-
-      {habits.length === 0 ? (
-        <div className="mt-3">
-          <EmptyState compact title="No habits yet — add one above, it'll show up as a checkbox on each day below." />
-        </div>
-      ) : (
-        <ul className="mt-3 divide-y divide-black/10 dark:divide-white/10">
-          {habits.map((habit) => (
-            <li key={habit.id} className="flex items-center justify-between py-2 text-sm">
-              <span>{habit.name}</span>
-              <div className="flex items-center gap-3">
-                <span className="text-zinc-500">{adherencePercent(habit.logs)}% (30d)</span>
-                <Button variant="danger" size="sm" onClick={() => handleDelete(habit.id, habit.name)}>
-                  Delete
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      </>
-      )}
-    </div>
-  );
-}
 
 function MoodDots({ label, value, onChange, disabled }: { label: string; value: number | null; onChange: (n: number) => void; disabled: boolean }) {
   return (
@@ -158,10 +69,10 @@ export function WeeklyLogTab({
   periodStartDates,
   readOnly,
   isCoachView,
-  habits,
   profile,
   programWeek,
   onOpenFoodDiary,
+  attendedSessions,
 }: {
   clientId: string;
   weekDates: string[];
@@ -170,24 +81,14 @@ export function WeeklyLogTab({
   periodStartDates: string[];
   readOnly: boolean;
   isCoachView: boolean;
-  habits: HabitWithLogs[];
   profile: ClientProfileRow | null;
   programWeek: number;
   // Takes the member to the Food Tracking diary (where calories and macros are logged).
   onOpenFoodDiary?: () => void;
+  // Classes the member attended, by date -- a day with one counts as a gym session automatically.
+  attendedSessions: { date: string; label: string }[];
 }) {
   const { run } = useAction();
-  const { run: runHabitToggle } = useAction();
-  const [busyHabitKey, setBusyHabitKey] = useState<string | null>(null);
-
-  async function toggleHabit(habitId: string, date: string, completed: boolean) {
-    setBusyHabitKey(`${habitId}|${date}`);
-    try {
-      await runHabitToggle(() => toggleHabitLog(habitId, date, completed));
-    } finally {
-      setBusyHabitKey(null);
-    }
-  }
   const [days, setDays] = useState<Record<string, DayForm>>(() => {
     const map: Record<string, DayForm> = {};
     for (const date of weekDates) {
@@ -234,8 +135,8 @@ export function WeeklyLogTab({
     try {
       // Macros are the food diary's to write unless this member types them here; sending this
       // form's older copy of them would overwrite what the diary just recorded.
-      const { protein, carbs, fat, ...rest } = { ...days[date], ...patch };
-      const fields = macrosEditable ? { ...rest, protein, carbs, fat } : rest;
+      const { protein, carbs, fat, fibre, ...rest } = { ...days[date], ...patch };
+      const fields = macrosEditable ? { ...rest, protein, carbs, fat, fibre } : rest;
       await run(() => upsertDailyLog(clientId, date, fields), {
         onDone: () => setSavedDates((s) => ({ ...s, [date]: true })),
       });
@@ -274,11 +175,10 @@ export function WeeklyLogTab({
   const calories = dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0);
   const cycleDay = gender === 'Female' ? cycleDayFor(periodStartDates, focusedDate) : null;
   const dayTarget = targetForDayType(d.day_type);
+  const attendedToday = attendedSessions.find((a) => a.date === focusedDate) ?? null;
 
   return (
     <div className="space-y-6">
-      {isCoachView && <HabitManager clientId={clientId} habits={habits} />}
-
       <div className="grid grid-cols-3 gap-3">
         <div className={cardCls}>
           <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgCalories)}</p>
@@ -360,28 +260,6 @@ export function WeeklyLogTab({
           </p>
         )}
 
-        {habits.length > 0 && (
-          <div className="mt-3 space-y-2 border-b border-black/5 pb-3 dark:border-white/5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Habits</p>
-            {habits.map((habit) => {
-              const habitLog = habit.logs.find((l) => l.log_date === focusedDate);
-              const done = habitLog?.completed ?? false;
-              const key = `${habit.id}|${focusedDate}`;
-              return (
-                <label key={habit.id} className="flex items-center gap-3 text-sm">
-                  <Checkbox
-                    checked={done}
-                    disabled={isCoachView || busyHabitKey === key}
-                    onChange={() => toggleHabit(habit.id, focusedDate, !done)}
-                    className="h-7 w-7 rounded-lg"
-                  />
-                  {habit.name}
-                </label>
-              );
-            })}
-          </div>
-        )}
-
         <div className="mt-3 space-y-2">
           {(['sleep', 'steps', 'water'] as const).map((metric) => (
             <AccountabilityTracker
@@ -407,12 +285,13 @@ export function WeeklyLogTab({
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-5 gap-1.5 text-center">
               {[
                 ['kcal', Math.round(calories)],
                 ['Protein', d.protein],
                 ['Carbs', d.carbs],
                 ['Fat', d.fat],
+                ['Fibre', d.fibre],
               ].map(([label, value]) => (
                 <div key={label as string}>
                   <p className="text-base font-black text-black dark:text-zinc-50">
@@ -423,6 +302,7 @@ export function WeeklyLogTab({
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-[11px] text-zinc-400">Fibre counts the foods that have a fibre figure.</p>
           </div>
         )}
 
@@ -450,13 +330,13 @@ export function WeeklyLogTab({
                 <input type="number" inputMode="decimal" className={inputCls} value={d.fat ?? ''}
                   onChange={(e) => updateDay(focusedDate, { fat: numOrNull(e.target.value) })} />
               </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Fibre (g)</label>
+                <input type="number" inputMode="decimal" className={inputCls} value={d.fibre ?? ''}
+                  onChange={(e) => updateDay(focusedDate, { fibre: numOrNull(e.target.value) })} />
+              </div>
             </>
           )}
-          <div className="space-y-1">
-            <label className={labelCls}>Fibre (g)</label>
-            <input type="number" className={inputCls} value={d.fibre ?? ''}
-              onChange={(e) => updateDay(focusedDate, { fibre: numOrNull(e.target.value) })} />
-          </div>
           <div className="space-y-1">
             <label className={labelCls}>Bodyweight (kg)</label>
             <input type="number" step="0.1" className={inputCls} value={d.bodyweight ?? ''}
@@ -476,10 +356,17 @@ export function WeeklyLogTab({
             />
           ))}
 
-          <label className="flex items-center gap-2 pt-5 text-sm">
-            <Checkbox checked={d.gym_session}
-              onChange={(e) => updateDay(focusedDate, { gym_session: e.target.checked })} />
-            Gym session
+          <label className="col-span-2 flex items-center gap-2 text-sm sm:col-span-4">
+            <Checkbox
+              checked={d.gym_session || attendedToday != null}
+              disabled={attendedToday != null}
+              onChange={(e) => updateDay(focusedDate, { gym_session: e.target.checked })}
+            />
+            <span>
+              Gym session
+              {attendedToday != null && <span className="ml-1.5 text-xs font-semibold text-success">· from your booking: {attendedToday.label}</span>}
+              {attendedToday == null && <span className="ml-1.5 text-xs text-zinc-500">· ticks itself when a class is marked attended</span>}
+            </span>
           </label>
           {gender === 'Female' && (
             <label className="flex items-center gap-2 pt-5 text-sm">

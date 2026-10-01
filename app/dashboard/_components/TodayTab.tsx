@@ -11,7 +11,6 @@ import type {
   ClientProfileRow,
   DailyLogRow,
   FormAssignmentWithDetails,
-  HabitWithLogs,
   BigDogResultRow,
   RewardRow,
   WorkoutLogRow,
@@ -59,7 +58,6 @@ export function TodayTab({
   programWeek,
   weekLogs,
   historyLogs,
-  habits,
   formAssignments,
   bookings,
   creditsBalance,
@@ -77,7 +75,6 @@ export function TodayTab({
   programWeek: number;
   weekLogs: DailyLogRow[];
   historyLogs: DailyLogRow[];
-  habits: HabitWithLogs[];
   formAssignments: FormAssignmentWithDetails[];
   bookings: BookingRow[];
   creditsBalance: number;
@@ -105,7 +102,8 @@ export function TodayTab({
 
   const streak = currentStreak(historyLogs, todayIso);
 
-  const habitsDoneToday = habits.filter((h) => h.logs.find((l) => l.log_date === todayIso)?.completed).length;
+  // Sleep, steps and water are the daily check-in: how many of the three are in for today.
+  const checkinDone = [todayLog?.sleep, todayLog?.steps, todayLog?.water].filter((v) => v != null).length;
 
   const pendingForms = formAssignments.filter((a) => !a.completed_at).length;
 
@@ -262,9 +260,9 @@ export function TodayTab({
           <IconChip icon={CheckSquare} tone="muted" />
           <span>
             <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">
-              {habits.length === 0 ? '—' : `${habitsDoneToday} of ${habits.length}`}
+              {checkinDone} of 3
             </span>
-            <span className="block text-xs text-zinc-500">Habits today</span>
+            <span className="block text-xs text-zinc-500">Check-in today</span>
           </span>
         </button>
       </Card>

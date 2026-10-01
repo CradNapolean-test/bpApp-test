@@ -75,6 +75,8 @@ export interface FoodRow {
   protein: number;
   carbs: number;
   fat: number;
+  // Grams of fibre per gram of food (same unit as the macros); null when the source has no figure.
+  fibre?: number | null;
   barcode: string | null;
 }
 

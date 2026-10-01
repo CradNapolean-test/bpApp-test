@@ -93,13 +93,13 @@ def main(src, dst):
         reader = csv.reader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
         header = next(reader)
         ix = {h: i for i, h in enumerate(header)}
-        need = ["code", "product_name", "brands", "brands_tags", "countries_tags", "energy-kcal_100g", "proteins_100g", "carbohydrates_100g", "fat_100g"]
+        need = ["code", "product_name", "brands", "brands_tags", "countries_tags", "energy-kcal_100g", "proteins_100g", "carbohydrates_100g", "fat_100g", "fiber_100g"]
         col = [ix[n] for n in need]
         top = max(col)
         for n, row in enumerate(reader):
             if len(row) <= top:
                 continue
-            code, name, brands, btags, ctags, kcal, prot, carb, fat = (row[i] for i in col)
+            code, name, brands, btags, ctags, kcal, prot, carb, fat, fibre_raw = (row[i] for i in col)
             if "en:united-kingdom" not in ctags:
                 continue
             hay = f"{brands} {btags}".lower()
@@ -136,6 +136,8 @@ def main(src, dst):
             if abs(k - calc) > max(30, 0.25 * k):
                 rejected["calories don't match macros"] += 1
                 continue
+            fibre = num(fibre_raw)
+            fibre = round(fibre, 1) if fibre is not None and 0 <= fibre <= min(60.0, c + 25) else None  # unknown stays unknown
             first_brand = clean(brands.split(",")[0]) if brands else ""
             display_brand = label if label not in ("brand",) else first_brand
             if display_brand and alnum(display_brand) not in alnum(name):
@@ -147,7 +149,7 @@ def main(src, dst):
             seen_products.add(dupe_key)
             seen.add(code)
             stats[label] += 1
-            out.write(json.dumps({"code": code, "name": name[:140], "brand": (BRAND_LONG.get(display_brand) or display_brand)[:60] or None, "kcal": k, "protein": p, "carbs": c, "fat": fa, "group": label}, ensure_ascii=False) + "\n")
+            out.write(json.dumps({"code": code, "name": name[:140], "brand": (BRAND_LONG.get(display_brand) or display_brand)[:60] or None, "kcal": k, "protein": p, "carbs": c, "fat": fa, "fibre": fibre, "group": label}, ensure_ascii=False) + "\n")
             if n % 500000 == 0:
                 print(f"  ...{n:,} rows read, {sum(v for kk, v in stats.items() if kk not in ('uk_matching',)):,} kept", flush=True)
     out.close()

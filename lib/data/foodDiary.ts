@@ -152,9 +152,10 @@ export async function syncFoodDiaryToLog(dailyLogId: string): Promise<void> {
       acc.protein += m.protein;
       acc.carbs += m.carbs;
       acc.fat += m.fat;
+      acc.fibre += m.fibre;
       return acc;
     },
-    { protein: 0, carbs: 0, fat: 0 }
+    { protein: 0, carbs: 0, fat: 0, fibre: 0 }
   );
 
   const supabase = await createClient();
@@ -164,6 +165,7 @@ export async function syncFoodDiaryToLog(dailyLogId: string): Promise<void> {
       protein: Math.round(totals.protein * 10) / 10,
       carbs: Math.round(totals.carbs * 10) / 10,
       fat: Math.round(totals.fat * 10) / 10,
+      fibre: Math.round(totals.fibre * 10) / 10,
     })
     .eq('id', dailyLogId);
   if (error) raise(error);

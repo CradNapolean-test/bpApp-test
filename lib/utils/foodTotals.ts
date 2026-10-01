@@ -2,7 +2,7 @@ import { dayCalories } from '@/lib/calculations';
 import type { FoodDiaryEntryRow, MealPlanEntryRow, RecipeIngredientRow } from '@/lib/data/types';
 
 export function entryMacros(entry: {
-  food: { protein: number; carbs: number; fat: number } | null;
+  food: { protein: number; carbs: number; fat: number; fibre?: number | null } | null;
   portions: number;
   quick_add_calories?: number | null;
   quick_add_protein?: number | null;
@@ -13,7 +13,9 @@ export function entryMacros(entry: {
     const protein = entry.food.protein * entry.portions;
     const carbs = entry.food.carbs * entry.portions;
     const fat = entry.food.fat * entry.portions;
-    return { protein, carbs, fat, calories: dayCalories(protein, carbs, fat) };
+    // Fibre only counts where the food has a figure; foods without one add nothing.
+    const fibre = (entry.food.fibre ?? 0) * entry.portions;
+    return { protein, carbs, fat, fibre, calories: dayCalories(protein, carbs, fat) };
   }
   // Quick Add row -- macros may be partially unknown (e.g. "650 kcal, don't know the split"),
   // so calories is taken as-entered rather than always re-derived from protein/carbs/fat.
@@ -22,9 +24,9 @@ export function entryMacros(entry: {
     const carbs = entry.quick_add_carbs ?? 0;
     const fat = entry.quick_add_fat ?? 0;
     const calories = entry.quick_add_calories ?? dayCalories(protein, carbs, fat);
-    return { protein, carbs, fat, calories };
+    return { protein, carbs, fat, fibre: 0, calories };
   }
-  return { protein: 0, carbs: 0, fat: 0, calories: 0 };
+  return { protein: 0, carbs: 0, fat: 0, fibre: 0, calories: 0 };
 }
 
 // Most foods are stored per-1g, so an entry's quantity means grams ("150g"); a handful of
@@ -42,10 +44,11 @@ export function totalMacros(entries: (FoodDiaryEntryRow | MealPlanEntryRow)[]) {
       acc.protein += m.protein;
       acc.carbs += m.carbs;
       acc.fat += m.fat;
+      acc.fibre += m.fibre;
       acc.calories += m.calories;
       return acc;
     },
-    { protein: 0, carbs: 0, fat: 0, calories: 0 }
+    { protein: 0, carbs: 0, fat: 0, fibre: 0, calories: 0 }
   );
 }
 
@@ -59,9 +62,10 @@ export function totalRecipeMacros(ingredients: RecipeIngredientRow[]) {
       acc.protein += m.protein;
       acc.carbs += m.carbs;
       acc.fat += m.fat;
+      acc.fibre += m.fibre;
       acc.calories += m.calories;
       return acc;
     },
-    { protein: 0, carbs: 0, fat: 0, calories: 0 }
+    { protein: 0, carbs: 0, fat: 0, fibre: 0, calories: 0 }
   );
 }

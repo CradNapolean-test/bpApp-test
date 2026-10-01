@@ -33,6 +33,7 @@ def main(src, dst):
     header = next(rows)
     ix = {h: i for i, h in enumerate(header) if h}
     p_i, f_i, c_i, k_i = ix["Protein (g)"], ix["Fat (g)"], ix["Carbohydrate (g)"], ix["Energy (kcal) (kcal)"]
+    fibre_i = ix.get("AOAC fibre (g)")
     n_i = ix["Food Name"]
     seen = set()
     kept = skipped = 0
@@ -50,7 +51,8 @@ def main(src, dst):
             if key in seen:
                 continue
             seen.add(key)
-            out.write(json.dumps({"name": name[:140], "kcal": k, "protein": p, "carbs": c, "fat": f}, ensure_ascii=False) + "\n")
+            fibre = num(row[fibre_i]) if fibre_i is not None else None
+            out.write(json.dumps({"name": name[:140], "kcal": k, "protein": p, "carbs": c, "fat": f, "fibre": fibre}, ensure_ascii=False) + "\n")
             kept += 1
     print(f"kept {kept:,}, skipped {skipped:,} (missing or impossible values)")
 

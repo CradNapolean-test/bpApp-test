@@ -34,7 +34,7 @@ import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, COACH_SCREEN_LABEL, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
-import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, formatClassTime } from '@/lib/utils/dates';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
@@ -118,7 +118,6 @@ export function DashboardShell({
   creditPacks,
   photos,
   measurementLogs,
-  habits,
   notifications,
   formTemplates,
   formAssignments,
@@ -511,7 +510,6 @@ export function DashboardShell({
               programWeek={programWeek}
               weekLogs={weekLogs}
               historyLogs={historyLogs}
-              habits={habits}
               formAssignments={formAssignments}
               bookings={bookings}
               creditsBalance={creditsBalance}
@@ -572,10 +570,12 @@ export function DashboardShell({
               periodStartDates={periodStartDates}
               readOnly={isCoachView}
               isCoachView={isCoachView}
-              habits={habits}
               profile={profile}
               programWeek={programWeek}
               onOpenFoodDiary={() => handleNavigate('Nutrition', 'Food Tracking')}
+              attendedSessions={bookings
+                .filter((b) => b.attended)
+                .map((b) => ({ date: b.booking_date, label: `${b.class?.name ?? 'Class'}${b.class?.start_time ? ` ${formatClassTime(b.class.start_time)}` : ''}` }))}
             />
           )}
           {effectiveScreen === 'Forms' && (
