@@ -46,14 +46,14 @@ export function EventsTab({ events, readOnly }: { events: EventWithSignup[]; rea
           <div key={e.id} className={cardCls}>
             <div className="flex gap-3">
               <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-accent-soft text-accent">
-                <span className="text-[11px] font-bold uppercase">{start.toLocaleDateString(undefined, { month: 'short' })}</span>
+                <span className="text-[11px] font-bold uppercase">{start.toLocaleDateString('en-GB', { month: 'short' })}</span>
                 <span className="text-lg font-black leading-none">{start.getDate()}</span>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-extrabold text-black dark:text-zinc-50">{e.title}</p>
                 <p className="text-[11px] text-zinc-500">
-                  {start.toLocaleDateString(undefined, { weekday: 'long' })},{' '}
-                  {start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                  {start.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
+                  {start.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '')}
                 </p>
                 {e.location && (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-zinc-500">
@@ -77,7 +77,7 @@ export function EventsTab({ events, readOnly }: { events: EventWithSignup[]; rea
                     e.signedUp ? 'bg-black/10 text-zinc-700 dark:bg-white/10 dark:text-zinc-300' : 'bg-accent text-accent-foreground'
                   }`}
                 >
-                  {e.signedUp ? "I'm in ✓ (leave)" : full ? 'Full' : "I'm in"}
+                  {e.signedUp ? 'Going ✓ · tap to leave' : full ? 'Full' : "I'm in"}
                 </button>
               )}
             </div>
@@ -227,6 +227,13 @@ export function ReferTab({ name }: { name: string }) {
 export function RewardsTab({ data }: { data: RewardsForMember }) {
   const { rewards, grantedIds, sessions, months } = data;
   const clubs = Math.floor(sessions / 100);
+  const nextClub = (clubs + 1) * 100;
+  const clubPct = Math.round(((sessions - clubs * 100) / 100) * 100);
+
+  const progressOf = (r: RewardsForMember['rewards'][number]) => (r.kind === 'sessions' ? sessions : months) / r.threshold;
+  // Earned-but-not-received first, then nearest to being earned, then already received.
+  const rank = (r: RewardsForMember['rewards'][number]) => (grantedIds.includes(r.id) ? 2 : progressOf(r) >= 1 ? 0 : 1);
+  const sorted = [...rewards].sort((a, b) => rank(a) - rank(b) || progressOf(b) - progressOf(a));
 
   return (
     <div className="space-y-3">
@@ -235,7 +242,15 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
         <p className="mt-1 text-sm font-extrabold text-black dark:text-zinc-50">
           {clubs > 0 ? `You're in the ${clubs * 100} club` : `${100 - sessions} sessions to the 100 club`}
         </p>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        {clubs > 0 && (
+          <p className="text-xs text-zinc-500">
+            {nextClub - sessions} more session{nextClub - sessions === 1 ? '' : 's'} to the {nextClub} club
+          </p>
+        )}
+        <div className="mt-2.5 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${clubPct}%` }} />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {[100, 200, 300, 400, 500].map((n) => (
             <span
               key={n}
@@ -249,11 +264,12 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
         </div>
       </div>
 
-      {rewards.length === 0 ? (
+      {sorted.length === 0 ? (
         <EmptyState icon={Gift} title="No rewards yet" hint="Loyalty gifts like bottles and hoodies will show up here." />
       ) : (
-        rewards.map((r) => {
+        sorted.map((r) => {
           const value = r.kind === 'sessions' ? sessions : months;
+          const unit = r.kind === 'sessions' ? 'sessions' : 'months';
           const given = grantedIds.includes(r.id);
           const earned = value >= r.threshold;
           const pct = Math.min(100, Math.round((value / r.threshold) * 100));
@@ -263,7 +279,7 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
                 <div className="min-w-0">
                   <p className="text-sm font-extrabold text-black dark:text-zinc-50">{r.name}</p>
                   <p className="text-[11px] text-zinc-500">
-                    {r.kind === 'sessions' ? `${r.threshold} sessions` : `${r.threshold} months as a member`}
+                    {r.kind === 'sessions' ? `After ${r.threshold} sessions` : `After ${r.threshold} months as a member`}
                     {r.description ? ` · ${r.description}` : ''}
                   </p>
                 </div>
@@ -276,7 +292,7 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
                         : 'bg-black/5 text-zinc-500 dark:bg-white/10'
                   }`}
                 >
-                  {given ? 'Received ✓' : earned ? 'Earned — ask your coach' : `${value}/${r.threshold}`}
+                  {given ? 'Received ✓' : earned ? 'Earned — ask your coach' : `${value} of ${r.threshold} ${unit}`}
                 </span>
               </div>
               {!earned && (
