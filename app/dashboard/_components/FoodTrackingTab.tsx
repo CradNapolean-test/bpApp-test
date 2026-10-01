@@ -28,7 +28,6 @@ import {
 } from '@/lib/data/mealSections';
 import { getFavoriteFoods, getFoodByBarcode, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { logRecipeToDiary } from '@/lib/data/recipes';
-import { addJournalEntry } from '@/lib/data/clientJournal';
 import { fail, ok } from '@/lib/data/result';
 import { lookupBarcode } from '@/lib/openFoodFacts';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
@@ -36,6 +35,7 @@ import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
+import { FeedbackThread } from './FeedbackThread';
 import { NutritionSummary } from './NutritionSummary';
 import { BarcodeScanner } from './BarcodeScanner';
 import type { NutritionTrackingMode } from './categories';
@@ -44,6 +44,7 @@ import type {
   FoodDiaryEntryRow,
   FoodRow,
   ManualMacroEntryRow,
+  NutritionFeedbackRow,
   MealSectionRow,
   RecipeRow,
 } from '@/lib/data/types';
@@ -370,6 +371,8 @@ export function FoodTrackingTab({
   sections,
   recipes,
   readOnly,
+  canGiveFeedback = false,
+  feedback = [],
   profile,
   programWeek,
   nutritionMode,
@@ -381,6 +384,9 @@ export function FoodTrackingTab({
   sections: MealSectionRow[];
   recipes: RecipeRow[];
   readOnly: boolean;
+  // Coach-only: leave feedback the member can see (their own coach only).
+  canGiveFeedback?: boolean;
+  feedback?: NutritionFeedbackRow[];
   profile: ClientProfileRow | null;
   programWeek: number;
   nutritionMode: NutritionTrackingMode;
@@ -389,7 +395,6 @@ export function FoodTrackingTab({
   const { run } = useAction();
   const { run: runRecipe } = useAction();
   const { run: runSection, busy: addingSection } = useAction();
-  const { run: runFeedback, busy: sendingFeedback } = useAction();
   const { run: runManual } = useAction();
   // Which meal section a scan will file into -- null means closed; { id: null } targets the
   // unfiled "Other" bucket (the header's "Scan barcode" button), a section id targets that
@@ -413,8 +418,6 @@ export function FoodTrackingTab({
   // prototype's single shared addFoodModal instead of an always-visible inline panel.
   const [addFoodTarget, setAddFoodTarget] = useState<{ id: string | null; label: string } | null>(null);
   const [newSectionLabel, setNewSectionLabel] = useState('');
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [feedbackBody, setFeedbackBody] = useState('');
   const isManual = nutritionMode === 'manual_import';
 
   // Must match the timezone dashboardBundle used to resolve `dailyLogId`/`initialEntries`
@@ -501,20 +504,6 @@ export function FoodTrackingTab({
     await runManual(async () => {
       await removeManualMacroEntry(id, currentDailyLogId);
       await loadDate(viewingDate);
-    });
-  }
-
-  // Coach-only: leaves a note tagged to the day being viewed rather than granting edit
-  // access to the client's own logged food -- shows up under the client's Info tab.
-  async function handleSendFeedback(e: React.FormEvent) {
-    e.preventDefault();
-    if (!feedbackBody.trim()) return;
-    await runFeedback(() => addJournalEntry(clientId, 'note', feedbackBody.trim(), viewingDate), {
-      success: 'Feedback saved to Info tab',
-      onDone: () => {
-        setFeedbackBody('');
-        setFeedbackOpen(false);
-      },
     });
   }
 
@@ -710,34 +699,14 @@ export function FoodTrackingTab({
         </div>
       </div>
 
-      {readOnly && (
-        <div>
-          {!feedbackOpen ? (
-            <Button variant="outline" size="sm" onClick={() => setFeedbackOpen(true)}>
-              Leave feedback on this day
-            </Button>
-          ) : (
-            <form onSubmit={handleSendFeedback} className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-3 dark:border-white/10">
-              <textarea
-                value={feedbackBody}
-                onChange={(e) => setFeedbackBody(e.target.value)}
-                placeholder={`Feedback on ${isToday ? "today's" : dateLabel} nutrition…`}
-                rows={2}
-                autoFocus
-                className="w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
-              />
-              <div className="flex gap-2">
-                <Button type="submit" variant="primary" size="sm" disabled={sendingFeedback || !feedbackBody.trim()}>
-                  Save to Info tab
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setFeedbackOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
+      <FeedbackThread
+        clientId={clientId}
+        date={viewingDate}
+        items={feedback}
+        canGive={canGiveFeedback}
+        placeholder={`Feedback on ${isToday ? "today's" : dateLabel} nutrition…`}
+        buttonLabel="Leave feedback on this day"
+      />
 
       <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} />
 

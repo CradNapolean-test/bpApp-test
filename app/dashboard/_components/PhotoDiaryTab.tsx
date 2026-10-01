@@ -1,142 +1,41 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Camera, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
-import { deleteFoodPhoto, getFoodPhotosForDate, updateFoodPhotoMacros, uploadFoodPhoto } from '@/lib/data/foodPhotos';
+import { useBackHandler } from '@/app/_components/useBackHandler';
+import { deleteFoodPhoto, getFoodPhotosForDate, uploadFoodPhoto } from '@/lib/data/foodPhotos';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
-import { dayCalories, weeklyTarget } from '@/lib/calculations';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
-import { NutritionSummary } from './NutritionSummary';
-import type { ClientProfileRow, FoodPhotoEntry } from '@/lib/data/types';
+import { FeedbackThread } from './FeedbackThread';
+import type { ClientProfileRow, FoodPhotoEntry, NutritionFeedbackRow } from '@/lib/data/types';
 
-const MACRO_COLORS = { protein: '#a07aff', carbs: '#e8a020', fat: '#2ecc71' };
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
 
-// Edit what the AI estimated (or fill it in when there was no estimate). Calories follow the macros.
-function MacroEditor({ entry, dailyLogId, onClose }: { entry: FoodPhotoEntry; dailyLogId: string; onClose: () => void }) {
-  const { run, busy } = useAction();
-  const [protein, setProtein] = useState(entry.estimated_protein != null ? String(Math.round(entry.estimated_protein)) : '');
-  const [carbs, setCarbs] = useState(entry.estimated_carbs != null ? String(Math.round(entry.estimated_carbs)) : '');
-  const [fat, setFat] = useState(entry.estimated_fat != null ? String(Math.round(entry.estimated_fat)) : '');
-  const kcal = Math.round(dayCalories(Number(protein) || 0, Number(carbs) || 0, Number(fat) || 0));
+const timeOf = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    const ok = await run(
-      () =>
-        updateFoodPhotoMacros(entry.id, dailyLogId, {
-          calories: kcal,
-          protein: protein === '' ? null : Number(protein),
-          carbs: carbs === '' ? null : Number(carbs),
-          fat: fat === '' ? null : Number(fat),
-        }),
-      { success: 'Macros saved' }
-    );
-    if (ok) onClose();
-  }
-
-  const field = (label: string, color: string, value: string, set: (v: string) => void) => (
-    <label className="space-y-1">
-      <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>{label}</span>
-      <input type="number" inputMode="decimal" step="1" placeholder="g" value={value} onChange={(e) => set(e.target.value)} className={inputCls} />
-    </label>
-  );
-
-  return (
-    <form onSubmit={save} className="space-y-2.5 rounded-xl bg-black/[.03] p-3 dark:bg-white/[.04]">
-      <div className="grid grid-cols-3 gap-2">
-        {field('Protein', MACRO_COLORS.protein, protein, setProtein)}
-        {field('Carbs', MACRO_COLORS.carbs, carbs, setCarbs)}
-        {field('Fat', MACRO_COLORS.fat, fat, setFat)}
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500"><b className="text-black dark:text-zinc-50">{kcal}</b> kcal</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="rounded-full px-4 py-2 text-sm font-semibold text-zinc-500">Cancel</button>
-          <button type="submit" disabled={busy} className="rounded-full bg-accent px-5 py-2 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
-    </form>
-  );
-}
-
-function PhotoCard({
-  entry,
-  dailyLogId,
-  readOnly,
-  onDelete,
-}: {
-  entry: FoodPhotoEntry;
-  dailyLogId: string | null;
-  readOnly: boolean;
-  onDelete: (id: string) => void;
-}) {
-  const hasEstimate = entry.estimated_calories != null;
-  // A photo with no estimate opens straight into the macro editor so it gets filled in.
-  const [editing, setEditing] = useState(!hasEstimate && !readOnly);
-  return (
-    <div className="overflow-hidden rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
-      {entry.signedUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={entry.signedUrl} alt={entry.description ?? 'Food photo'} className="aspect-[4/3] w-full object-cover" />
-      ) : (
-        <div className="aspect-[4/3] w-full bg-black/5 dark:bg-white/5" />
-      )}
-      <div className="space-y-2 p-3.5">
-        <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 text-sm font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
-          {!readOnly && dailyLogId && (
-            <div className="flex shrink-0 items-center">
-              <button type="button" aria-label="Edit macros" onClick={() => setEditing((v) => !v)} className="rounded-full p-2 text-zinc-400 hover:text-black dark:hover:text-zinc-100">
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button type="button" aria-label="Delete photo" onClick={() => onDelete(entry.id)} className="rounded-full p-2 text-zinc-400 hover:text-danger">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-        </div>
-        {hasEstimate ? (
-          <div>
-            <p className="text-lg font-extrabold text-black dark:text-zinc-50">
-              {Math.round(entry.estimated_calories!)} <span className="text-xs font-bold text-zinc-500">kcal · estimated</span>
-            </p>
-            <p className="text-xs font-semibold">
-              <span style={{ color: MACRO_COLORS.protein }}>P {Math.round(entry.estimated_protein ?? 0)}g</span>{' · '}
-              <span style={{ color: MACRO_COLORS.carbs }}>C {Math.round(entry.estimated_carbs ?? 0)}g</span>{' · '}
-              <span style={{ color: MACRO_COLORS.fat }}>F {Math.round(entry.estimated_fat ?? 0)}g</span>
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-500">{readOnly ? 'No estimate yet.' : 'Add the calories and macros for this meal.'}</p>
-        )}
-        {editing && dailyLogId && <MacroEditor entry={entry} dailyLogId={dailyLogId} onClose={() => setEditing(false)} />}
-      </div>
-    </div>
-  );
-}
-
+// A visual food diary: no numbers, just what was eaten and when, for the coach to look through
+// and comment on. (Calories can't be told from a photo, so none are shown or estimated.)
 export function PhotoDiaryTab({
   clientId,
   dailyLogId,
   initialPhotos,
   readOnly,
+  canGiveFeedback,
+  feedback,
   profile,
-  programWeek,
 }: {
   clientId: string;
   dailyLogId: string | null;
   initialPhotos: FoodPhotoEntry[];
   readOnly: boolean;
+  canGiveFeedback: boolean;
+  feedback: NutritionFeedbackRow[];
   profile: ClientProfileRow | null;
-  programWeek: number;
 }) {
   const confirm = useConfirm();
   const { run: runUpload, busy: uploading } = useAction();
@@ -157,24 +56,14 @@ export function PhotoDiaryTab({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [viewing, setViewing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const dayTarget = useMemo(() => {
-    const engineProfile = toEngineProfile(profile);
-    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
-  }, [profile, programWeek]);
-
-  const totals = useMemo(() => {
-    const protein = photos.reduce((s, p) => s + (p.estimated_protein ?? 0), 0);
-    const carbs = photos.reduce((s, p) => s + (p.estimated_carbs ?? 0), 0);
-    const fat = photos.reduce((s, p) => s + (p.estimated_fat ?? 0), 0);
-    return { calories: dayCalories(protein, carbs, fat), protein, carbs, fat };
-  }, [photos]);
+  useBackHandler(viewing != null, () => setViewing(null));
 
   const dateLabel = new Date(viewingDate + 'T00:00:00Z').toLocaleDateString('en-GB', {
-    weekday: 'short',
+    weekday: 'long',
     day: 'numeric',
-    month: 'short',
+    month: 'long',
     timeZone: 'UTC',
   });
 
@@ -226,7 +115,7 @@ export function PhotoDiaryTab({
     if (!currentLogId) return;
     const ok = await confirm({ title: 'Delete this photo?', destructive: true });
     if (!ok) return;
-    const done = await runDelete(() => deleteFoodPhoto(id, currentLogId), { success: 'Photo deleted' });
+    const done = await runDelete(() => deleteFoodPhoto(id), { success: 'Photo deleted' });
     if (done && !isToday) await loadDate(viewingDate);
   }
 
@@ -242,7 +131,10 @@ export function PhotoDiaryTab({
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="text-sm font-semibold text-black dark:text-zinc-50">{isToday ? 'Today' : dateLabel}</div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-black dark:text-zinc-50">{isToday ? 'Today' : dateLabel}</p>
+          {isToday && <p className="text-xs text-zinc-500">{dateLabel}</p>}
+        </div>
         <div className="flex items-center gap-1">
           {!isToday && (
             <button type="button" disabled={dateLoading} onClick={() => loadDate(todayIso)} className="rounded-full px-3 py-1 text-xs font-bold text-accent">
@@ -261,8 +153,6 @@ export function PhotoDiaryTab({
         </div>
       </div>
 
-      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} />
-
       {!readOnly && (
         <button
           type="button"
@@ -277,16 +167,56 @@ export function PhotoDiaryTab({
         </button>
       )}
 
+      <FeedbackThread
+        clientId={clientId}
+        date={viewingDate}
+        items={feedback}
+        canGive={canGiveFeedback}
+        placeholder={`Feedback on ${isToday ? "today's" : 'this day’s'} food…`}
+        buttonLabel="Leave feedback on this day"
+      />
+
       {photos.length === 0 ? (
         <EmptyState
           icon={Camera}
           title={isToday ? 'No meals logged yet' : 'No meals logged this day'}
-          hint={readOnly ? 'Nothing uploaded yet.' : 'Photograph each meal and log its macros. Your coach can see every photo.'}
+          hint={readOnly ? 'Nothing uploaded yet.' : 'Photograph each meal and add a short description. Your coach looks through your photos.'}
         />
       ) : (
         <div className="space-y-3">
           {photos.map((entry) => (
-            <PhotoCard key={entry.id} entry={entry} dailyLogId={currentLogId} readOnly={readOnly} onDelete={handleDelete} />
+            <div key={entry.id} className="overflow-hidden rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
+              {entry.signedUrl ? (
+                <button type="button" aria-label="View photo" onClick={() => setViewing(entry.signedUrl)} className="block w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={entry.signedUrl} alt={entry.description ?? 'Food photo'} className="aspect-[4/3] w-full object-cover" />
+                </button>
+              ) : (
+                <div className="aspect-[4/3] w-full bg-black/5 dark:bg-white/5" />
+              )}
+              <div className="space-y-2 p-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
+                    <p className="text-xs text-zinc-500">{timeOf(entry.created_at)}</p>
+                  </div>
+                  {!readOnly && (
+                    <button type="button" aria-label="Delete photo" onClick={() => handleDelete(entry.id)} className="shrink-0 rounded-full p-2 text-zinc-400 hover:text-danger">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <FeedbackThread
+                  clientId={clientId}
+                  date={viewingDate}
+                  photoId={entry.id}
+                  items={feedback}
+                  canGive={canGiveFeedback}
+                  placeholder="Comment on this meal…"
+                  buttonLabel="Comment on this meal"
+                />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -339,6 +269,13 @@ export function PhotoDiaryTab({
             </button>
           </div>
         </BottomSheet>
+      )}
+
+      {viewing && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setViewing(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={viewing} alt="Meal photo" className="max-h-[88vh] max-w-full rounded-xl object-contain" />
+        </div>
       )}
     </div>
   );

@@ -55,6 +55,7 @@ import type {
   ActivityRow,
   BigDogResultRow,
   BodyScan,
+  NutritionFeedbackRow,
   BookingRow,
   EventWithSignup,
   RewardsForMember,
@@ -125,6 +126,7 @@ export function DashboardShell({
   creditPacks,
   photos,
   bodyScans,
+  nutritionFeedback = [],
   measurementLogs,
   notifications,
   formTemplates,
@@ -178,6 +180,7 @@ export function DashboardShell({
   creditPacks: CreditPackRow[];
   photos: ProgressPhoto[];
   bodyScans: BodyScan[];
+  nutritionFeedback?: NutritionFeedbackRow[];
   measurementLogs: MeasurementLogRow[];
   habits: HabitWithLogs[];
   notifications: NotificationRow[];
@@ -334,6 +337,7 @@ export function DashboardShell({
       if (open === 'messages') handleCategoryClick('Messages');
       else if (open === 'book') handleClientTab('Book');
       else if (open === 'checkin') handleCategoryClick('Accountability');
+      else if (open === 'nutrition') handleCategoryClick('Nutrition');
       url.searchParams.delete('open');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     });
@@ -754,6 +758,8 @@ export function DashboardShell({
               profile={profile}
               programWeek={programWeek}
               nutritionMode={nutritionMode}
+              canGiveFeedback={isCoachView && isOwnClient}
+              feedback={nutritionFeedback}
             />
           )}
           {effectiveScreen === 'Photo Diary' && (
@@ -762,8 +768,9 @@ export function DashboardShell({
               dailyLogId={todayLogId}
               initialPhotos={foodPhotos}
               readOnly={isCoachView}
+              canGiveFeedback={isCoachView && isOwnClient}
+              feedback={nutritionFeedback}
               profile={profile}
-              programWeek={programWeek}
             />
           )}
           {effectiveScreen === 'Meal Planner' && (

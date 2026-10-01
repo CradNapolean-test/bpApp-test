@@ -90,6 +90,7 @@ export default async function CoachClientPage({
       creditPacks={bundle.creditPacks}
       photos={bundle.photos}
       bodyScans={bundle.bodyScans}
+      nutritionFeedback={bundle.nutritionFeedback}
       measurementLogs={bundle.measurementLogs}
       habits={bundle.habits}
       notifications={bundle.notifications}

@@ -73,6 +73,7 @@ export default async function DashboardPage() {
       creditPacks={bundle.creditPacks}
       photos={bundle.photos}
       bodyScans={bundle.bodyScans}
+      nutritionFeedback={bundle.nutritionFeedback}
       measurementLogs={bundle.measurementLogs}
       habits={bundle.habits}
       notifications={bundle.notifications}

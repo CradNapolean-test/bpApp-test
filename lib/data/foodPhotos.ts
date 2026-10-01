@@ -2,9 +2,7 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import { estimateFoodPhoto } from '@/lib/ai/estimateFoodPhoto';
 import type { FoodPhotoEntry, FoodPhotoEntryRow } from './types';
-import { dayCalories } from '@/lib/calculations';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -49,9 +47,7 @@ export async function getFoodPhotos(dailyLogId: string): Promise<FoodPhotoEntry[
 }
 
 // Takes a FormData (not typed File args directly) -- same reasoning as uploadProgressPhoto:
-// the documented-safe way to pass a File through a Next.js Server Action. AI estimation is
-// best-effort: a failed or unconfigured call leaves estimated_* null and the entry still
-// saves, rather than blocking the upload.
+// the documented-safe way to pass a File through a Next.js Server Action.
 export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntryRow> {
   const supabase = await createClient();
   const clientId = formData.get('clientId') as string;
@@ -66,60 +62,22 @@ export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntr
   const { error: uploadError } = await supabase.storage.from('food-photos').upload(path, file);
   if (uploadError) raise(uploadError);
 
-  let estimate: Awaited<ReturnType<typeof estimateFoodPhoto>> = null;
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    estimate = await estimateFoodPhoto(bytes, file.type, description);
-  } catch {
-    // Graceful degradation -- no ANTHROPIC_API_KEY set, or the call failed. The client
-    // fills in macros manually in that case; the photo entry itself still saves below.
-    estimate = null;
-  }
-
   const { data, error } = await supabase
     .from('food_photo_entries')
     .insert({
       daily_log_id: dailyLogId,
       storage_path: path,
       description,
-      estimated_calories: estimate?.calories ?? null,
-      estimated_protein: estimate?.protein ?? null,
-      estimated_carbs: estimate?.carbs ?? null,
-      estimated_fat: estimate?.fat ?? null,
     })
     .select()
     .single();
   if (error) raise(error);
-
-  await syncFoodPhotosToLog(dailyLogId);
+  // The photo diary is visual only: no calories or macros are estimated or written to the day's
+  // totals (those come from the check-in), so nothing to sync here.
   return data;
 }
 
-export async function updateFoodPhotoMacros(
-  id: string,
-  dailyLogId: string,
-  fields: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
-): Promise<void> {
-  const supabase = await createClient();
-  // Calories follow the macros (as everywhere else), so the two can never disagree.
-  const calories =
-    fields.protein == null && fields.carbs == null && fields.fat == null
-      ? fields.calories
-      : Math.round(dayCalories(fields.protein ?? 0, fields.carbs ?? 0, fields.fat ?? 0));
-  const { error } = await supabase
-    .from('food_photo_entries')
-    .update({
-      estimated_calories: calories,
-      estimated_protein: fields.protein,
-      estimated_carbs: fields.carbs,
-      estimated_fat: fields.fat,
-    })
-    .eq('id', id);
-  if (error) raise(error);
-  await syncFoodPhotosToLog(dailyLogId);
-}
-
-export async function deleteFoodPhoto(id: string, dailyLogId: string): Promise<void> {
+export async function deleteFoodPhoto(id: string): Promise<void> {
   const supabase = await createClient();
   const { data: entry, error: fetchError } = await supabase
     .from('food_photo_entries')
@@ -133,7 +91,7 @@ export async function deleteFoodPhoto(id: string, dailyLogId: string): Promise<v
 
   const { error } = await supabase.from('food_photo_entries').delete().eq('id', id);
   if (error) raise(error);
-  await syncFoodPhotosToLog(dailyLogId);
+  // (No totals sync: the photo diary doesn't write calories or macros to the day.)
 }
 
 // Same reasoning as syncFoodDiaryToLog (lib/data/foodDiary.ts): keeps daily_logs the single

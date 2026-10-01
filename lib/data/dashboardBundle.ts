@@ -25,6 +25,7 @@ import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getCreditPacks, getMyMembership, getPackages } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
+import { getNutritionFeedback } from './nutritionFeedback';
 import { getHabitsWithLogs } from './habits';
 import { getUnreadNotifications } from './notifications';
 import { getFormTemplates, getClientFormAssignments } from './forms';
@@ -73,6 +74,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     creditPacks,
     photos,
     bodyScans,
+    nutritionFeedback,
     measurementLogs,
     habits,
     notifications,
@@ -110,6 +112,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getCreditPacks(),
     getPhotos(clientId),
     getBodyScans(clientId),
+    getNutritionFeedback(clientId),
     getMeasurementLogs(clientId),
     getHabitsWithLogs(clientId, profile?.timezone ?? DEFAULT_TIMEZONE),
     getUnreadNotifications(clientId),
@@ -164,6 +167,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     creditPacks,
     photos,
     bodyScans,
+    nutritionFeedback,
     measurementLogs,
     habits,
     notifications,

@@ -408,6 +408,17 @@ export interface BodyScan extends BodyScanRow {
   signedPrintoutUrl: string | null;
 }
 
+// Coach feedback on a member's food diary (migration 0085). photo_id null = feedback on the whole day.
+export interface NutritionFeedbackRow {
+  id: string;
+  client_id: string;
+  coach_id: string;
+  log_date: string;
+  photo_id: string | null;
+  body: string;
+  created_at: string;
+}
+
 export interface FoodPhotoEntryRow {
   id: string;
   daily_log_id: string;
