@@ -112,7 +112,23 @@ export function CoachingHub({
       {show('Nutrition') && (
         <div>
           <SectionLabel>Nutrition</SectionLabel>
-          <Card>
+          {profile?.nutrition_tracking_mode === 'photo_diary' ? (
+            <Card>
+              <p className="text-sm font-bold text-black dark:text-zinc-50">Photo diary</p>
+              <p className="mt-0.5 text-xs text-zinc-500">Photograph your meals and your coach looks through them.</p>
+              <button
+                type="button"
+                onClick={() => onNavigate('Nutrition')}
+                className="mt-4 flex w-full items-center justify-between rounded-xl bg-accent/15 px-4 py-3 text-left"
+              >
+                <span className="flex items-center gap-2 text-sm font-bold text-accent">
+                  <NotebookPen className="h-4 w-4" /> Add a meal photo
+                </span>
+                <ChevronRight className="h-4 w-4 text-accent" />
+              </button>
+            </Card>
+          ) : (
+            <Card>
             <div className="mb-3 flex items-baseline justify-between">
               <p className="text-sm font-bold text-black dark:text-zinc-50">Today&apos;s targets</p>
               <p className="text-xs text-zinc-500">
@@ -131,6 +147,7 @@ export function CoachingHub({
               <ChevronRight className="h-4 w-4 text-accent" />
             </button>
           </Card>
+          )}
         </div>
       )}
 

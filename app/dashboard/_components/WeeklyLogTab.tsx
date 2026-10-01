@@ -109,9 +109,11 @@ export function WeeklyLogTab({
   const [savingDate, setSavingDate] = useState<string | null>(null);
   const [savedDates, setSavedDates] = useState<Record<string, boolean>>({});
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
-  // Calories and macros come from the food diary for everyone except photo-diary members, who
-  // type them in here. Showing editable boxes for the rest would fight the diary's own totals.
-  const macrosEditable = (profile?.nutrition_tracking_mode ?? 'full_tracking') === 'photo_diary' && !readOnly;
+  // Calories and macros always come from the food diary (full tracking, or typed totals); the
+  // check-in never edits them. Photo-diary members have no numbers at all (photos can't be turned
+  // into calories), so every food figure is hidden for them.
+  const mode = profile?.nutrition_tracking_mode ?? 'full_tracking';
+  const isPhoto = mode === 'photo_diary';
   // A single focused day at a time (7-day chip strip selects it), replacing the previous
   // stack of seven independently-collapsible day cards -- one form on screen instead of
   // seven, matching the mobile redesign brief.
@@ -134,10 +136,10 @@ export function WeeklyLogTab({
   async function saveDay(date: string, patch: Partial<DayForm> = {}) {
     setSavingDate(date);
     try {
-      // Macros are the food diary's to write unless this member types them here; sending this
-      // form's older copy of them would overwrite what the diary just recorded.
-      const { protein, carbs, fat, fibre, ...rest } = { ...days[date], ...patch };
-      const fields = macrosEditable ? { ...rest, protein, carbs, fat, fibre } : rest;
+      // Macros are the food diary's to write; sending this form's older copy of them would
+      // overwrite what the diary just recorded.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { protein, carbs, fat, fibre, ...fields } = { ...days[date], ...patch };
       await run(() => upsertDailyLog(clientId, date, fields), {
         onDone: () => setSavedDates((s) => ({ ...s, [date]: true })),
       });
@@ -181,26 +183,44 @@ export function WeeklyLogTab({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-3">
-        <div className={cardCls}>
-          <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgCalories)}</p>
-          <p className="mt-0.5 text-xs text-zinc-500">avg kcal</p>
+      {isPhoto ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className={cardCls}>
+            <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgSteps)}</p>
+            <p className="mt-0.5 text-xs text-zinc-500">avg steps</p>
+          </div>
+          <div className={cardCls}>
+            <p className="text-2xl font-bold text-black dark:text-zinc-50">
+              {fmt(avgBodyweight, 1)}
+              {avgBodyweight != null && <span className="text-sm font-bold text-zinc-500">kg</span>}
+            </p>
+            <p className="mt-0.5 text-xs text-zinc-500">avg bodyweight</p>
+          </div>
         </div>
-        <div className={cardCls}>
-          <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgProtein)}{avgProtein != null && 'g'}</p>
-          <p className="mt-0.5 text-xs text-zinc-500">avg protein</p>
-        </div>
-        <div className={cardCls}>
-          <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgSteps)}</p>
-          <p className="mt-0.5 text-xs text-zinc-500">avg steps</p>
-        </div>
-      </div>
-      <p className="text-xs text-zinc-500">
-        {loggedDays.length} day{loggedDays.length === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgCarbs)}
-        {avgCarbs != null && 'g'} · avg fat {fmt(avgFat)}
-        {avgFat != null && 'g'} · avg bodyweight {fmt(avgBodyweight, 1)}
-        {avgBodyweight != null && 'kg'}
-      </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className={cardCls}>
+              <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgCalories)}</p>
+              <p className="mt-0.5 text-xs text-zinc-500">avg kcal</p>
+            </div>
+            <div className={cardCls}>
+              <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgProtein)}{avgProtein != null && 'g'}</p>
+              <p className="mt-0.5 text-xs text-zinc-500">avg protein</p>
+            </div>
+            <div className={cardCls}>
+              <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgSteps)}</p>
+              <p className="mt-0.5 text-xs text-zinc-500">avg steps</p>
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500">
+            {loggedDays.length} day{loggedDays.length === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgCarbs)}
+            {avgCarbs != null && 'g'} · avg fat {fmt(avgFat)}
+            {avgFat != null && 'g'} · avg bodyweight {fmt(avgBodyweight, 1)}
+            {avgBodyweight != null && 'kg'}
+          </p>
+        </>
+      )}
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {weekDates.map((date) => {
@@ -244,18 +264,18 @@ export function WeeklyLogTab({
             })}
           </h4>
           <span className="text-sm text-zinc-500">
-            {calories > 0 && <span>{Math.round(calories)} kcal</span>}
+            {!isPhoto && calories > 0 && <span>{Math.round(calories)} kcal</span>}
             {cycleDay && <span className="ml-2">· cycle day {cycleDay}</span>}
           </span>
         </div>
 
-        {calories > 0 && calories < CALORIE_FLOOR && focusedDate < todayIso && (
+        {!isPhoto && calories > 0 && calories < CALORIE_FLOOR && focusedDate < todayIso && (
           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
             Below {CALORIE_FLOOR} kcal — worth a coach review.
           </p>
         )}
 
-        {dayTarget && (
+        {!isPhoto && dayTarget && (
           <p className="mt-1 text-xs text-zinc-500">
             {Math.round(calories)} / {Math.round(dayTarget.calories)} kcal ·{' '}
             {Math.round(d.protein ?? 0)} / {Math.round(dayTarget.protein)}g protein
@@ -277,23 +297,37 @@ export function WeeklyLogTab({
           ))}
         </div>
 
-        {!macrosEditable && (
+        {isPhoto ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-card-muted p-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Food · photo diary</p>
+              <p className="mt-0.5 text-xs text-zinc-500">Your coach looks through your meal photos.</p>
+            </div>
+            {onOpenFoodDiary && !isCoachView && (
+              <button type="button" onClick={onOpenFoodDiary} className="shrink-0 text-xs font-bold text-accent">
+                Open photo diary →
+              </button>
+            )}
+          </div>
+        ) : (
           <div className="mt-3 rounded-xl bg-card-muted p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Food · from your diary</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Food · {mode === 'manual_import' ? 'your totals' : 'from your diary'}
+              </p>
               {onOpenFoodDiary && !isCoachView && (
                 <button type="button" onClick={onOpenFoodDiary} className="text-xs font-bold text-accent">
                   Open food diary →
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-5 gap-1.5 text-center">
+            <div className={`grid gap-1.5 text-center ${mode === 'manual_import' ? 'grid-cols-4' : 'grid-cols-5'}`}>
               {[
                 ['kcal', Math.round(calories)],
                 ['Protein', d.protein],
                 ['Carbs', d.carbs],
                 ['Fat', d.fat],
-                ['Fibre', d.fibre],
+                ...(mode === 'manual_import' ? [] : [['Fibre', d.fibre]]),
               ].map(([label, value]) => (
                 <div key={label as string}>
                   <p className="text-base font-black text-black dark:text-zinc-50">
@@ -304,7 +338,9 @@ export function WeeklyLogTab({
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-zinc-400">Fibre counts the foods that have a fibre figure.</p>
+            {mode !== 'manual_import' && (
+              <p className="mt-2 text-[11px] text-zinc-400">Fibre counts the foods that have a fibre figure.</p>
+            )}
           </div>
         )}
 
@@ -315,30 +351,6 @@ export function WeeklyLogTab({
           }}
           className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
-          {macrosEditable && (
-            <>
-              <div className="space-y-1">
-                <label className={labelCls}>Protein (g)</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={d.protein ?? ''}
-                  onChange={(e) => updateDay(focusedDate, { protein: numOrNull(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Carbs (g)</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={d.carbs ?? ''}
-                  onChange={(e) => updateDay(focusedDate, { carbs: numOrNull(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Fat (g)</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={d.fat ?? ''}
-                  onChange={(e) => updateDay(focusedDate, { fat: numOrNull(e.target.value) })} />
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Fibre (g)</label>
-                <input type="number" inputMode="decimal" className={inputCls} value={d.fibre ?? ''}
-                  onChange={(e) => updateDay(focusedDate, { fibre: numOrNull(e.target.value) })} />
-              </div>
-            </>
-          )}
           <label className="col-span-2 flex h-16 items-center justify-between gap-3 rounded-full border border-black/10 bg-card px-6 transition-colors focus-within:border-accent disabled:opacity-60 dark:border-white/10 sm:col-span-4">
             <span className="text-sm font-extrabold text-black dark:text-zinc-50">Bodyweight</span>
             <span className="flex items-baseline gap-1.5">

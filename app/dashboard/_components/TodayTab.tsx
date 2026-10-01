@@ -132,6 +132,14 @@ export function TodayTab({
         className="block w-full overflow-hidden rounded-2xl p-5 text-left text-white shadow-[0_1px_2px_rgba(0,0,0,.02)]"
         style={{ background: 'linear-gradient(155deg, #2abfbf, #157f7f)' }}
       >
+        {profile?.nutrition_tracking_mode === 'photo_diary' ? (
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-white/70">Today&apos;s nutrition</p>
+            <p className="text-xl font-bold text-white">Photo diary</p>
+            <p className="text-sm text-white/70">Tap to look through their meal photos and leave feedback.</p>
+          </div>
+        ) : (
+          <>
         <div className="flex items-center gap-4">
           {dayTarget ? (
             <ProgressRing
@@ -167,6 +175,8 @@ export function TodayTab({
             <MacroBar label="Carbs" value={todayLog?.carbs ?? 0} target={dayTarget.carbs} />
             <MacroBar label="Fat" value={todayLog?.fat ?? 0} target={dayTarget.fat} />
           </div>
+        )}
+          </>
         )}
       </button>
       </>
