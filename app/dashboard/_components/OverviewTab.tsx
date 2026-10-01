@@ -50,9 +50,21 @@ const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px
 
 // Plain inline SVG (same custom-SVG-over-a-charting-library precedent as ProgressRing). Shows the
 // weekly averages as a line with dots, the high/low values on the left and the week dates below.
-export function TrendChart({ values, labels, color, formatter }: { values: number[]; labels: string[]; color: string; formatter: (v: number) => string }) {
+export function TrendChart({
+  values,
+  labels,
+  color,
+  formatter,
+  emptyText = 'Log a second week to see your trend',
+}: {
+  values: number[];
+  labels: string[];
+  color: string;
+  formatter: (v: number) => string;
+  emptyText?: string;
+}) {
   if (values.length < 2) {
-    return <div className="flex h-16 items-center text-xs text-zinc-400">Log a second week to see your trend</div>;
+    return <div className="flex h-16 items-center text-xs text-zinc-400">{emptyText}</div>;
   }
   const width = 280;
   const height = 96;

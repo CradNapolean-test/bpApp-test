@@ -126,6 +126,7 @@ export function BodyScansTab({
                 labels={chartScans.map((s) => shortDate(s.scan_date))}
                 color={chartMeta.color}
                 formatter={(v) => v.toFixed(1)}
+                emptyText="Add a second scan to see your trend"
               />
             </div>
           </div>
