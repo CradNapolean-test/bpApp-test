@@ -2,9 +2,47 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
+import { sendPushToClient } from '@/lib/push';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from './types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
+
+// A message from the coach pings the member's phone (when they've turned push on) so it can't be
+// missed. A member's own messages never push anyone here. Best-effort: push trouble must never
+// fail the send itself.
+async function pushMemberIfFromCoach(senderId: string, clientId: string, preview: string): Promise<void> {
+  if (senderId === clientId) return;
+  try {
+    await sendPushToClient(clientId, {
+      title: 'New message from your coach',
+      body: preview.length > 120 ? `${preview.slice(0, 117)}...` : preview,
+      url: '/dashboard',
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+// Photos are inserted straight from the browser, so the browser calls this afterwards. It only
+// pushes if the caller really did just send a photo into this thread (RLS decides what they see).
+export async function notifyPhotoSent(clientId: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || user.id === clientId) return;
+  const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('chat_messages')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('sender_id', user.id)
+    .not('image_path', 'is', null)
+    .gt('created_at', since)
+    .limit(1);
+  if (!data?.length) return;
+  await pushMemberIfFromCoach(user.id, clientId, '📷 Sent you a photo');
+}
 
 export async function getMessages(clientId: string): Promise<ChatMessage[]> {
   const supabase = await createClient();
@@ -48,6 +86,7 @@ export async function sendMessage(clientId: string, text: string): Promise<void>
     .from('chat_messages')
     .insert({ client_id: clientId, sender_id: user.id, text });
   if (error) raise(error);
+  await pushMemberIfFromCoach(user.id, clientId, text);
 }
 
 // Mirrors uploadProgressPhoto/uploadFoodPhoto's FormData-in convention -- the documented-safe
@@ -78,6 +117,7 @@ export async function sendVoiceNote(clientId: string, formData: FormData): Promi
     audio_duration_seconds: duration,
   });
   if (error) raise(error);
+  await pushMemberIfFromCoach(user.id, clientId, '🎤 Sent you a voice note');
 }
 
 export async function getCoachChatOverview(): Promise<ChatOverviewRow[]> {

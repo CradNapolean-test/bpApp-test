@@ -7,7 +7,7 @@ import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Avatar } from '@/app/_components/Avatar';
 import { VoiceRecorder } from '@/app/_components/VoiceRecorder';
-import { markChatRead, sendMessage, sendVoiceNote } from '@/lib/data/chat';
+import { markChatRead, notifyPhotoSent, sendMessage, sendVoiceNote } from '@/lib/data/chat';
 import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -222,6 +222,7 @@ export function ChatTab({
         .from('chat_messages')
         .insert({ client_id: clientId, sender_id: currentUserId, text: null, image_path: path });
       if (error) throw error;
+      void notifyPhotoSent(clientId);
     } catch {
       toast.error('Could not send that photo. Please try again.');
     } finally {

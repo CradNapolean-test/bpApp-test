@@ -7,6 +7,7 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { createClient } from '@/lib/supabase/client';
+import { PushPrompt } from './PushPrompt';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -792,6 +793,7 @@ export function DashboardShell({
         />
       )}
 
+      {!isCoachView && <PushPrompt clientId={clientId} />}
     </AppShell>
     </ClientOnly>
   );
