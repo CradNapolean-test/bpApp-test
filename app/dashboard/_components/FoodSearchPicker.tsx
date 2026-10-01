@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Star } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { searchFoods } from '@/lib/data/foods';
+import { createClient } from '@/lib/supabase/client';
 import { dayCalories } from '@/lib/calculations';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
@@ -189,15 +190,58 @@ export function FoodSearchPicker({
   const [results, setResults] = useState<FoodRow[]>([]);
   const [grams, setGrams] = useState<Record<string, number>>({});
   const [servings, setServings] = useState<Record<string, number>>({});
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abort = useRef<AbortController | null>(null);
+  const latest = useRef(0);
 
+  // Searches go straight from the phone to the database (one hop, no server-action queue), start
+  // 200 ms after the last keystroke, cancel the request they replace, and ignore any answer that is
+  // no longer the latest -- typing "porridge" is one search, not eight queued ones. If the direct
+  // call fails for any reason it falls back to the server-side search.
   function handleQueryChange(value: string) {
     setQuery(value);
-    startTransition(async () => {
-      const foods = await searchFoods(value);
+    if (timer.current) clearTimeout(timer.current);
+    abort.current?.abort();
+    const q = value.trim();
+    const id = ++latest.current;
+    if (q.length < 2) {
+      setResults([]);
+      setIsPending(false);
+      return;
+    }
+    setIsPending(true);
+    timer.current = setTimeout(async () => {
+      const controller = new AbortController();
+      abort.current = controller;
+      let foods: FoodRow[] | null = null;
+      try {
+        const { data, error } = await createClient().rpc('search_foods', { p_query: q, p_limit: 25 }).abortSignal(controller.signal);
+        if (!error) foods = (data ?? []) as FoodRow[];
+      } catch {
+        // aborted or offline: handled below
+      }
+      if (id !== latest.current) return; // a newer search has taken over
+      if (foods === null) {
+        try {
+          foods = await searchFoods(q);
+        } catch {
+          foods = [];
+        }
+        if (id !== latest.current) return;
+      }
       setResults(foods);
-    });
+      setIsPending(false);
+    }, 200);
   }
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      abort.current?.abort();
+    },
+    []
+  );
 
   const modes: ('foods' | 'recipes' | 'quick_add')[] = [
     'foods',
@@ -360,7 +404,7 @@ export function FoodSearchPicker({
           ))}
           {!isPending && results.length === 0 && (
             <li>
-              <EmptyState compact title={query ? `No results for "${query}"` : 'Start typing to search foods'} />
+              <EmptyState compact title={query.trim().length >= 2 ? `No results for "${query.trim()}"` : query ? 'Keep typing…' : 'Start typing to search foods'} />
             </li>
           )}
         </ul>
