@@ -5,16 +5,21 @@ import { Card } from '@/app/_components/ui';
 
 type Macros = { calories: number; protein: number; carbs: number; fat: number };
 
-function MacroRing({ label, unit, value, target }: { label: string; unit: string; value: number; target: number | null }) {
+// Ring colours from the owner's My coaching mockup: teal, purple, amber, green.
+const RING_COLORS = { calories: 'var(--accent)', protein: '#a07aff', carbs: '#e8a020', fat: '#2ecc71' } as const;
+
+function MacroRing({ label, unit, value, target, color }: { label: string; unit: string; value: number; target: number | null; color: string }) {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
-      <ProgressRing value={value} target={target ?? 0} label="" size={64} strokeWidth={6} hideValue />
-      <p className="text-sm font-black leading-none text-black dark:text-zinc-50">
-        {Math.round(value)}
-        <span className="text-[11px] font-bold text-zinc-500">{unit}</span>
-      </p>
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="text-[11px] text-zinc-400">{target != null ? `of ${Math.round(target)}${unit}` : '—'}</p>
+      <div className="relative">
+        <ProgressRing value={value} target={target ?? 0} label="" size={64} strokeWidth={6} color={color} hideValue />
+        <span className="absolute inset-0 flex items-center justify-center text-xs font-black leading-none text-black dark:text-zinc-50">
+          {Math.round(value).toLocaleString()}
+          {unit}
+        </span>
+      </div>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="text-[11px] text-zinc-400">{target != null ? `of ${Math.round(target).toLocaleString()}${unit}` : '—'}</p>
     </div>
   );
 }
@@ -24,10 +29,10 @@ function MacroRing({ label, unit, value, target }: { label: string; unit: string
 export function TargetRings({ totals, target }: { totals: Macros; target: Macros | null }) {
   return (
     <div className="grid grid-cols-4 gap-2">
-      <MacroRing label="Calories" unit="" value={totals.calories} target={target?.calories ?? null} />
-      <MacroRing label="Protein" unit="g" value={totals.protein} target={target?.protein ?? null} />
-      <MacroRing label="Carbs" unit="g" value={totals.carbs} target={target?.carbs ?? null} />
-      <MacroRing label="Fats" unit="g" value={totals.fat} target={target?.fat ?? null} />
+      <MacroRing label="Calories" unit="" value={totals.calories} target={target?.calories ?? null} color={RING_COLORS.calories} />
+      <MacroRing label="Protein" unit="g" value={totals.protein} target={target?.protein ?? null} color={RING_COLORS.protein} />
+      <MacroRing label="Carbs" unit="g" value={totals.carbs} target={target?.carbs ?? null} color={RING_COLORS.carbs} />
+      <MacroRing label="Fats" unit="g" value={totals.fat} target={target?.fat ?? null} color={RING_COLORS.fat} />
     </div>
   );
 }
