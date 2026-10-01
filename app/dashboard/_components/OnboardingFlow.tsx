@@ -254,7 +254,7 @@ export function OnboardingFlow({
       if (!phone.trim()) return 'Please add a mobile number.';
       if (!emName.trim() || !emPhone.trim()) return 'Please add an emergency contact name and number.';
     }
-    if (key === 'goal' && goal.trim().length < 10) return 'Tell us a little about your goal so your coach can help.';
+    if (key === 'goal' && goal.trim().length === 0) return 'Please tell us your goal so your coach can help.';
     if (key === 'body') {
       if (!heightCm || heightCm < 120 || heightCm > 230) return 'Please check your height.';
       if (!weightKg || weightKg < 30 || weightKg > 300) return 'Please check your current weight.';
