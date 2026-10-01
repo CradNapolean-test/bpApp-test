@@ -32,6 +32,7 @@ export default async function DashboardPage() {
       <OnboardingFlow
         clientId={user.id}
         email={profile.email}
+        existing={bundle.profile}
         coachFirstName={(coach as { display_name?: string | null } | null)?.display_name?.split(' ')[0] ?? null}
       />
     );

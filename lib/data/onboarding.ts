@@ -177,6 +177,90 @@ async function assignDefaultForm(clientId: string): Promise<void> {
   }
 }
 
+export interface ShortOnboardingSubmission {
+  name: string;
+  gender: 'Male' | 'Female';
+  dateOfBirth: string;
+  phone: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  goalDescription: string;
+  experience: string;
+  healthNotes: string;
+  nutritionTrackingMode: string;
+}
+
+// The short version for existing members: confirms contact details, goal and food-tracking method.
+// It never touches their weights, targets or review flag.
+export async function completeShortOnboarding(clientId: string, input: ShortOnboardingSubmission): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || user.id !== clientId) return fail(null, 'Not signed in');
+
+  const name = input.name.trim();
+  const age = ageFromDob(input.dateOfBirth);
+  if (!name) return fail(null, 'Please enter your name');
+  if (age == null || age < 10 || age > 100) return fail(null, 'Please check your date of birth');
+  if (!TRACKING_OPTIONS.some((o) => o.value === input.nutritionTrackingMode)) return fail(null, 'Pick how to track food');
+
+  const { data, error } = await supabase
+    .from('client_profiles')
+    .update({
+      name,
+      gender: input.gender,
+      date_of_birth: input.dateOfBirth,
+      age,
+      phone: input.phone.trim() || null,
+      emergency_contact_name: input.emergencyContactName.trim() || null,
+      emergency_contact_phone: input.emergencyContactPhone.trim() || null,
+      goal_description: input.goalDescription.trim() || null,
+      experience: input.experience.trim() || null,
+      health_notes: input.healthNotes.trim() || null,
+      nutrition_tracking_mode: input.nutritionTrackingMode,
+      onboarding_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('client_id', clientId)
+    .select('client_id');
+  if (error || !data?.length) return fail(error, 'Could not save your answers. Please try again.');
+  return ok();
+}
+
+// A coach asks one of their clients to confirm their details (the short onboarding shows next time
+// they open the app).
+export async function requestDetailsUpdate(clientId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('client_profiles')
+    .update({ onboarding_completed_at: null })
+    .eq('client_id', clientId)
+    .select('client_id');
+  if (error || !data?.length) return fail(error, 'Could not send the request');
+  return ok();
+}
+
+// ...or all of the coach's own clients who already have a profile and haven't been asked yet.
+export async function requestDetailsUpdateForAll(): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Not signed in' };
+  const { data: mine } = await supabase.from('profiles').select('id').eq('coach_id', user.id).eq('role', 'client');
+  const ids = (mine ?? []).map((p) => p.id);
+  if (ids.length === 0) return { ok: true, count: 0 };
+  const { data, error } = await supabase
+    .from('client_profiles')
+    .update({ onboarding_completed_at: null })
+    .in('client_id', ids)
+    .not('onboarding_completed_at', 'is', null)
+    .select('client_id');
+  if (error) return { ok: false, error: error.message || 'Could not send the request' };
+  return { ok: true, count: data?.length ?? 0 };
+}
+
 export interface ReviewQueueItem {
   clientId: string;
   name: string;

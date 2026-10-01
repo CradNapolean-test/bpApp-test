@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Copy, Link2 } from 'lucide-react';
-import { getMyJoinLinkToken, setJoinLinkActive } from '@/lib/data/onboarding';
+import { getMyJoinLinkToken, requestDetailsUpdateForAll, setJoinLinkActive } from '@/lib/data/onboarding';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 
 // The coach's reusable sign-up link: paste it into the Ontraport welcome email. Anyone who opens
 // it can create a login attached to this coach, then goes through onboarding.
 export function JoinLinkCard() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [link, setLink] = useState<{ token: string; active: boolean } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -57,6 +59,26 @@ export function JoinLinkCard() {
         </button>
         <button type="button" onClick={toggle} className="text-xs font-semibold text-zinc-500 underline">
           {link.active ? 'Switch link off' : 'Switch link on'}
+        </button>
+      </div>
+      <div className="mt-4 border-t border-black/[.06] pt-3 dark:border-white/10">
+        <p className="text-xs text-zinc-500">Existing members can confirm their details too: it shows a one-minute check the next time they open the app.</p>
+        <button
+          type="button"
+          onClick={async () => {
+            const ok = await confirm({
+              title: 'Ask all your clients to confirm their details?',
+              body: 'Each of your clients will see a short details check the next time they open the app.',
+              confirmLabel: 'Ask them',
+            });
+            if (!ok) return;
+            const res = await requestDetailsUpdateForAll();
+            if (res.ok) toast.success(`Asked ${res.count} client${res.count === 1 ? '' : 's'} to confirm their details`);
+            else toast.error(res.error);
+          }}
+          className="mt-2 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold dark:border-white/15"
+        >
+          Ask all my clients to confirm details
         </button>
       </div>
     </div>

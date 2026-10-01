@@ -5,6 +5,7 @@ import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
+import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
 
@@ -273,6 +274,20 @@ export function SetupTab({
             </div>
           </div>
         </div>
+
+        {isCoachView && !readOnly && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+            <p className="text-xs text-zinc-500">Ask this member to confirm their details (a one-minute check next time they open the app).</p>
+            <button
+              type="button"
+              disabled={savingMode}
+              onClick={() => runMode(() => requestDetailsUpdate(clientId), { success: 'Asked them to confirm their details' })}
+              className="shrink-0 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold disabled:opacity-50 dark:border-white/15"
+            >
+              Ask them
+            </button>
+          </div>
+        )}
 
         {isCoachView && (initialProfile?.health_notes || initialProfile?.height_cm) && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-sm dark:bg-amber-500/10">

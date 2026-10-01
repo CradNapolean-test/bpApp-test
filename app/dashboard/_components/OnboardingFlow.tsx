@@ -5,11 +5,22 @@ import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, PlusSquare, Share } from 'lucide-react';
 import { Logo } from '@/app/_components/Logo';
 import { Button } from '@/app/_components/Button';
-import { completeOnboarding } from '@/lib/data/onboarding';
+import { completeOnboarding, completeShortOnboarding } from '@/lib/data/onboarding';
 import { ACTIVITY_OPTIONS, ageFromDob, buildOnboardingPlan, TRACKING_OPTIONS } from '@/lib/onboarding';
 import type { TrackingMode } from '@/lib/onboarding';
+import type { ClientProfileRow } from '@/lib/data/types';
 
-const STEPS = ['About you', 'Your goal', 'Your body', 'Food tracking', 'Your plan'] as const;
+const FULL_STEPS = ['about', 'goal', 'body', 'food', 'plan'] as const;
+// Existing members: just confirm details, goal and how they track food (no body stats or plan).
+const SHORT_STEPS = ['about', 'goal', 'food'] as const;
+type StepKey = (typeof FULL_STEPS)[number];
+const STEP_TITLE: Record<StepKey, string> = {
+  about: 'About you',
+  goal: 'Your goal',
+  body: 'Your body',
+  food: 'Food tracking',
+  plan: 'Your plan',
+};
 
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-3 text-base dark:border-white/10';
 const labelCls = 'text-sm font-semibold text-zinc-700 dark:text-zinc-300';
@@ -204,28 +215,44 @@ function useInstallState() {
   return { standalone, ios, installEvent };
 }
 
-export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: string; email: string; coachFirstName: string | null }) {
+export function OnboardingFlow({
+  clientId,
+  email,
+  coachFirstName,
+  existing = null,
+}: {
+  clientId: string;
+  email: string;
+  coachFirstName: string | null;
+  // An existing member being asked to confirm their details gets the short version.
+  existing?: ClientProfileRow | null;
+}) {
   const router = useRouter();
-  const [step, setStep] = useState(-1); // -1 = welcome, 0..4 = questions, 5 = done
+  const short = existing != null;
+  const steps: readonly StepKey[] = short ? SHORT_STEPS : FULL_STEPS;
+  const doneStep = steps.length;
+  const [step, setStep] = useState(-1); // -1 = welcome, 0..n-1 = questions, n = done
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState('');
-  const [gender, setGender] = useState<'Female' | 'Male' | null>(null);
-  const [dob, setDob] = useState('');
-  const [phone, setPhone] = useState('');
-  const [emName, setEmName] = useState('');
-  const [emPhone, setEmPhone] = useState('');
-  const [goal, setGoal] = useState('');
-  const [experience, setExperience] = useState('');
-  const [health, setHealth] = useState('');
+  const [name, setName] = useState(existing?.name ?? '');
+  const [gender, setGender] = useState<'Female' | 'Male' | null>(
+    existing?.gender === 'Male' ? 'Male' : existing?.gender === 'Female' ? 'Female' : null
+  );
+  const [dob, setDob] = useState(existing?.date_of_birth ?? '');
+  const [phone, setPhone] = useState(existing?.phone ?? '');
+  const [emName, setEmName] = useState(existing?.emergency_contact_name ?? '');
+  const [emPhone, setEmPhone] = useState(existing?.emergency_contact_phone ?? '');
+  const [goal, setGoal] = useState(existing?.goal_description ?? '');
+  const [experience, setExperience] = useState(existing?.experience ?? '');
+  const [health, setHealth] = useState(existing?.health_notes ?? '');
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [weightKg, setWeightKg] = useState<number | null>(null);
   const [goalKg, setGoalKg] = useState<number | null>(null);
   const [activity, setActivity] = useState<number>(1.5);
   const [knowsBf, setKnowsBf] = useState(false);
   const [bf, setBf] = useState('');
-  const [mode, setMode] = useState<TrackingMode>('full_tracking');
+  const [mode, setMode] = useState<TrackingMode>(existing?.nutrition_tracking_mode ?? 'full_tracking');
   const install = useInstallState();
 
   const age = dob ? ageFromDob(dob) : null;
@@ -245,16 +272,17 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
     });
   }, [gender, age, weightKg, goalKg, heightCm, activity, bfNumber, health]);
 
-  function stepError(s: number): string | null {
-    if (s === 0) {
+  function stepError(index: number): string | null {
+    const key = steps[index];
+    if (key === 'about') {
       if (!name.trim()) return 'Please enter your name.';
       if (!gender) return 'Please choose an option for gender (we use it for your calorie calculation).';
       if (age == null || age < 10 || age > 100) return 'Please enter your date of birth.';
       if (!phone.trim()) return 'Please add a mobile number.';
       if (!emName.trim() || !emPhone.trim()) return 'Please add an emergency contact name and number.';
     }
-    if (s === 1 && goal.trim().length < 10) return 'Tell us a little about your goal so your coach can help.';
-    if (s === 2) {
+    if (key === 'goal' && goal.trim().length < 10) return 'Tell us a little about your goal so your coach can help.';
+    if (key === 'body') {
       if (!heightCm || heightCm < 120 || heightCm > 230) return 'Please check your height.';
       if (!weightKg || weightKg < 30 || weightKg > 300) return 'Please check your current weight.';
       if (!goalKg || goalKg < 30 || goalKg > 300) return 'Please check your goal weight.';
@@ -274,7 +302,31 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
   }
 
   async function finish() {
-    if (!gender || !weightKg || !goalKg || !heightCm) return;
+    if (!gender) return;
+    if (short) {
+      setSaving(true);
+      setError(null);
+      const res = await completeShortOnboarding(clientId, {
+        name,
+        gender,
+        dateOfBirth: dob,
+        phone,
+        emergencyContactName: emName,
+        emergencyContactPhone: emPhone,
+        goalDescription: goal,
+        experience,
+        healthNotes: health,
+        nutritionTrackingMode: mode,
+      });
+      setSaving(false);
+      if (!res.ok) {
+        setError(res.error ?? 'Something went wrong. Please try again.');
+        return;
+      }
+      setStep(doneStep);
+      return;
+    }
+    if (!weightKg || !goalKg || !heightCm) return;
     setSaving(true);
     setError(null);
     const res = await completeOnboarding(clientId, {
@@ -299,7 +351,7 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
       setError(res.error ?? 'Something went wrong. Please try again.');
       return;
     }
-    setStep(5);
+    setStep(doneStep);
   }
 
   const shell = (children: React.ReactNode) => (
@@ -310,27 +362,31 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
     return shell(
       <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
         <Logo variant="full" size={96} />
-        <h1 className="text-2xl font-extrabold text-black dark:text-zinc-50">Let&apos;s get you set up</h1>
+        <h1 className="text-2xl font-extrabold text-black dark:text-zinc-50">{short ? 'Quick details check' : "Let's get you set up"}</h1>
         <p className="text-sm text-zinc-500">
-          A few quick questions so {coachFirstName ?? 'your coach'} can build your plan. It takes about 3 minutes, and you
-          can change anything later.
+          {short
+            ? `${coachFirstName ?? 'Your coach'} would like you to confirm a few details so everything is up to date. It takes about a minute, and your answers are filled in where we already have them.`
+            : `A few quick questions so ${coachFirstName ?? 'your coach'} can build your plan. It takes about 3 minutes, and you can change anything later.`}
         </p>
         <ul className="w-full space-y-2 rounded-2xl border border-black/[.06] bg-card p-4 text-left text-sm dark:border-white/10">
-          {['About you and your goal', 'Your body and activity', 'How you want to track food', 'Your daily calories & macros'].map((t) => (
+          {(short
+            ? ['Your contact details', 'Your goal', 'How you want to track food']
+            : ['About you and your goal', 'Your body and activity', 'How you want to track food', 'Your daily calories & macros']
+          ).map((t) => (
             <li key={t} className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
               <Check className="h-4 w-4 text-accent" /> {t}
             </li>
           ))}
         </ul>
         <Button variant="primary" className="w-full !rounded-full py-3 text-base" onClick={() => setStep(0)}>
-          Let&apos;s go
+          {short ? 'Start' : "Let's go"}
         </Button>
         <p className="text-xs text-zinc-400">Signed in as {email}</p>
       </div>
     );
   }
 
-  if (step === 5) {
+  if (step === doneStep) {
     const firstName = name ? name.split(' ')[0] : '';
     return shell(
       <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
@@ -339,8 +395,9 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
         </span>
         <h1 className="text-2xl font-extrabold text-black dark:text-zinc-50">You&apos;re all set{firstName ? `, ${firstName}` : ''}!</h1>
         <p className="text-sm text-zinc-500">
-          {coachFirstName ?? 'Your coach'} will look over your plan and may tweak it. Your coach will also activate your
-          membership so you can book sessions.
+          {short
+            ? 'Thanks, your details are up to date.'
+            : `${coachFirstName ?? 'Your coach'} will look over your plan and may tweak it. Your coach will also activate your membership so you can book sessions.`}
         </p>
 
         {!install.standalone && (
@@ -401,10 +458,10 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
         )}
         <div className="flex-1">
           <p className="text-xs font-semibold text-zinc-500">
-            Step {step + 1} of {STEPS.length} · {STEPS[step]}
+            Step {step + 1} of {steps.length} · {STEP_TITLE[steps[step]]}
           </p>
           <div className="mt-1.5 flex gap-1">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <span key={s} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-black/10 dark:bg-white/10'}`} />
             ))}
           </div>
@@ -412,7 +469,7 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
       </div>
 
       <div className="mt-6 flex-1 space-y-5">
-        {step === 0 && (
+        {steps[step] === 'about' && (
           <>
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">First, about you</h2>
             <div className="space-y-1.5">
@@ -443,7 +500,7 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
           </>
         )}
 
-        {step === 1 && (
+        {steps[step] === 'goal' && (
           <>
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your goal</h2>
             <div className="space-y-1.5">
@@ -467,7 +524,7 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
           </>
         )}
 
-        {step === 2 && (
+        {steps[step] === 'body' && (
           <>
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your body &amp; activity</h2>
             <HeightField cm={heightCm} onChange={setHeightCm} />
@@ -509,7 +566,7 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
           </>
         )}
 
-        {step === 3 && (
+        {steps[step] === 'food' && (
           <>
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">How do you want to track your food?</h2>
             <p className="-mt-2 text-sm text-zinc-500">You can change this later with your coach.</p>
@@ -537,7 +594,7 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
           </>
         )}
 
-        {step === 4 && (
+        {steps[step] === 'plan' && (
           <>
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your daily plan</h2>
             {plan ? (
@@ -573,13 +630,13 @@ export function OnboardingFlow({ clientId, email, coachFirstName }: { clientId: 
 
       {error && <p className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
       <div className="mt-6">
-        {step < 4 ? (
+        {step < steps.length - 1 ? (
           <Button variant="primary" className="w-full !rounded-full py-3 text-base" onClick={next}>
             Continue
           </Button>
         ) : (
-          <Button variant="primary" className="w-full !rounded-full py-3 text-base" disabled={saving || !plan} onClick={finish}>
-            {saving ? 'Saving…' : 'Looks good — finish'}
+          <Button variant="primary" className="w-full !rounded-full py-3 text-base" disabled={saving || (!short && !plan)} onClick={finish}>
+            {saving ? 'Saving…' : short ? 'Save & finish' : 'Looks good — finish'}
           </Button>
         )}
       </div>
