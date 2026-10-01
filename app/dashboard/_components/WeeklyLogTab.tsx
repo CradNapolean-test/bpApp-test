@@ -91,7 +91,7 @@ function HabitManager({ clientId, habits }: { clientId: string; habits: HabitWit
             required
             value={newHabitName}
             onChange={(e) => setNewHabitName(e.target.value)}
-            placeholder="e.g. 10,000 steps"
+            placeholder="e.g. 8,000 steps"
             className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
           />
         </div>

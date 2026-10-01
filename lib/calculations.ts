@@ -53,7 +53,11 @@ export function phaseForWeek(week: number): 1 | 2 | 3 {
   return week <= 4 ? 1 : week <= 8 ? 2 : 3;
 }
 
-// Step target schedule (Program Overview tab equivalent)
+// The daily step goal every client is coached towards. The Activity swap screen starts from this.
+export const STANDARD_STEP_TARGET = 8000;
+
+// Step target schedule (Program Overview tab equivalent) -- the old week-by-week ramp, no longer
+// used by the app (kept because it is covered by the validated test suite and the demo seed).
 export function stepTargetForWeek(week: number): number {
   if (week <= 1) return 10000;
   if (week <= 6) return 12000;

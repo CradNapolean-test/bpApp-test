@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { equivalentMinutesForActivity, stepTargetForWeek } from '@/lib/calculations';
+import { equivalentMinutesForActivity, STANDARD_STEP_TARGET } from '@/lib/calculations';
 import { Card, inputCls } from '@/app/_components/ui';
 import type { ActivityRow } from '@/lib/data/types';
 
@@ -33,14 +33,12 @@ function splitName(name: string): { title: string; detail: string | null } {
 export function ActivityTab({
   activities,
   bodyWeightKg,
-  programWeek,
 }: {
   activities: ActivityRow[];
   bodyWeightKg: number | null;
-  programWeek: number;
 }) {
   const [minutesPer1000, setMinutesPer1000] = useState<number | ''>(10);
-  const [stepTarget, setStepTarget] = useState<number | ''>(stepTargetForWeek(programWeek));
+  const [stepTarget, setStepTarget] = useState<number | ''>(STANDARD_STEP_TARGET);
   const [category, setCategory] = useState<Category>('All');
   const [query, setQuery] = useState('');
 
@@ -82,7 +80,7 @@ export function ActivityTab({
         </div>
         <div className="grid grid-cols-2 gap-3">
           {numberField('Minutes per 1,000 steps', 'How long you take to walk 1,000 steps', minutesPer1000, setMinutesPer1000, '0.5')}
-          {numberField('Step target', 'Your daily goal from your plan', stepTarget, setStepTarget)}
+          {numberField('Step target', 'Our standard daily goal', stepTarget, setStepTarget)}
         </div>
         <p className="rounded-xl bg-black/[.04] px-3 py-2 text-sm text-zinc-700 dark:bg-white/[.06] dark:text-zinc-300">
           <span className="font-bold text-black dark:text-zinc-50">{steps.toLocaleString()} steps</span> is about{' '}
