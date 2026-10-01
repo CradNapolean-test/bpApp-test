@@ -7,6 +7,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
+import { shrinkImageFile } from '@/lib/utils/shrinkImage';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
@@ -63,7 +64,7 @@ export function ProgressTab({
     const file = input.files?.[0];
     if (!file) return;
     const formData = new FormData();
-    formData.set('file', file);
+    formData.set('file', await shrinkImageFile(file));
     formData.set('clientId', clientId);
     formData.set('date', today);
     await runUpload(() => uploadProgressPhoto(formData), {

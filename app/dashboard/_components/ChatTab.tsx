@@ -8,25 +8,10 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { Avatar } from '@/app/_components/Avatar';
 import { VoiceRecorder } from '@/app/_components/VoiceRecorder';
 import { markChatRead, notifyPhotoSent, sendMessage, sendVoiceNote } from '@/lib/data/chat';
+import { shrinkImage } from '@/lib/utils/shrinkImage';
 import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
-const MAX_PHOTO_EDGE = 1600;
-
-// Phone photos are several MB and server actions cap request bodies, so photos are shrunk in the
-// browser and uploaded straight to storage (RLS on the bucket decides who may).
-async function shrinkImage(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not read that photo'))), 'image/jpeg', 0.82)
-  );
-}
-
 function dayLabel(iso: string): string {
   const d = new Date(iso);
   const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;

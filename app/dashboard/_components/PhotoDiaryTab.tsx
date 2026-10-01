@@ -8,6 +8,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { deleteFoodPhoto, updateFoodPhotoMacros, uploadFoodPhoto } from '@/lib/data/foodPhotos';
+import { shrinkImageFile } from '@/lib/utils/shrinkImage';
 import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import type { ClientProfileRow, FoodPhotoEntry } from '@/lib/data/types';
@@ -79,6 +80,8 @@ export function PhotoDiaryTab({
     if (!dailyLogId) return;
     const form = e.currentTarget;
     const formData = new FormData(form);
+    const original = formData.get('file');
+    if (original instanceof File && original.size > 0) formData.set('file', await shrinkImageFile(original));
     formData.set('clientId', clientId);
     formData.set('dailyLogId', dailyLogId);
     formData.set('description', description);
