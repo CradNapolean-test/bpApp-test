@@ -12,7 +12,7 @@ import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 type Scope = 'mine' | 'gym';
-type QuickFilter = 'all' | 'review' | 'quiet' | 'credits';
+type QuickFilter = 'all' | 'review' | 'quiet' | 'credits' | 'noplan';
 
 const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
 
@@ -74,7 +74,9 @@ export function ClientTable({
             ? health?.status === 'red' || health?.status === 'amber'
             : quick === 'credits'
               ? client.balance <= 1 && client.planName != null
-              : true
+              : quick === 'noplan'
+                ? client.planName == null
+                : true
       );
     merged.sort((a, b) => {
       let cmp = 0;
@@ -103,6 +105,7 @@ export function ClientTable({
         return s === 'red' || s === 'amber';
       }).length,
       credits: activeClients.filter((c) => c.balance <= 1 && c.planName != null).length,
+      noplan: activeClients.filter((c) => c.planName == null).length,
     }),
     [activeClients, statusById]
   );
@@ -212,6 +215,7 @@ const scopeBtnCls = (active: boolean) =>
           ['review', 'New to review', quickCounts.review],
           ['quiet', 'Gone quiet', quickCounts.quiet],
           ['credits', 'Low credits', quickCounts.credits],
+          ['noplan', 'No plan', quickCounts.noplan],
         ] as [QuickFilter, string, number][]).map(([key, label, count]) => (
           <button
             key={key}

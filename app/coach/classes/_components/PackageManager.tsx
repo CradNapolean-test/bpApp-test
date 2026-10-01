@@ -221,7 +221,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function PackageManager({ initialPackages }: { initialPackages: MembershipPackageRow[] }) {
+export function PackageManager({ initialPackages, memberCounts = {} }: { initialPackages: MembershipPackageRow[]; memberCounts?: Record<string, number> }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
   const [addingPackage, setAddingPackage] = useState(false);
@@ -287,7 +287,10 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
                   {p.description ? ` · ${p.description}` : ''}
                 </p>
                 <p className="mt-1 text-xs text-zinc-400">
-                  {p.included_screens ? `Restricted: ${p.included_screens.join(', ')}` : 'Full app access'}
+                  {p.included_screens
+                    ? `Not included: ${DISABLEABLE_SCREENS.filter((s) => !p.included_screens!.includes(s)).join(', ') || 'nothing'}`
+                    : 'Full app access'}
+                  {memberCounts[p.name] != null ? ` · ${memberCounts[p.name]} member${memberCounts[p.name] === 1 ? '' : 's'}` : ''}
                 </p>
               </div>
             )

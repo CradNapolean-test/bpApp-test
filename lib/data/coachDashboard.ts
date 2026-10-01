@@ -355,3 +355,118 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     nameById,
   };
 }
+
+// ---- Business overview (gym owners and managers) ----
+
+export interface BusinessOverview {
+  members: number;
+  onPlan: number;
+  noPlan: { clientId: string; name: string }[];
+  newThisMonth: number;
+  attendedThisMonth: number;
+  plans: { name: string; count: number }[];
+  team: {
+    coachId: string;
+    name: string;
+    members: number;
+    checkedIn: number;
+    eligible: number;
+    quiet: number;
+    toReview: number;
+  }[];
+}
+
+// Gym-wide numbers for the owner/manager: who's on which plan, who has no plan (needs setting up),
+// and how each coach's members are getting on this week. Returns null for a non-admin.
+export async function getBusinessOverview(): Promise<BusinessOverview | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: me } = await supabase.from('profiles').select('gym_id, is_gym_admin').eq('id', user.id).maybeSingle();
+  if (!me?.is_gym_admin || !me.gym_id) return null;
+
+  const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
+  const thisWeek = isoWeekKey(todayIso);
+  const monthStart = `${todayIso.slice(0, 7)}-01`;
+  const since14 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -14));
+
+  const [{ data: coachRows }, { data: rows, error }] = await Promise.all([
+    supabase.from('profiles').select('id, email, display_name').eq('role', 'coach').eq('gym_id', me.gym_id),
+    supabase
+      .from('profiles')
+      .select(
+        `id, email, coach_id, created_at,
+         client_profiles(name, onboarding_completed_at, needs_coach_review),
+         client_memberships!client_id(ended_at, membership_packages(name)),
+         daily_logs(log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes),
+         bookings!client_id(booking_date, attended)`
+      )
+      .eq('role', 'client')
+      .eq('gym_id', me.gym_id)
+      .gte('daily_logs.log_date', since14)
+      .gte('bookings.booking_date', monthStart)
+      .limit(1000),
+  ]);
+  if (error) throw new Error(error.message);
+
+  const coachName = new Map((coachRows ?? []).map((c) => [c.id, c.display_name || c.email]));
+  const team = new Map<string, BusinessOverview['team'][number]>();
+  for (const c of coachRows ?? []) {
+    team.set(c.id, { coachId: c.id, name: coachName.get(c.id) ?? 'Coach', members: 0, checkedIn: 0, eligible: 0, quiet: 0, toReview: 0 });
+  }
+  const planCounts = new Map<string, number>();
+  const noPlan: BusinessOverview['noPlan'] = [];
+  let onPlan = 0;
+  let newThisMonth = 0;
+  let attended = 0;
+
+  type Row = {
+    id: string;
+    email: string;
+    coach_id: string | null;
+    created_at: string;
+    client_profiles: ProfileRel<{ name: string | null; onboarding_completed_at: string | null; needs_coach_review: boolean | null }>;
+    client_memberships: { ended_at: string | null; membership_packages: ProfileRel<{ name: string }> }[] | null;
+    daily_logs: DailyLogRow[] | null;
+    bookings: { booking_date: string; attended: boolean | null }[] | null;
+  };
+  for (const m of (rows ?? []) as unknown as Row[]) {
+    const cp = one(m.client_profiles);
+    const name = cp?.name || m.email;
+    const open = (m.client_memberships ?? []).find((c) => c.ended_at === null);
+    if (open) {
+      onPlan += 1;
+      const planName = one(open.membership_packages)?.name ?? 'Plan';
+      planCounts.set(planName, (planCounts.get(planName) ?? 0) + 1);
+    } else {
+      noPlan.push({ clientId: m.id, name });
+    }
+    if (m.created_at.slice(0, 10) >= monthStart) newThisMonth += 1;
+    attended += (m.bookings ?? []).filter((b) => b.attended).length;
+
+    const t = m.coach_id ? team.get(m.coach_id) : undefined;
+    if (!t) continue;
+    t.members += 1;
+    if (cp?.needs_coach_review) t.toReview += 1;
+    const logs = (m.daily_logs ?? []).filter(hasLoggedData);
+    if (cp?.onboarding_completed_at !== null && cp) {
+      t.eligible += 1;
+      if (logs.some((l) => l.log_date >= thisWeek)) t.checkedIn += 1;
+      const last = logs.map((l) => l.log_date).sort().at(-1);
+      const days = last ? Math.round((new Date(todayIso).getTime() - new Date(last).getTime()) / 86400000) : 99;
+      if (days >= 7) t.quiet += 1;
+    }
+  }
+
+  return {
+    members: (rows ?? []).length,
+    onPlan,
+    noPlan,
+    newThisMonth,
+    attendedThisMonth: attended,
+    plans: [...planCounts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+    team: [...team.values()].sort((a, b) => b.members - a.members),
+  };
+}

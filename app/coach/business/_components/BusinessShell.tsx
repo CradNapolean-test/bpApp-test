@@ -13,6 +13,8 @@ import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
 import { CreditPackManager } from '@/app/coach/classes/_components/CreditPackManager';
 import { EventsPane, FeedbackPane, RewardsPane } from '@/app/coach/community/_components/CommunityShell';
+import { OverviewPane } from './OverviewPane';
+import type { BusinessOverview } from '@/lib/data/coachDashboard';
 import type {
   CreditPackRow,
   EventWithSignup,
@@ -21,10 +23,11 @@ import type {
   RewardOverview,
 } from '@/lib/data/types';
 
-const TABS = ['Plans', 'Credit packs', 'Events', 'Rewards', 'Feedback'] as const;
-type Tab = (typeof TABS)[number];
+const ALL_TABS = ['Overview', 'Plans', 'Credit packs', 'Events', 'Rewards', 'Feedback'] as const;
+type Tab = (typeof ALL_TABS)[number];
 
 const TAB_PARAM: Record<string, Tab> = {
+  overview: 'Overview',
   plans: 'Plans',
   packages: 'Plans',
   'credit-packs': 'Credit packs',
@@ -34,6 +37,7 @@ const TAB_PARAM: Record<string, Tab> = {
 };
 
 const BLURB: Record<Tab, string> = {
+  Overview: 'How the gym is doing: members, plans, and how each coach\'s members are getting on.',
   Plans: 'Recurring plans: weekly credits, how far ahead members can book, and which screens they get.',
   'Credit packs': 'One-off credit bundles for drop-in members, optionally expiring.',
   Events: 'Gym events members can sign up to (walks, paddles, the Christmas do).',
@@ -47,6 +51,7 @@ export function BusinessShell({
   events,
   feedback,
   rewards,
+  overview,
   unreadCount,
   email,
 }: {
@@ -55,11 +60,19 @@ export function BusinessShell({
   events: EventWithSignup[];
   feedback: FeedbackRow[];
   rewards: RewardOverview[];
+  // Gym owners and managers only; null hides the Overview tab.
+  overview: BusinessOverview | null;
   unreadCount: number;
   email: string;
 }) {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Plans');
+  const tabs = overview ? ALL_TABS : ALL_TABS.filter((t) => t !== 'Overview');
+  const [tab, setTab] = useState<Tab>(() => {
+    const wanted = TAB_PARAM[searchParams.get('tab') ?? ''];
+    if (wanted && (wanted !== 'Overview' || overview)) return wanted;
+    return overview ? 'Overview' : 'Plans';
+  });
+  const planCounts = Object.fromEntries((overview?.plans ?? []).map((p) => [p.name, p.count]));
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -72,9 +85,10 @@ export function BusinessShell({
       >
         <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">Business</h1>
         <p className="mb-4 text-sm text-zinc-500">{BLURB[tab]}</p>
-        <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
+        <HubTabBar tabs={tabs} active={tab} onSelect={setTab} />
 
-        {tab === 'Plans' && <PackageManager initialPackages={packages} />}
+        {tab === 'Overview' && overview && <OverviewPane data={overview} />}
+        {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} />}
         {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} />}
         {tab === 'Events' && <EventsPane events={events} />}
         {tab === 'Rewards' && <RewardsPane rewards={rewards} />}
