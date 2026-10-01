@@ -274,6 +274,23 @@ export function SetupTab({
           </div>
         </div>
 
+        {isCoachView && (initialProfile?.health_notes || initialProfile?.height_cm) && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-sm dark:bg-amber-500/10">
+            {initialProfile?.health_notes && (
+              <>
+                <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">Injuries &amp; health notes</p>
+                <p className="mt-1 whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">{initialProfile.health_notes}</p>
+              </>
+            )}
+            {initialProfile?.height_cm && (
+              <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                Height {initialProfile.height_cm} cm
+                {initialProfile.body_fat_estimated ? ' · body fat % below is an estimate, worth confirming with a scan' : ''}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Calorie-engine inputs. Coach-only for now: members see their resulting targets in
             Nutrition. A fuller rework (and a proper home for this) is still to be designed. */}
         {isCoachView && (
