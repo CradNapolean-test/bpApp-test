@@ -210,6 +210,8 @@ export function DashboardShell({
   const [category, setCategory] = useState<Category>('Home');
   const [screen, setScreen] = useState<Screen>('Today');
   const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen }[]>([]);
+  // Set by a coach deep link (?week=): which week of check-ins to open the Weekly Log on.
+  const [startWeek, setStartWeek] = useState<string | null>(null);
   const [focusDay, setFocusDay] = useState<{ dayId: string; nonce: number } | null>(null);
 
   // Live unread-message count for the member, so the header badge appears the moment the coach
@@ -326,19 +328,30 @@ export function DashboardShell({
     handleCategoryClick(tab === 'Home' ? 'Home' : tab === 'Coach' ? 'Coach' : 'Account Settings');
   }
 
-  // Deep links: home-screen shortcuts and push notifications open /dashboard?open=<where>.
-  // Runs once on load, then removes the parameter so a refresh doesn't repeat it.
+  // Deep links. Members: home-screen shortcuts and push notifications open /dashboard?open=<where>.
+  // Coaches: the dashboard's To do list opens a member straight to the right screen
+  // (/coach/clients/<id>?open=checkin&week=<Monday>). Runs once on load, then removes the
+  // parameters so a refresh doesn't repeat it.
   useEffect(() => {
-    if (isCoachView) return;
     Promise.resolve().then(() => {
       const url = new URL(window.location.href);
       const open = url.searchParams.get('open');
       if (!open) return;
-      if (open === 'messages') handleCategoryClick('Messages');
+      if (isCoachView) {
+        const week = url.searchParams.get('week');
+        if (open === 'checkin') {
+          if (week) setStartWeek(week);
+          handleCategoryClick('Accountability');
+        } else if (open === 'nutrition') handleCategoryClick('Nutrition');
+        else if (open === 'forms') handleNavigate('Accountability', 'Forms');
+        else if (open === 'bigdog') handleCategoryClick('Achievements');
+        else if (open === 'profile') handleCategoryClick('Account Settings');
+      } else if (open === 'messages') handleCategoryClick('Messages');
       else if (open === 'book') handleClientTab('Book');
       else if (open === 'checkin') handleCategoryClick('Accountability');
       else if (open === 'nutrition') handleCategoryClick('Nutrition');
       url.searchParams.delete('open');
+      url.searchParams.delete('week');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -715,6 +728,9 @@ export function DashboardShell({
               clientId={clientId}
               weekDates={weekDates}
               initialLogs={weekLogs}
+              historyLogs={historyLogs}
+              canReview={isCoachView && isOwnClient}
+              startWeek={startWeek}
               gender={profile?.gender ?? null}
               periodStartDates={periodStartDates}
               readOnly={isCoachView}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -8,6 +8,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { deleteFoodPhoto, getFoodPhotosForDate, uploadFoodPhoto } from '@/lib/data/foodPhotos';
+import { markReviewed } from '@/lib/data/coachReviews';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
 import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { FeedbackThread } from './FeedbackThread';
@@ -51,6 +52,12 @@ export function PhotoDiaryTab({
   const isToday = viewingDate === todayIso;
   const photos = useMemo(() => (isToday ? initialPhotos : (other?.photos ?? [])), [isToday, initialPhotos, other]);
   const currentLogId = isToday ? dailyLogId : (other?.logId ?? null);
+
+  // The member's own coach looking at a day of photos counts as reviewing it (it leaves the
+  // dashboard's To do); commenting does too.
+  useEffect(() => {
+    if (canGiveFeedback && photos.length > 0) void markReviewed('diary_day', clientId, viewingDate);
+  }, [canGiveFeedback, photos.length, clientId, viewingDate]);
 
   const [adding, setAdding] = useState(false);
   const [file, setFile] = useState<File | null>(null);

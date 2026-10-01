@@ -1,11 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getClientHealthStatuses, getMyClients } from '@/lib/data/coach';
+import { getCoachDashboard } from '@/lib/data/coachDashboard';
 import { getCoachChatOverview } from '@/lib/data/chat';
-import { getRecentActivity } from '@/lib/data/activity';
-import { getScheduleOccurrences } from '@/lib/data/classes';
-import { getBigDogToVerify, getDeletionRequests } from '@/lib/data/coachAttention';
-import { getClientsNeedingReview } from '@/lib/data/onboarding';
+import type { DashboardScope } from '@/lib/data/coachDashboard';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { CoachNav } from './_components/CoachNav';
@@ -15,11 +12,12 @@ import { CoachHeaderExtras } from './_components/CoachHeaderExtras';
 import { CoachTimeGreeting } from './_components/CoachGreeting';
 import { AddClientForm } from './_components/AddClientForm';
 import { ActivityFeed } from './_components/ActivityFeed';
-import { TodayOverview } from './_components/TodayOverview';
+import { CoachDashboard } from './_components/CoachDashboard';
 import { CoachMobileBrand } from './_components/CoachMobileBrand';
 import { Card } from '@/app/_components/ui';
 
-export default async function CoachPage() {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ scope?: string; coach?: string }> }) {
+  const { scope: scopeParam, coach: coachParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,27 +30,19 @@ export default async function CoachPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (!profile || profile.role !== 'coach') redirect('/');
 
-  const [clients, healthStatuses, chatOverview, activity, occurrences, newMembers, toVerify, deletionRequests] = await Promise.all([
-    getMyClients(supabase, user.id),
-    getClientHealthStatuses(supabase, user.id),
-    getCoachChatOverview(),
-    getRecentActivity(),
-    getScheduleOccurrences(1, 2),
-    getClientsNeedingReview(),
-    getBigDogToVerify(),
-    getDeletionRequests(),
-  ]);
+  const requested: DashboardScope = scopeParam === 'gym' || scopeParam === 'coach' ? scopeParam : 'mine';
+  const data = await getCoachDashboard(requested, coachParam ?? null);
 
-  // The activity feed is gym-wide, so it includes clients of other coaches -- look their names up
-  // too, otherwise those rows read "A client".
-  const knownIds = new Set(clients.map((c) => c.id));
-  const unknownIds = [...new Set(activity.map((e) => e.client_id))].filter((id) => !knownIds.has(id));
-  const { data: extraProfiles } = unknownIds.length
-    ? await supabase.from('client_profiles').select('client_id, name').in('client_id', unknownIds)
-    : { data: [] as { client_id: string; name: string | null }[] };
-  const extraNames: Record<string, string> = {};
-  for (const p of extraProfiles ?? []) if (p.name) extraNames[p.client_id] = p.name;
-  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
+  // The activity feed is gym-wide, so it includes members of other coaches too; their names come
+  // from the dashboard's own lookup where we have them, otherwise a quick query.
+  const names: Record<string, string> = { ...data.nameById };
+  const unknownIds = [...new Set(data.activity.map((e) => e.client_id))].filter((id) => !names[id]);
+  if (unknownIds.length) {
+    const { data: extra } = await supabase.from('client_profiles').select('client_id, name').in('client_id', unknownIds);
+    for (const p of extra ?? []) if (p.name) names[p.client_id] = p.name;
+  }
+  // The header's message badge is always the coach's own unread, whichever view is showing.
+  const unreadCount = (await getCoachChatOverview().catch(() => [])).reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -70,16 +60,9 @@ export default async function CoachPage() {
         {/* Phone: one column -- today, attention, activity, habits. Wide screen: today and attention on
             the left, activity and "add client" on the right. */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_24rem]">
-          <TodayOverview
-            occurrences={occurrences}
-            unreadCount={unreadCount}
-            flagged={healthStatuses.filter((s) => s.status === 'red' || s.status === 'amber')}
-            newMembers={newMembers}
-            toVerify={toVerify}
-            deletionRequests={deletionRequests}
-          />
+          <CoachDashboard data={data} />
           <div className="space-y-4">
-            <ActivityFeed events={activity} clients={clients} extraNames={extraNames} />
+            <ActivityFeed events={data.activity} clients={[]} extraNames={names} />
             <div className="hidden lg:block">
               <Card>
                 <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>

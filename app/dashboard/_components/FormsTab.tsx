@@ -6,6 +6,7 @@ import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
+import { markReviewed } from '@/lib/data/coachReviews';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow } from '@/lib/data/types';
 
 const fieldCls =
@@ -213,11 +214,21 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
 }
 
 // A finished form: one line until it's tapped, then the answers given.
-function CompletedForm({ assignment }: { assignment: FormAssignmentWithDetails }) {
+// When `reviewClientId` is set (the member's own coach), opening it counts as reviewed and drops it
+// off the dashboard's To do.
+function CompletedForm({ assignment, reviewClientId = null }: { assignment: FormAssignmentWithDetails; reviewClientId?: string | null }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-2.5 p-3.5 text-left">
+      <button
+        type="button"
+        onClick={() => {
+          if (!open && reviewClientId) void markReviewed('form', reviewClientId, assignment.id);
+          setOpen((v) => !v);
+        }}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 p-3.5 text-left"
+      >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
           <CheckCircle2 className="h-4 w-4" />
         </span>
@@ -355,7 +366,7 @@ export function FormsTab({
         <div className="space-y-2.5">
           <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Completed</h3>
           {completed.map((a) => (
-            <CompletedForm key={a.id} assignment={a} />
+            <CompletedForm key={a.id} assignment={a} reviewClientId={isCoachView && !readOnly ? clientId : null} />
           ))}
         </div>
       )}

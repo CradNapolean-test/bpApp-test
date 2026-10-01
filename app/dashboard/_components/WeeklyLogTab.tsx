@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Checkbox } from '@/app/_components/Checkbox';
-import { Check, Dumbbell } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { dayCalories, cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
@@ -12,6 +12,8 @@ import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
+import { getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
+import { addDays, toIsoDate } from '@/lib/utils/dates';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
 
@@ -62,7 +64,7 @@ function MoodDots({ label, value, onChange, disabled }: { label: string; value: 
   );
 }
 
-export function WeeklyLogTab({
+function WeekLog({
   clientId,
   weekDates,
   initialLogs,
@@ -301,7 +303,7 @@ export function WeeklyLogTab({
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-card-muted p-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Food · photo diary</p>
-              <p className="mt-0.5 text-xs text-zinc-500">Your coach looks through your meal photos.</p>
+              <p className="mt-0.5 text-xs text-zinc-500">{isCoachView ? 'Their meal photos are in the Nutrition tab.' : 'Your coach looks through your meal photos.'}</p>
             </div>
             {onOpenFoodDiary && !isCoachView && (
               <button type="button" onClick={onOpenFoodDiary} className="shrink-0 text-xs font-bold text-accent">
@@ -430,6 +432,107 @@ export function WeeklyLogTab({
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+
+type WeekLogProps = Parameters<typeof WeekLog>[0];
+
+const weekLabel = (iso: string) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+// The check-in screen with a week picker: the member can look back and fill in a missed day, and a
+// coach reviews last week's check-in here (the dashboard's "Weekly check-ins" list links to it) and
+// marks it reviewed.
+export function WeeklyLogTab(
+  props: WeekLogProps & {
+    historyLogs: DailyLogRow[];
+    // The member's own coach can mark a week reviewed.
+    canReview?: boolean;
+    // A specific week (its Monday) to open on, e.g. from the dashboard.
+    startWeek?: string | null;
+  }
+) {
+  const { historyLogs, canReview = false, startWeek = null, ...rest } = props;
+  const currentStart = rest.weekDates[0];
+  const [offset, setOffset] = useState(() =>
+    startWeek ? Math.round((new Date(startWeek).getTime() - new Date(currentStart).getTime()) / (7 * 86400000)) : 0
+  );
+  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  const weekStart = toIsoDate(addDays(new Date(currentStart + 'T00:00:00Z'), offset * 7));
+  const dates = Array.from({ length: 7 }, (_, i) => toIsoDate(addDays(new Date(weekStart + 'T00:00:00Z'), i)));
+  const logs = offset === 0 ? rest.initialLogs : historyLogs.filter((l) => dates.includes(l.log_date));
+
+  useEffect(() => {
+    if (!rest.isCoachView) return;
+    getReviewedWeeks(rest.clientId).then((weeks) => setReviewed(new Set(weeks)));
+  }, [rest.isCoachView, rest.clientId]);
+
+  async function toggleReviewed() {
+    setBusy(true);
+    const done = reviewed.has(weekStart);
+    const res = done ? await unmarkReviewed('week', rest.clientId, weekStart) : await markReviewed('week', rest.clientId, weekStart);
+    setBusy(false);
+    if (res.ok) {
+      setReviewed((prev) => {
+        const next = new Set(prev);
+        if (done) next.delete(weekStart);
+        else next.add(weekStart);
+        return next;
+      });
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          aria-label="Previous week"
+          onClick={() => setOffset(offset - 1)}
+          className="rounded-full p-2 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-black dark:text-zinc-50">
+            {offset === 0 ? 'This week' : offset === -1 ? 'Last week' : `Week of ${weekLabel(weekStart)}`}
+          </p>
+          <p className="text-xs text-zinc-500">
+            {weekLabel(dates[0])} to {weekLabel(dates[6])}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="Next week"
+          disabled={offset >= 0}
+          onClick={() => setOffset(offset + 1)}
+          className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      {rest.isCoachView && canReview && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={toggleReviewed}
+          className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-extrabold disabled:opacity-60 ${
+            reviewed.has(weekStart)
+              ? 'bg-success/15 text-success'
+              : 'bg-accent text-accent-foreground'
+          }`}
+        >
+          <Check className="h-4 w-4" />
+          {reviewed.has(weekStart) ? 'Week reviewed (tap to undo)' : 'Mark this week as reviewed'}
+        </button>
+      )}
+
+      <WeekLog key={weekStart} {...rest} weekDates={dates} initialLogs={logs} />
     </div>
   );
 }
