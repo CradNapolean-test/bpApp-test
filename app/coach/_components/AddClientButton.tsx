@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useClickOutside } from '@/app/_components/useClickOutside';
 import { AddClientForm } from './AddClientForm';
+import { JoinLinkCard } from './JoinLinkCard';
 
 // Compact black trigger + anchored popover for the Clients list page, wrapping the same
 // AddClientForm the Dashboard shows inline as a standing card -- one invite flow, two entry
@@ -29,6 +30,7 @@ export function AddClientButton() {
           className="absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-black/[.05] bg-card p-4 shadow-xl dark:border-white/10"
         >
           <AddClientForm />
+          <JoinLinkCard />
         </div>
       )}
     </div>

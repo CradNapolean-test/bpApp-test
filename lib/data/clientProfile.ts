@@ -32,6 +32,12 @@ export async function upsertClientProfile(
     | 'admin_notes'
     | 'deletion_requested_at'
     | 'minutes_per_1000_steps'
+    | 'height_cm'
+    | 'body_fat_estimated'
+    | 'health_notes'
+    | 'onboarding_completed_at'
+    | 'needs_coach_review'
+    | 'review_reasons'
   >
 ): Promise<void> {
   const supabase = await createClient();

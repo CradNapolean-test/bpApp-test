@@ -44,6 +44,14 @@ export interface ClientProfileRow {
   // Client-owned request flag -- see updateClientAdminDetails/requestAccountDeletion for how
   // this differs from a real hard-delete (there isn't one; the coach handles it manually).
   deletion_requested_at: string | null;
+  // Onboarding (migration 0083). onboarding_completed_at null = still to onboard; undefined only
+  // if the migration has not been applied yet.
+  height_cm?: number | null;
+  body_fat_estimated?: boolean;
+  health_notes?: string | null;
+  onboarding_completed_at?: string | null;
+  needs_coach_review?: boolean;
+  review_reasons?: string[];
 }
 
 export interface DailyLogRow {

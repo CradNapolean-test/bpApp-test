@@ -13,6 +13,8 @@ import { CoachHeaderExtras } from '../_components/CoachHeaderExtras';
 import { AddClientButton } from '../_components/AddClientButton';
 import { ImportClientsButton } from '../_components/ImportClientsButton';
 import { ClientTable } from '../_components/ClientTable';
+import { ReviewQueue } from '../_components/ReviewQueue';
+import { getClientsNeedingReview } from '@/lib/data/onboarding';
 
 export default async function CoachClientsPage() {
   const supabase = await createClient();
@@ -29,12 +31,13 @@ export default async function CoachClientsPage() {
   if (profile?.role !== 'coach') redirect('/dashboard');
   const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
-  const [clients, gymClients, healthStatuses, chatOverview, groups] = await Promise.all([
+  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue] = await Promise.all([
     getMyClients(supabase, user.id),
     searchGymClients(supabase, profile.gym_id, user.id),
     getClientHealthStatuses(supabase, user.id),
     getCoachChatOverview(),
     getGroups(),
+    getClientsNeedingReview(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
@@ -55,6 +58,7 @@ export default async function CoachClientsPage() {
         </div>
       </div>
       <div className="mt-4">
+        <ReviewQueue items={reviewQueue} />
         <ClientTable
           clients={clients}
           gymClients={gymClients}

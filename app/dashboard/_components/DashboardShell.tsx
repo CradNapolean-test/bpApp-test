@@ -8,6 +8,7 @@ import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { createClient } from '@/lib/supabase/client';
 import { PushPrompt } from './PushPrompt';
+import { ReviewBanner } from './ReviewBanner';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -449,6 +450,10 @@ export function DashboardShell({
   );
 
   const coachSummary = isCoachView && (
+    <>
+    {profile?.needs_coach_review && (
+      <ReviewBanner clientId={clientId} reasons={profile.review_reasons ?? []} canAct={isOwnClient} />
+    )}
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
       <Link
         href="/coach/clients"
@@ -463,6 +468,7 @@ export function DashboardShell({
         </span>
       )}
     </div>
+    </>
   );
 
   return (

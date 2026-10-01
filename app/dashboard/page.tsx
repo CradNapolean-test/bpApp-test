@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
 import { DashboardShell } from './_components/DashboardShell';
+import { OnboardingFlow } from './_components/OnboardingFlow';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -21,6 +22,20 @@ export default async function DashboardPage() {
   if (!profile || profile.role !== 'client') redirect('/');
 
   const bundle = await loadDashboardBundle(user.id, true);
+
+  // New members (no profile row yet, or onboarding not finished) get the onboarding flow first.
+  // Strict null, not falsy: undefined means the onboarding migration isn't applied yet.
+  if (!bundle.profile || bundle.profile.onboarding_completed_at === null) {
+    const { data: me } = await supabase.from('profiles').select('coach:coach_id(display_name)').eq('id', user.id).maybeSingle();
+    const coach = Array.isArray(me?.coach) ? me.coach[0] : me?.coach;
+    return (
+      <OnboardingFlow
+        clientId={user.id}
+        email={profile.email}
+        coachFirstName={(coach as { display_name?: string | null } | null)?.display_name?.split(' ')[0] ?? null}
+      />
+    );
+  }
 
   return (
     <DashboardShell
