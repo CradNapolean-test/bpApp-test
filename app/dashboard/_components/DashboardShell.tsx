@@ -575,6 +575,7 @@ export function DashboardShell({
               habits={habits}
               profile={profile}
               programWeek={programWeek}
+              onOpenFoodDiary={() => handleNavigate('Nutrition', 'Food Tracking')}
             />
           )}
           {effectiveScreen === 'Forms' && (

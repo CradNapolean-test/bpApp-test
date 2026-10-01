@@ -10,7 +10,7 @@ export function Checkbox({
   return (
     <input
       type="checkbox"
-      className={`h-5 w-5 rounded accent-accent cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`themed-checkbox h-5 w-5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       {...props}
     />
   );

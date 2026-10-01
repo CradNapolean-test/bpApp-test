@@ -12,6 +12,7 @@ import { upsertDailyLog } from '@/lib/data/dailyLogs';
 import { createHabit, deleteHabit, toggleHabitLog } from '@/lib/data/habits';
 import { adherencePercent } from '@/lib/utils/habitStats';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
 import type { ClientProfileRow, DailyLogRow, HabitWithLogs } from '@/lib/data/types';
@@ -160,6 +161,7 @@ export function WeeklyLogTab({
   habits,
   profile,
   programWeek,
+  onOpenFoodDiary,
 }: {
   clientId: string;
   weekDates: string[];
@@ -171,6 +173,8 @@ export function WeeklyLogTab({
   habits: HabitWithLogs[];
   profile: ClientProfileRow | null;
   programWeek: number;
+  // Takes the member to the Food Tracking diary (where calories and macros are logged).
+  onOpenFoodDiary?: () => void;
 }) {
   const { run } = useAction();
   const { run: runHabitToggle } = useAction();
@@ -202,7 +206,10 @@ export function WeeklyLogTab({
   });
   const [savingDate, setSavingDate] = useState<string | null>(null);
   const [savedDates, setSavedDates] = useState<Record<string, boolean>>({});
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+  // Calories and macros come from the food diary for everyone except photo-diary members, who
+  // type them in here. Showing editable boxes for the rest would fight the diary's own totals.
+  const macrosEditable = (profile?.nutrition_tracking_mode ?? 'full_tracking') === 'photo_diary' && !readOnly;
   // A single focused day at a time (7-day chip strip selects it), replacing the previous
   // stack of seven independently-collapsible day cards -- one form on screen instead of
   // seven, matching the mobile redesign brief.
@@ -225,7 +232,11 @@ export function WeeklyLogTab({
   async function saveDay(date: string, patch: Partial<DayForm> = {}) {
     setSavingDate(date);
     try {
-      await run(() => upsertDailyLog(clientId, date, { ...days[date], ...patch }), {
+      // Macros are the food diary's to write unless this member types them here; sending this
+      // form's older copy of them would overwrite what the diary just recorded.
+      const { protein, carbs, fat, ...rest } = { ...days[date], ...patch };
+      const fields = macrosEditable ? { ...rest, protein, carbs, fat } : rest;
+      await run(() => upsertDailyLog(clientId, date, fields), {
         onDone: () => setSavedDates((s) => ({ ...s, [date]: true })),
       });
     } finally {
@@ -239,22 +250,21 @@ export function WeeklyLogTab({
   }
 
   const weekValues = weekDates.map((d) => days[d]);
-  const loggedDays = weekValues.filter((d) => d.protein != null || d.carbs != null || d.fat != null);
-  const totals = loggedDays.reduce(
-    (acc, d) => {
-      const cals = dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0);
-      acc.calories += cals;
-      acc.protein += d.protein ?? 0;
-      acc.carbs += d.carbs ?? 0;
-      acc.fat += d.fat ?? 0;
-      acc.steps += d.steps ?? 0;
-      acc.bodyweight += d.bodyweight ?? 0;
-      acc.bwCount += d.bodyweight != null ? 1 : 0;
-      return acc;
-    },
-    { calories: 0, protein: 0, carbs: 0, fat: 0, steps: 0, bodyweight: 0, bwCount: 0 }
-  );
-  const n = loggedDays.length || 1;
+  // Each average only counts the days that actually have that figure -- a day with food but no steps
+  // must not drag the steps average down.
+  const avg = (vals: (number | null)[]) => {
+    const present = vals.filter((v): v is number => v != null);
+    return present.length ? present.reduce((a, v) => a + v, 0) / present.length : null;
+  };
+  const foodDays = weekValues.filter((d) => d.protein != null || d.carbs != null || d.fat != null);
+  const avgCalories = avg(foodDays.map((d) => dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0)));
+  const avgProtein = avg(foodDays.map((d) => d.protein));
+  const avgCarbs = avg(foodDays.map((d) => d.carbs));
+  const avgFat = avg(foodDays.map((d) => d.fat));
+  const avgSteps = avg(weekValues.map((d) => d.steps));
+  const avgBodyweight = avg(weekValues.map((d) => d.bodyweight));
+  const loggedDays = foodDays;
+  const fmt = (v: number | null, digits = 0) => (v == null ? '—' : digits ? v.toFixed(digits) : Math.round(v).toLocaleString());
 
   const inputCls =
     'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10 disabled:opacity-60';
@@ -271,22 +281,23 @@ export function WeeklyLogTab({
 
       <div className="grid grid-cols-3 gap-3">
         <div className={cardCls}>
-          <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(totals.calories / n)}</p>
+          <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgCalories)}</p>
           <p className="mt-0.5 text-xs text-zinc-500">avg kcal</p>
         </div>
         <div className={cardCls}>
-          <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(totals.protein / n)}g</p>
+          <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgProtein)}{avgProtein != null && 'g'}</p>
           <p className="mt-0.5 text-xs text-zinc-500">avg protein</p>
         </div>
         <div className={cardCls}>
-          <p className="text-2xl font-bold text-black dark:text-zinc-50">{Math.round(totals.steps / n).toLocaleString()}</p>
+          <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgSteps)}</p>
           <p className="mt-0.5 text-xs text-zinc-500">avg steps</p>
         </div>
       </div>
       <p className="text-xs text-zinc-500">
-        {loggedDays.length} logged day{loggedDays.length === 1 ? '' : 's'} this week · avg carbs{' '}
-        {Math.round(totals.carbs / n)}g · avg fat {Math.round(totals.fat / n)}g · avg bodyweight{' '}
-        {totals.bwCount ? (totals.bodyweight / totals.bwCount).toFixed(1) : '—'}kg
+        {loggedDays.length} day{loggedDays.length === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgCarbs)}
+        {avgCarbs != null && 'g'} · avg fat {fmt(avgFat)}
+        {avgFat != null && 'g'} · avg bodyweight {fmt(avgBodyweight, 1)}
+        {avgBodyweight != null && 'kg'}
       </p>
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -336,7 +347,7 @@ export function WeeklyLogTab({
           </span>
         </div>
 
-        {calories > 0 && calories < CALORIE_FLOOR && (
+        {calories > 0 && calories < CALORIE_FLOOR && focusedDate < todayIso && (
           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
             Below {CALORIE_FLOOR} kcal — worth a coach review.
           </p>
@@ -386,6 +397,35 @@ export function WeeklyLogTab({
           ))}
         </div>
 
+        {!macrosEditable && (
+          <div className="mt-3 rounded-xl bg-card-muted p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Food · from your diary</p>
+              {onOpenFoodDiary && !isCoachView && (
+                <button type="button" onClick={onOpenFoodDiary} className="text-xs font-bold text-accent">
+                  Open food diary →
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {[
+                ['kcal', Math.round(calories)],
+                ['Protein', d.protein],
+                ['Carbs', d.carbs],
+                ['Fat', d.fat],
+              ].map(([label, value]) => (
+                <div key={label as string}>
+                  <p className="text-base font-black text-black dark:text-zinc-50">
+                    {value == null ? '—' : Math.round(value as number)}
+                    {value != null && label !== 'kcal' && <span className="text-[11px] font-bold text-zinc-500">g</span>}
+                  </p>
+                  <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <fieldset
           disabled={readOnly}
           onBlur={() => {
@@ -393,21 +433,25 @@ export function WeeklyLogTab({
           }}
           className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
-          <div className="space-y-1">
-            <label className={labelCls}>Protein (g)</label>
-            <input type="number" className={inputCls} value={d.protein ?? ''}
-              onChange={(e) => updateDay(focusedDate, { protein: numOrNull(e.target.value) })} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Carbs (g)</label>
-            <input type="number" className={inputCls} value={d.carbs ?? ''}
-              onChange={(e) => updateDay(focusedDate, { carbs: numOrNull(e.target.value) })} />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Fat (g)</label>
-            <input type="number" className={inputCls} value={d.fat ?? ''}
-              onChange={(e) => updateDay(focusedDate, { fat: numOrNull(e.target.value) })} />
-          </div>
+          {macrosEditable && (
+            <>
+              <div className="space-y-1">
+                <label className={labelCls}>Protein (g)</label>
+                <input type="number" inputMode="decimal" className={inputCls} value={d.protein ?? ''}
+                  onChange={(e) => updateDay(focusedDate, { protein: numOrNull(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Carbs (g)</label>
+                <input type="number" inputMode="decimal" className={inputCls} value={d.carbs ?? ''}
+                  onChange={(e) => updateDay(focusedDate, { carbs: numOrNull(e.target.value) })} />
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Fat (g)</label>
+                <input type="number" inputMode="decimal" className={inputCls} value={d.fat ?? ''}
+                  onChange={(e) => updateDay(focusedDate, { fat: numOrNull(e.target.value) })} />
+              </div>
+            </>
+          )}
           <div className="space-y-1">
             <label className={labelCls}>Fibre (g)</label>
             <input type="number" className={inputCls} value={d.fibre ?? ''}
