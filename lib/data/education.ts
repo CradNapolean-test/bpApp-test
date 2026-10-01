@@ -135,9 +135,11 @@ export async function getClientCourseAssignments(clientId: string): Promise<Educ
   if (completionsResult.error) raise(completionsResult.error);
 
   const completions = completionsResult.data ?? [];
-  return ((assignmentsResult.data ?? []) as unknown as Omit<EducationCourseAssignmentWithDetails, 'completions'>[]).map(
-    (a) => ({ ...a, completions })
-  );
+  // An assignment whose course the viewer can't read comes back with a null course; drop it
+  // rather than crash the screen.
+  return ((assignmentsResult.data ?? []) as unknown as Omit<EducationCourseAssignmentWithDetails, 'completions'>[])
+    .filter((a) => a.course != null)
+    .map((a) => ({ ...a, completions }));
 }
 
 // Returns rather than throws -- assign_education_course raises user-facing domain errors that
