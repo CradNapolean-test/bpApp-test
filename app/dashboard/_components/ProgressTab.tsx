@@ -8,6 +8,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
+import { useBackHandler } from '@/app/_components/useBackHandler';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
@@ -51,6 +52,8 @@ export function ProgressTab({
   // Photos arrive newest-first; default the comparison to oldest (before) vs newest (after).
   const [beforeId, setBeforeId] = useState<string | null>(null);
   const [afterId, setAfterId] = useState<string | null>(null);
+  useBackHandler(viewing != null, () => setViewing(null));
+  useBackHandler(comparing, () => setComparing(false));
   const withImage = initialPhotos.filter((p) => p.signedUrl);
   const beforePhoto = withImage.find((p) => p.id === beforeId) ?? withImage[withImage.length - 1];
   const afterPhoto = withImage.find((p) => p.id === afterId) ?? withImage[0];

@@ -14,6 +14,12 @@ export function SignOutButton({
   const router = useRouter();
 
   async function handleSignOut() {
+    // Don't leave a copy of the member's plan on a shared phone (see OfflineSnapshot).
+    try {
+      localStorage.removeItem('bp-offline-snapshot');
+    } catch {
+      /* ignore */
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/login');

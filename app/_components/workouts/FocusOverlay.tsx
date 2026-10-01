@@ -2,6 +2,7 @@
 
 import { ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useBackHandler } from '../useBackHandler';
 
 // Shared fullscreen shell for "click an item, go into its detail view" -- same fixed-inset-0
 // convention as BarcodeScanner.tsx. Purely presentational, no business logic of its own --
@@ -20,6 +21,8 @@ export function FocusOverlay({
   headerActions?: ReactNode;
   children: ReactNode;
 }) {
+  useBackHandler(true, onClose);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]">
       <div className="flex items-center justify-between gap-2 border-b border-black/10 p-4 pt-[max(1rem,env(safe-area-inset-top))] dark:border-white/10">

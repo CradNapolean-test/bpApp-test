@@ -10,6 +10,8 @@ import { createClient } from '@/lib/supabase/client';
 import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
 import { InstallBanner } from './InstallBanner';
+import { OfflineSnapshot } from './OfflineSnapshot';
+import { closeTopOverlay } from '@/app/_components/useBackHandler';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
@@ -496,6 +498,43 @@ export function DashboardShell({
     </>
   );
 
+  // Phone back button / swipe-back. The page keeps a "base" history entry plus one in front of it;
+  // pressing back lands on the base entry, we handle it inside the app (close a sheet, go back a
+  // screen, or go to Home) and put the front entry back. At the Home screen we let it leave the app.
+  const navRef = useRef({ canBack: false, atRoot: true, goBack: () => {}, goHome: () => {} });
+  useEffect(() => {
+    navRef.current = {
+      canBack: backStack.length > 0,
+      atRoot: area === 'Coaching' && category === 'Home' && effectiveScreen === 'Today',
+      goBack,
+      goHome: () => handleCategoryClick('Home'),
+    };
+  });
+  useEffect(() => {
+    if (isCoachView) return;
+    if (window.history.state?.bp !== 'app') {
+      window.history.replaceState({ bp: 'base' }, '');
+      window.history.pushState({ bp: 'app' }, '');
+    }
+    const rearm = () => window.history.pushState({ bp: 'app' }, '');
+    const onPop = (e: PopStateEvent) => {
+      if (e.state?.bp !== 'base') return; // a forward move, or not ours
+      if (closeTopOverlay()) return rearm();
+      const nav = navRef.current;
+      if (nav.canBack) {
+        nav.goBack();
+        return rearm();
+      }
+      if (!nav.atRoot) {
+        nav.goHome();
+        return rearm();
+      }
+      window.history.back(); // already at Home: leave the app
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [isCoachView]);
+
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
     <AppShell
@@ -830,6 +869,7 @@ export function DashboardShell({
       )}
 
       {!isCoachView && <PushPrompt clientId={clientId} />}
+      {!isCoachView && <OfflineSnapshot name={clientLabel} profile={profile} programWeek={programWeek} programs={programs} weekLogs={weekLogs} />}
     </AppShell>
     </ClientOnly>
   );

@@ -9,6 +9,7 @@ import { Avatar } from '@/app/_components/Avatar';
 import { VoiceRecorder } from '@/app/_components/VoiceRecorder';
 import { markChatRead, notifyPhotoSent, sendMessage, sendVoiceNote } from '@/lib/data/chat';
 import { shrinkImage } from '@/lib/utils/shrinkImage';
+import { useBackHandler } from '@/app/_components/useBackHandler';
 import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -118,6 +119,7 @@ export function ChatTab({
   const listRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  useBackHandler(viewingPhoto != null, () => setViewingPhoto(null));
 
   useEffect(() => {
     // Subscribing before the realtime socket's own auth handshake resolves is a real race:

@@ -3,7 +3,7 @@
 //  - Offline: precaches a small offline page, shown only when a page load fails with no network.
 //  - Speed: caches the app's static build files and icons (never pages, API calls or user data, so
 //    nothing signed-in is ever stored or served stale).
-const VERSION = 'bp-v2';
+const VERSION = 'bp-v3';
 const STATIC_CACHE = `${VERSION}-static`;
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/icons/icon-192.png', '/icons/icon-512.png'];

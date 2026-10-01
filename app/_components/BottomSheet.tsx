@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useBackHandler } from './useBackHandler';
 
 // A sheet that slides up from the bottom on a phone and centres as a dialog on desktop.
 export function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -10,6 +11,8 @@ export function BottomSheet({ title, onClose, children }: { title: string; onClo
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  useBackHandler(true, onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center md:items-center" role="dialog" aria-modal="true" aria-label={title}>
