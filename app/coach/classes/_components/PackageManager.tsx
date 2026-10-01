@@ -61,6 +61,7 @@ function EditPackageCard({
   const [creditsPerWeek, setCreditsPerWeek] = useState(pkg.credits_per_week);
   const [description, setDescription] = useState(pkg.description ?? '');
   const [advanceDays, setAdvanceDays] = useState<string>(pkg.advance_booking_days?.toString() ?? '');
+  const [durationWeeks, setDurationWeeks] = useState<string>(pkg.duration_weeks?.toString() ?? '');
   const [screens, setScreens] = useState<Set<string>>(new Set(pkg.included_screens ?? DISABLEABLE_SCREENS));
 
   async function handleSave(e: React.FormEvent) {
@@ -72,6 +73,8 @@ function EditPackageCard({
           credits_per_week: creditsPerWeek,
           description: description || null,
           advance_booking_days: advanceDays ? Number(advanceDays) : null,
+          // Only sent when it matters, so this still saves before migration 0088 is applied.
+          ...(durationWeeks !== '' || pkg.duration_weeks != null ? { duration_weeks: durationWeeks ? Number(durationWeeks) : null } : {}),
           included_screens: screensToIncludedScreens(screens),
         }),
       { success: 'Package updated', onDone: onClose }
@@ -107,6 +110,17 @@ function EditPackageCard({
           />
         </div>
         <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500">Length in weeks (blank = ongoing, e.g. 6 for the challenge)</label>
+          <input
+            type="number"
+            min={1}
+            className={inputCls}
+            value={durationWeeks}
+            onChange={(e) => setDurationWeeks(e.target.value)}
+            placeholder="e.g. 6"
+          />
+        </div>
+        <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Description</label>
           <input className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
@@ -133,6 +147,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
   const [creditsPerWeek, setCreditsPerWeek] = useState(4);
   const [description, setDescription] = useState('');
   const [advanceDays, setAdvanceDays] = useState('');
+  const [durationWeeks, setDurationWeeks] = useState('');
   const [screens, setScreens] = useState<Set<string>>(new Set(DISABLEABLE_SCREENS));
 
   async function handleCreate(e: React.FormEvent) {
@@ -144,6 +159,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
           credits_per_week: creditsPerWeek,
           description: description || null,
           advance_booking_days: advanceDays ? Number(advanceDays) : null,
+          ...(durationWeeks ? { duration_weeks: Number(durationWeeks) } : {}),
           included_screens: screensToIncludedScreens(screens),
         }),
       { success: 'Package added', onDone }
@@ -175,6 +191,17 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
           value={advanceDays}
           onChange={(e) => setAdvanceDays(e.target.value)}
           placeholder="e.g. 14"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-zinc-500">Length in weeks (blank = ongoing, e.g. 6 for the challenge)</label>
+        <input
+          type="number"
+          min={1}
+          className={inputCls}
+          value={durationWeeks}
+          onChange={(e) => setDurationWeeks(e.target.value)}
+          placeholder="e.g. 6"
         />
       </div>
       <div className="space-y-1">
@@ -256,7 +283,7 @@ export function PackageManager({ initialPackages }: { initialPackages: Membershi
                   {p.credits_per_week} <span className="text-sm font-medium text-zinc-500">credits / week</span>
                 </p>
                 <p className="mt-1 text-sm text-zinc-500">
-                  {p.advance_booking_days ? `Book up to ${p.advance_booking_days} days ahead` : 'No booking limit'}
+                  {p.advance_booking_days ? `Book up to ${p.advance_booking_days} days ahead` : 'No booking limit'}{p.duration_weeks ? ` · ${p.duration_weeks} weeks` : ''}
                   {p.description ? ` · ${p.description}` : ''}
                 </p>
                 <p className="mt-1 text-xs text-zinc-400">

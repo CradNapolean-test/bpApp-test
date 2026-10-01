@@ -1,3 +1,4 @@
+import { todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientMembershipRow, CreditBucketBalances } from '@/lib/data/types';
 
 const longDate = (iso: string) =>
@@ -45,6 +46,18 @@ export function ClientCreditsTab({
                 <div className="flex justify-between py-2">
                   <dt className="text-zinc-500">Book up to</dt>
                   <dd className="font-semibold text-black dark:text-zinc-50">{pkg.advance_booking_days} days ahead</dd>
+                </div>
+              )}
+              {membership?.started_at && membership.started_at > todayIsoInTz(DEFAULT_TIMEZONE) && (
+                <div className="flex justify-between py-2">
+                  <dt className="text-zinc-500">Starts</dt>
+                  <dd className="font-semibold text-black dark:text-zinc-50">{longDate(membership.started_at)}</dd>
+                </div>
+              )}
+              {membership?.scheduled_end && (
+                <div className="flex justify-between py-2">
+                  <dt className="text-zinc-500">Ends</dt>
+                  <dd className="font-semibold text-black dark:text-zinc-50">{longDate(membership.scheduled_end)}</dd>
                 </div>
               )}
               {membership?.started_at && (

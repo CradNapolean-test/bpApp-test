@@ -521,6 +521,8 @@ export interface MembershipPackageRow {
   included_screens: string[] | null;
   // How many days ahead a member on this package may book; null = no limit (migration 0064).
   advance_booking_days: number | null;
+  // Length of the plan in weeks (e.g. 6 for the 6-week challenge); null = ongoing (migration 0088).
+  duration_weeks?: number | null;
 }
 
 export interface ClientMembershipRow {
@@ -530,6 +532,8 @@ export interface ClientMembershipRow {
   started_at: string;
   ended_at: string | null;
   last_reset_week: string | null;
+  // Planned last day; the plan stays active until then (migration 0088).
+  scheduled_end?: string | null;
   created_at: string;
   package: MembershipPackageRow | null;
 }
