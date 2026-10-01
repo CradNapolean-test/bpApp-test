@@ -8,7 +8,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
-import { formatDelta, measurementDelta } from '@/lib/utils/measurementDeltas';
+import { formatDelta } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
 
 const longDate = (iso: string) =>
@@ -182,14 +182,16 @@ export function ProgressTab({
               </div>
               {MEASUREMENT_FIELDS.map(({ key, label }) => {
                 const latest = initialMeasurements[0][key];
-                const start = profile?.[`meas_${key}_start` as keyof ClientProfileRow] as number | null | undefined;
+                // Start is the first measurement ever logged (members no longer type a start figure).
+                const first = initialMeasurements[initialMeasurements.length - 1];
+                const start = initialMeasurements.length > 1 ? first?.[key] ?? null : null;
                 const last = initialMeasurements[1]?.[key] ?? null;
-                const { vsStart, vsPrevious } = measurementDelta(initialMeasurements, profile, key);
+                const vsStart = latest != null && start != null ? latest - start : null;
+                const vsPrevious = latest != null && last != null ? latest - last : null;
                 const deltaLabel = formatDelta(vsStart);
-                // Good = moving towards the goal (waist/hips usually down, arm/chest/quad usually up).
-                const goal = profile?.[`meas_${key}_goal` as keyof ClientProfileRow] as number | null | undefined;
-                const towardsGoal = vsStart != null && start != null && goal != null && Math.abs(vsStart) >= 0.05
-                  ? (goal - start) * vsStart > 0
+                // Waist/hips going down is the usual aim; for arm/chest/quad, up is.
+                const towardsGoal = vsStart != null && Math.abs(vsStart) >= 0.05
+                  ? (key === 'waist' || key === 'hips' ? vsStart < 0 : vsStart > 0)
                   : null;
                 return (
                   <div key={key} className="py-2.5">
@@ -201,7 +203,7 @@ export function ProgressTab({
                     </div>
                     {deltaLabel && (
                       <p className={`mt-0.5 text-[11px] font-medium ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-success' : 'text-danger'}`}>
-                        {deltaLabel}cm since you started
+                        {deltaLabel}cm since your first measurement
                         {formatDelta(vsPrevious) ? ` · ${formatDelta(vsPrevious)}cm since last time` : ''}
                       </p>
                     )}

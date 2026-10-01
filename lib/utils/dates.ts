@@ -17,7 +17,7 @@ export const COMMON_TIMEZONES = [
   'UTC',
 ] as const;
 
-export const DEFAULT_TIMEZONE = 'Pacific/Auckland';
+export const DEFAULT_TIMEZONE = 'Europe/London';
 
 // 0=Sunday..6=Saturday, matching classes.day_of_week / Postgres's own convention.
 export const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

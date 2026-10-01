@@ -108,7 +108,6 @@ export function DashboardShell({
   occurrences,
   creditsBalance,
   creditsBuckets,
-  creditsLedger,
   programs,
   workoutLogs,
   clientExerciseMaxes,
@@ -544,7 +543,6 @@ export function DashboardShell({
               initialProfile={profile}
               readOnly={isCoachView && !isOwnClient}
               isCoachView={isCoachView}
-              measurementLogs={measurementLogs}
             />
           )}
           {effectiveScreen === 'Account' && !isCoachView && (
@@ -679,7 +677,6 @@ export function DashboardShell({
               creditsBalance={creditsBalance}
               creditsBuckets={creditsBuckets}
               membership={membership}
-              ledger={creditsLedger}
             />
           )}
           {effectiveScreen === 'Info' && isCoachView && (

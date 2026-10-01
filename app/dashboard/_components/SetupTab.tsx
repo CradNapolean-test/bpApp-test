@@ -5,8 +5,8 @@ import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
-import { COMMON_TIMEZONES, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
-import type { ClientProfileRow, MeasurementLogRow } from '@/lib/data/types';
+import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import type { ClientProfileRow } from '@/lib/data/types';
 
 const NUTRITION_MODES: { value: ClientProfileRow['nutrition_tracking_mode']; label: string; hint: string }[] = [
   { value: 'full_tracking', label: 'Full tracking', hint: 'Per-food diary, barcode scan, recipes.' },
@@ -66,35 +66,17 @@ function numOrNull(v: string): number | null {
   return v === '' ? null : Number(v);
 }
 
-const MEASUREMENTS: { key: 'arm' | 'chest' | 'waist' | 'hips' | 'quad'; label: string }[] = [
-  { key: 'arm', label: 'Arm' },
-  { key: 'chest', label: 'Chest' },
-  { key: 'waist', label: 'Waist' },
-  { key: 'hips', label: 'Hips' },
-  { key: 'quad', label: 'Quad' },
-];
-
-const LIFTS: { key: 'db_press' | 'squats' | 'pull_ups' | 'rdl' | 'hip_thrust'; label: string }[] = [
-  { key: 'db_press', label: 'DB Press' },
-  { key: 'squats', label: 'Squats' },
-  { key: 'pull_ups', label: 'Pull Ups' },
-  { key: 'rdl', label: 'Romanian Deadlift' },
-  { key: 'hip_thrust', label: 'Hip Thrust' },
-];
-
 export function SetupTab({
   clientId,
   initialProfile,
   readOnly,
   isCoachView = false,
-  measurementLogs,
 }: {
   clientId: string;
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
   // Coach-only controls (nutrition tracking method, calculation detail) show for a coach.
   isCoachView?: boolean;
-  measurementLogs: MeasurementLogRow[];
 }) {
   const { run, busy: saving } = useAction();
   const { run: runMode, busy: savingMode } = useAction();
@@ -153,7 +135,8 @@ export function SetupTab({
       return;
     }
     setError(null);
-    await run(() => upsertClientProfile(clientId, form), { success: 'Details saved' });
+    // The gym is UK-only, so the timezone is fixed rather than a setting.
+    await run(() => upsertClientProfile(clientId, { ...form, timezone: DEFAULT_TIMEZONE }), { success: 'Details saved' });
   }
 
   const inputCls =
@@ -161,61 +144,31 @@ export function SetupTab({
   const labelCls = 'text-sm font-medium text-zinc-700 dark:text-zinc-300';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      {engine && week1Target && (
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your daily targets</h3>
-          <p className="mt-2 text-3xl font-extrabold text-black dark:text-zinc-50">
-            {Math.round(week1Target.calories / 7)} <span className="text-base font-bold text-zinc-500">kcal</span>
-          </p>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            {Math.round(week1Target.protein / 7)}g protein · {Math.round(week1Target.carbs / 7)}g carbs ·{' '}
-            {Math.round(week1Target.fat / 7)}g fat <span className="text-zinc-400">(starting week)</span>
-          </p>
-          {isCoachView && (
-            <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-black/[.05] pt-3 text-sm dark:border-white/10 sm:grid-cols-4">
-              <div><dt className="text-zinc-500">BMR</dt><dd>{Math.round(engine.bmr)} kcal</dd></div>
-              <div><dt className="text-zinc-500">TDEE</dt><dd>{Math.round(engine.tdee)} kcal</dd></div>
-              <div><dt className="text-zinc-500">Protein/day</dt><dd>{Math.round(engine.protein)} g</dd></div>
-              <div><dt className="text-zinc-500">Fat/day</dt><dd>{Math.round(engine.fat)} g</dd></div>
-            </dl>
-          )}
-          {week1Target.calories / 7 < CALORIE_FLOOR && (
-            <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-              Daily target is below {CALORIE_FLOOR} kcal — worth a chat with your coach.
-            </p>
-          )}
-        </div>
-      )}
-
-      {isCoachView && !readOnly && (
-        <div className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <label className={labelCls}>Nutrition tracking method</label>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {NUTRITION_MODES.map((m) => (
-              <button
-                key={m.value}
-                type="button"
-                disabled={savingMode}
-                onClick={() => handleModeChange(m.value)}
-                className={`rounded-md border p-2.5 text-left text-sm transition-colors disabled:opacity-50 ${
-                  nutritionMode === m.value
-                    ? 'border-accent bg-accent-soft'
-                    : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-                }`}
-              >
-                <p className="font-medium text-black dark:text-zinc-50">{m.label}</p>
-                <p className="text-xs text-zinc-500">{m.hint}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
+    <form onSubmit={handleSubmit} className="space-y-6">
       <fieldset disabled={readOnly} className="space-y-6">
         <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Contact details</h3>
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">About you</h3>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className={labelCls}>Name</label>
+              <input
+                required
+                className={inputCls}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Gender</label>
+              <select
+                className={inputCls}
+                value={form.gender ?? 'Female'}
+                onChange={(e) => setForm({ ...form, gender: e.target.value })}
+              >
+                <option>Female</option>
+                <option>Male</option>
+              </select>
+            </div>
             <div className="space-y-1">
               <label className={labelCls}>Phone</label>
               <input
@@ -234,7 +187,7 @@ export function SetupTab({
                 onChange={(e) => setForm({ ...form, date_of_birth: e.target.value || null })}
               />
             </div>
-            <div className="sm:col-span-2 space-y-1">
+            <div className="space-y-1 sm:col-span-2">
               <label className={labelCls}>Address</label>
               <input
                 className={inputCls}
@@ -263,236 +216,163 @@ export function SetupTab({
         </div>
 
         <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">About you &amp; your goal</h3>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className={labelCls}>Name</label>
-            <input
-              required
-              className={inputCls}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Gender</label>
-            <select
-              className={inputCls}
-              value={form.gender ?? 'Female'}
-              onChange={(e) => setForm({ ...form, gender: e.target.value })}
-            >
-              <option>Female</option>
-              <option>Male</option>
-            </select>
-          </div>
-          <div className="sm:col-span-2 space-y-1">
-            <label className={labelCls}>Goal description</label>
-            <input
-              className={inputCls}
-              placeholder="e.g. Fat loss"
-              value={form.goal_description ?? ''}
-              onChange={(e) => setForm({ ...form, goal_description: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Experience level</label>
-            <input
-              className={inputCls}
-              value={form.experience ?? ''}
-              onChange={(e) => setForm({ ...form, experience: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Timezone</label>
-            <select
-              className={inputCls}
-              value={form.timezone}
-              onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-            >
-              {COMMON_TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-zinc-500">
-              Used to work out which calendar day your logs and reminders land on.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Age</label>
-            <input
-              type="number"
-              className={inputCls}
-              value={form.age ?? ''}
-              onChange={(e) => setForm({ ...form, age: numOrNull(e.target.value) })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Body fat %</label>
-            <input
-              type="number"
-              step="0.1"
-              className={inputCls}
-              value={form.body_fat_pct ?? ''}
-              onChange={(e) => setForm({ ...form, body_fat_pct: numOrNull(e.target.value) })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Start weight (kg)</label>
-            <input
-              type="number"
-              step="0.1"
-              required
-              className={inputCls}
-              value={form.start_weight || ''}
-              onChange={(e) => setForm({ ...form, start_weight: Number(e.target.value) })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>
-              Goal weight (kg) <span className="text-red-500">*required</span>
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              required
-              className={inputCls}
-              value={form.goal_weight || ''}
-              onChange={(e) => setForm({ ...form, goal_weight: Number(e.target.value) })}
-            />
-          </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Nutrition plan</h3>
-          <p className="mt-1 text-xs text-zinc-500">These set your calorie and macro targets. Check with your coach before changing them.</p>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className={labelCls}>Activity level multiplier</label>
-            <input
-              type="number"
-              step="0.05"
-              className={inputCls}
-              value={form.activity_level}
-              onChange={(e) => setForm({ ...form, activity_level: Number(e.target.value) })}
-            />
-            <p className="text-xs text-zinc-500">1.2 mostly desk-based · 1.5 moderately active · 1.75 very active.</p>
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Diet approach</label>
-            <select
-              className={inputCls}
-              value={form.diet_approach}
-              onChange={(e) =>
-                setForm({ ...form, diet_approach: e.target.value as ClientProfileRow['diet_approach'] })
-              }
-            >
-              <option>High Carb Low Fat</option>
-              <option>Higher Fat</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className={labelCls}>Tier</label>
-            <select
-              className={inputCls}
-              value={form.tier}
-              onChange={(e) => setForm({ ...form, tier: Number(e.target.value) as 1 | 2 | 3 })}
-            >
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-            </select>
-          </div>
-          <label className="flex items-center gap-2 pt-6 text-sm">
-            <input
-              type="checkbox"
-              checked={form.cycling}
-              onChange={(e) => setForm({ ...form, cycling: e.target.checked })}
-            />
-            Calorie cycling
-          </label>
-          </div>
-        </div>
-
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements (cm)</h3>
-          <p className="mb-2 text-xs text-zinc-500">
-            Current comes from the latest entry logged under Progress &amp; Photos.
-          </p>
-          <div className="mb-1 grid grid-cols-4 gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-            <span />
-            <span className="px-3">Now</span>
-            <span>Start</span>
-            <span>Goal</span>
-          </div>
-          <div className="space-y-2">
-            {MEASUREMENTS.map(({ key, label }) => {
-              const current = measurementLogs[0]?.[key] ?? null;
-              return (
-              <div key={key} className="grid grid-cols-4 items-center gap-2">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">{label}</span>
-                <span className="rounded-md border border-transparent px-3 py-2 text-sm text-zinc-500">
-                  {current ?? '—'}
-                </span>
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your goal</h3>
+          <div className="mt-3 space-y-4">
+            <div className="space-y-1">
+              <label className={labelCls}>What do you want to achieve?</label>
+              <textarea
+                rows={7}
+                className={`${inputCls} resize-y leading-relaxed`}
+                placeholder="Be as detailed as you can. What do you want to achieve and why does it matter to you? Is there a date or event you're working towards? What has worked or not worked before? Any injuries, health conditions or things we should know about?"
+                value={form.goal_description ?? ''}
+                onChange={(e) => setForm({ ...form, goal_description: e.target.value })}
+              />
+              <p className="text-xs text-zinc-500">The more your coach knows, the better they can tailor your plan.</p>
+            </div>
+            <div className="space-y-1">
+              <label className={labelCls}>Training experience</label>
+              <textarea
+                rows={3}
+                className={`${inputCls} resize-y leading-relaxed`}
+                placeholder="e.g. Trained on and off for 2 years, new to lifting weights, ex-athlete..."
+                value={form.experience ?? ''}
+                onChange={(e) => setForm({ ...form, experience: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className={labelCls}>Start weight (kg)</label>
                 <input
                   type="number"
+                  step="0.1"
+                  required
                   className={inputCls}
-                  placeholder="start"
-                  value={(form as Record<string, unknown>)[`meas_${key}_start`] as number ?? ''}
-                  onChange={(e) =>
-                    setForm({ ...form, [`meas_${key}_start`]: numOrNull(e.target.value) })
-                  }
-                />
-                <input
-                  type="number"
-                  className={inputCls}
-                  placeholder="goal"
-                  value={(form as Record<string, unknown>)[`meas_${key}_goal`] as number ?? ''}
-                  onChange={(e) =>
-                    setForm({ ...form, [`meas_${key}_goal`]: numOrNull(e.target.value) })
-                  }
+                  value={form.start_weight || ''}
+                  onChange={(e) => setForm({ ...form, start_weight: Number(e.target.value) })}
                 />
               </div>
-              );
-            })}
+              <div className="space-y-1">
+                <label className={labelCls}>
+                  Goal weight (kg) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  required
+                  className={inputCls}
+                  value={form.goal_weight || ''}
+                  onChange={(e) => setForm({ ...form, goal_weight: Number(e.target.value) })}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Strength lifts (start / goal)</h3>
-          <div className="mb-1 grid grid-cols-3 gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-            <span />
-            <span>Start (kg)</span>
-            <span>Goal (kg)</span>
-          </div>
-          <div className="space-y-2">
-            {LIFTS.map(({ key, label }) => (
-              <div key={key} className="grid grid-cols-3 items-center gap-2">
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">{label}</span>
+        {/* Calorie-engine inputs. Coach-only for now: members see their resulting targets in
+            Nutrition. A fuller rework (and a proper home for this) is still to be designed. */}
+        {isCoachView && (
+          <div className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Nutrition plan (coach only)</h3>
+            {engine && week1Target && (
+              <div className="rounded-xl bg-black/[.03] p-3 text-sm dark:bg-white/[.04]">
+                <p className="font-bold text-black dark:text-zinc-50">
+                  {Math.round(week1Target.calories / 7)} kcal · {Math.round(week1Target.protein / 7)}g protein ·{' '}
+                  {Math.round(week1Target.carbs / 7)}g carbs · {Math.round(week1Target.fat / 7)}g fat
+                  <span className="font-normal text-zinc-500"> (starting week)</span>
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  BMR {Math.round(engine.bmr)} · TDEE {Math.round(engine.tdee)} · protein {Math.round(engine.protein)}g · fat{' '}
+                  {Math.round(engine.fat)}g per day
+                </p>
+                {week1Target.calories / 7 < CALORIE_FLOOR && (
+                  <p className="mt-2 text-amber-600 dark:text-amber-400">Daily target is below {CALORIE_FLOOR} kcal — worth a review.</p>
+                )}
+              </div>
+            )}
+            {!readOnly && (
+              <div className="space-y-2">
+                <label className={labelCls}>Nutrition tracking method</label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {NUTRITION_MODES.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      disabled={savingMode}
+                      onClick={() => handleModeChange(m.value)}
+                      className={`rounded-md border p-2.5 text-left text-sm transition-colors disabled:opacity-50 ${
+                        nutritionMode === m.value
+                          ? 'border-accent bg-accent-soft'
+                          : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      <p className="font-medium text-black dark:text-zinc-50">{m.label}</p>
+                      <p className="text-xs text-zinc-500">{m.hint}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className={labelCls}>Age</label>
                 <input
                   type="number"
                   className={inputCls}
-                  placeholder="start"
-                  value={(form as Record<string, unknown>)[`lift_${key}_start`] as number ?? ''}
-                  onChange={(e) =>
-                    setForm({ ...form, [`lift_${key}_start`]: numOrNull(e.target.value) })
-                  }
-                />
-                <input
-                  type="number"
-                  className={inputCls}
-                  placeholder="goal"
-                  value={(form as Record<string, unknown>)[`lift_${key}_goal`] as number ?? ''}
-                  onChange={(e) =>
-                    setForm({ ...form, [`lift_${key}_goal`]: numOrNull(e.target.value) })
-                  }
+                  value={form.age ?? ''}
+                  onChange={(e) => setForm({ ...form, age: numOrNull(e.target.value) })}
                 />
               </div>
-            ))}
+              <div className="space-y-1">
+                <label className={labelCls}>Body fat %</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className={inputCls}
+                  value={form.body_fat_pct ?? ''}
+                  onChange={(e) => setForm({ ...form, body_fat_pct: numOrNull(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Activity level multiplier</label>
+                <input
+                  type="number"
+                  step="0.05"
+                  className={inputCls}
+                  value={form.activity_level}
+                  onChange={(e) => setForm({ ...form, activity_level: Number(e.target.value) })}
+                />
+                <p className="text-xs text-zinc-500">1.2 mostly desk-based · 1.5 moderately active · 1.75 very active.</p>
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Diet approach</label>
+                <select
+                  className={inputCls}
+                  value={form.diet_approach}
+                  onChange={(e) => setForm({ ...form, diet_approach: e.target.value as ClientProfileRow['diet_approach'] })}
+                >
+                  <option>High Carb Low Fat</option>
+                  <option>Higher Fat</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className={labelCls}>Tier</label>
+                <select
+                  className={inputCls}
+                  value={form.tier}
+                  onChange={(e) => setForm({ ...form, tier: Number(e.target.value) as 1 | 2 | 3 })}
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 pt-6 text-sm">
+                <input type="checkbox" checked={form.cycling} onChange={(e) => setForm({ ...form, cycling: e.target.checked })} />
+                Calorie cycling
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 

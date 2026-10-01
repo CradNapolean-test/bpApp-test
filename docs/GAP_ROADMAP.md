@@ -118,3 +118,10 @@ Each active-backlog item becomes its own `EnterPlanMode` pass when picked up —
 specific files, confirm schema decisions, write the migration + code, verify with disposable
 test accounts, deploy. This document's job is to track what's actually still open, not to
 lock in every implementation detail today.
+
+## Parked idea: strength progression (noted 2026-10-01)
+The Personal details form no longer asks members for start/goal strength lifts (DB Press, Squats,
+Pull Ups, RDL, Hip Thrust). The `lift_*_start` / `lift_*_goal` columns on `client_profiles` stay in
+the schema, untouched. Instead, members see their previous results per exercise in the Training
+area (last time, PR). A future progression element could build on that: start vs best vs goal per
+lift, taken from logged sets rather than typed in. Not scheduled.
