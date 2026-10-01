@@ -697,6 +697,7 @@ export function DashboardShell({
               profile={profile}
               results={bigDogResults}
               canRecord={isCoachView && isOwnClient}
+              canLog={!isCoachView}
             />
           )}
           {effectiveScreen === 'Notifications' && (

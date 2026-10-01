@@ -685,6 +685,10 @@ export interface BigDogResultRow {
   exercise_key: string;
   level: 'none' | 'rookie' | 'strong' | 'big_dog';
   result_text: string | null;
+  // The score as one number (kg, reps, seconds or metres); null on older coach-recorded rows.
+  result_value: number | null;
+  // Logged by the member themselves rather than recorded by a coach.
+  self_reported: boolean;
   tested_date: string;
   recorded_by: string | null;
   created_at: string;
