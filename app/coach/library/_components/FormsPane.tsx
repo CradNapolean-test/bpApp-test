@@ -15,6 +15,7 @@ import {
   getFormTemplateWithQuestions,
   updateFormTemplate,
 } from '@/lib/data/forms';
+import { STARTER_FORMS } from '@/lib/starterForms';
 import type { FormQuestionType, FormTemplateRow } from '@/lib/data/types';
 import { inputCls } from '@/app/_components/ui';
 
@@ -199,6 +200,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
   const confirm = useConfirm();
   const toast = useToast();
   const { run: runDelete } = useAction();
+  const { run: runStarter, busy: addingStarter } = useAction();
   const [editorState, setEditorState] = useState<{
     editingId: string | null;
     name: string;
@@ -240,6 +242,20 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
     });
   }
 
+  // One-tap ready-made forms (health questionnaire, lifestyle intake) to edit afterwards.
+  async function addStarter(id: string) {
+    const starter = STARTER_FORMS.find((f) => f.id === id);
+    if (!starter) return;
+    await runStarter(
+      () =>
+        createFormTemplate(
+          { name: starter.name, description: starter.description, is_default_onboarding: false },
+          starter.questions.map((q, i) => ({ order_index: i, ...q }))
+        ),
+      { success: `Added "${starter.name}". Edit it, or tick "default onboarding form" so new members get it.` }
+    );
+  }
+
   async function handleDelete(id: string) {
     const template = initialTemplates.find((t) => t.id === id);
     const ok = await confirm({
@@ -253,7 +269,16 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <DropdownMenu
+          variant="header"
+          triggerLabel="Start from a ready-made form"
+          items={STARTER_FORMS.map((f) => ({
+            label: addingStarter ? 'Adding…' : f.name,
+            onSelect: () => addStarter(f.id),
+            disabled: addingStarter,
+          }))}
+        />
         <button
           type="button"
           onClick={openNew}
@@ -264,7 +289,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
       </div>
 
       {initialTemplates.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No form templates yet" hint="Add one above to start collecting structured answers from clients." />
+        <EmptyState icon={ClipboardList} title="No form templates yet" hint="Add one above, or use the ⋯ menu to start from a ready-made health questionnaire." />
       ) : (
         <div className="space-y-2">
           {initialTemplates.map((t) => (
@@ -278,7 +303,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
                   {t.questionCount} question{t.questionCount === 1 ? '' : 's'}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2.5">
+              <div className="ml-auto flex shrink-0 items-center gap-2.5">
                 {t.is_default_onboarding && (
                   <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
                     Default onboarding
