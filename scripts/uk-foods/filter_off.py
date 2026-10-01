@@ -54,6 +54,18 @@ BRAND_LONG = {"M&S": "Marks & Spencer", "Co-op": "Co-operative Co-op"}
 NON_LATIN = re.compile(r"[^\u0000-\u024F\u2010-\u2027\u20AC]")
 
 
+# Words that mark a product page written for another European market (some carry a UK tag as well).
+FOREIGN = re.compile(r"(et|avec|sans|poulet|oeuf|oeufs|œuf|mit|und|oder|mehl|pollo|riz|épices|aux)", re.I)
+
+
+def is_junk_name(name, label):
+    """True for names that are just the brand ("Tesco", "Lidl bbj") or are clearly another language."""
+    if FOREIGN.search(name):
+        return True
+    rest = re.sub(re.escape(label), "", name, flags=re.I) if label else name
+    return len(re.sub(r"[^A-Za-z]", "", rest)) < 3 and label not in (None, "", "brand")
+
+
 def num(x):
     if x is None or x == "":
         return None
@@ -103,6 +115,9 @@ def main(src, dst):
                 continue
             if len(name) < 2:
                 rejected["no name"] += 1
+                continue
+            if is_junk_name(name, label):
+                rejected["brand-only or foreign-language name"] += 1
                 continue
             if not re.fullmatch(r"\d{8,14}", code or ""):
                 rejected["bad barcode"] += 1
