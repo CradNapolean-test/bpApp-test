@@ -11,6 +11,7 @@ import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
 import { InstallBanner } from './InstallBanner';
 import { BodyScansTab } from './BodyScansTab';
+import { CoachMemberOverview } from './CoachMemberOverview';
 import { OfflineSnapshot } from './OfflineSnapshot';
 import { closeTopOverlay } from '@/app/_components/useBackHandler';
 import { Logo } from '@/app/_components/Logo';
@@ -666,7 +667,32 @@ export function DashboardShell({
               <InstallBanner />
             </div>
           )}
-          {effectiveScreen === 'Today' && (
+          {effectiveScreen === 'Today' && isCoachView && (
+            <CoachMemberOverview
+              clientId={clientId}
+              profile={profile}
+              programWeek={programWeek}
+              weekLogs={weekLogs}
+              historyLogs={historyLogs}
+              formAssignments={formAssignments}
+              bookings={bookings}
+              creditsBalance={creditsBalance}
+              membership={membership}
+              programs={programs}
+              workoutLogs={workoutLogs}
+              bodyScans={bodyScans}
+              bigDogResults={bigDogResults}
+              journalEntries={journalEntries}
+              healthStatus={healthStatus}
+              isOwnClient={isOwnClient}
+              onNavigate={handleNavigate}
+              onOpenCheckin={(week) => {
+                setStartWeek(week);
+                handleNavigate('Accountability', 'Weekly Log');
+              }}
+            />
+          )}
+          {effectiveScreen === 'Today' && !isCoachView && (
             <TodayTab
               profile={profile}
               programWeek={programWeek}

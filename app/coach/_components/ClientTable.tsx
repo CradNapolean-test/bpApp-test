@@ -12,6 +12,7 @@ import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 type Scope = 'mine' | 'gym';
+type QuickFilter = 'all' | 'review' | 'quiet' | 'credits';
 
 const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
 
@@ -47,6 +48,7 @@ export function ClientTable({
   const [groupId, setGroupId] = useState('');
   const [managingGroups, setManagingGroups] = useState(false);
   const [pendingDeletionOnly, setPendingDeletionOnly] = useState(false);
+  const [quick, setQuick] = useState<QuickFilter>('all');
 
   const activeClients: (CoachClientRow | GymClientRow)[] = scope === 'gym' && gymClients ? gymClients : clients;
 
@@ -63,7 +65,17 @@ export function ClientTable({
       .filter((c) => (q ? (c.name ?? '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) : true))
       .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true))
       .filter((c) => (pendingDeletionOnly ? c.deletion_requested_at != null : true));
-    const merged = filteredClients.map((c) => ({ client: c, health: statusById.get(c.id) ?? null }));
+    const merged = filteredClients
+      .map((c) => ({ client: c, health: statusById.get(c.id) ?? null }))
+      .filter(({ client, health }) =>
+        quick === 'review'
+          ? client.needsReview
+          : quick === 'quiet'
+            ? health?.status === 'red' || health?.status === 'amber'
+            : quick === 'credits'
+              ? client.balance <= 1 && client.planName != null
+              : true
+      );
     merged.sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') {
@@ -81,7 +93,19 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly]);
+  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly, quick]);
+
+  const quickCounts = useMemo(
+    () => ({
+      review: activeClients.filter((c) => c.needsReview).length,
+      quiet: activeClients.filter((c) => {
+        const s = statusById.get(c.id)?.status;
+        return s === 'red' || s === 'amber';
+      }).length,
+      credits: activeClients.filter((c) => c.balance <= 1 && c.planName != null).length,
+    }),
+    [activeClients, statusById]
+  );
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setAsc((v) => !v);
@@ -182,6 +206,26 @@ const scopeBtnCls = (active: boolean) =>
           ]}
         />
       </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {([
+          ['all', 'All', activeClients.length],
+          ['review', 'New to review', quickCounts.review],
+          ['quiet', 'Gone quiet', quickCounts.quiet],
+          ['credits', 'Low credits', quickCounts.credits],
+        ] as [QuickFilter, string, number][]).map(([key, label, count]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setQuick(key)}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold ${
+              quick === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+            }`}
+          >
+            {label}
+            {key !== 'all' && count > 0 ? ` · ${count}` : ''}
+          </button>
+        ))}
+      </div>
       {pendingDeletionCount > 0 && (
         <button
           onClick={() => setPendingDeletionOnly((v) => !v)}
@@ -217,9 +261,14 @@ const scopeBtnCls = (active: boolean) =>
               >
                 <Avatar name={client.name ?? client.email} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-black dark:text-zinc-50">{client.name ?? client.email}</p>
+                  <p className="flex items-center gap-1.5 truncate font-semibold text-black dark:text-zinc-50">
+                    <span className="truncate">{client.name ?? client.email}</span>
+                    {client.needsReview && <span className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-extrabold text-warning">NEW</span>}
+                    {client.deletion_requested_at && <span className="shrink-0 rounded-full bg-danger/15 px-1.5 py-0.5 text-[10px] font-extrabold text-danger">DELETE</span>}
+                  </p>
                   <p className="truncate text-xs text-zinc-500">
                     <span className={`font-semibold ${status.cls}`}>{status.label}</span> · {last}
+                    {client.planName ? ` · ${client.planName}` : ' · No plan'}
                     {'coachName' in client && !client.isOwnClient ? ` · ${client.coachName}` : ''}
                   </p>
                 </div>
@@ -278,6 +327,9 @@ const scopeBtnCls = (active: boolean) =>
                         >
                           {client.name ?? client.email}
                         </Link>
+                        {client.needsReview && (
+                          <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-extrabold text-warning">NEW</span>
+                        )}
                         {client.deletion_requested_at && (
                           <span
                             title="Deletion requested"
@@ -288,7 +340,7 @@ const scopeBtnCls = (active: boolean) =>
                           </span>
                         )}
                       </div>
-                      <p className="truncate text-xs text-zinc-500">{client.email}</p>
+                      <p className="truncate text-xs text-zinc-500">{client.planName ?? 'No plan'} · {client.email}</p>
                     </div>
                   </div>
                 </td>

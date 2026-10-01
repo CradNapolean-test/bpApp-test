@@ -43,6 +43,19 @@ export interface CoachClientRow {
   goal_weight: number | null;
   balance: number;
   deletion_requested_at: string | null;
+  // New member whose starting plan hasn't been checked yet (onboarding).
+  needsReview: boolean;
+  // Name of their current membership plan, null when none is set up.
+  planName: string | null;
+}
+
+// The name of the plan on a member's open (not ended) membership, if any.
+function planNameOf(memberships: unknown): string | null {
+  const rows = (Array.isArray(memberships) ? memberships : []) as { ended_at: string | null; membership_packages: { name: string } | { name: string }[] | null }[];
+  const open = rows.find((m) => m.ended_at === null);
+  if (!open) return null;
+  const pkg = Array.isArray(open.membership_packages) ? open.membership_packages[0] : open.membership_packages;
+  return pkg?.name ?? null;
 }
 
 export interface GymClientRow extends CoachClientRow {
@@ -65,7 +78,7 @@ export async function searchGymClients(
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at), credits_balance(balance), coach:coach_id(id, email, display_name)'
+      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, membership_packages(name)), coach:coach_id(id, email, display_name)'
     )
     .eq('role', 'client')
     .eq('gym_id', gymId)
@@ -85,6 +98,8 @@ export async function searchGymClients(
       goal_weight: profile?.goal_weight ?? null,
       balance: balanceRow?.balance ?? 0,
       deletion_requested_at: profile?.deletion_requested_at ?? null,
+      needsReview: profile?.needs_coach_review ?? false,
+      planName: planNameOf(row.client_memberships),
       coachId: coach?.id ?? '',
       coachName: coach?.display_name ?? coach?.email ?? 'Unknown coach',
       isOwnClient: coach?.id === myCoachId,
@@ -99,7 +114,7 @@ export async function getMyClients(
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at), credits_balance(balance)'
+      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, membership_packages(name))'
     )
     .eq('coach_id', coachId)
     .eq('role', 'client')
@@ -118,6 +133,8 @@ export async function getMyClients(
       goal_weight: profile?.goal_weight ?? null,
       balance: balanceRow?.balance ?? 0,
       deletion_requested_at: profile?.deletion_requested_at ?? null,
+      needsReview: profile?.needs_coach_review ?? false,
+      planName: planNameOf(row.client_memberships),
     };
   });
 }
