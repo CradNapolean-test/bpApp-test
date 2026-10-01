@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BP App — Coach Messaging</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+  :root{--t:#2ABFBF;--td:rgba(42,191,191,0.12);--tb:rgba(42,191,191,0.28);--bk:#111;--c1:#1e1e1e;--mu:#666;--wh:#f0f0f0;--rd:#e05555;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#1a1a2e;display:flex;justify-content:center;align-items:flex-start;min-height:100vh;padding:2rem 0;font-family:'Helvetica Neue',Arial,sans-serif;}
+  .frame{width:340px;background:var(--bk);border-radius:42px;border:2.5px solid #2a2a2a;overflow:hidden;color:var(--wh);}
+  .nbar{display:flex;justify-content:space-between;align-items:center;padding:14px 22px 0;font-size:11px;font-weight:700;}
+  .notch{width:80px;height:22px;background:var(--bk);border-radius:0 0 14px 14px;margin:0 auto;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 8px;}
+  .back{width:32px;height:32px;border-radius:50%;background:var(--c1);border:0.5px solid #2e2e2e;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .back i{font-size:16px;color:#aaa;}
+  .coach-info{display:flex;align-items:center;gap:8px;}
+  .coach-avatar{width:32px;height:32px;border-radius:50%;background:var(--td);border:1.5px solid var(--t);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--t);}
+  .coach-name-sm{font-size:13px;font-weight:800;}
+  .coach-status{font-size:9px;color:var(--t);}
+  .online-dot{width:7px;height:7px;background:var(--t);border-radius:50%;display:inline-block;margin-right:3px;}
+  .icon-btn{width:32px;height:32px;border-radius:50%;background:var(--c1);border:0.5px solid #2e2e2e;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .icon-btn i{font-size:15px;color:#aaa;}
+  .auto-banner{margin:4px 14px 8px;background:rgba(42,191,191,0.06);border:0.5px solid var(--tb);border-radius:12px;padding:9px 12px;display:flex;align-items:center;gap:8px;}
+  .auto-banner i{font-size:14px;color:var(--t);flex-shrink:0;}
+  .auto-banner span{font-size:10px;color:var(--t);font-weight:600;line-height:1.4;}
+  .messages{padding:0 14px;display:flex;flex-direction:column;gap:10px;height:330px;overflow-y:auto;scrollbar-width:none;}
+  .messages::-webkit-scrollbar{display:none;}
+  .date-divider{text-align:center;font-size:9px;color:var(--mu);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:4px 0;}
+  .bubble-row{display:flex;align-items:flex-end;gap:6px;}
+  .bubble-row.mine{flex-direction:row-reverse;}
+  .bubble-avatar{width:24px;height:24px;border-radius:50%;background:var(--td);border:1px solid var(--tb);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:var(--t);flex-shrink:0;}
+  .bubble{max-width:220px;padding:9px 12px;border-radius:16px;font-size:12px;line-height:1.5;}
+  .bubble.coach{background:var(--c1);border-radius:4px 16px 16px 16px;border:0.5px solid #2a2a2a;}
+  .bubble.mine{background:var(--t);color:#000;border-radius:16px 4px 16px 16px;}
+  .bubble.auto{background:rgba(42,191,191,0.08);border-radius:4px 16px 16px 16px;border:0.5px solid var(--tb);}
+  .auto-tag{font-size:8px;font-weight:800;color:var(--t);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;opacity:0.8;}
+  .bubble-time{font-size:9px;color:var(--mu);margin-top:3px;}
+  .bubble-time.left{text-align:left;}
+  .voice-bubble{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--c1);border-radius:4px 16px 16px 16px;border:0.5px solid #2a2a2a;max-width:200px;cursor:pointer;}
+  .play-btn{width:26px;height:26px;border-radius:50%;background:var(--t);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .play-btn i{font-size:12px;color:#000;}
+  .voice-wave{flex:1;height:20px;display:flex;align-items:center;gap:2px;}
+  .wave-bar{width:3px;border-radius:2px;background:#333;}
+  .voice-dur{font-size:10px;color:var(--mu);flex-shrink:0;}
+  .photo-bubble{width:160px;border-radius:4px 16px 16px 16px;overflow:hidden;border:0.5px solid #2a2a2a;cursor:pointer;background:var(--c1);}
+  .photo-placeholder{width:100%;height:90px;background:linear-gradient(135deg,#1e1e1e,#2a2a2a);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;}
+  .photo-placeholder i{font-size:22px;color:#444;}
+  .photo-placeholder span{font-size:9px;color:#555;}
+  .input-bar{padding:8px 14px 10px;border-top:0.5px solid #1e1e1e;display:flex;align-items:center;gap:8px;}
+  .input-wrap{flex:1;background:var(--c1);border-radius:20px;border:0.5px solid #2a2a2a;display:flex;align-items:center;padding:8px 12px;gap:8px;}
+  .input-wrap input{flex:1;background:transparent;border:none;outline:none;font-size:12px;color:var(--wh);font-family:inherit;}
+  .input-wrap input::placeholder{color:#444;}
+  .input-icon{font-size:16px;color:#555;cursor:pointer;}
+  .send-btn{width:34px;height:34px;border-radius:50%;background:var(--t);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  .send-btn i{font-size:16px;color:#000;}
+  .navbar{display:flex;justify-content:space-around;padding:8px 0 20px;border-top:0.5px solid #1e1e1e;}
+  .ni{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;}
+  .ni i{font-size:20px;color:#444;}
+  .ni span{font-size:9px;color:#444;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;}
+  .ni.on i,.ni.on span{color:var(--t);}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="nbar"><span>9:41</span><div class="notch"></div><div style="display:flex;gap:4px;align-items:center;"><i class="ti ti-wifi" style="font-size:12px"></i><i class="ti ti-battery" style="font-size:12px"></i></div></div>
+  <div class="topbar">
+    <div class="back"><i class="ti ti-arrow-left"></i></div>
+    <div class="coach-info"><div class="coach-avatar">RJ</div><div><div class="coach-name-sm">Coach Ryan</div><div class="coach-status"><span class="online-dot"></span>Online</div></div></div>
+    <div class="icon-btn"><i class="ti ti-dots-vertical"></i></div>
+  </div>
+  <div class="auto-banner"><i class="ti ti-robot"></i><span>Weekly check-in sent Sunday — tap to view your coach's message below</span></div>
+  <div class="messages" id="msgList">
+    <div class="date-divider">Sunday 25 May</div>
+    <div class="bubble-row"><div class="bubble-avatar">RJ</div><div><div class="bubble auto"><div class="auto-tag">⚡ Weekly check-in</div>Hey Jamie! Hope you've had a great week. How are you getting on with training and nutrition? Any wins or struggles you want to chat through? 💪</div><div class="bubble-time left">Sun 8:00am · Auto</div></div></div>
+    <div class="bubble-row mine"><div><div class="bubble mine">Hey Ryan! Week went well, hit all 3 sessions. Nutrition was a bit off Thursday but got back on track Friday 👍</div><div class="bubble-time">Sun 10:22am</div></div></div>
+    <div class="bubble-row"><div class="bubble-avatar">RJ</div><div><div class="bubble coach">That's a great week Jamie — 3 from 3 is exactly what we want. Don't stress about Thursday, one day doesn't undo the work. Keep the consistency going!</div><div class="bubble-time left">Sun 11:05am</div></div></div>
+    <div class="date-divider">Tuesday 27 May</div>
+    <div class="bubble-row"><div class="bubble-avatar">RJ</div><div><div class="voice-bubble"><div class="play-btn"><i class="ti ti-player-play"></i></div><div class="voice-wave"><div class="wave-bar" style="height:6px"></div><div class="wave-bar" style="height:12px"></div><div class="wave-bar" style="height:8px"></div><div class="wave-bar" style="height:16px"></div><div class="wave-bar" style="height:10px"></div><div class="wave-bar" style="height:14px"></div><div class="wave-bar" style="height:7px"></div><div class="wave-bar" style="height:18px"></div><div class="wave-bar" style="height:9px"></div><div class="wave-bar" style="height:13px"></div><div class="wave-bar" style="height:6px"></div><div class="wave-bar" style="height:11px"></div></div><div class="voice-dur">0:32</div></div><div class="bubble-time left">Tue 9:15am</div></div></div>
+    <div class="bubble-row mine"><div><div class="photo-bubble"><div class="photo-placeholder"><i class="ti ti-salad"></i><span>Lunch — grilled chicken</span></div></div><div class="bubble-time">Tue 12:48pm</div></div></div>
+    <div class="bubble-row"><div class="bubble-avatar">RJ</div><div><div class="bubble coach">Love that! Portion looks spot on. Make sure you're getting those carbs in around training days 🔥</div><div class="bubble-time left">Tue 1:02pm · Just now</div></div></div>
+  </div>
+  <div class="input-bar">
+    <div class="input-wrap"><i class="ti ti-paperclip input-icon"></i><input type="text" placeholder="Message Coach Ryan..." id="msgInput"/><i class="ti ti-microphone input-icon"></i></div>
+    <button class="send-btn" onclick="sendMessage()"><i class="ti ti-send"></i></button>
+  </div>
+  <div class="navbar">
+    <div class="ni"><i class="ti ti-home"></i><span>Home</span></div>
+    <div class="ni"><i class="ti ti-calendar"></i><span>Book</span></div>
+    <div class="ni on"><i class="ti ti-messages"></i><span>Coach</span></div>
+    <div class="ni"><i class="ti ti-user"></i><span>Profile</span></div>
+  </div>
+</div>
+<script>
+function sendMessage(){const input=document.getElementById('msgInput');const text=input.value.trim();if(!text)return;const list=document.getElementById('msgList');const row=document.createElement('div');row.className='bubble-row mine';row.innerHTML=`<div><div class="bubble mine">${text}</div><div class="bubble-time">Just now</div></div>`;list.appendChild(row);input.value='';list.scrollTop=list.scrollHeight;setTimeout(()=>{const reply=document.createElement('div');reply.className='bubble-row';reply.innerHTML=`<div class="bubble-avatar">RJ</div><div><div class="bubble coach">Thanks for the update Jamie — keep it up! 💪</div><div class="bubble-time left">Just now</div></div>`;list.appendChild(reply);list.scrollTop=list.scrollHeight;},1200);}
+document.getElementById('msgInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendMessage();});
+</script>
+</body>
+</html>

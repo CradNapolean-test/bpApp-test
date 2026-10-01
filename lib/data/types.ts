@@ -156,11 +156,13 @@ export interface ChatMessageRow {
   text: string | null;
   audio_path: string | null;
   audio_duration_seconds: number | null;
+  image_path?: string | null;
   created_at: string;
 }
 
 export interface ChatMessage extends ChatMessageRow {
   signedAudioUrl: string | null;
+  signedImageUrl?: string | null;
 }
 
 export interface ChatOverviewRow {

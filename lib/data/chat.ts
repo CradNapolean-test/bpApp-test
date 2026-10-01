@@ -18,11 +18,21 @@ export async function getMessages(clientId: string): Promise<ChatMessage[]> {
   const rows = (data ?? []) as ChatMessageRow[];
   return Promise.all(
     rows.map(async (row) => {
-      if (!row.audio_path) return { ...row, signedAudioUrl: null };
-      const { data: signed } = await supabase.storage
-        .from('voice-notes')
-        .createSignedUrl(row.audio_path, SIGNED_URL_TTL_SECONDS);
-      return { ...row, signedAudioUrl: signed?.signedUrl ?? null };
+      let signedAudioUrl: string | null = null;
+      let signedImageUrl: string | null = null;
+      if (row.audio_path) {
+        const { data: signed } = await supabase.storage
+          .from('voice-notes')
+          .createSignedUrl(row.audio_path, SIGNED_URL_TTL_SECONDS);
+        signedAudioUrl = signed?.signedUrl ?? null;
+      }
+      if (row.image_path) {
+        const { data: signed } = await supabase.storage
+          .from('chat-photos')
+          .createSignedUrl(row.image_path, SIGNED_URL_TTL_SECONDS);
+        signedImageUrl = signed?.signedUrl ?? null;
+      }
+      return { ...row, signedAudioUrl, signedImageUrl };
     })
   );
 }

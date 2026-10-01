@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu style options</title>
+<style>
+  body{margin:0;background:#0b0b0b;color:#f4f4f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px}
+  .sub{color:#8a8a8f;font-size:14px;margin:0 0 20px;max-width:640px;line-height:1.5}
+  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;max-width:960px}
+  .c p.cap{margin:0 0 4px;font-size:14px;color:#f4f4f5;font-weight:600}
+  .c p.use{margin:0 0 8px;font-size:12px;color:#8a8a8f}
+  .ph{background:#111;border:1px solid #232323;border-radius:16px;padding:12px;color:#f4f4f5;height:270px;overflow:hidden}
+  .ph .t{font-size:15px;font-weight:600;margin:0 0 10px}
+  .row{background:#1e1e1e;border-radius:12px;padding:10px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:13px}
+  .row small{color:#8a8a8f;font-size:11px;display:block}
+  .m{color:#8a8a8f}
+  .pill{display:inline-block;padding:6px 12px;border-radius:999px;font-size:12px;border:1px solid #333;color:#d4d4d8;margin-right:6px}
+  .pill.on{background:#2abfbf;color:#06302f;border-color:#2abfbf;font-weight:600}
+  .notes{max-width:640px;margin-top:24px;font-size:14px;line-height:1.6;color:#c9c9ce}
+  .notes li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<h1>Menu style options</h1>
+<p class="sub">Saved 1 Oct 2026. Static mockups of the ways the app could switch between views of the same thing, shown on the Training screen. Not wired into any page. The app currently uses pills everywhere.</p>
+
+<div class="g">
+  <div class="c">
+    <p class="cap">Pills (current)</p>
+    <p class="use">Used today for views, days, weeks and filters</p>
+    <div class="ph">
+      <p class="t">Training</p>
+      <span class="pill on">Workout</span><span class="pill">Activity</span>
+      <div class="row"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div>
+      <div class="row"><span>Tuesday<small>Bench Press</small></span><span class="m">›</span></div>
+      <div class="row"><span>Wednesday<small>Deadlift</small></span><span class="m">›</span></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">Underline tabs</p>
+    <p class="use">Switching views; scales to 3-5 items</p>
+    <div class="ph">
+      <p class="t">Training</p>
+      <div style="display:flex;gap:20px;border-bottom:1px solid #2a2a2a;font-size:13px">
+        <span style="padding-bottom:8px;border-bottom:2px solid #2abfbf;font-weight:600">Workout</span>
+        <span class="m" style="padding-bottom:8px">Activity</span>
+        <span class="m" style="padding-bottom:8px">Progress</span>
+      </div>
+      <div class="row"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div>
+      <div class="row"><span>Tuesday<small>Bench Press</small></span><span class="m">›</span></div>
+      <div class="row"><span>Wednesday<small>Deadlift</small></span><span class="m">›</span></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">Segmented control</p>
+    <p class="use">Switching between exactly 2-3 views</p>
+    <div class="ph">
+      <p class="t">Training</p>
+      <div style="display:flex;background:#1e1e1e;border-radius:10px;padding:3px;font-size:13px">
+        <span style="flex:1;text-align:center;padding:7px 0;border-radius:8px;background:#2abfbf;color:#06302f;font-weight:600">Workout</span>
+        <span class="m" style="flex:1;text-align:center;padding:7px 0">Activity</span>
+      </div>
+      <div class="row"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div>
+      <div class="row"><span>Tuesday<small>Bench Press</small></span><span class="m">›</span></div>
+      <div class="row"><span>Wednesday<small>Deadlift</small></span><span class="m">›</span></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">Title dropdown</p>
+    <p class="use">Many sub-screens; hides the options</p>
+    <div class="ph">
+      <p class="t" style="font-size:17px">Training <span style="color:#2abfbf;font-size:13px">▾</span></p>
+      <div style="background:#1e1e1e;border:1px solid #333;border-radius:12px;padding:4px;font-size:13px">
+        <div style="padding:8px 10px;border-radius:8px;background:#262626;color:#2abfbf;font-weight:600">Workout</div>
+        <div style="padding:8px 10px" class="m">Activity</div>
+        <div style="padding:8px 10px" class="m">Progress</div>
+      </div>
+      <div class="row" style="opacity:.5"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">Week stepper</p>
+    <p class="use">Choosing a week in a long block</p>
+    <div class="ph">
+      <p class="t">Workout</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#1e1e1e;border-radius:12px;padding:8px 10px;font-size:13px">
+        <span style="width:28px;height:28px;border-radius:50%;background:#262626;display:flex;align-items:center;justify-content:center">‹</span>
+        <span style="text-align:center">Week 2 of 3<small style="display:block;color:#2abfbf;font-size:11px">Current week</small></span>
+        <span style="width:28px;height:28px;border-radius:50%;background:#262626;display:flex;align-items:center;justify-content:center">›</span>
+      </div>
+      <div style="display:flex;justify-content:center;gap:5px;margin-top:8px"><span style="width:6px;height:6px;border-radius:50%;background:#444"></span><span style="width:6px;height:6px;border-radius:50%;background:#2abfbf"></span><span style="width:6px;height:6px;border-radius:50%;background:#444"></span></div>
+      <div class="row"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div>
+      <div class="row"><span>Tuesday<small>Bench Press</small></span><span class="m">›</span></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">Filter chips</p>
+    <p class="use">Filtering a list (e.g. activity categories)</p>
+    <div class="ph">
+      <p class="t">Step swap</p>
+      <div style="display:flex;gap:6px;overflow:hidden">
+        <span class="pill on">All</span><span class="pill">Walking</span><span class="pill">Running</span><span class="pill">Cycling</span>
+      </div>
+      <div class="row"><span>Running<small>10 mph</small></span><b style="color:#2abfbf;font-weight:600">27 min</b></div>
+      <div class="row"><span>Swimming<small>butterfly</small></span><b style="color:#2abfbf;font-weight:600">28 min</b></div>
+      <div class="row"><span>Skipping</span><b style="color:#2abfbf;font-weight:600">35 min</b></div>
+    </div>
+  </div>
+</div>
+
+<ul class="notes">
+  <li>Proposed rule: tabs navigate, chips filter. Pills currently do three different jobs, which is part of why some screens feel inconsistent.</li>
+  <li>Suggested: segmented control for Workout / Activity (closest to today); underline tabs if more sub-screens are added; keep the date strip for days and chips for filters.</li>
+  <li>Not decided yet. Nothing in the app has changed.</li>
+</ul>
+</body>
+</html>

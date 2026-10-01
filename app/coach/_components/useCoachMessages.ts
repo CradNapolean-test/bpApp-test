@@ -72,7 +72,7 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
                   row.client_id === message.client_id
                     ? {
                         ...row,
-                        last_message: message.text ?? (message.audio_path ? '🎤 Voice note' : null),
+                        last_message: message.text ?? (message.audio_path ? '🎤 Voice note' : message.image_path ? '📷 Photo' : null),
                         last_message_at: message.created_at,
                         last_sender_id: message.sender_id,
                         unread_count:
