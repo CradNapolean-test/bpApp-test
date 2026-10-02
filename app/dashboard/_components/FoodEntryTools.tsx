@@ -93,6 +93,17 @@ function CompleteScannedFoodForm({
   );
 }
 
+// A scan should be a plain product number, but some packs carry a retailer label with the number
+// buried in text (e.g. "COLA5000129396980V1"). Take the product number out of it: the longest run of
+// 8-14 digits.
+export function extractBarcode(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^\d{6,14}$/.test(trimmed)) return trimmed;
+  const runs = trimmed.match(/\d{8,14}/g);
+  if (!runs) return trimmed;
+  return runs.sort((a, b) => b.length - a.length)[0];
+}
+
 // The barcode flow: start a scan aimed at a target (a diary section, a plan meal, a recipe), look
 // the code up (our food database first, then Open Food Facts), and hand the food back to be added
 // at 100g. `panel` is the scanner / "fill in the missing macros" form / status line to render once
@@ -114,7 +125,8 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     setStatus(null);
   }
 
-  async function handleDetected(barcode: string) {
+  async function handleDetected(scanned: string) {
+    const barcode = extractBarcode(scanned);
     const target = scanTarget;
     setScanTarget(null);
     setStatus('Looking up…');

@@ -3,7 +3,13 @@
 import { useState } from 'react';
 import { Flashlight, FlashlightOff, Keyboard, X } from 'lucide-react';
 import { useZxing } from 'react-zxing';
+import type { BarcodeFormat } from 'barcode-detector/ponyfill';
 import { Button } from '@/app/_components/Button';
+
+// Only the product barcodes on food (EAN/UPC). Without this the scanner also reads the other codes
+// printed on a pack -- a store's internal label, a batch code -- and returns text that is not a
+// product number, so nothing matches.
+const PRODUCT_FORMATS: BarcodeFormat[] = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
 
 export function BarcodeScanner({
   onDetected,
@@ -19,7 +25,17 @@ export function BarcodeScanner({
 
   const { ref, torch } = useZxing({
     paused,
-    constraints: { video: { facingMode: 'environment' } },
+    formats: PRODUCT_FORMATS,
+    // A sharper picture (and continuous focus where the phone offers it) so small or curved
+    // barcodes decode from a comfortable distance.
+    constraints: {
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet],
+      },
+    },
     // Tries extra rotation angles on a failed frame -- real-world packaging (a barcode on a
     // curved tin, or held at a slight angle) is the common case react-zxing's default straight-
     // on decode misses, not a rare edge case.
@@ -72,7 +88,7 @@ export function BarcodeScanner({
           {/* Aiming guide only -- react-zxing scans the full frame regardless, this just gives
               the user a target so they hold the barcode steady in the camera's sweet spot. */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="h-24 w-4/5 max-w-sm rounded-lg border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+            <div className="h-44 w-[94%] max-w-lg rounded-xl border-2 border-white/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
           </div>
         </div>
       )}
