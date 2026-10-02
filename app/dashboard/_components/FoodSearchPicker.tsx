@@ -35,7 +35,9 @@ function FoodResultRow({
   // of that unit instead.
   const isPerGram = food.portion === '1 gram';
   const step = isPerGram ? 5 : 0.25;
-  const min = isPerGram ? 5 : 0.25;
+  // What the box shows while it is being typed in: lets it be emptied (counts as 0) and lets a
+  // number starting with 1 be typed without jumping to a minimum. Reset to the real value on blur.
+  const [draft, setDraft] = useState<string | null>(null);
   const presets = isPerGram ? GRAM_PRESETS : UNIT_PRESETS;
 
   const protein = food.protein * qty;
@@ -66,7 +68,7 @@ function FoodResultRow({
             </p>
           </div>
         </div>
-        <Button variant="primary" size="sm" onClick={() => onAdd(food, qty)}>
+        <Button variant="primary" size="sm" disabled={!(qty > 0)} onClick={() => onAdd(food, qty)}>
           Add
         </Button>
       </div>
@@ -75,7 +77,10 @@ function FoodResultRow({
         {presets.map((p) => (
           <button
             key={p}
-            onClick={() => onQtyChange(p)}
+            onClick={() => {
+              setDraft(null);
+              onQtyChange(p);
+            }}
             className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
               qty === p
                 ? 'border-accent bg-accent-soft text-accent'
@@ -88,19 +93,30 @@ function FoodResultRow({
       </div>
 
       <div className="flex items-center gap-1.5">
-        <Button variant="outline" size="sm" onClick={() => onQtyChange(qty - step)} aria-label="Decrease quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
+        <Button variant="outline" size="sm" onClick={() => {
+            setDraft(null);
+            onQtyChange(qty - step);
+          }} aria-label="Decrease quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
           −
         </Button>
         <input
           type="number"
-          min={min}
+          inputMode="decimal"
+          min={0}
           step={step}
-          value={qty}
-          onChange={(e) => onQtyChange(Number(e.target.value))}
+          value={draft ?? String(qty)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            onQtyChange(e.target.value === '' ? 0 : Number(e.target.value));
+          }}
+          onBlur={() => setDraft(null)}
           aria-label={isPerGram ? 'Grams' : 'Quantity'}
           className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
         />
-        <Button variant="outline" size="sm" onClick={() => onQtyChange(qty + step)} aria-label="Increase quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
+        <Button variant="outline" size="sm" onClick={() => {
+            setDraft(null);
+            onQtyChange(qty + step);
+          }} aria-label="Increase quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
           +
         </Button>
         {isPerGram && <span className="text-xs text-zinc-500">g</span>}
@@ -298,12 +314,12 @@ export function FoodSearchPicker({
                     min={0.25}
                     step={0.25}
                     value={s}
-                    onChange={(e) => setServings((v) => ({ ...v, [recipe.id]: Number(e.target.value) }))}
+                    onChange={(e) => setServings((v) => ({ ...v, [recipe.id]: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) }))}
                     aria-label="Servings"
                     className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
                   />
                   <span className="text-xs text-zinc-500">servings</span>
-                  <Button variant="primary" size="sm" onClick={() => onAddRecipe?.(recipe.id, s)}>
+                  <Button variant="primary" size="sm" disabled={!(s > 0)} onClick={() => onAddRecipe?.(recipe.id, s)}>
                     Add
                   </Button>
                 </div>
@@ -361,7 +377,7 @@ export function FoodSearchPicker({
                     key={food.id}
                     food={food}
                     qty={grams[food.id] ?? (food.portion === '1 gram' ? 100 : 1)}
-                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(food.portion === '1 gram' ? 5 : 0.25, v) }))}
+                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
                     onAdd={onAdd}
                     isFavorite={favoriteIds?.has(food.id) ?? true}
                     onToggleFavorite={onToggleFavorite}
@@ -379,7 +395,7 @@ export function FoodSearchPicker({
                     key={food.id}
                     food={food}
                     qty={grams[food.id] ?? (food.portion === '1 gram' ? 100 : 1)}
-                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(food.portion === '1 gram' ? 5 : 0.25, v) }))}
+                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
                     onAdd={onAdd}
                     isFavorite={favoriteIds?.has(food.id) ?? false}
                     onToggleFavorite={onToggleFavorite}
@@ -396,7 +412,7 @@ export function FoodSearchPicker({
               key={food.id}
               food={food}
               qty={grams[food.id] ?? (food.portion === '1 gram' ? 100 : 1)}
-              onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(food.portion === '1 gram' ? 5 : 0.25, v) }))}
+              onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
               onAdd={onAdd}
               isFavorite={favoriteIds?.has(food.id) ?? false}
               onToggleFavorite={onToggleFavorite}

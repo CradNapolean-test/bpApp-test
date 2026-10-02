@@ -21,15 +21,29 @@ export async function searchFoods(query: string): Promise<FoodRow[]> {
   return data ?? [];
 }
 
+// The same product can be written several ways: a phone scan of a UPC-A gives 12 digits, an EAN-13
+// gives 13 (often with leading zeros), an EAN-8 gives 8, and Open Food Facts pads some codes with
+// zeros. Compare on the digits only, trying the usual padded lengths, so a scan matches however the
+// food was stored.
+export async function barcodeVariants(barcode: string): Promise<string[]> {
+  const digits = barcode.replace(/\D/g, '');
+  const stripped = digits.replace(/^0+/, '') || digits;
+  const variants = new Set<string>([barcode, digits, stripped]);
+  for (const len of [8, 12, 13, 14]) {
+    if (stripped.length <= len) variants.add(stripped.padStart(len, '0'));
+  }
+  return [...variants];
+}
+
 export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('foods')
     .select('*')
-    .eq('barcode', barcode)
-    .maybeSingle();
+    .in('barcode', await barcodeVariants(barcode))
+    .limit(1);
   if (error) raise(error);
-  return data;
+  return data?.[0] ?? null;
 }
 
 // Caches a barcode-scanned product into the shared foods table. Never overwrites an

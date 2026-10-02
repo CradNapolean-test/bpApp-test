@@ -225,6 +225,8 @@ function EditEntrySheet({
   onRefile?: (sectionId: string) => void;
 }) {
   const [portions, setPortions] = useState(entry.portions);
+  // The box can be emptied while typing (counts as 0) and shows the real number again on blur.
+  const [draft, setDraft] = useState<string | null>(null);
   const unitLabel = entry.food?.portion === '1 gram' ? 'Grams' : `× ${entry.food?.portion ?? 'portion'}`;
 
   return (
@@ -244,11 +246,16 @@ function EditEntrySheet({
             <label className="text-xs font-medium text-zinc-500">Quantity ({unitLabel})</label>
             <input
               type="number"
+              inputMode="decimal"
               min={0}
               step="any"
               autoFocus
-              value={portions}
-              onChange={(e) => setPortions(Number(e.target.value))}
+              value={draft ?? String(portions)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setPortions(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)));
+              }}
+              onBlur={() => setDraft(null)}
               className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
             />
           </div>
