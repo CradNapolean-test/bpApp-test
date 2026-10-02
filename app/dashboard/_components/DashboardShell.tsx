@@ -816,7 +816,15 @@ export function DashboardShell({
             />
           )}
           {effectiveScreen === 'Meal Planner' && (
-            <MealPlannerTab clientId={clientId} initialEntries={mealPlanEntries} recipes={recipes} readOnly={isCoachView} />
+            <MealPlannerTab
+              clientId={clientId}
+              initialEntries={mealPlanEntries}
+              recipes={recipes}
+              readOnly={isCoachView}
+              profile={profile}
+              programWeek={programWeek}
+              todayLogId={isCoachView ? null : todayLogId}
+            />
           )}
           {effectiveScreen === 'Recipes' && (
             <RecipesTab clientId={clientId} initialRecipes={recipes} readOnly={isCoachView} />

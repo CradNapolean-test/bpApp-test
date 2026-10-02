@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChefHat } from 'lucide-react';
-import { Button } from '@/app/_components/Button';
+import { ChefHat, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -11,11 +10,16 @@ import {
   createRecipe,
   deleteRecipe,
   removeRecipeIngredient,
+  updateRecipeIngredientPortions,
   updateRecipeServings,
 } from '@/lib/data/recipes';
-import { totalRecipeMacros } from '@/lib/utils/foodTotals';
+import { entryMacros, totalRecipeMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
-import type { FoodRow, RecipeWithIngredients } from '@/lib/data/types';
+import { QuantitySheet } from './QuantitySheet';
+import type { FoodRow, RecipeIngredientRow, RecipeWithIngredients } from '@/lib/data/types';
+
+const MACRO_COLORS = { protein: '#a07aff', carbs: '#e8a020', fat: '#2ecc71' };
+const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
 
 function ServingsInput({ recipeId, initial }: { recipeId: string; initial: number }) {
   const { run } = useAction();
@@ -29,19 +33,24 @@ function ServingsInput({ recipeId, initial }: { recipeId: string; initial: numbe
   }
 
   return (
-    <label className="flex items-center gap-1 text-xs text-zinc-500">
-      Servings
+    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-500">
+      Makes
       <input
         type="number"
+        inputMode="numeric"
         min={1}
-        className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+        className="w-16 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-center text-sm dark:border-white/10"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleBlur}
       />
+      serving{initial === 1 ? '' : 's'}
     </label>
   );
 }
+
+const amountLabel = (ing: RecipeIngredientRow) =>
+  ing.food?.portion === '1 gram' ? `${Math.round(ing.portions * 10) / 10}g` : `${Math.round(ing.portions * 100) / 100}× ${ing.food?.portion ?? ''}`;
 
 export function RecipesTab({
   clientId,
@@ -56,9 +65,10 @@ export function RecipesTab({
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate } = useAction();
   const [name, setName] = useState('');
-  const [servings, setServings] = useState(1);
+  const [servings, setServings] = useState('1');
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
   const [addingIngredient, setAddingIngredient] = useState(false);
+  const [editingIngredient, setEditingIngredient] = useState<RecipeIngredientRow | null>(null);
   const [addingRecipe, setAddingRecipe] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
@@ -66,17 +76,20 @@ export function RecipesTab({
     let newId: string | null = null;
     await runCreate(
       async () => {
-        newId = await createRecipe(clientId, name, servings);
+        newId = await createRecipe(clientId, name, Math.max(1, Number(servings) || 1));
       },
       {
         success: 'Recipe created',
         onDone: () => {
           setName('');
-          setServings(1);
+          setServings('1');
           setAddingRecipe(false);
-          // Jump straight to adding ingredients instead of leaving the coach to find and
+          // Jump straight to adding ingredients instead of leaving the member to find and
           // click back into the recipe they just created.
-          if (newId) setOpenRecipeId(newId);
+          if (newId) {
+            setOpenRecipeId(newId);
+            setAddingIngredient(true);
+          }
         },
       }
     );
@@ -99,10 +112,6 @@ export function RecipesTab({
     await runMutate(() => addRecipeIngredient(recipeId, food.id, portions), { success: `${food.name} added` });
   }
 
-  async function handleRemoveIngredient(id: string) {
-    await runMutate(() => removeRecipeIngredient(id), { success: 'Ingredient removed' });
-  }
-
   return (
     <div className="space-y-4">
       {initialRecipes.length === 0 ? (
@@ -120,68 +129,85 @@ export function RecipesTab({
           {initialRecipes.map((recipe) => {
             const open = openRecipeId === recipe.id;
             const totals = totalRecipeMacros(recipe.recipe_ingredients);
-            const servings = recipe.servings || 1;
+            const per = recipe.servings || 1;
+            const count = recipe.recipe_ingredients.length;
             return (
-              <div key={recipe.id} className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => {
-                      setOpenRecipeId(open ? null : recipe.id);
-                      setAddingIngredient(false);
-                    }}
-                    className="text-left text-base font-bold text-black hover:underline dark:text-zinc-50"
-                  >
-                    {recipe.name}
-                  </button>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {!readOnly ? (
-                      <ServingsInput recipeId={recipe.id} initial={servings} />
+              <div key={recipe.id} className="rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenRecipeId(open ? null : recipe.id);
+                    setAddingIngredient(false);
+                  }}
+                  className="flex w-full items-start justify-between gap-3 p-4 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="text-base font-extrabold text-black dark:text-zinc-50">{recipe.name}</p>
+                    {count > 0 ? (
+                      <>
+                        <p className="mt-0.5 text-sm font-bold text-black dark:text-zinc-50">
+                          {Math.round(totals.calories / per)} <span className="text-xs font-semibold text-zinc-500">kcal per serving</span>
+                        </p>
+                        <p className="text-xs font-semibold">
+                          <span style={{ color: MACRO_COLORS.protein }}>P {Math.round(totals.protein / per)}g</span>{' · '}
+                          <span style={{ color: MACRO_COLORS.carbs }}>C {Math.round(totals.carbs / per)}g</span>{' · '}
+                          <span style={{ color: MACRO_COLORS.fat }}>F {Math.round(totals.fat / per)}g</span>
+                        </p>
+                      </>
                     ) : (
-                      <span className="text-xs text-zinc-500">{servings} serving{servings === 1 ? '' : 's'}</span>
+                      <p className="mt-0.5 text-xs text-zinc-500">No ingredients yet</p>
                     )}
-                    {!readOnly && (
-                      <Button variant="danger" size="sm" onClick={() => handleDelete(recipe.id, recipe.name)}>
-                        Delete
-                      </Button>
-                    )}
+                    <p className="mt-0.5 text-xs text-zinc-400">
+                      {count} ingredient{count === 1 ? '' : 's'} · makes {per} serving{per === 1 ? '' : 's'}
+                    </p>
                   </div>
-                </div>
-
-                {recipe.recipe_ingredients.length > 0 && (
-                  <p className="mt-1 text-xs text-zinc-500">Per serving: {Math.round(totals.calories / servings)} kcal</p>
-                )}
-                <p className="mt-0.5 text-xs text-zinc-400">
-                  {recipe.recipe_ingredients.length} ingredient{recipe.recipe_ingredients.length === 1 ? '' : 's'}
-                </p>
+                  <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
 
                 {open && (
-                  <>
-                    <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/5">
+                  <div className="border-t border-black/[.05] px-4 pb-4 dark:border-white/10">
+                    <ul className="divide-y divide-black/5 dark:divide-white/5">
                       {recipe.recipe_ingredients.map((ing) => (
-                        <li key={ing.id} className="flex items-center justify-between py-1.5">
-                          <span>
-                            {ing.food?.name ?? 'Unknown food'}{' '}
-                            <span className="text-zinc-500">
-                              {ing.food?.portion === '1 gram' ? `${ing.portions}g` : `${ing.portions}× ${ing.food?.portion ?? ''}`}
+                        <li key={ing.id}>
+                          <button
+                            type="button"
+                            disabled={readOnly}
+                            onClick={() => setEditingIngredient(ing)}
+                            className="flex w-full items-center justify-between gap-3 py-2.5 text-left disabled:cursor-default"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{ing.food?.name ?? 'Unknown food'}</span>
+                              <span className="block text-xs text-zinc-500">{amountLabel(ing)}</span>
                             </span>
-                          </span>
-                          {!readOnly && (
-                            <Button variant="danger" size="sm" onClick={() => handleRemoveIngredient(ing.id)}>
-                              Remove
-                            </Button>
-                          )}
+                            <span className="shrink-0 text-sm text-zinc-500">{Math.round(entryMacros(ing).calories)} kcal</span>
+                          </button>
                         </li>
                       ))}
-                      {recipe.recipe_ingredients.length === 0 && (
-                        <li className="py-1.5 text-zinc-500">No ingredients yet.</li>
-                      )}
+                      {count === 0 && <li className="py-2.5 text-sm text-zinc-500">Add the first ingredient to see the calories.</li>}
                     </ul>
                     {!readOnly && (
-                      <Button variant="ghost" size="sm" className="mt-2" onClick={() => setAddingIngredient(true)}>
-                        + Add ingredient
-                      </Button>
+                      <div className="mt-2 space-y-3">
+                        <button
+                          type="button"
+                          onClick={() => setAddingIngredient(true)}
+                          className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-extrabold text-accent-foreground"
+                        >
+                          <Plus className="h-4 w-4" /> Add ingredient
+                        </button>
+                        <div className="flex items-center justify-between gap-3">
+                          <ServingsInput recipeId={recipe.id} initial={per} />
+                          <button
+                            type="button"
+                            aria-label="Delete recipe"
+                            onClick={() => handleDelete(recipe.id, recipe.name)}
+                            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-danger"
+                          >
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </button>
+                        </div>
+                      </div>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             );
@@ -191,34 +217,30 @@ export function RecipesTab({
 
       {!readOnly &&
         (addingRecipe ? (
-          <form onSubmit={handleCreate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <div className="flex-1 space-y-1">
-              <label className="text-xs font-medium text-zinc-500">Recipe name</label>
+          <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-500">Recipe name</label>
               <input
                 required
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Protein overnight oats"
-                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                className={inputCls}
               />
             </div>
-            <div className="w-24 space-y-1">
-              <label className="text-xs font-medium text-zinc-500">Servings</label>
-              <input
-                type="number"
-                min={1}
-                value={servings}
-                onChange={(e) => setServings(Math.max(1, Number(e.target.value) || 1))}
-                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-              />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-500">How many servings does it make?</label>
+              <input type="number" inputMode="numeric" min={1} value={servings} onChange={(e) => setServings(e.target.value)} className={inputCls} />
             </div>
-            <Button type="submit" variant="primary" disabled={creating}>
-              {creating ? 'Creating…' : 'Add'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setAddingRecipe(false)}>
-              Cancel
-            </Button>
+            <div className="flex gap-2">
+              <button type="submit" disabled={creating} className="flex-1 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+                {creating ? 'Creating…' : 'Create & add ingredients'}
+              </button>
+              <button type="button" onClick={() => setAddingRecipe(false)} className="rounded-full px-4 py-2.5 text-sm font-semibold text-zinc-500">
+                Cancel
+              </button>
+            </div>
           </form>
         ) : (
           <button
@@ -235,6 +257,25 @@ export function RecipesTab({
           sectionLabel={initialRecipes.find((r) => r.id === openRecipeId)?.name ?? 'Recipe'}
           onAdd={(food, portions) => handleAddIngredient(openRecipeId, food, portions)}
           onClose={() => setAddingIngredient(false)}
+        />
+      )}
+
+      {editingIngredient && (
+        <QuantitySheet
+          title={editingIngredient.food?.name ?? 'Ingredient'}
+          unitLabel={editingIngredient.food?.portion === '1 gram' ? 'grams' : `× ${editingIngredient.food?.portion ?? 'portion'}`}
+          initial={editingIngredient.portions}
+          onClose={() => setEditingIngredient(null)}
+          onSave={(portions) => {
+            const id = editingIngredient.id;
+            setEditingIngredient(null);
+            runMutate(() => updateRecipeIngredientPortions(id, portions), { success: 'Updated' });
+          }}
+          onDelete={() => {
+            const id = editingIngredient.id;
+            setEditingIngredient(null);
+            runMutate(() => removeRecipeIngredient(id), { success: 'Ingredient removed' });
+          }}
         />
       )}
     </div>

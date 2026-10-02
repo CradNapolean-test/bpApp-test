@@ -59,6 +59,12 @@ export async function addRecipeIngredient(recipeId: string, foodId: string, port
   if (error) raise(error);
 }
 
+export async function updateRecipeIngredientPortions(id: string, portions: number): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('recipe_ingredients').update({ portions }).eq('id', id);
+  if (error) raise(error);
+}
+
 export async function removeRecipeIngredient(id: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('recipe_ingredients').delete().eq('id', id);
