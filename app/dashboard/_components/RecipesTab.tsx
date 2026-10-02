@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ChefHat, ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChefHat, ChevronDown, Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -15,6 +16,7 @@ import {
 } from '@/lib/data/recipes';
 import { entryMacros, totalRecipeMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
+import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
 import { QuantitySheet } from './QuantitySheet';
 import type { FoodRow, RecipeIngredientRow, RecipeWithIngredients } from '@/lib/data/types';
 
@@ -64,6 +66,8 @@ export function RecipesTab({
   const confirm = useConfirm();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate } = useAction();
+  const router = useRouter();
+  const { favorites, recentlyLogged, favoriteIds, toggleFavorite } = useFoodShortcuts(clientId, !readOnly);
   const [name, setName] = useState('');
   const [servings, setServings] = useState('1');
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
@@ -112,8 +116,14 @@ export function RecipesTab({
     await runMutate(() => addRecipeIngredient(recipeId, food.id, portions), { success: `${food.name} added` });
   }
 
+  const scan = useBarcodeAdd(async (food, portions, target) => {
+    if (target?.id) await addRecipeIngredient(target.id, food.id, portions);
+    router.refresh();
+  });
+
   return (
     <div className="space-y-4">
+      {!readOnly && <div className="space-y-2">{scan.panel}</div>}
       {initialRecipes.length === 0 ? (
         <EmptyState
           icon={ChefHat}
@@ -187,13 +197,12 @@ export function RecipesTab({
                     </ul>
                     {!readOnly && (
                       <div className="mt-2 space-y-3">
-                        <button
-                          type="button"
-                          onClick={() => setAddingIngredient(true)}
-                          className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-extrabold text-accent-foreground"
-                        >
-                          <Plus className="h-4 w-4" /> Add ingredient
-                        </button>
+                        <AddFoodButtons
+                          label="Add ingredient"
+                          onAdd={() => setAddingIngredient(true)}
+                          onScan={() => scan.start({ id: recipe.id, label: recipe.name })}
+                          scanLabel={`Scan a barcode into ${recipe.name}`}
+                        />
                         <div className="flex items-center justify-between gap-3">
                           <ServingsInput recipeId={recipe.id} initial={per} />
                           <button
@@ -256,6 +265,10 @@ export function RecipesTab({
         <AddFoodSheet
           sectionLabel={initialRecipes.find((r) => r.id === openRecipeId)?.name ?? 'Recipe'}
           onAdd={(food, portions) => handleAddIngredient(openRecipeId, food, portions)}
+          favorites={favorites}
+          recentlyLogged={recentlyLogged}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={toggleFavorite}
           onClose={() => setAddingIngredient(false)}
         />
       )}

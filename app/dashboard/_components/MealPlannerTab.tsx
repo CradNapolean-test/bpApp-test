@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { NotebookPen } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -10,6 +11,7 @@ import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
+import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
 import { NutritionSummary } from './NutritionSummary';
 import { QuantitySheet } from './QuantitySheet';
 import type { ClientProfileRow, MealPlanEntryRow, MealPlanSection, FoodRow, RecipeRow } from '@/lib/data/types';
@@ -91,10 +93,12 @@ export function MealPlannerTab({
   // Today's diary, so a planned meal can be copied into it. Null for a coach's read-only view.
   todayLogId: string | null;
 }) {
+  const router = useRouter();
   const { run } = useAction();
   const { run: runRecipe } = useAction();
   const { run: runUpdate } = useAction();
   const { run: runLog, busy: logging } = useAction();
+  const { favorites, recentlyLogged, favoriteIds, toggleFavorite } = useFoodShortcuts(clientId, !readOnly);
   const [addFoodSection, setAddFoodSection] = useState<{ key: MealPlanSection; label: string } | null>(null);
 
   const dayTarget = useMemo(() => {
@@ -105,6 +109,12 @@ export function MealPlannerTab({
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
     await run(() => addMealPlanEntry(clientId, section, food.id, portions), { success: `${food.name} added` });
   }
+
+  const scan = useBarcodeAdd(async (food, portions, target) => {
+    const section = SECTIONS.find((x) => x.label === target?.label);
+    if (section) await addMealPlanEntry(clientId, section.key, food.id, portions);
+    router.refresh();
+  });
 
   async function handleAddRecipe(section: MealPlanSection, recipeId: string, servings: number) {
     const recipe = recipes.find((r) => r.id === recipeId);
@@ -146,6 +156,8 @@ export function MealPlannerTab({
         </button>
       )}
 
+      {!readOnly && <div className="space-y-2">{scan.panel}</div>}
+
       {SECTIONS.map(({ key, label }) => {
         const entries = initialEntries.filter((e) => e.section === key);
         const sectionKcal = totalMacros(entries).calories;
@@ -166,18 +178,20 @@ export function MealPlannerTab({
               )}
             </ul>
             {!readOnly && (
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <button type="button" onClick={() => setAddFoodSection({ key, label })} className="text-sm font-bold text-accent hover:underline">
-                  + Add food
-                </button>
+              <div className="mt-3 space-y-2">
+                <AddFoodButtons
+                  onAdd={() => setAddFoodSection({ key, label })}
+                  onScan={() => scan.start({ id: key, label })}
+                  scanLabel={`Scan a barcode into ${label}`}
+                />
                 {canLog && entries.length > 0 && (
                   <button
                     type="button"
                     disabled={logging}
                     onClick={() => handleLog(key, label)}
-                    className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-600 disabled:opacity-60 dark:border-white/15 dark:text-zinc-300"
+                    className="w-full rounded-full border border-black/10 py-2 text-xs font-bold text-zinc-600 disabled:opacity-60 dark:border-white/15 dark:text-zinc-300"
                   >
-                    Add to today
+                    Add {label} to today&apos;s diary
                   </button>
                 )}
               </div>
@@ -192,6 +206,10 @@ export function MealPlannerTab({
           onAdd={(food, portions) => handleAdd(addFoodSection.key, food, portions)}
           recipes={recipes}
           onAddRecipe={(recipeId, servings) => handleAddRecipe(addFoodSection.key, recipeId, servings)}
+          favorites={favorites}
+          recentlyLogged={recentlyLogged}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={toggleFavorite}
           onClose={() => setAddFoodSection(null)}
         />
       )}

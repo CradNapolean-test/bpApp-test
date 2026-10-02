@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Barcode, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Trash2, Utensils } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -26,10 +26,8 @@ import {
   renameMealSection,
   reorderMealSections,
 } from '@/lib/data/mealSections';
-import { getFavoriteFoods, getFoodByBarcode, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { logRecipeToDiary } from '@/lib/data/recipes';
 import { fail, ok } from '@/lib/data/result';
-import { lookupBarcode } from '@/lib/openFoodFacts';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
@@ -37,7 +35,7 @@ import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
 import { NutritionSummary } from './NutritionSummary';
-import { BarcodeScanner } from './BarcodeScanner';
+import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
 import type { NutritionTrackingMode } from './categories';
 import type {
   ClientProfileRow,
@@ -100,64 +98,6 @@ function ManualMacroForm({ onAdd }: { onAdd: (fields: { calories: number | null;
         >
           Add
         </button>
-      </div>
-    </form>
-  );
-}
-
-// Shown when a barcode scan hits a real Open Food Facts product that's missing one or more
-// macros (common for smaller/private-label brands where a contributor never filled in the
-// full nutrition panel) -- lets the user complete just what's missing instead of the scan
-// silently failing as if OFF had no record of the product at all. Inputs are per-100g (what's
-// on the packaging) and converted to the foods table's per-gram storage on save.
-function CompleteScannedFoodForm({
-  product,
-  onCancel,
-  onSave,
-}: {
-  product: { name: string; protein: number | null; carbs: number | null; fat: number | null };
-  onCancel: () => void;
-  onSave: (macros: { protein: number; carbs: number; fat: number }) => void;
-}) {
-  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
-  const toPer100 = (v: number | null) => (v != null ? String(Math.round(v * 100 * 10) / 10) : '');
-  const [protein, setProtein] = useState(toPer100(product.protein));
-  const [carbs, setCarbs] = useState(toPer100(product.carbs));
-  const [fat, setFat] = useState(toPer100(product.fat));
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (protein === '' || carbs === '' || fat === '') return;
-    onSave({ protein: Number(protein) / 100, carbs: Number(carbs) / 100, fat: Number(fat) / 100 });
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-2 rounded-xl border border-black/10 p-3 dark:border-white/10">
-      <p className="text-sm font-medium text-black dark:text-zinc-50">{product.name}</p>
-      <p className="text-xs text-zinc-500">
-        Found on Open Food Facts, but missing some nutrition info — fill in the rest (per 100g) to save it.
-      </p>
-      <div className="grid grid-cols-3 gap-1.5">
-        <label className="space-y-0.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Protein g</span>
-          <input type="number" step="0.1" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
-        </label>
-        <label className="space-y-0.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Carbs g</span>
-          <input type="number" step="0.1" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
-        </label>
-        <label className="space-y-0.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Fat g</span>
-          <input type="number" step="0.1" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" variant="primary" size="sm">
-          Save &amp; add
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
-        </Button>
       </div>
     </form>
   );
@@ -403,22 +343,6 @@ export function FoodTrackingTab({
   const { run: runRecipe } = useAction();
   const { run: runSection, busy: addingSection } = useAction();
   const { run: runManual } = useAction();
-  // Which meal section a scan will file into -- null means closed; { id: null } targets the
-  // unfiled "Other" bucket (the header's "Scan barcode" button), a section id targets that
-  // section's own "Scan" trigger. Mirrors addFoodTarget below so a scanned item can land
-  // directly in a meal instead of always going to "Other" for a manual re-file afterward.
-  const [scanTarget, setScanTarget] = useState<{ id: string | null; label: string } | null>(null);
-  const [scanStatus, setScanStatus] = useState<string | null>(null);
-  // Set when a scan hits an OFF product missing one or more macros -- holds everything needed
-  // to finish the save once CompleteScannedFoodForm collects the rest (see handleBarcodeDetected).
-  const [pendingScanProduct, setPendingScanProduct] = useState<{
-    barcode: string;
-    name: string;
-    protein: number | null;
-    carbs: number | null;
-    fat: number | null;
-    target: { id: string | null; label: string } | null;
-  } | null>(null);
   // Shared bottom-sheet "Add food" target -- null means closed; { id: null } targets the
   // unfiled "Other" bucket (the header's "Search foods" button), a section id targets that
   // section's own "+ Add food" button. One sheet for all entry points, matching the
@@ -437,24 +361,11 @@ export function FoodTrackingTab({
   const [entries, setEntries] = useState(initialEntries);
   const [manualEntries, setManualEntries] = useState(initialManualMacroEntries);
   const [dateLoading, setDateLoading] = useState(false);
-  const [favorites, setFavorites] = useState<FoodRow[]>([]);
-  const [recentlyLogged, setRecentlyLogged] = useState<FoodRow[]>([]);
   const isToday = viewingDate === todayIso;
-  const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites]);
 
-  // Lazy, not part of initialEntries -- cheap derived/lookup queries the sheet only needs once
-  // it's actually opened for the first time, not on every Food Tracking tab visit.
-  useEffect(() => {
-    if (readOnly || isManual) return;
-    getFavoriteFoods(clientId).then(setFavorites);
-    getRecentlyLoggedFoods(clientId).then(setRecentlyLogged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per client, not on every entries/date change
-  }, [clientId]);
-
-  async function handleToggleFavorite(food: FoodRow, isFavorite: boolean) {
-    setFavorites((prev) => (isFavorite ? [food, ...prev.filter((f) => f.id !== food.id)] : prev.filter((f) => f.id !== food.id)));
-    await setFavoriteFood(clientId, food.id, isFavorite);
-  }
+  // Favourites and recently logged foods for the Add food sheet, loaded once (not for coaches or
+  // typed-totals members, who never open it).
+  const { favorites, recentlyLogged, favoriteIds, toggleFavorite: handleToggleFavorite } = useFoodShortcuts(clientId, !readOnly && !isManual);
 
   const totals = isManual
     ? manualEntries.reduce(
@@ -551,54 +462,7 @@ export function FoodTrackingTab({
     );
   }
 
-  async function handleBarcodeDetected(barcode: string) {
-    const target = scanTarget;
-    setScanTarget(null);
-    setScanStatus('Looking up…');
-    try {
-      let food = await getFoodByBarcode(barcode);
-      if (!food) {
-        const product = await lookupBarcode(barcode);
-        if (!product) {
-          setScanStatus(`No product found for barcode ${barcode} — try search below, or add it manually.`);
-          return;
-        }
-        if (product.protein == null || product.carbs == null || product.fat == null) {
-          // OFF has this product but a contributor never filled in every nutrient -- ask for
-          // just what's missing rather than discarding a real match as if it were a total miss.
-          setScanStatus(null);
-          setPendingScanProduct({ barcode, name: product.name, protein: product.protein, carbs: product.carbs, fat: product.fat, target });
-          return;
-        }
-        food = await upsertFoodFromBarcode(barcode, {
-          name: product.name,
-          portion: '1 gram',
-          protein: product.protein,
-          carbs: product.carbs,
-          fat: product.fat,
-          fibre: product.fibre,
-        });
-      }
-      await handleAdd(food, 100, target?.id ?? null);
-      setScanStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
-    } catch (err) {
-      setScanStatus(err instanceof Error ? err.message : 'Lookup failed.');
-    }
-  }
-
-  async function handleCompleteScannedFood(macros: { protein: number; carbs: number; fat: number }) {
-    if (!pendingScanProduct) return;
-    const { barcode, name, target } = pendingScanProduct;
-    setPendingScanProduct(null);
-    setScanStatus('Saving…');
-    try {
-      const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros });
-      await handleAdd(food, 100, target?.id ?? null);
-      setScanStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
-    } catch (err) {
-      setScanStatus(err instanceof Error ? err.message : 'Save failed.');
-    }
-  }
+  const scan = useBarcodeAdd((food, portions, target) => handleAdd(food, portions, target?.id ?? null));
 
   async function handleCopyFromYesterday() {
     if (!currentDailyLogId) return;
@@ -719,15 +583,7 @@ export function FoodTrackingTab({
 
       {!readOnly && !isManual && (
         <div className="space-y-2">
-          {scanTarget && <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanTarget(null)} />}
-          {pendingScanProduct && (
-            <CompleteScannedFoodForm
-              product={pendingScanProduct}
-              onCancel={() => setPendingScanProduct(null)}
-              onSave={handleCompleteScannedFood}
-            />
-          )}
-          {scanStatus && <p className="text-sm text-zinc-500">{scanStatus}</p>}
+          {scan.panel}
           {entries.length === 0 && (
             <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-semibold text-accent hover:underline">
               Copy yesterday&apos;s food
@@ -813,26 +669,12 @@ export function FoodTrackingTab({
                   )}
                 </ul>
                 {!readOnly && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
-                      className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent-soft text-sm font-bold text-accent"
-                    >
-                      <Search className="h-4 w-4" />
-                      Add food
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Scan a barcode into ${section.label}`}
-                      onClick={() => {
-                        setScanTarget({ id: section.id, label: section.label });
-                        setScanStatus(null);
-                      }}
-                      className="flex h-10 w-12 items-center justify-center rounded-full border border-black/10 text-zinc-600 dark:border-white/10 dark:text-zinc-300"
-                    >
-                      <Barcode className="h-4 w-4" />
-                    </button>
+                  <div className="mt-3">
+                    <AddFoodButtons
+                      onAdd={() => setAddFoodTarget({ id: section.id, label: section.label })}
+                      onScan={() => scan.start({ id: section.id, label: section.label })}
+                      scanLabel={`Scan a barcode into ${section.label}`}
+                    />
                   </div>
                 )}
               </>
@@ -893,27 +735,12 @@ export function FoodTrackingTab({
         />
       )}
       {!readOnly && !isManual && sections.length === 0 && (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setAddFoodTarget({ id: null, label: 'Other' })}
-            className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent text-sm font-extrabold text-accent-foreground"
-          >
-            <Search className="h-4 w-4" />
-            Add food
-          </button>
-          <button
-            type="button"
-            aria-label="Scan a barcode"
-            onClick={() => {
-              setScanTarget({ id: null, label: 'Other' });
-              setScanStatus(null);
-            }}
-            className="flex h-11 w-12 items-center justify-center rounded-full border border-black/10 text-zinc-600 dark:border-white/10 dark:text-zinc-300"
-          >
-            <Barcode className="h-4 w-4" />
-          </button>
-        </div>
+        <AddFoodButtons
+          prominent
+          onAdd={() => setAddFoodTarget({ id: null, label: 'Other' })}
+          onScan={() => scan.start({ id: null, label: 'Other' })}
+          scanLabel="Scan a barcode"
+        />
       )}
 
       {addFoodTarget && (
