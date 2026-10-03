@@ -381,6 +381,18 @@ export interface ProgramTemplateRow {
   created_at: string;
 }
 
+// A scheduled "give this programme to these people on this date" (migration 0094).
+export interface ProgrammeRolloutRow {
+  id: string;
+  template_id: string;
+  template_name: string | null;
+  program_name: string;
+  start_date: string;
+  audience: 'all' | 'selected';
+  client_ids: string[];
+  applied_at: string | null;
+}
+
 export interface ProgramTemplateWithDays extends ProgramTemplateRow {
   program_template_days: ProgramTemplateDayRow[];
 }

@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/send-communications",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/apply-programme-rollouts",
+      "schedule": "15 3 * * *"
     }
   ]
 }

@@ -20,6 +20,7 @@ import type {
   ExerciseLibraryRow,
   FormTemplateRow,
   ProgramTemplateWithDays,
+  ProgrammeRolloutRow,
 } from '@/lib/data/types';
 
 const TABS = ['Exercises', 'Program templates', 'Education', 'Forms'] as const;
@@ -40,6 +41,7 @@ export function LibraryHubShell({
   unreadCount,
   groups,
   members,
+  rollouts,
   email,
 }: {
   initialExercises: ExerciseLibraryRow[];
@@ -49,6 +51,7 @@ export function LibraryHubShell({
   unreadCount: number;
   groups: ClientGroupWithMembers[];
   members: { id: string; name: string }[];
+  rollouts: ProgrammeRolloutRow[];
   email: string;
 }) {
   const searchParams = useSearchParams();
@@ -68,7 +71,7 @@ export function LibraryHubShell({
 
       {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} />}
       {tab === 'Program templates' && (
-        <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} />
+        <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} rollouts={rollouts} />
       )}
       {tab === 'Education' && <EducationPane initialCourses={initialCourses} />}
       {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}

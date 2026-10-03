@@ -24,15 +24,19 @@ import {
   duplicateProgramTemplate,
   duplicateTemplateDay,
   importProgramTemplate,
-  instantiateProgramTemplate,
+  cancelProgrammeRollout,
+  scheduleProgrammeRollout,
   reorderTemplateExercises,
   updateTemplateDay,
   updateTemplateExercise,
 } from '@/lib/data/programTemplates';
 import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
-import { PROGRAM_WEEKDAYS, WEEKDAY_SHORT } from '@/lib/utils/dates';
-import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgramTemplateWithDays } from '@/lib/data/types';
+import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, todayIsoInTz } from '@/lib/utils/dates';
+import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgrammeRolloutRow, ProgramTemplateWithDays } from '@/lib/data/types';
+
+const longDate = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 function exportTemplate(template: ProgramTemplateWithDays) {
   const json = JSON.stringify(toTemplateExport(template), null, 2);
@@ -148,11 +152,13 @@ export function ProgramTemplateManager({
   library,
   groups,
   members,
+  rollouts,
 }: {
   initialTemplates: ProgramTemplateWithDays[];
   library: ExerciseLibraryRow[];
   groups: ClientGroupWithMembers[];
   members: { id: string; name: string }[];
+  rollouts: ProgrammeRolloutRow[];
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -169,6 +175,8 @@ export function ProgramTemplateManager({
   const [addWorkout, setAddWorkout] = useState<{ label: string; position: number | null } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignName, setAssignName] = useState('');
+  const [assignStart, setAssignStart] = useState('');
+  const [assignAudience, setAssignAudience] = useState<'all' | 'selected'>('all');
   const [picked, setPicked] = useState<string[]>([]);
   const [groupId, setGroupId] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
@@ -283,6 +291,8 @@ export function ProgramTemplateManager({
 
   function openAssign(template: ProgramTemplateWithDays) {
     setAssignName(template.name);
+    setAssignStart(todayIsoInTz(DEFAULT_TIMEZONE));
+    setAssignAudience('all');
     setPicked([]);
     setGroupId('');
     setMemberSearch('');
@@ -291,21 +301,24 @@ export function ProgramTemplateManager({
 
   // Gives the programme to each chosen member (and everyone in a chosen group) as their own copy.
   const groupMemberIds = groups.find((g) => g.id === groupId)?.memberIds ?? [];
-  const targetIds = Array.from(new Set([...picked, ...groupMemberIds]));
+  const targetIds = assignAudience === 'selected' ? Array.from(new Set([...picked, ...groupMemberIds])) : [];
+  const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
+  const startsNow = !assignStart || assignStart <= todayIso;
 
   async function handleAssign(template: ProgramTemplateWithDays) {
-    if (targetIds.length === 0) return;
+    if (assignAudience === 'selected' && targetIds.length === 0) return;
     await runAssign(
-      async () => {
-        const results = await Promise.all(
-          targetIds.map((id) => instantiateProgramTemplate(template.id, id, assignName.trim() || template.name))
-        );
-        const failed = results.filter((r) => !r.ok).length;
-        if (failed > 0) return { ok: false, error: `${failed} of ${results.length} could not be assigned` } as const;
-        return { ok: true } as const;
-      },
+      () =>
+        scheduleProgrammeRollout({
+          templateId: template.id,
+          programName: assignName.trim() || template.name,
+          startDate: assignStart || todayIso,
+          audience: assignAudience,
+          clientIds: targetIds,
+          startsNow,
+        }),
       {
-        success: `Programme given to ${targetIds.length} member${targetIds.length === 1 ? '' : 's'}`,
+        success: startsNow ? 'Programme started' : `Scheduled for ${longDate(assignStart)}`,
         onDone: () => setAssignOpen(false),
       }
     );
@@ -388,6 +401,11 @@ export function ProgramTemplateManager({
                   {template.description && (
                     <p className="mt-0.5 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
                   )}
+                  {rollouts.filter((r) => r.template_id === template.id).slice(0, 1).map((r) => (
+                    <p key={r.id} className="mt-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
+                      Starts {longDate(r.start_date)}
+                    </p>
+                  ))}
                   <p className="mt-0.5 text-xs text-zinc-500">
                     {weekNums.length === 0
                       ? 'Empty, tap to start building'
@@ -419,7 +437,7 @@ export function ProgramTemplateManager({
           <div className="flex items-center gap-2">
             <Button variant="primary" size="sm" className="flex items-center gap-1.5" onClick={() => openAssign(previewTemplate)}>
               <UserPlus className="h-3.5 w-3.5" />
-              Give to members
+              Start a programme
             </Button>
             <div className="ml-auto">
               <DropdownMenu
@@ -437,6 +455,27 @@ export function ProgramTemplateManager({
               />
             </div>
           </div>
+
+          {rollouts.filter((r) => r.template_id === previewTemplate.id).length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {rollouts
+                .filter((r) => r.template_id === previewTemplate.id)
+                .map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 rounded-xl bg-accent-soft px-3 py-2 text-sm">
+                    <span className="min-w-0 flex-1 font-semibold text-accent">
+                      Starts {longDate(r.start_date)} for {r.audience === 'all' ? 'everyone at the gym' : `${r.client_ids.length} member${r.client_ids.length === 1 ? '' : 's'}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => runMutate(() => cancelProgrammeRollout(r.id), { success: 'Cancelled' })}
+                      className="shrink-0 text-xs font-bold text-danger"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
 
           <div className="mt-3">
             <TemplateDetails key={previewTemplate.id} template={previewTemplate} />
@@ -543,73 +582,112 @@ export function ProgramTemplateManager({
           )}
 
           {assignOpen && (
-            <BottomSheet title="Give this programme to…" onClose={() => setAssignOpen(false)}>
+            <BottomSheet title="Start this programme" onClose={() => setAssignOpen(false)}>
               <div className="space-y-4">
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  Each member gets their own copy to follow. Editing this template later does not change copies already given out.
+                  Each member gets their own copy on the start date and it becomes the programme they follow. Their old programmes and
+                  every weight and rep logged stay on file. Edit this template any time before the start date and the copies pick up the
+                  changes.
                 </p>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-500">Starts</label>
+                  <input
+                    type="date"
+                    min={todayIso}
+                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10"
+                    value={assignStart}
+                    onChange={(e) => setAssignStart(e.target.value)}
+                  />
+                </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-zinc-500">Programme name for them</label>
                   <input
-                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
+                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10"
                     value={assignName}
                     onChange={(e) => setAssignName(e.target.value)}
                   />
                 </div>
-                {groups.length > 0 && (
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-zinc-500">A whole group</label>
-                    <select
-                      className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-sm dark:border-white/10"
-                      value={groupId}
-                      onChange={(e) => setGroupId(e.target.value)}
-                    >
-                      <option value="">No group</option>
-                      {groups.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name} ({g.memberIds.length})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-500">Members</label>
-                  <input
-                    placeholder="Search your members"
-                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
-                    value={memberSearch}
-                    onChange={(e) => setMemberSearch(e.target.value)}
-                  />
-                  <div className="max-h-56 divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-                    {filteredMembers.length === 0 && <p className="p-3 text-sm text-zinc-500">No members found.</p>}
-                    {filteredMembers.map((m) => {
-                      const inGroup = groupMemberIds.includes(m.id);
-                      return (
-                        <label key={m.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={picked.includes(m.id) || inGroup}
-                            disabled={inGroup}
-                            onChange={() => setPicked(picked.includes(m.id) ? picked.filter((x) => x !== m.id) : [...picked, m.id])}
-                          />
-                          <span className="font-medium text-black dark:text-zinc-50">{m.name}</span>
-                        </label>
-                      );
-                    })}
+                  <label className="text-xs font-medium text-zinc-500">Who gets it</label>
+                  <div className="flex gap-2">
+                    {(['all', 'selected'] as const).map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => setAssignAudience(a)}
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
+                          assignAudience === a ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
+                        }`}
+                      >
+                        {a === 'all' ? 'Everyone at the gym' : 'Choose members'}
+                      </button>
+                    ))}
                   </div>
                 </div>
+                {assignAudience === 'selected' && (
+                  <>
+                    {groups.length > 0 && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-500">A whole group</label>
+                        <select
+                          className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10"
+                          value={groupId}
+                          onChange={(e) => setGroupId(e.target.value)}
+                        >
+                          <option value="">No group</option>
+                          {groups.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name} ({g.memberIds.length})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-zinc-500">Members</label>
+                      <input
+                        placeholder="Search your members"
+                        className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-base dark:border-white/10"
+                        value={memberSearch}
+                        onChange={(e) => setMemberSearch(e.target.value)}
+                      />
+                      <div className="max-h-56 divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+                        {filteredMembers.length === 0 && <p className="p-3 text-sm text-zinc-500">No members found.</p>}
+                        {filteredMembers.map((m) => {
+                          const inGroup = groupMemberIds.includes(m.id);
+                          return (
+                            <label key={m.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={picked.includes(m.id) || inGroup}
+                                disabled={inGroup}
+                                onChange={() => setPicked(picked.includes(m.id) ? picked.filter((x) => x !== m.id) : [...picked, m.id])}
+                              />
+                              <span className="font-medium text-black dark:text-zinc-50">{m.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
                 <Button
                   variant="primary"
                   className="w-full"
-                  disabled={assigning || targetIds.length === 0}
+                  disabled={assigning || (assignAudience === 'selected' && targetIds.length === 0)}
                   onClick={() => handleAssign(previewTemplate)}
                 >
                   {assigning
-                    ? 'Assigning…'
-                    : targetIds.length === 0
-                      ? 'Choose who to give it to'
-                      : `Give to ${targetIds.length} member${targetIds.length === 1 ? '' : 's'}`}
+                    ? 'Saving…'
+                    : assignAudience === 'selected' && targetIds.length === 0
+                      ? 'Choose who gets it'
+                      : startsNow
+                        ? assignAudience === 'all'
+                          ? 'Start for everyone today'
+                          : `Start for ${targetIds.length} member${targetIds.length === 1 ? '' : 's'} today`
+                        : assignAudience === 'all'
+                          ? `Schedule for everyone on ${longDate(assignStart)}`
+                          : `Schedule for ${targetIds.length} member${targetIds.length === 1 ? '' : 's'} on ${longDate(assignStart)}`}
                 </Button>
               </div>
             </BottomSheet>

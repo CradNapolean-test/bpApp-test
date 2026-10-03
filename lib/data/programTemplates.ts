@@ -6,6 +6,7 @@ import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { TemplateExport, TemplateExportDay, TemplateExportExercise } from './templateTransfer';
 import type {
+  ProgrammeRolloutRow,
   ProgramTemplateDayRow,
   ProgramTemplateExerciseRow,
   ProgramTemplateRow,
@@ -377,13 +378,87 @@ export async function importProgramTemplate(rawData: unknown): Promise<ActionRes
 export async function instantiateProgramTemplate(
   templateId: string,
   clientId: string,
-  programName: string
+  programName: string,
+  startDate: string | null = null
 ): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('instantiate_program_template', {
     p_template_id: templateId,
     p_client_id: clientId,
     p_program_name: programName,
+    p_start_date: startDate,
   });
   return error ? fail(error, 'Could not start that programme') : ok();
+}
+
+// Rollouts not yet given out, soonest first.
+export async function getPendingRollouts(): Promise<ProgrammeRolloutRow[]> {
+  const supabase = await createClient();
+  const gymId = await resolveScopingGymId(supabase);
+  const { data, error } = await supabase
+    .from('programme_rollouts')
+    .select('id, template_id, program_name, start_date, audience, client_ids, applied_at, program_templates(name)')
+    .eq('gym_id', gymId)
+    .is('applied_at', null)
+    .order('start_date');
+  // Migration 0094 not applied yet: no rollouts, rather than breaking the library.
+  if (error) return [];
+  return (data ?? []).map((r) => {
+    const template = Array.isArray(r.program_templates) ? r.program_templates[0] : r.program_templates;
+    return {
+      id: r.id,
+      template_id: r.template_id,
+      template_name: template?.name ?? null,
+      program_name: r.program_name,
+      start_date: r.start_date,
+      audience: r.audience as 'all' | 'selected',
+      client_ids: r.client_ids ?? [],
+      applied_at: r.applied_at,
+    };
+  });
+}
+
+// Schedules a template for a start date. Everyone it covers gets their own copy on that date (the
+// daily job does it), or straight away when the date is today or earlier (`startsNow`).
+export async function scheduleProgrammeRollout(input: {
+  templateId: string;
+  programName: string;
+  startDate: string;
+  audience: 'all' | 'selected';
+  clientIds: string[];
+  startsNow: boolean;
+}): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail(null, 'Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
+
+  const { data, error } = await supabase
+    .from('programme_rollouts')
+    .insert({
+      gym_id: gymId,
+      template_id: input.templateId,
+      program_name: input.programName,
+      start_date: input.startDate,
+      audience: input.audience,
+      client_ids: input.audience === 'selected' ? input.clientIds : [],
+      created_by: user.id,
+    })
+    .select('id')
+    .single();
+  if (error) return fail(error, 'Could not schedule that programme');
+
+  if (input.startsNow) {
+    const { error: applyError } = await supabase.rpc('apply_programme_rollout', { p_rollout_id: data.id });
+    if (applyError) return fail(applyError, 'Could not start that programme');
+  }
+  return ok();
+}
+
+export async function cancelProgrammeRollout(rolloutId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('programme_rollouts').delete().eq('id', rolloutId).is('applied_at', null);
+  return error ? fail(error, 'Could not cancel that') : ok();
 }
