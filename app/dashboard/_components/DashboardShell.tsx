@@ -255,7 +255,10 @@ export function DashboardShell({
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
 
-  const disabledScreenSet = toEffectiveDisabledScreenSet(disabledScreens, membership?.package?.included_screens ?? null);
+  // A plan can hide screens from the member, but never from their coach, who still needs to build their
+  // training and see everything.
+  const memberDisabledScreens = toEffectiveDisabledScreenSet(disabledScreens, membership?.package?.included_screens ?? null);
+  const disabledScreenSet: typeof memberDisabledScreens = isCoachView ? new Set() : memberDisabledScreens;
   const nutritionMode = profile?.nutrition_tracking_mode ?? 'full_tracking';
   // The single enforcement choke point: handleNavigate/handleCheckIn below set `screen`
   // directly (for a home-card shortcut or the classes check-in flow), bypassing
