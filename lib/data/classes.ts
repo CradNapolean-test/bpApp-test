@@ -279,6 +279,20 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Pro
     if (b.booking_date < todayIso && !b.attended && !b.no_show) unmarkedMap.set(key, (unmarkedMap.get(key) ?? 0) + 1);
   }
 
+  // A member can only read their own bookings, so the count above is only theirs. Ask for the real
+  // per-session totals (counts only, never who) so "spots left" is right for everyone. Falls back to
+  // the count above if migration 0094 has not been applied yet.
+  const { data: totals, error: totalsError } = await supabase.rpc('class_booking_counts', {
+    p_class_ids: classIds,
+    p_dates: dates,
+  });
+  if (!totalsError && totals) {
+    countMap.clear();
+    for (const t of totals as { class_id: string; booking_date: string; booked_count: number }[]) {
+      countMap.set(`${t.class_id}|${t.booking_date}`, t.booked_count);
+    }
+  }
+
   return activeOccurrences
     .map((o) => ({
       ...o,
