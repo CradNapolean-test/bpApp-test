@@ -125,3 +125,19 @@ Pull Ups, RDL, Hip Thrust). The `lift_*_start` / `lift_*_goal` columns on `clien
 the schema, untouched. Instead, members see their previous results per exercise in the Training
 area (last time, PR). A future progression element could build on that: start vs best vs goal per
 lift, taken from logged sets rather than typed in. Not scheduled.
+
+## Wanted: lock screens by membership tier instead of hiding them (noted 2026-10-03)
+Today a screen the member's tier doesn't include (`membership_packages.included_screens`) is simply
+hidden, so a member on a lower tier sees nothing and has no idea why (found when a member on "Classes
+Only Tier" couldn't see Training).
+
+What we want instead: the screen/area stays visible but **faded**, with a **lock/block** on it saying
+"Not available on your tier. Upgrade for access." (plus an upgrade route, e.g. message the coach).
+- Applies to every tier-gated screen (Workout, Activity, Food Tracking, Meal Planner, Recipes, Check-in,
+  Forms, Resources, Progress, Body Scans, etc.), including the hub rows and the Coach hub sections.
+- Per-member switches a coach turns off by hand (`client_disabled_screens`) are different: those can
+  stay hidden, since the coach chose to remove them.
+- Needs a decision on the upgrade action (message coach / link / in-app request).
+- Where to change: `toEffectiveDisabledScreenSet` and `screensForCategory` in
+  `app/dashboard/_components/categories.ts` (currently filter the screens out), and the hub in
+  `CoachingHub.tsx` (hides whole categories whose screens are all disabled).
