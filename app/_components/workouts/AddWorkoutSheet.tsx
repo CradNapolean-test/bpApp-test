@@ -68,3 +68,51 @@ export function AddWorkoutSheet({
     </BottomSheet>
   );
 }
+
+// Rename a workout. A block usually repeats the same workout every week, so by default the new name is
+// applied to the same workout in every week.
+export function RenameWorkoutSheet({
+  initial,
+  otherWeeks,
+  busy,
+  onSubmit,
+  onClose,
+}: {
+  initial: string;
+  // How many other weeks have a workout with this name.
+  otherWeeks: number;
+  busy: boolean;
+  onSubmit: (name: string, allWeeks: boolean) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(initial);
+  const [allWeeks, setAllWeeks] = useState(true);
+  return (
+    <BottomSheet title="Rename workout" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim()) onSubmit(name.trim(), allWeeks);
+        }}
+        className="space-y-4"
+      >
+        <input
+          autoFocus
+          required
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        {otherWeeks > 0 && (
+          <label className="flex items-center gap-2.5 text-sm text-zinc-700 dark:text-zinc-300">
+            <input type="checkbox" checked={allWeeks} onChange={(e) => setAllWeeks(e.target.checked)} />
+            Also rename it in the other {otherWeeks} week{otherWeeks === 1 ? '' : 's'}
+          </label>
+        )}
+        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </form>
+    </BottomSheet>
+  );
+}

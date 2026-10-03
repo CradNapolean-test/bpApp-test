@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Dumbbell } from 'lucide-react';
-import { AddWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
+import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -606,6 +606,7 @@ type Sheet =
   | { kind: 'start' }
   | { kind: 'max' }
   | { kind: 'rename'; programId: string; name: string }
+  | { kind: 'renameDay'; dayId: string; name: string; position: number | null }
   | { kind: 'addWorkout'; programId: string; week: number; count: number };
 
 export function WorkoutTab({
@@ -708,6 +709,18 @@ export function WorkoutTab({
     await runMutate(() => deleteProgramWeek(program.id, week), {
       success: `Week ${week} deleted`,
       onDone: () => setActiveWeeks((st) => ({ ...st, [program.id]: 1 })),
+    });
+  }
+
+  // The same workout repeats every week, so renaming can cover the matching workout in each week.
+  async function handleRenameDay(program: WorkoutProgramRow, dayId: string, name: string, allWeeks: boolean) {
+    const old = program.workout_program_days.find((d) => d.id === dayId);
+    const targets = allWeeks && old
+      ? program.workout_program_days.filter((d) => d.day_label === old.day_label && d.day_position === old.day_position)
+      : program.workout_program_days.filter((d) => d.id === dayId);
+    await runMutate(() => Promise.all(targets.map((d) => updateProgramDay(d.id, { day_label: name }))), {
+      success: 'Renamed',
+      onDone: () => setSheet(null),
     });
   }
 
@@ -921,6 +934,7 @@ export function WorkoutTab({
                           <DropdownMenu
                             triggerLabel="Workout actions"
                             items={[
+                              { label: 'Rename', onSelect: () => setSheet({ kind: 'renameDay', dayId: day.id, name: day.day_label, position: day.day_position }) },
                               { label: 'Copy to next week', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
                               {
                                 label: 'Delete workout',
@@ -1006,6 +1020,19 @@ export function WorkoutTab({
           initial={sheet.name}
           busy={mutating}
           onSubmit={(name) => handleRename(sheet.programId, name)}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {isCoachView && sheet?.kind === 'renameDay' && current && (
+        <RenameWorkoutSheet
+          initial={sheet.name}
+          otherWeeks={
+            current.workout_program_days.filter(
+              (d) => d.id !== sheet.dayId && d.day_label === sheet.name && d.day_position === sheet.position
+            ).length
+          }
+          busy={mutating}
+          onSubmit={(name, allWeeks) => handleRenameDay(current, sheet.dayId, name, allWeeks)}
           onClose={() => setSheet(null)}
         />
       )}

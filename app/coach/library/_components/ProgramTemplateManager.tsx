@@ -7,6 +7,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 import { BottomSheet } from '@/app/_components/BottomSheet';
+import { RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
@@ -173,6 +174,7 @@ export function ProgramTemplateManager({
   const [addingTemplate, setAddingTemplate] = useState(false);
   const [activeWeek, setActiveWeek] = useState<number | null>(null);
   const [addWorkout, setAddWorkout] = useState<{ label: string; position: number | null } | null>(null);
+  const [renameDay, setRenameDay] = useState<{ id: string; name: string; position: number | null } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignName, setAssignName] = useState('');
   const [assignStart, setAssignStart] = useState('');
@@ -279,6 +281,20 @@ export function ProgramTemplateManager({
     const ok = await confirm({ title: `Delete “${label}”?`, body: 'This removes the workout and all its exercises.', destructive: true });
     if (!ok) return;
     await runMutate(() => deleteTemplateDay(dayId), { success: 'Workout deleted' });
+  }
+
+  // The same workout repeats every week, so renaming can cover the matching workout in each week.
+  async function handleRenameDay(template: ProgramTemplateWithDays, name: string, allWeeks: boolean) {
+    if (!renameDay) return;
+    const source = renameDay;
+    const old = template.program_template_days.find((d) => d.id === source.id);
+    const targets = allWeeks && old
+      ? template.program_template_days.filter((d) => d.day_label === old.day_label && d.day_position === old.day_position)
+      : template.program_template_days.filter((d) => d.id === source.id);
+    await runMutate(() => Promise.all(targets.map((d) => updateTemplateDay(d.id, { day_label: name }))), {
+      success: 'Renamed',
+      onDone: () => setRenameDay(null),
+    });
   }
 
   async function handleCopyDay(dayId: string, weekNum: number, dayLabel: string) {
@@ -506,6 +522,7 @@ export function ProgramTemplateManager({
                   <DropdownMenu
                     triggerLabel="Workout actions"
                     items={[
+                      { label: 'Rename', onSelect: () => setRenameDay({ id: day.id, name: day.day_label, position: day.day_position }) },
                       { label: 'Copy to next week', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
                       {
                         label: 'Delete workout',
@@ -557,6 +574,20 @@ export function ProgramTemplateManager({
               </button>
             )}
           </div>
+
+          {renameDay && (
+            <RenameWorkoutSheet
+              initial={renameDay.name}
+              otherWeeks={
+                previewTemplate.program_template_days.filter(
+                  (d) => d.id !== renameDay.id && d.day_label === renameDay.name && d.day_position === renameDay.position
+                ).length
+              }
+              busy={mutating}
+              onSubmit={(name, allWeeks) => handleRenameDay(previewTemplate, name, allWeeks)}
+              onClose={() => setRenameDay(null)}
+            />
+          )}
 
           {addWorkout && (
             <BottomSheet title={`Add a workout to week ${shownWeek}`} onClose={() => setAddWorkout(null)}>
