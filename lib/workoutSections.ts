@@ -3,6 +3,11 @@
 
 export type WorkoutSection = 'warmup' | 'lift' | 'strong' | 'conditioning';
 
+// Strong block 2 can be split into an upper body list and a lower body list.
+export type BlockPart = 'upper' | 'lower';
+
+export const PART_TITLE: Record<BlockPart, string> = { upper: 'Upper body', lower: 'Lower body' };
+
 export interface SectionDef {
   key: WorkoutSection;
   title: string;
@@ -65,6 +70,7 @@ export function formatDescription(name: string | null): string | undefined {
 export interface SectionedExercise {
   section: WorkoutSection;
   block_no: number | null;
+  block_part?: BlockPart | null;
   block_format: string | null;
   sort_order: number;
 }
@@ -76,13 +82,16 @@ export function normalisedBlock(section: WorkoutSection, blockNo: number | null)
   return null;
 }
 
-export function blockKey(section: WorkoutSection, blockNo: number | null): string {
+export function blockKey(section: WorkoutSection, blockNo: number | null, part: BlockPart | null = null): string {
   const b = normalisedBlock(section, blockNo);
-  return b == null ? section : `${section}:${b}`;
+  if (b == null) return section;
+  // Only Strong block 2 splits into parts.
+  if (section === 'strong' && b === 2 && part) return `${section}:2:${part}`;
+  return `${section}:${b}`;
 }
 
-export function exerciseBlockKey(ex: Pick<SectionedExercise, 'section' | 'block_no'>): string {
-  return blockKey(ex.section ?? 'lift', ex.block_no ?? null);
+export function exerciseBlockKey(ex: Pick<SectionedExercise, 'section' | 'block_no' | 'block_part'>): string {
+  return blockKey(ex.section ?? 'lift', ex.block_no ?? null, ex.block_part ?? null);
 }
 
 // Buckets a day's exercises into their blocks, in order within each block.
@@ -102,6 +111,11 @@ export function blockFormatOf(rows: Pick<SectionedExercise, 'block_format'>[] | 
   return rows?.find((r) => r.block_format)?.block_format ?? null;
 }
 
+// Strong block 2 is split when any Strong block 2 row has a part.
+export function strongBlock2IsSplit(exercises: Pick<SectionedExercise, 'section' | 'block_no' | 'block_part'>[]): boolean {
+  return exercises.some((e) => e.section === 'strong' && e.block_no === 2 && !!e.block_part);
+}
+
 // Conditioning is a single 20-minute block when any of its rows sit in block 0.
 export function conditioningIsSingle(exercises: Pick<SectionedExercise, 'section' | 'block_no'>[]): boolean {
   return exercises.some((e) => e.section === 'conditioning' && e.block_no === 0);
@@ -114,7 +128,11 @@ export function usesSections(exercises: Pick<SectionedExercise, 'section'>[]): b
 }
 
 // Picker value for "move to": e.g. 'strong:2'.
-export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 0 | 1 | 2 | null } {
-  const [section, block] = key.split(':');
-  return { section: section as WorkoutSection, blockNo: block === '2' ? 2 : block === '1' ? 1 : block === '0' ? 0 : null };
+export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 0 | 1 | 2 | null; part: BlockPart | null } {
+  const [section, block, part] = key.split(':');
+  return {
+    section: section as WorkoutSection,
+    blockNo: block === '2' ? 2 : block === '1' ? 1 : block === '0' ? 0 : null,
+    part: part === 'upper' || part === 'lower' ? part : null,
+  };
 }

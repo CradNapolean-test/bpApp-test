@@ -1040,6 +1040,7 @@ export function WorkoutTab({
                 section: fields.section,
                 block_no: fields.block_no,
                 block_format: fields.block_format,
+                block_part: fields.block_part,
               })
             }
             onUpdate={(id, fields) => updateExercise(id, fields)}

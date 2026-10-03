@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
+import { strongBlock2IsSplit, blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
 
 const ex = (section: 'warmup' | 'lift' | 'strong' | 'conditioning', block_no: number | null, sort_order: number, block_format: string | null = null) => ({
   section,
@@ -38,8 +38,8 @@ describe('workout sections', () => {
   });
 
   it('parses a block key back', () => {
-    expect(parseBlockKey('conditioning:2')).toEqual({ section: 'conditioning', blockNo: 2 });
-    expect(parseBlockKey('lift')).toEqual({ section: 'lift', blockNo: null });
+    expect(parseBlockKey('conditioning:2')).toEqual({ section: 'conditioning', blockNo: 2, part: null });
+    expect(parseBlockKey('lift')).toEqual({ section: 'lift', blockNo: null, part: null });
   });
 
   it('knows when conditioning is one 20-minute block', () => {
@@ -47,5 +47,15 @@ describe('workout sections', () => {
     expect(blockKey('strong', 0)).toBe('strong:1');
     expect(conditioningIsSingle([ex('conditioning', 0, 0)])).toBe(true);
     expect(conditioningIsSingle([ex('conditioning', 1, 0)])).toBe(false);
+  });
+
+  it('splits Strong block 2 into Upper and Lower', () => {
+    expect(blockKey('strong', 2, 'upper')).toBe('strong:2:upper');
+    expect(blockKey('strong', 1, 'upper')).toBe('strong:1');
+    expect(blockKey('conditioning', 2, 'lower')).toBe('conditioning:2');
+    expect(parseBlockKey('strong:2:lower')).toEqual({ section: 'strong', blockNo: 2, part: 'lower' });
+    expect(exerciseBlockKey({ section: 'strong', block_no: 2, block_part: 'upper' })).toBe('strong:2:upper');
+    expect(strongBlock2IsSplit([{ section: 'strong', block_no: 2, block_part: 'upper' }])).toBe(true);
+    expect(strongBlock2IsSplit([{ section: 'strong', block_no: 2, block_part: null }])).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import type { WorkoutSection } from '@/lib/workoutSections';
+import type { BlockPart, WorkoutSection } from '@/lib/workoutSections';
 export interface ClientProfileRow {
   client_id: string;
   name: string;
@@ -246,6 +246,8 @@ export interface ExerciseCoreFields {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  // 'upper' / 'lower' when Strong block 2 is split (migration 0093).
+  block_part: BlockPart | null;
   exercise_library_id: string | null;
   name: string;
   sets: number | null;

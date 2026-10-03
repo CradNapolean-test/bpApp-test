@@ -2,7 +2,7 @@
 // 'use server' file (unlike programTemplates.ts): toTemplateExport is a pure sync function
 // called directly from the client component (ProgramTemplateManager) on data it already has,
 // and a 'use server' file requires every export to be async (Next.js Server Actions rule).
-import type { WorkoutSection } from '@/lib/workoutSections';
+import type { BlockPart, WorkoutSection } from '@/lib/workoutSections';
 import type {
   BlockType,
   PrescriptionType,
@@ -32,6 +32,7 @@ export interface TemplateExportExercise {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  block_part: BlockPart | null;
 }
 
 export interface TemplateExportDay {
@@ -80,6 +81,7 @@ export function toTemplateExport(template: ProgramTemplateWithDays): TemplateExp
         section: ex.section,
         block_no: ex.block_no,
         block_format: ex.block_format,
+        block_part: ex.block_part,
       })),
     })),
   };

@@ -37,6 +37,9 @@ import {
   formatDescription,
   normalisedBlock,
   parseBlockKey,
+  strongBlock2IsSplit,
+  PART_TITLE,
+  type BlockPart,
   usesSections,
   type WorkoutSection,
 } from '@/lib/workoutSections';
@@ -62,6 +65,7 @@ export interface EditableExercise {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  block_part: BlockPart | null;
 }
 
 export interface NewExerciseFields {
@@ -82,6 +86,7 @@ export interface NewExerciseFields {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  block_part: BlockPart | null;
   // Template-only -- ignored by live workout_exercises callers.
   progression_load_increment: number | null;
   progression_every_weeks: number;
@@ -125,10 +130,17 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function blockLabel(section: WorkoutSection, blockNo: number | null) {
+function blockLabel(section: WorkoutSection, blockNo: number | null, part: BlockPart | null = null) {
   const b = normalisedBlock(section, blockNo);
   if (b == null) return SECTION_TITLE[section];
-  return b === 0 ? `${SECTION_TITLE[section]} · 20 min` : `${SECTION_TITLE[section]} · Block ${b}`;
+  if (b === 0) return `${SECTION_TITLE[section]} · 20 min`;
+  const base = `${SECTION_TITLE[section]} · Block ${b}`;
+  return section === 'strong' && b === 2 && part ? `${base} · ${PART_TITLE[part]}` : base;
+}
+
+function keyLabel(key: string) {
+  const { section, blockNo, part } = parseBlockKey(key);
+  return blockLabel(section, blockNo, part);
 }
 
 // One line saying what to do, e.g. "3 × 8-10 · 20kg · RPE 8 · rest 60s".
@@ -212,9 +224,10 @@ function ExerciseSheet<T extends EditableExercise>({
       }
     }
     if (target !== currentBlock) {
-      const { section, blockNo } = parseBlockKey(target);
+      const { section, blockNo, part } = parseBlockKey(target);
       fields.section = section;
       fields.block_no = blockNo;
+      fields.block_part = part;
     }
     await run(() => onSave(fields), { success: 'Saved', onDone: onClose });
   }
@@ -724,6 +737,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   const [pendingFormats, setPendingFormats] = useState<Record<string, string | null>>({});
   // Conditioning as one 20-minute block, chosen before any exercise is in it.
   const [pendingSingle, setPendingSingle] = useState(false);
+  // Strong block 2 as Upper / Lower, chosen before any exercise is in it.
+  const [pendingSplit, setPendingSplit] = useState(false);
 
   useEffect(() => {
     if (prevIdsKey.current !== idsKey) {
@@ -773,7 +788,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   }
 
   async function addRow(key: string, partial: Partial<NewExerciseFields> & Pick<NewExerciseFields, 'name' | 'block_type'>) {
-    const { section, blockNo } = parseBlockKey(key);
+    const { section, blockNo, part } = parseBlockKey(key);
     return onAdd({
       exercise_library_id: null,
       sets: null,
@@ -791,6 +806,7 @@ export function ExerciseEditor<T extends EditableExercise>({
       progression_every_weeks: 1,
       section,
       block_no: blockNo,
+      block_part: part,
       block_format: formatFor(key),
       ...partial,
     });
@@ -855,6 +871,7 @@ export function ExerciseEditor<T extends EditableExercise>({
           section: rest.section ?? 'lift',
           block_no: rest.block_no ?? null,
           block_format: rest.block_format ?? null,
+          block_part: rest.block_part ?? null,
           progression_load_increment: null,
           progression_every_weeks: 1,
         }),
@@ -893,10 +910,26 @@ export function ExerciseEditor<T extends EditableExercise>({
   }
 
   const condSingle = conditioningIsSingle(displayOrder) || (pendingSingle && !displayOrder.some((e) => e.section === 'conditioning'));
-  const blocksFor = (s: (typeof SECTIONS)[number]) => (s.key === 'conditioning' && condSingle ? [0 as const] : s.blocks);
-  const blockOptions = SECTIONS.flatMap((s) =>
-    blocksFor(s).map((b) => ({ key: blockKey(s.key, b), label: blockLabel(s.key, b) }))
-  );
+  const strongSplit = strongBlock2IsSplit(displayOrder) || (pendingSplit && !displayOrder.some((e) => e.section === 'strong' && e.block_no === 2));
+  // The blocks a section shows right now, as keyed slots.
+  type Slot = { key: string; blockNo: 0 | 1 | 2 | null; part: BlockPart | null };
+  const slotsFor = (s: (typeof SECTIONS)[number]): Slot[] => {
+    const slot = (blockNo: 0 | 1 | 2 | null, part: BlockPart | null = null): Slot => ({ key: blockKey(s.key, blockNo, part), blockNo, part });
+    if (s.key === 'strong') return strongSplit ? [slot(1), slot(2, 'upper'), slot(2, 'lower')] : [slot(1), slot(2)];
+    if (s.key === 'conditioning') return condSingle ? [slot(0)] : [slot(1), slot(2)];
+    return s.blocks.map((b) => slot(b));
+  };
+  const blockOptions = SECTIONS.flatMap((s) => slotsFor(s).map((sl) => ({ key: sl.key, label: keyLabel(sl.key) })));
+
+  // Splits Strong block 2 into Upper and Lower lists (what is there goes under Upper), or joins them back.
+  async function setStrongSplit(split: boolean) {
+    const rows = displayOrder.filter((e) => e.section === 'strong' && e.block_no === 2);
+    if (rows.length === 0) {
+      setPendingSplit(split);
+      return;
+    }
+    await runMutate(() => Promise.all(rows.map((r) => onUpdate(r.id, { block_part: split ? 'upper' : null }))));
+  }
 
   // Switches Conditioning between two 10-minute blocks and one 20-minute block, moving what is in it.
   async function setConditioningSingle(single: boolean) {
@@ -916,14 +949,19 @@ export function ExerciseEditor<T extends EditableExercise>({
     const orderedBlocks: { key: string; title: string | null; rows: T[] }[] = [];
     if (sectioned) {
       for (const s of SECTIONS) {
-        for (const b of s.key === 'conditioning' ? ([0, 1, 2] as const) : s.blocks) {
-          const key = blockKey(s.key, b);
+        const keys =
+          s.key === 'conditioning'
+            ? [blockKey(s.key, 0), blockKey(s.key, 1), blockKey(s.key, 2)]
+            : s.key === 'strong'
+              ? [blockKey(s.key, 1), blockKey(s.key, 2), blockKey(s.key, 2, 'upper'), blockKey(s.key, 2, 'lower')]
+              : s.blocks.map((b) => blockKey(s.key, b));
+        for (const key of keys) {
           const rows = blocks.get(key) ?? [];
           if (rows.length === 0) continue;
           const format = blockFormatOf(rows);
           orderedBlocks.push({
             key,
-            title: `${blockLabel(s.key, b)}${format ? ` · ${format}` : ''}`,
+            title: `${keyLabel(key)}${format ? ` · ${format}` : ''}`,
             rows,
           });
         }
@@ -995,6 +1033,23 @@ export function ExerciseEditor<T extends EditableExercise>({
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-extrabold uppercase tracking-wide text-black dark:text-zinc-50">{section.title}</h3>
               {section.key !== 'conditioning' && section.hint && <span className="text-xs text-zinc-500">{section.hint}</span>}
+              {section.key === 'strong' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-zinc-500">Block 2:</span>
+                  {[false, true].map((split) => (
+                    <button
+                      key={String(split)}
+                      type="button"
+                      onClick={() => setStrongSplit(split)}
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                        strongSplit === split ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/15'
+                      }`}
+                    >
+                      {split ? 'Upper / Lower' : 'One list'}
+                    </button>
+                  ))}
+                </div>
+              )}
               {section.key === 'conditioning' && (
                 <div className="flex gap-1.5">
                   {[false, true].map((single) => (
@@ -1013,8 +1068,7 @@ export function ExerciseEditor<T extends EditableExercise>({
               )}
             </div>
             <div className="space-y-3">
-              {blocksFor(section).map((blockNo) => {
-                const key = blockKey(section.key, blockNo);
+              {slotsFor(section).map(({ key, blockNo, part }) => {
                 const rows = blocks.get(key) ?? [];
                 const format = formatFor(key);
                 return (
@@ -1022,7 +1076,9 @@ export function ExerciseEditor<T extends EditableExercise>({
                     {(blockNo != null || rows.length > 0) && (
                       <div className="mb-1.5 flex items-center gap-2">
                         {blockNo != null && (
-                          <span className="text-xs font-bold text-zinc-500">{blockNo === 0 ? 'One block · 20 min' : `Block ${blockNo} · 10 min`}</span>
+                          <span className="text-xs font-bold text-zinc-500">
+                            {blockNo === 0 ? 'One block · 20 min' : part ? `Block ${blockNo} · ${PART_TITLE[part]}` : `Block ${blockNo} · 10 min`}
+                          </span>
                         )}
                         {blockNo != null && (
                           <button
@@ -1109,7 +1165,7 @@ export function ExerciseEditor<T extends EditableExercise>({
           onSave={async (fields) => {
             if (fields.section !== undefined) {
               // Moving to another block: take on that block's format.
-              const dest = blockKey(fields.section, fields.block_no ?? null);
+              const dest = blockKey(fields.section, fields.block_no ?? null, fields.block_part ?? null);
               fields.block_format = blockFormatOf(blocks.get(dest)) ?? null;
             }
             await onUpdate(editing.id, fields);
@@ -1124,7 +1180,7 @@ export function ExerciseEditor<T extends EditableExercise>({
       {sheet?.kind === 'pick' && (
         <ExercisePickerSheet
           library={library}
-          title={`Add to ${blockLabel(parseBlockKey(sheet.key).section, parseBlockKey(sheet.key).blockNo)}`}
+          title={`Add to ${keyLabel(sheet.key)}`}
           onPick={(entry) => addFromLibrary(sheet.key, entry)}
           onCustom={(name) => addRow(sheet.key, { block_type: 'exercise', name, sets: 3, reps: '8-10' })}
           onClose={() => setSheet(null)}
@@ -1133,7 +1189,7 @@ export function ExerciseEditor<T extends EditableExercise>({
 
       {sheet?.kind === 'note' && (
         <InstructionsSheet
-          title={`Instructions for ${blockLabel(parseBlockKey(sheet.key).section, parseBlockKey(sheet.key).blockNo)}`}
+          title={`Instructions for ${keyLabel(sheet.key)}`}
           defaultFormat={formatFor(sheet.key)}
           onAdd={(name, notes) => addRow(sheet.key, { block_type: 'circuit', name, notes })}
           onClose={() => setSheet(null)}
@@ -1142,7 +1198,7 @@ export function ExerciseEditor<T extends EditableExercise>({
 
       {sheet?.kind === 'format' && (
         <FormatSheet
-          title={`Format · ${blockLabel(parseBlockKey(sheet.key).section, parseBlockKey(sheet.key).blockNo)}`}
+          title={`Format · ${keyLabel(sheet.key)}`}
           current={formatFor(sheet.key)}
           onPick={(format) => setFormat(sheet.key, format)}
           onClose={() => setSheet(null)}

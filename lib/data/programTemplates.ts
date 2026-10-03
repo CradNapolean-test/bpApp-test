@@ -220,6 +220,7 @@ export async function duplicateTemplateDay(dayId: string, weekNum: number, dayLa
       section: ex.section,
       block_no: ex.block_no,
       block_format: ex.block_format,
+      block_part: ex.block_part,
     }));
     const { error: insertExercisesError } = await supabase.from('program_template_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);
@@ -295,6 +296,7 @@ function validateTemplateExport(data: unknown): TemplateExport | null {
           ex.section === 'warmup' || ex.section === 'strong' || ex.section === 'conditioning' ? ex.section : 'lift',
         block_no: ex.block_no === 1 || ex.block_no === 2 ? ex.block_no : null,
         block_format: typeof ex.block_format === 'string' ? ex.block_format : null,
+        block_part: ex.block_part === 'upper' || ex.block_part === 'lower' ? ex.block_part : null,
       });
     }
     days.push({
