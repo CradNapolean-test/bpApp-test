@@ -445,7 +445,6 @@ function CourseOverlay({
   const sortedModules = [...course.education_modules].sort((a, b) => a.sort_order - b.sort_order);
   const lessonTotal = sortedModules.reduce((n, m) => n + m.education_lessons.length, 0);
   const people = rollup.filter((r) => r.course_id === course.id);
-  const nameOf = (id: string) => members.find((m) => m.id === id)?.name ?? 'Member';
 
   async function handleMoveModule(index: number, direction: -1 | 1) {
     const reordered = [...sortedModules];
@@ -482,29 +481,9 @@ function CourseOverlay({
         </button>
 
         {people.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm font-extrabold text-black dark:text-zinc-50">
-              Who has it · {people.length}
-            </p>
-            <div className="divide-y divide-black/5 rounded-2xl border border-black/[.06] bg-card px-3.5 dark:divide-white/10 dark:border-white/10">
-              {people.map((p) => {
-                const pct = lessonTotal > 0 ? Math.round((p.done / lessonTotal) * 100) : 0;
-                return (
-                  <div key={p.client_id} className="py-2.5">
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span className="truncate font-semibold text-black dark:text-zinc-50">{nameOf(p.client_id)}</span>
-                      <span className="shrink-0 text-xs text-zinc-500">
-                        {lessonTotal > 0 && p.done >= lessonTotal ? 'Finished' : `${p.done} of ${lessonTotal} lessons`}
-                      </span>
-                    </div>
-                    <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                      <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <p className="text-sm text-zinc-500">
+            {people.length} assigned · {people.filter((p) => lessonTotal > 0 && p.done >= lessonTotal).length} finished
+          </p>
         )}
 
         <div className="space-y-3">
