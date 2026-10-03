@@ -506,7 +506,7 @@ export function DashboardShell({
 
   const coachSummary = isCoachView && (
     <>
-    {profile?.needs_coach_review && (
+    {profile?.needs_coach_review && !(category === 'Home' && effectiveScreen === 'Today') && (
       <ReviewBanner clientId={clientId} reasons={profile.review_reasons ?? []} canAct={isOwnClient} />
     )}
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
@@ -517,9 +517,11 @@ export function DashboardShell({
         &larr; All clients
       </Link>
       {healthStatus && (
-        <span className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+        <span
+          className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+          title="How long since they last logged anything, against their check-in reminder setting (Credits & plan). Turns amber, then red, the longer they go quiet."
+        >
           <StatusBadge status={healthStatus.status} />
-          {healthStatus.status !== 'unmonitored' && `last active ${healthStatus.daysSinceActive}d ago`}
         </span>
       )}
     </div>

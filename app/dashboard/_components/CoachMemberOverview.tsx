@@ -24,9 +24,12 @@ import { Avatar } from '@/app/_components/Avatar';
 import { Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { getReviews } from '@/lib/data/coachReviews';
+import { clearReviewFlag } from '@/lib/data/onboarding';
+import { trafficLight, TRACKER_THRESHOLDS, type TrafficLight } from '@/lib/utils/accountability';
+import { useAction } from '@/app/_components/useAction';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
-import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { addDays, daysBetween, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
 import type { ClientHealthStatus } from '@/lib/data/coach';
@@ -54,15 +57,45 @@ const avg = (vals: (number | null | undefined)[]) => {
   return present.length ? present.reduce((a, v) => a + v, 0) / present.length : null;
 };
 
-function Tile({ icon, label, value, hint }: { icon: typeof Check; label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-3.5 dark:border-white/10">
+const TONE_CLS: Record<TrafficLight, string> = {
+  green: 'text-success',
+  amber: 'text-warning',
+  red: 'text-danger',
+};
+
+// One number for the week. `tone` colours it green / amber / red against the gym's accountability
+// thresholds; `onClick` makes the tile a shortcut.
+function Tile({
+  icon,
+  label,
+  value,
+  hint,
+  tone,
+  onClick,
+}: {
+  icon: typeof Check;
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: TrafficLight | null;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
         <IconChip icon={icon} size="sm" /> {label}
       </p>
-      <p className="mt-1.5 text-xl font-extrabold text-black dark:text-zinc-50">{value}</p>
+      <p className={`mt-1.5 text-xl font-extrabold ${tone ? TONE_CLS[tone] : 'text-black dark:text-zinc-50'}`}>{value}</p>
       {hint && <p className="text-[11px] text-zinc-500">{hint}</p>}
-    </div>
+    </>
+  );
+  const cls = 'rounded-2xl border border-black/[.05] bg-card p-3.5 text-left dark:border-white/10';
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${cls} hover:bg-black/[.02] dark:hover:bg-white/[.03]`}>
+      {body}
+    </button>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }
 
@@ -163,7 +196,20 @@ export function CoachMemberOverview({
   const prevScan = bodyScans[1] ?? null;
 
   // ---- needs doing ----
-  const todo: { key: string; icon: typeof Check; title: string; hint: string; action: () => void }[] = [];
+  const todo: { key: string; icon: typeof Check; title: string; hint: string; action: () => void; reviewed?: () => Promise<unknown> }[] = [];
+  // A new member's automatic starting plan waits for the coach to check it (it used to be a separate banner).
+  if (profile?.needs_coach_review) {
+    todo.push({
+      key: 'new-member',
+      icon: ClipboardList,
+      title: 'New member: check their starting plan',
+      hint:
+        (profile.review_reasons ?? []).filter((r) => !r.toLowerCase().startsWith('new member')).join(' · ') ||
+        'Check their targets, then set up their membership',
+      action: () => onNavigate('Account Settings', 'Setup'),
+      reviewed: isOwnClient ? () => clearReviewFlag(clientId) : undefined,
+    });
+  }
   if (reviews) {
     for (const w of [prevWeek, toIsoDate(addDays(new Date(prevWeek + 'T00:00:00Z'), -7))]) {
       const d = daysIn(w);
@@ -213,11 +259,28 @@ export function CoachMemberOverview({
     });
   }
 
+  // "6 Week Challenge · week 2 of 6 · ends 15 Nov" (or "starts 12 Oct" before it begins).
+  const planLabel = (() => {
+    if (!membership?.package) return 'No plan set up';
+    const name = membership.package.name;
+    const parts = [name];
+    const startedAt = membership.started_at;
+    if (startedAt && startedAt > todayIso) {
+      parts.push(`starts ${shortDate(startedAt)}`);
+    } else {
+      const total = membership.package.duration_weeks;
+      if (total && startedAt) parts.push(`week ${Math.min(Math.floor(daysBetween(startedAt, todayIso) / 7) + 1, total)} of ${total}`);
+      if (membership.scheduled_end) parts.push(`ends ${shortDate(membership.scheduled_end)}`);
+    }
+    return parts.join(' · ');
+  })();
+  const { run: runReviewed, busy: reviewing } = useAction();
   const memberSince = profile?.join_date ?? null;
   const notes = journalEntries.slice(0, 2);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4 lg:grid lg:grid-cols-5 lg:items-start lg:gap-4 lg:space-y-0">
+      <div className="space-y-4 lg:col-span-3">
       {/* ---- who ---- */}
       <Card>
         <div className="flex items-start gap-3">
@@ -234,7 +297,7 @@ export function CoachMemberOverview({
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span className="rounded-full bg-accent/15 px-2.5 py-0.5 text-[11px] font-bold text-accent">
-                {membership?.package ? membership.package.name : 'No plan set up'}
+                {planLabel}
               </span>
               <span
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
@@ -249,13 +312,17 @@ export function CoachMemberOverview({
             </div>
           </div>
         </div>
-        {profile?.goal_description && <p className="mt-3 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">{profile.goal_description}</p>}
+        {profile?.goal_description && (
+          <p className="mt-3 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <b className="text-zinc-500">Goal:</b> {profile.goal_description}
+          </p>
+        )}
         {profile?.health_notes && (
           <p className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-black dark:text-zinc-100">
             <b className="text-warning">Health notes:</b> {profile.health_notes}
           </p>
         )}
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex gap-2 sm:max-w-sm">
           <button type="button" onClick={() => onNavigate('Messages')} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground">
             <MessageSquare className="h-4 w-4" /> Message
           </button>
@@ -272,16 +339,28 @@ export function CoachMemberOverview({
           <Card className="!py-1">
             <div className="divide-y divide-black/5 dark:divide-white/10">
               {todo.map((t) => (
-                <button key={t.key} type="button" onClick={t.action} className="flex w-full items-center gap-3 py-3 text-left">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
-                    <t.icon className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{t.title}</span>
-                    <span className="block truncate text-xs text-zinc-500">{t.hint}</span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-                </button>
+                <div key={t.key} className="flex items-center gap-2">
+                  <button type="button" onClick={t.action} className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
+                      <t.icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{t.title}</span>
+                      <span className="block truncate text-xs text-zinc-500">{t.hint}</span>
+                    </span>
+                    {!t.reviewed && <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />}
+                  </button>
+                  {t.reviewed && (
+                    <button
+                      type="button"
+                      disabled={reviewing}
+                      onClick={() => runReviewed(t.reviewed as () => Promise<unknown>, { success: 'Marked as reviewed' })}
+                      className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-700 disabled:opacity-50 dark:border-white/15 dark:text-zinc-200"
+                    >
+                      {reviewing ? 'Saving…' : 'Reviewed'}
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </Card>
@@ -291,16 +370,40 @@ export function CoachMemberOverview({
       {/* ---- this week ---- */}
       <div>
         <SectionLabel>This week</SectionLabel>
-        <div className="grid grid-cols-2 gap-2.5">
-          <Tile icon={Check} label="Check-in" value={`${weekDays.length} / 7 days`} hint={weekDays.length === 0 ? 'Nothing logged yet' : undefined} />
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <Tile
+            icon={Check}
+            label="Days logged"
+            value={`${weekDays.length} / 7`}
+            hint={
+              daysIn(prevWeek) > 0
+                ? `Last week: ${daysIn(prevWeek)} days${reviews?.week.includes(prevWeek) ? ', reviewed' : ', tap to review'}`
+                : weekDays.length === 0
+                  ? 'Nothing logged yet'
+                  : undefined
+            }
+            onClick={daysIn(prevWeek) > 0 ? () => onOpenCheckin(prevWeek) : undefined}
+          />
           <Tile
             icon={CalendarDays}
-            label="Sessions"
+            label="Sessions attended"
             value={`${attendedThisWeek}${perWeek ? ` / ${perWeek}` : ''}`}
-            hint={nextClass ? `Next: ${longDate(nextClass.booking_date)} ${formatClassTime(nextClass.class?.start_time)}` : 'Nothing booked'}
+            hint={`${perWeek ? `Plan allows ${perWeek} a week. ` : ''}${nextClass ? `Next: ${longDate(nextClass.booking_date)} ${formatClassTime(nextClass.class?.start_time)}` : 'Nothing booked'}`}
           />
-          <Tile icon={Footprints} label="Steps (avg)" value={stepsAvg != null ? Math.round(stepsAvg).toLocaleString() : '—'} />
-          <Tile icon={Moon} label="Sleep (avg)" value={sleepAvg != null ? `${sleepAvg.toFixed(1)}h` : '—'} />
+          <Tile
+            icon={Footprints}
+            label="Steps (avg)"
+            value={stepsAvg != null ? Math.round(stepsAvg).toLocaleString() : '—'}
+            tone={stepsAvg != null ? trafficLight('steps', stepsAvg) : null}
+            hint={`Green is ${TRACKER_THRESHOLDS.steps.green.toLocaleString()}+`}
+          />
+          <Tile
+            icon={Moon}
+            label="Sleep (avg)"
+            value={sleepAvg != null ? `${sleepAvg.toFixed(1)}h` : '—'}
+            tone={sleepAvg != null ? trafficLight('sleep', sleepAvg) : null}
+            hint={`Green is ${TRACKER_THRESHOLDS.sleep.green}h+`}
+          />
           {!isPhoto && (
             <Tile
               icon={Utensils}
@@ -318,6 +421,8 @@ export function CoachMemberOverview({
         </div>
       </div>
 
+      </div>
+      <div className="space-y-4 lg:col-span-2">
       {/* ---- weight ---- */}
       <div>
         <SectionLabel>Weight</SectionLabel>
@@ -419,6 +524,7 @@ export function CoachMemberOverview({
       <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Achievements', 'Big Dog')} />
 
       {!isOwnClient && <p className="text-center text-xs text-zinc-500">You are viewing another coach&apos;s member (read-only).</p>}
+      </div>
     </div>
   );
 }
