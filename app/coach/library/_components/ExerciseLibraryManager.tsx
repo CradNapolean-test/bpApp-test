@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Dumbbell } from 'lucide-react';
-import { Button } from '@/app/_components/Button';
+import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
@@ -18,7 +18,6 @@ import {
 } from '@/lib/data/exerciseLibrary';
 import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
-import { inputCls } from '@/app/_components/ui';
 
 const EXPORT_COLUMNS = [
   'name',
@@ -80,230 +79,159 @@ function parseExerciseCsv(text: string): Omit<ExerciseLibraryRow, 'id' | 'create
 }
 
 
-// Inline edit -- replaces the card's own content in place, matching the desktop pattern used
-// by ClassManager's row edit (plenty of width for this instead of a mobile bottom sheet).
-function EditExerciseCard({
-  exercise,
-  onClose,
-  onDelete,
-}: {
-  exercise: ExerciseLibraryRow;
-  onClose: () => void;
-  onDelete: (id: string, name: string) => void;
-}) {
-  const { run, busy: saving } = useAction();
-  const [name, setName] = useState(exercise.name);
-  const [muscleGroup, setMuscleGroup] = useState(exercise.muscle_group ?? '');
-  const [equipment, setEquipment] = useState(exercise.equipment ?? '');
-  const [defaultSets, setDefaultSets] = useState<number | ''>(exercise.default_sets ?? '');
-  const [defaultReps, setDefaultReps] = useState(exercise.default_reps ?? '');
-  const [defaultRpe, setDefaultRpe] = useState<number | ''>(exercise.default_rpe ?? '');
+const sheetField = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    await run(
-      () =>
-        updateLibraryExercise(exercise.id, {
-          name,
-          muscle_group: muscleGroup || null,
-          equipment: equipment || null,
-          default_sets: defaultSets === '' ? null : defaultSets,
-          default_reps: defaultReps || null,
-          default_rpe: defaultRpe === '' ? null : defaultRpe,
-        }),
-      { success: 'Exercise updated', onDone: onClose }
-    );
-  }
-
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-      <form onSubmit={handleSave} className="space-y-3">
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Name</label>
-          <input required autoFocus className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Muscle group</label>
-            <select className={inputCls} value={muscleGroup} onChange={(e) => setMuscleGroup(e.target.value)}>
-              <option value="">—</option>
-              {MUSCLE_GROUPS.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Equipment</label>
-            <input className={inputCls} value={equipment} onChange={(e) => setEquipment(e.target.value)} placeholder="e.g. Barbell" />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Sets</label>
-            <input
-              type="number"
-              className={inputCls}
-              value={defaultSets}
-              onChange={(e) => setDefaultSets(e.target.value === '' ? '' : Number(e.target.value))}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Reps</label>
-            <input className={inputCls} value={defaultReps} onChange={(e) => setDefaultReps(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">RPE</label>
-            <input
-              type="number"
-              className={inputCls}
-              value={defaultRpe}
-              onChange={(e) => setDefaultRpe(e.target.value === '' ? '' : Number(e.target.value))}
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button type="submit" variant="primary" size="sm" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button type="button" variant="danger" size="sm" onClick={() => onDelete(exercise.id, exercise.name)}>
-            Delete
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
-      </form>
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-zinc-500">{label}</label>
+      {children}
     </div>
   );
 }
 
-function AddExerciseCard({ onDone }: { onDone: () => void }) {
-  const { run: runCreate, busy: saving } = useAction();
-  const [name, setName] = useState('');
-  const [defaultSets, setDefaultSets] = useState<number | ''>(3);
-  const [defaultReps, setDefaultReps] = useState('8-10');
-  const [defaultRpe, setDefaultRpe] = useState<number | ''>('');
-  const [defaultRestSeconds, setDefaultRestSeconds] = useState<number | ''>('');
-  const [muscleGroup, setMuscleGroup] = useState('');
-  const [equipment, setEquipment] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [notes, setNotes] = useState('');
+// Add or edit an exercise. The things you reach for first (name, video, muscle, equipment) are up top; the
+// defaults a programme starts from, and the longer text, sit under "Defaults and notes".
+function ExerciseFormSheet({
+  exercise,
+  onClose,
+  onDelete,
+}: {
+  exercise: ExerciseLibraryRow | null;
+  onClose: () => void;
+  onDelete?: (id: string, name: string) => void;
+}) {
+  const { run, busy } = useAction();
+  const [name, setName] = useState(exercise?.name ?? '');
+  const [videoUrl, setVideoUrl] = useState(exercise?.video_url ?? '');
+  const [muscleGroup, setMuscleGroup] = useState(exercise?.muscle_group ?? '');
+  const [equipment, setEquipment] = useState(exercise?.equipment ?? '');
+  const [sets, setSets] = useState(exercise ? (exercise.default_sets == null ? '' : String(exercise.default_sets)) : '3');
+  const [reps, setReps] = useState(exercise ? (exercise.default_reps ?? '') : '8-10');
+  const [rpe, setRpe] = useState(exercise?.default_rpe == null ? '' : String(exercise.default_rpe));
+  const [rest, setRest] = useState(exercise?.default_rest_seconds == null ? '' : String(exercise.default_rest_seconds));
+  const [imageUrl, setImageUrl] = useState(exercise?.image_url ?? '');
+  const [instructions, setInstructions] = useState(exercise?.instructions ?? '');
+  const [notes, setNotes] = useState(exercise?.notes ?? '');
 
-  async function handleCreate(e: React.FormEvent) {
+  const num = (v: string) => (v.trim() === '' ? null : Number(v));
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await runCreate(
-      () =>
-        createLibraryExercise({
-          name,
-          default_sets: defaultSets === '' ? null : defaultSets,
-          default_reps: defaultReps || null,
-          default_rpe: defaultRpe === '' ? null : defaultRpe,
-          default_rest_seconds: defaultRestSeconds === '' ? null : defaultRestSeconds,
-          muscle_group: muscleGroup || null,
-          equipment: equipment || null,
-          video_url: videoUrl || null,
-          image_url: imageUrl || null,
-          instructions: instructions || null,
-          notes: notes || null,
-        }),
-      { success: 'Exercise added to library', onDone }
-    );
+    const fields = {
+      name: name.trim(),
+      video_url: videoUrl.trim() || null,
+      muscle_group: muscleGroup || null,
+      equipment: equipment.trim() || null,
+      default_sets: num(sets),
+      default_reps: reps.trim() || null,
+      default_rpe: num(rpe),
+      default_rest_seconds: num(rest),
+      image_url: imageUrl.trim() || null,
+      instructions: instructions.trim() || null,
+      notes: notes.trim() || null,
+    };
+    await run(() => (exercise ? updateLibraryExercise(exercise.id, fields) : createLibraryExercise(fields)), {
+      success: exercise ? 'Exercise updated' : 'Exercise added to library',
+      onDone: onClose,
+    });
   }
 
   return (
-    <form onSubmit={handleCreate} className="grid grid-cols-2 gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10 sm:grid-cols-4">
-      <div className="col-span-2 space-y-1 sm:col-span-4">
-        <label className="text-xs font-medium text-zinc-500">Exercise name</label>
-        <input required autoFocus className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Muscle group</label>
-        <select className={inputCls} value={muscleGroup} onChange={(e) => setMuscleGroup(e.target.value)}>
-          <option value="">—</option>
-          {MUSCLE_GROUPS.map((g) => (
-            <option key={g} value={g}>{g}</option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Equipment</label>
-        <input className={inputCls} value={equipment} onChange={(e) => setEquipment(e.target.value)} placeholder="e.g. Barbell" />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Default sets</label>
-        <input
-          type="number"
-          className={inputCls}
-          value={defaultSets}
-          onChange={(e) => setDefaultSets(e.target.value === '' ? '' : Number(e.target.value))}
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Default reps</label>
-        <input className={inputCls} value={defaultReps} onChange={(e) => setDefaultReps(e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Default RPE</label>
-        <input
-          type="number"
-          className={inputCls}
-          value={defaultRpe}
-          onChange={(e) => setDefaultRpe(e.target.value === '' ? '' : Number(e.target.value))}
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Default rest (s)</label>
-        <input
-          type="number"
-          className={inputCls}
-          value={defaultRestSeconds}
-          onChange={(e) => setDefaultRestSeconds(e.target.value === '' ? '' : Number(e.target.value))}
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Video URL</label>
-        <input className={inputCls} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Image URL</label>
-        <input className={inputCls} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
-      </div>
-      <div className="col-span-2 space-y-1 sm:col-span-4">
-        <label className="text-xs font-medium text-zinc-500">Instructions</label>
-        <textarea rows={2} className={inputCls} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
-      </div>
-      <div className="col-span-2 space-y-1 sm:col-span-4">
-        <label className="text-xs font-medium text-zinc-500">Notes</label>
-        <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </div>
-      <div className="col-span-2 flex gap-2 sm:col-span-4">
-        <Button type="submit" variant="primary" disabled={saving}>
-          {saving ? 'Adding…' : 'Add to library'}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+    <BottomSheet title={exercise ? 'Edit exercise' : 'Add an exercise'} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Labeled label="Exercise name">
+          <input required autoFocus={!exercise} className={sheetField} value={name} onChange={(e) => setName(e.target.value)} />
+        </Labeled>
+        <Labeled label="Video link">
+          <input className={sheetField} value={videoUrl} placeholder="https://" onChange={(e) => setVideoUrl(e.target.value)} />
+        </Labeled>
+        <div className="grid grid-cols-2 gap-3">
+          <Labeled label="Muscle group">
+            <select className={sheetField} value={muscleGroup} onChange={(e) => setMuscleGroup(e.target.value)}>
+              <option value="">None</option>
+              {MUSCLE_GROUPS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </Labeled>
+          <Labeled label="Equipment">
+            <input className={sheetField} value={equipment} placeholder="e.g. Barbell" onChange={(e) => setEquipment(e.target.value)} />
+          </Labeled>
+        </div>
+
+        <details open={!!exercise && !!(exercise.instructions || exercise.notes || exercise.image_url)} className="group rounded-xl border border-black/10 dark:border-white/10">
+          <summary className="cursor-pointer list-none px-3.5 py-2.5 text-sm font-bold text-black dark:text-zinc-50">
+            Defaults and notes
+            <span className="ml-2 text-xs font-medium text-zinc-500">sets, reps, rest, instructions</span>
+          </summary>
+          <div className="space-y-3 px-3.5 pb-3.5">
+            <div className="grid grid-cols-2 gap-3">
+              <Labeled label="Default sets">
+                <input type="number" inputMode="numeric" className={sheetField} value={sets} onChange={(e) => setSets(e.target.value)} />
+              </Labeled>
+              <Labeled label="Default reps">
+                <input className={sheetField} value={reps} onChange={(e) => setReps(e.target.value)} />
+              </Labeled>
+              <Labeled label="Default RPE">
+                <input type="number" inputMode="decimal" className={sheetField} value={rpe} onChange={(e) => setRpe(e.target.value)} />
+              </Labeled>
+              <Labeled label="Default rest (seconds)">
+                <input type="number" inputMode="numeric" className={sheetField} value={rest} onChange={(e) => setRest(e.target.value)} />
+              </Labeled>
+            </div>
+            <Labeled label="Image link">
+              <input className={sheetField} value={imageUrl} placeholder="https://" onChange={(e) => setImageUrl(e.target.value)} />
+            </Labeled>
+            <Labeled label="Instructions">
+              <textarea rows={3} className={sheetField} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
+            </Labeled>
+            <Labeled label="Notes">
+              <textarea rows={2} className={sheetField} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </Labeled>
+          </div>
+        </details>
+
+        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Saving…' : exercise ? 'Save' : 'Add to library'}
+        </button>
+        {exercise && onDelete && (
+          <button type="button" onClick={() => onDelete(exercise.id, exercise.name)} className="w-full rounded-full py-2 text-sm font-bold text-danger">
+            Delete exercise
+          </button>
+        )}
+      </form>
+    </BottomSheet>
   );
 }
 
 const PAGE_SIZE = 60;
 
-export function ExerciseLibraryManager({ initialExercises }: { initialExercises: ExerciseLibraryRow[] }) {
+export function ExerciseLibraryManager({
+  initialExercises,
+  usage = {},
+}: {
+  initialExercises: ExerciseLibraryRow[];
+  // How many programme templates use each exercise, by exercise id.
+  usage?: Record<string, number>;
+}) {
   const confirm = useConfirm();
   const toast = useToast();
   const { run: runDelete } = useAction();
   const { run: runImport, busy: importing } = useAction();
-  const [addingExercise, setAddingExercise] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterGroup, setFilterGroup] = useState('');
+  const [noVideoOnly, setNoVideoOnly] = useState(false);
   const [search, setSearch] = useState('');
   // The library can hold hundreds of exercises -- render a page at a time so the tab stays fast.
   const [visible, setVisible] = useState(PAGE_SIZE);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const hasVideo = (ex: ExerciseLibraryRow) => !!(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://'));
+  const missingVideos = useMemo(() => initialExercises.filter((ex) => !hasVideo(ex)).length, [initialExercises]);
 
   async function handleDelete(id: string, exerciseName: string) {
     const ok = await confirm({
@@ -344,9 +272,18 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
     return initialExercises.filter(
       (ex) =>
         (!filterGroup || ex.muscle_group === filterGroup) &&
+        (!noVideoOnly || !hasVideo(ex)) &&
         (!q || ex.name.toLowerCase().includes(q) || (ex.equipment ?? '').toLowerCase().includes(q))
     );
-  }, [initialExercises, filterGroup, search]);
+  }, [initialExercises, filterGroup, noVideoOnly, search]);
+
+  const editing = editingId ? initialExercises.find((ex) => ex.id === editingId) : undefined;
+  const chip = (active: boolean) =>
+    `rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+      active
+        ? 'border-accent bg-accent-soft text-accent'
+        : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+    }`;
 
   return (
     <div className="space-y-4">
@@ -354,7 +291,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         <button
           type="button"
-          onClick={() => setAddingExercise(true)}
+          onClick={() => setAdding(true)}
           className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
         >
           + Add exercise
@@ -369,7 +306,8 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         />
       </div>
 
-      {addingExercise && <AddExerciseCard onDone={() => setAddingExercise(false)} />}
+      {adding && <ExerciseFormSheet exercise={null} onClose={() => setAdding(false)} />}
+      {editing && <ExerciseFormSheet key={editing.id} exercise={editing} onClose={() => setEditingId(null)} onDelete={handleDelete} />}
 
       {initialExercises.length > 0 && (
         <input
@@ -380,7 +318,7 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
             setVisible(PAGE_SIZE);
           }}
           placeholder={`Search ${initialExercises.length} exercises…`}
-          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm md:max-w-sm dark:border-white/10"
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base md:max-w-sm dark:border-white/10"
         />
       )}
 
@@ -388,24 +326,34 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-medium text-zinc-500">Filter:</span>
           <button
-            onClick={() => { setFilterGroup(''); setVisible(PAGE_SIZE); }}
-            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-              filterGroup === ''
-                ? 'border-accent bg-accent-soft text-accent'
-                : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-            }`}
+            onClick={() => {
+              setFilterGroup('');
+              setNoVideoOnly(false);
+              setVisible(PAGE_SIZE);
+            }}
+            className={chip(filterGroup === '' && !noVideoOnly)}
           >
             All
           </button>
+          {missingVideos > 0 && (
+            <button
+              onClick={() => {
+                setNoVideoOnly((v) => !v);
+                setVisible(PAGE_SIZE);
+              }}
+              className={chip(noVideoOnly)}
+            >
+              No video ({missingVideos})
+            </button>
+          )}
           {MUSCLE_GROUPS.map((g) => (
             <button
               key={g}
-              onClick={() => { setFilterGroup(g); setVisible(PAGE_SIZE); }}
-              className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                filterGroup === g
-                  ? 'border-accent bg-accent-soft text-accent'
-                  : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-              }`}
+              onClick={() => {
+                setFilterGroup(filterGroup === g ? '' : g);
+                setVisible(PAGE_SIZE);
+              }}
+              className={chip(filterGroup === g)}
             >
               {g}
             </button>
@@ -425,10 +373,9 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {filteredExercises.slice(0, visible).map((ex) =>
-            editingId === ex.id ? (
-              <EditExerciseCard key={ex.id} exercise={ex} onClose={() => setEditingId(null)} onDelete={handleDelete} />
-            ) : (
+          {filteredExercises.slice(0, visible).map((ex) => {
+            const templates = usage[ex.id] ?? 0;
+            return (
               <div
                 key={ex.id}
                 className="rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
@@ -445,23 +392,29 @@ export function ExerciseLibraryManager({ initialExercises }: { initialExercises:
                     />
                   </div>
                 </div>
-                <p className="mt-0.5 text-sm text-zinc-500">
-                  {[ex.muscle_group, ex.equipment].filter(Boolean).join(' · ') || '—'}
-                </p>
+                <p className="mt-0.5 text-sm text-zinc-500">{[ex.muscle_group, ex.equipment].filter(Boolean).join(' · ') || 'No muscle group or equipment set'}</p>
                 {ex.default_sets != null && (
                   <p className="mt-1 text-sm text-zinc-500">
                     Default {ex.default_sets}×{ex.default_reps ?? '—'}
                     {ex.default_rpe != null ? ` · RPE ${ex.default_rpe}` : ''}
+                    {ex.default_rest_seconds != null ? ` · rest ${ex.default_rest_seconds}s` : ''}
                   </p>
                 )}
-                {ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://') ? (
-                  <VideoDemo videoUrl={ex.video_url} title={ex.name} />
+                {hasVideo(ex) ? (
+                  <VideoDemo videoUrl={ex.video_url as string} title={ex.name} />
                 ) : (
-                  <p className="mt-1 text-xs text-zinc-400">No video linked</p>
+                  <button type="button" onClick={() => setEditingId(ex.id)} className="mt-1 text-xs font-semibold text-warning">
+                    No video linked · add one
+                  </button>
+                )}
+                {templates > 0 && (
+                  <p className="mt-1.5 text-xs text-zinc-400">
+                    In {templates} programme template{templates === 1 ? '' : 's'}
+                  </p>
                 )}
               </div>
-            )
-          )}
+            );
+          })}
         </div>
       )}
 

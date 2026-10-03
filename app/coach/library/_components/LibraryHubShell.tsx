@@ -42,6 +42,7 @@ export function LibraryHubShell({
   groups,
   members,
   rollouts,
+  exerciseUsage,
   email,
 }: {
   initialExercises: ExerciseLibraryRow[];
@@ -52,6 +53,7 @@ export function LibraryHubShell({
   groups: ClientGroupWithMembers[];
   members: { id: string; name: string }[];
   rollouts: ProgrammeRolloutRow[];
+  exerciseUsage: Record<string, number>;
   email: string;
 }) {
   const searchParams = useSearchParams();
@@ -69,7 +71,7 @@ export function LibraryHubShell({
       <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Library</h1>
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
-      {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} />}
+      {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} usage={exerciseUsage} />}
       {tab === 'Program templates' && (
         <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} rollouts={rollouts} />
       )}

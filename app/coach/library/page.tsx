@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getExerciseLibrary } from '@/lib/data/exerciseLibrary';
+import { getExerciseLibrary, getExerciseUsage } from '@/lib/data/exerciseLibrary';
 import { getPendingRollouts, getProgramTemplatesWithDays } from '@/lib/data/programTemplates';
 import { getFormTemplates } from '@/lib/data/forms';
 import { getCourses } from '@/lib/data/education';
@@ -23,7 +23,7 @@ export default async function CoachLibraryPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [exercises, templates, formTemplates, courses, chatOverview, groups, myClients, rollouts] = await Promise.all([
+  const [exercises, templates, formTemplates, courses, chatOverview, groups, myClients, rollouts, exerciseUsage] = await Promise.all([
     getExerciseLibrary(),
     getProgramTemplatesWithDays(),
     getFormTemplates(),
@@ -32,6 +32,7 @@ export default async function CoachLibraryPage() {
     getGroups(),
     getMyClients(supabase, user.id),
     getPendingRollouts(),
+    getExerciseUsage(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
@@ -44,6 +45,7 @@ export default async function CoachLibraryPage() {
       unreadCount={unreadCount}
       groups={groups}
       rollouts={rollouts}
+      exerciseUsage={exerciseUsage}
       members={myClients.map((c) => ({ id: c.id, name: c.name ?? c.email }))}
       email={user.email ?? 'Coach'}
     />
