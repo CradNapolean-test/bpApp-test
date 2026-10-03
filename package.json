@@ -11,6 +11,7 @@
     "seed": "tsx scripts/seed.ts",
     "create-coach": "tsx scripts/create-coach.ts",
     "create-gym": "tsx scripts/create-gym.ts",
+    "copy-course": "tsx scripts/copy-course-to-gym.ts",
     "seed-demo-history": "tsx scripts/seed-demo-history.ts"
   },
   "dependencies": {

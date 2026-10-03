@@ -12,6 +12,7 @@ import {
   addLesson,
   addModule,
   assignCourseToMany,
+  copyCourseToGym,
   createCourse,
   deleteCourse,
   deleteLesson,
@@ -369,11 +370,65 @@ function AssignSheet({
   );
 }
 
+// Copy a course into another gym the coach belongs to, so that gym's coaches can use and edit their own copy.
+function CopyToGymSheet({
+  course,
+  gyms,
+  onClose,
+}: {
+  course: EducationCourseWithModules;
+  gyms: { id: string; name: string }[];
+  onClose: () => void;
+}) {
+  const { run, busy } = useAction();
+  const [picked, setPicked] = useState<string[]>([]);
+  return (
+    <BottomSheet title={`Copy “${course.title}” to another gym`} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Each gym gets its own copy of the modules and lessons, which its coaches can edit and assign. Members are not copied across, and a gym that
+          already has a course with this title is skipped.
+        </p>
+        <div className="divide-y divide-black/5 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+          {gyms.map((g) => (
+            <label key={g.id} className="flex cursor-pointer items-center gap-3 px-3 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={picked.includes(g.id)}
+                onChange={() => setPicked(picked.includes(g.id) ? picked.filter((x) => x !== g.id) : [...picked, g.id])}
+              />
+              <span className="font-medium text-black dark:text-zinc-50">{g.name}</span>
+            </label>
+          ))}
+        </div>
+        <button
+          type="button"
+          disabled={busy || picked.length === 0}
+          onClick={() =>
+            run(
+              async () => {
+                const results = await Promise.all(picked.map((id) => copyCourseToGym(course.id, id)));
+                const failed = results.find((r) => !r.ok);
+                return failed ?? { ok: true as const };
+              },
+              { success: `Copied to ${picked.length} gym${picked.length === 1 ? '' : 's'}`, onDone: onClose }
+            )
+          }
+          className={primaryBtn}
+        >
+          {busy ? 'Copying…' : picked.length === 0 ? 'Choose a gym' : `Copy to ${picked.length} gym${picked.length === 1 ? '' : 's'}`}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
 function CourseOverlay({
   course,
   members,
   groups,
   rollup,
+  otherGyms,
   onClose,
   onDelete,
 }: {
@@ -381,11 +436,12 @@ function CourseOverlay({
   members: { id: string; name: string }[];
   groups: ClientGroupWithMembers[];
   rollup: CourseRollupRow[];
+  otherGyms: { id: string; name: string }[];
   onClose: () => void;
   onDelete: (id: string, courseTitle: string) => void;
 }) {
   const { run: runReorder } = useAction();
-  const [sheet, setSheet] = useState<'module' | 'details' | 'assign' | null>(null);
+  const [sheet, setSheet] = useState<'module' | 'details' | 'assign' | 'copy' | null>(null);
   const sortedModules = [...course.education_modules].sort((a, b) => a.sort_order - b.sort_order);
   const lessonTotal = sortedModules.reduce((n, m) => n + m.education_lessons.length, 0);
   const people = rollup.filter((r) => r.course_id === course.id);
@@ -410,6 +466,7 @@ function CourseOverlay({
           triggerLabel="Course actions"
           items={[
             { label: 'Edit title and description', onSelect: () => setSheet('details') },
+            ...(otherGyms.length > 0 ? [{ label: 'Copy to another gym', onSelect: () => setSheet('copy') }] : []),
             { label: 'Delete course', destructive: true, onSelect: () => onDelete(course.id, course.title) },
           ]}
         />
@@ -490,6 +547,7 @@ function CourseOverlay({
           onClose={() => setSheet(null)}
         />
       )}
+      {sheet === 'copy' && <CopyToGymSheet course={course} gyms={otherGyms} onClose={() => setSheet(null)} />}
       {sheet === 'assign' && (
         <AssignSheet
           course={course}
@@ -508,11 +566,13 @@ export function EducationPane({
   members,
   groups,
   rollup,
+  otherGyms,
 }: {
   initialCourses: EducationCourseWithModules[];
   members: { id: string; name: string }[];
   groups: ClientGroupWithMembers[];
   rollup: CourseRollupRow[];
+  otherGyms: { id: string; name: string }[];
 }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
@@ -604,6 +664,7 @@ export function EducationPane({
           members={members}
           groups={groups}
           rollup={rollup}
+          otherGyms={otherGyms}
           onClose={() => setOpenCourseId(null)}
           onDelete={handleDelete}
         />

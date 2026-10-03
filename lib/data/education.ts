@@ -227,6 +227,13 @@ export async function getCourseRollup(): Promise<CourseRollupRow[]> {
   });
 }
 
+// Copies a course into another gym the coach belongs to (an independent copy, no assignments).
+export async function copyCourseToGym(courseId: string, targetGymId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('copy_education_course_to_gym', { p_course_id: courseId, p_target_gym_id: targetGymId });
+  return error ? fail(error, 'Could not copy that course') : ok();
+}
+
 // Gives a course to several members at once. Anyone who already has it is skipped, so it is safe to run
 // again after adding people.
 export async function assignCourseToMany(courseId: string, clientIds: string[]): Promise<ActionResult> {
