@@ -250,7 +250,7 @@ Rookie / Strong / Big Dog benchmarks for 13 tests, split male and female. The fi
 ## 8. 12 Week Training Overview
 
 **What the SOP says**
-Weeks 1–4, 5–8, 9–11, then **Week 12 Peak Week**. Three day-pairs: **Mon/Thu, Tue/Fri, Wed/Sat**, one pair per column.
+Weeks 1–4, 5–8, 9–11, then **Week 12 Peak Week**. Each workout is its own day with one weekday. **Only Peak Week runs as day pairs** (Mon/Thu, Tue/Fri, Wed/Sat, one pair per column); weeks 1–11 do not.
 
 | | Weeks 1–4 | Weeks 5–8 | Weeks 9–11 |
 |---|---|---|---|
@@ -263,7 +263,7 @@ Weeks 1–4, 5–8, 9–11, then **Week 12 Peak Week**. Three day-pairs: **Mon/T
 Conditioning methods also include Pyramid, Descending and Ascending reps.
 
 **App areas affected**
-- Programme structure → `app/coach/library`, `lib/data/programTemplates.ts`, `0013_exercise_library_and_program_templates.sql`, `0020_workout_builder_v2.sql`, `0057_program_day_weekday_link.sql` (weekday link supports day pairs), `0090_program_template_description.sql`.
+- Programme structure → `app/coach/library`, `lib/data/programTemplates.ts`, `0013_exercise_library_and_program_templates.sql`, `0020_workout_builder_v2.sql`, `0057_program_day_weekday_link.sql` (one weekday per day; Peak Week pairs are built as separate days), `0090_program_template_description.sql`.
 - Delivery → `lib/data/workouts.ts`, `WorkoutTab.tsx`, `app/_components/workouts/*`.
 - Class day to workout → `lib/utils/checkin.ts`, `0024_classes_linked_checkin.sql`, `0071_check_in_booking.sql`.
 

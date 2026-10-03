@@ -21,12 +21,24 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useAction } from '@/app/_components/useAction';
-import { useClickOutside } from '@/app/_components/useClickOutside';
+import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu, type DropdownMenuItem } from '@/app/_components/DropdownMenu';
-import { BrowseExercisesModal } from '@/app/coach/library/_components/BrowseExercisesModal';
 import { DefaultMuscleGroupIcon, MUSCLE_GROUP_ICONS } from './muscleGroups';
 import type { BlockType, ClientExerciseMaxRow, ExerciseLibraryRow, PrescriptionType } from '@/lib/data/types';
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
+import {
+  BLOCK_FORMATS,
+  SECTIONS,
+  SECTION_TITLE,
+  blockKey,
+  blockFormatOf,
+  exerciseBlockKey,
+  formatDescription,
+  normalisedBlock,
+  parseBlockKey,
+  usesSections,
+  type WorkoutSection,
+} from '@/lib/workoutSections';
 
 // The fields every exercise row needs regardless of whether it's a live workout_exercises row
 // or a program_template_exercises row.
@@ -46,6 +58,9 @@ export interface EditableExercise {
   block_type: BlockType;
   prescription_type: PrescriptionType;
   percent_1rm: number | null;
+  section: WorkoutSection;
+  block_no: number | null;
+  block_format: string | null;
 }
 
 export interface NewExerciseFields {
@@ -63,10 +78,19 @@ export interface NewExerciseFields {
   block_type: BlockType;
   prescription_type: PrescriptionType;
   percent_1rm: number | null;
+  section: WorkoutSection;
+  block_no: number | null;
+  block_format: string | null;
   // Template-only -- ignored by live workout_exercises callers.
   progression_load_increment: number | null;
   progression_every_weeks: number;
 }
+
+// What an edit can change. The progression fields only exist on template rows.
+export type ExerciseUpdate = Partial<EditableExercise> & {
+  progression_load_increment?: number | null;
+  progression_every_weeks?: number;
+};
 
 export interface ResolvedMax {
   estimated1RM: number;
@@ -88,499 +112,470 @@ function latestMax(maxes: ClientExerciseMaxRow[] | undefined, libraryId: string 
   return { estimated1RM, source };
 }
 
-function LabeledField({ label, children }: { label: string; children: ReactNode }) {
+const fieldCls =
+  'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <label className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</label>
+    <div className="flex min-w-0 flex-col gap-1">
+      <label className="text-xs font-medium text-zinc-500">{label}</label>
       {children}
     </div>
   );
 }
 
-function AddExerciseForm({
+function blockLabel(section: WorkoutSection, blockNo: number | null) {
+  const b = normalisedBlock(section, blockNo);
+  return b == null ? SECTION_TITLE[section] : `${SECTION_TITLE[section]} · Block ${b}`;
+}
+
+// One line saying what to do, e.g. "3 × 8-10 · 20kg · RPE 8 · rest 60s".
+function prescriptionSummary(ex: EditableExercise): string {
+  if (ex.block_type === 'circuit') return ex.notes ? ex.notes.split('\n')[0] : 'Instructions';
+  const parts: string[] = [];
+  if (ex.sets != null && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
+  else if (ex.sets != null) parts.push(`${ex.sets} sets`);
+  else if (ex.reps) parts.push(ex.reps);
+  if (ex.prescription_type === 'percent_1rm') {
+    if (ex.percent_1rm != null) parts.push(`${ex.percent_1rm}% 1RM`);
+  } else if (ex.load != null) parts.push(`${ex.load}kg`);
+  if (ex.rpe != null) parts.push(`RPE ${ex.rpe}`);
+  if (ex.rest_seconds != null) parts.push(`rest ${ex.rest_seconds}s`);
+  return parts.length > 0 ? parts.join(' · ') : 'Tap to set sets and reps';
+}
+
+// ------------------------------------------------------------------ edit sheet
+
+function ExerciseSheet<T extends EditableExercise>({
+  exercise,
   library,
-  nextSortOrder,
-  onAdd,
-  clientExerciseMaxes,
   showProgression,
+  progression,
+  blockOptions,
+  currentBlock,
+  onSave,
+  onDelete,
+  onClose,
 }: {
+  exercise: T;
   library: ExerciseLibraryRow[];
-  nextSortOrder: number;
-  onAdd: (fields: NewExerciseFields) => Promise<unknown>;
-  clientExerciseMaxes?: ClientExerciseMaxRow[];
   showProgression?: boolean;
+  progression: { increment: number | null; everyWeeks: number } | null;
+  blockOptions: { key: string; label: string }[];
+  currentBlock: string;
+  onSave: (fields: ExerciseUpdate) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onClose: () => void;
 }) {
+  const isCircuit = exercise.block_type === 'circuit';
+  const [name, setName] = useState(exercise.name);
+  const [sets, setSets] = useState(exercise.sets == null ? '' : String(exercise.sets));
+  const [reps, setReps] = useState(exercise.reps ?? '');
+  const [prescription, setPrescription] = useState<PrescriptionType>(exercise.prescription_type);
+  const [load, setLoad] = useState(exercise.load == null ? '' : String(exercise.load));
+  const [percent, setPercent] = useState(exercise.percent_1rm == null ? '' : String(exercise.percent_1rm));
+  const [rpe, setRpe] = useState(exercise.rpe == null ? '' : String(exercise.rpe));
+  const [rest, setRest] = useState(exercise.rest_seconds == null ? '' : String(exercise.rest_seconds));
+  const [superset, setSuperset] = useState(exercise.superset_group ?? '');
+  const [notes, setNotes] = useState(exercise.notes ?? '');
+  const [video, setVideo] = useState(exercise.video_url ?? '');
+  const [incr, setIncr] = useState(progression?.increment == null ? '' : String(progression.increment));
+  const [every, setEvery] = useState(String(progression?.everyWeeks ?? 1));
+  const [target, setTarget] = useState(currentBlock);
   const { run, busy } = useAction();
-  const [libraryId, setLibraryId] = useState('');
-  const [name, setName] = useState('');
-  const [blockType, setBlockType] = useState<BlockType>('exercise');
-  const [prescriptionType, setPrescriptionType] = useState<PrescriptionType>('absolute');
-  const [sets, setSets] = useState<number | ''>(3);
-  const [reps, setReps] = useState('8-10');
-  const [load, setLoad] = useState<number | ''>('');
-  const [percent1rm, setPercent1rm] = useState<number | ''>('');
-  const [rpe, setRpe] = useState<number | ''>('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [supersetGroup, setSupersetGroup] = useState('');
-  const [restSeconds, setRestSeconds] = useState<number | ''>('');
-  const [notes, setNotes] = useState('');
-  const [progressionIncrement, setProgressionIncrement] = useState<number | ''>('');
-  const [progressionWeeks, setProgressionWeeks] = useState<number | ''>(1);
-  const [showResults, setShowResults] = useState(false);
-  const [highlightIndex, setHighlightIndex] = useState(0);
-  const [browseOpen, setBrowseOpen] = useState(false);
+  const { run: runDelete } = useAction();
 
-  const comboRef = useClickOutside<HTMLDivElement>(() => setShowResults(false), showResults);
+  const num = (v: string) => (v.trim() === '' ? null : Number(v));
+  const linked = exercise.exercise_library_id != null && library.some((l) => l.id === exercise.exercise_library_id);
+  const percentNeedsLink = !isCircuit && prescription === 'percent_1rm' && !linked;
 
-  function handlePickLibrary(id: string) {
-    setLibraryId(id);
-    setShowResults(false);
-    const entry = library.find((e) => e.id === id);
-    if (!entry) return;
-    setName(entry.name);
-    if (entry.default_sets != null) setSets(entry.default_sets);
-    if (entry.default_reps != null) setReps(entry.default_reps);
-    if (entry.default_rpe != null) setRpe(entry.default_rpe);
-    if (entry.video_url != null) setVideoUrl(entry.video_url);
-    if (entry.default_rest_seconds != null) setRestSeconds(entry.default_rest_seconds);
-  }
-
-  const results = name.trim()
-    ? library
-        .filter(
-          (e) =>
-            e.name.toLowerCase().includes(name.trim().toLowerCase()) ||
-            (e.muscle_group ?? '').toLowerCase().includes(name.trim().toLowerCase())
-        )
-        .slice(0, 8)
-    : [];
-
-  function handleNameKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (!showResults || results.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightIndex((i) => Math.min(i + 1, results.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      handlePickLibrary(results[highlightIndex].id);
-    } else if (e.key === 'Escape') {
-      setShowResults(false);
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const isCircuit = blockType === 'circuit';
-    const isPercent = !isCircuit && prescriptionType === 'percent_1rm';
-    // %1RM rows need a linked library exercise to resolve a target load against (DB check
-    // constraint enforces this too, but that surfaces as a raw Postgres error -- catch it
-    // here first with a message that explains why).
-    if (isPercent && !libraryId) return;
-    await run(
-      () =>
-        onAdd({
-          exercise_library_id: libraryId || null,
-          name,
-          sets: isCircuit ? null : sets === '' ? null : sets,
-          reps: isCircuit ? null : reps || null,
-          load: isCircuit || isPercent ? null : load === '' ? null : load,
-          rpe: isCircuit ? null : rpe === '' ? null : rpe,
-          notes: notes || null,
-          video_url: videoUrl || null,
-          superset_group: isCircuit ? null : supersetGroup || null,
-          rest_seconds: isCircuit ? null : restSeconds === '' ? null : restSeconds,
-          sort_order: nextSortOrder,
-          block_type: blockType,
-          prescription_type: isCircuit ? 'absolute' : prescriptionType,
-          percent_1rm: isPercent ? (percent1rm === '' ? null : percent1rm) : null,
-          progression_load_increment:
-            showProgression && !isCircuit && !isPercent ? (progressionIncrement === '' ? null : progressionIncrement) : null,
-          progression_every_weeks: showProgression ? (progressionWeeks === '' ? 1 : progressionWeeks) : 1,
-        }),
-      {
-        success: 'Exercise added',
-        onDone: () => {
-          setLibraryId('');
-          setName('');
-          setVideoUrl('');
-          setSupersetGroup('');
-          setRestSeconds('');
-          setNotes('');
-          setPercent1rm('');
-          setProgressionIncrement('');
-        },
+  async function save() {
+    const fields: ExerciseUpdate = { name: name.trim() || exercise.name, notes: notes.trim() || null };
+    if (!isCircuit) {
+      const isPercent = prescription === 'percent_1rm';
+      Object.assign(fields, {
+        sets: num(sets),
+        reps: reps.trim() || null,
+        prescription_type: prescription,
+        load: isPercent ? null : num(load),
+        percent_1rm: isPercent ? num(percent) : null,
+        rpe: num(rpe),
+        rest_seconds: num(rest),
+        superset_group: superset.trim() || null,
+        video_url: video.trim() || null,
+      });
+      if (showProgression) {
+        fields.progression_load_increment = isPercent ? null : num(incr);
+        fields.progression_every_weeks = Number(every) > 0 ? Number(every) : 1;
       }
-    );
+    }
+    if (target !== currentBlock) {
+      const { section, blockNo } = parseBlockKey(target);
+      fields.section = section;
+      fields.block_no = blockNo;
+    }
+    await run(() => onSave(fields), { success: 'Saved', onDone: onClose });
   }
-
-  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
-  const segBtnCls = (active: boolean) =>
-    `rounded-md px-2 py-1 text-xs font-medium ${active ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/10'}`;
-  const isCircuit = blockType === 'circuit';
-  const hasMaxOnFile = latestMax(clientExerciseMaxes, libraryId || null) != null;
 
   return (
-    <form onSubmit={handleSubmit} className="mt-3 space-y-2 rounded-lg border border-black/10 p-3 dark:border-white/10">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
-          <button type="button" className={segBtnCls(blockType === 'exercise')} onClick={() => setBlockType('exercise')}>
-            Exercise
-          </button>
-          <button type="button" className={segBtnCls(blockType === 'circuit')} onClick={() => setBlockType('circuit')}>
-            Circuit
-          </button>
-        </div>
-        {!isCircuit && (
+    <BottomSheet title={isCircuit ? 'Instructions' : exercise.name} onClose={onClose}>
+      <div className="space-y-4">
+        {isCircuit ? (
           <>
-            <div className="h-5 w-px bg-black/10 dark:bg-white/10" />
-            <div className="flex gap-1">
-              <button type="button" className={segBtnCls(prescriptionType === 'absolute')} onClick={() => setPrescriptionType('absolute')}>
-                Absolute
-              </button>
-              <button type="button" className={segBtnCls(prescriptionType === 'percent_1rm')} onClick={() => setPrescriptionType('percent_1rm')}>
-                % 1RM
-              </button>
-            </div>
+            <Field label="Title">
+              <input className={fieldCls} value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <Field label="What to do">
+              <textarea
+                rows={4}
+                className={fieldCls}
+                placeholder="e.g. 10 min AMRAP: 40s row, 20 push press, 8 burpees"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </Field>
           </>
-        )}
-      </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Sets">
+                <input type="number" inputMode="numeric" className={fieldCls} value={sets} onChange={(e) => setSets(e.target.value)} />
+              </Field>
+              <Field label="Reps">
+                <input className={fieldCls} value={reps} placeholder="8-10" onChange={(e) => setReps(e.target.value)} />
+              </Field>
+            </div>
 
-      {!isCircuit && (
-        <p className="text-[11px] text-zinc-500">
-          {prescriptionType === 'absolute'
-            ? 'Absolute — a fixed weight you set.'
-            : "% 1RM — a percentage of the client's tested max for this exercise; the app calculates the actual target weight for you."}
-        </p>
-      )}
-
-      {!isCircuit && prescriptionType === 'percent_1rm' && !libraryId && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400">
-          Pick an exercise from the library first — % 1RM needs a linked exercise to resolve against.
-        </p>
-      )}
-      {!isCircuit && prescriptionType === 'percent_1rm' && libraryId && clientExerciseMaxes !== undefined && !hasMaxOnFile && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400">
-          No tested max on file for this exercise yet — log one so the target load can resolve.
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-end gap-2">
-        <div ref={comboRef} className="relative w-48">
-          <LabeledField label="Exercise">
-            <input
-              required
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setLibraryId('');
-                setShowResults(true);
-                setHighlightIndex(0);
-              }}
-              onFocus={() => setShowResults(true)}
-              onKeyDown={handleNameKeyDown}
-              placeholder="Search or type a name"
-              className={inputCls}
-            />
-          </LabeledField>
-          {showResults && results.length > 0 && (
-            <div
-              role="listbox"
-              className="absolute z-10 mt-1 max-h-56 w-56 overflow-auto rounded-md border border-black/10 bg-[var(--background)] py-1 shadow-lg dark:border-white/10"
-            >
-              {results.map((entry, i) => {
-                const Icon = MUSCLE_GROUP_ICONS[entry.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
-                return (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {(['absolute', 'percent_1rm'] as const).map((p) => (
                   <button
-                    key={entry.id}
+                    key={p}
                     type="button"
-                    role="option"
-                    aria-selected={i === highlightIndex}
-                    onClick={() => handlePickLibrary(entry.id)}
-                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${
-                      i === highlightIndex ? 'bg-black/5 dark:bg-white/5' : ''
+                    onClick={() => setPrescription(p)}
+                    className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
+                      prescription === p ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-                    <span className="truncate">{entry.name}</span>
-                    {entry.muscle_group && <span className="shrink-0 text-zinc-500">{entry.muscle_group}</span>}
+                    {p === 'absolute' ? 'Fixed weight' : '% of 1RM'}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+              {prescription === 'absolute' ? (
+                <Field label="Load (kg)">
+                  <input type="number" inputMode="decimal" className={fieldCls} value={load} onChange={(e) => setLoad(e.target.value)} />
+                </Field>
+              ) : (
+                <Field label="% of the member's tested max">
+                  <input type="number" inputMode="decimal" className={fieldCls} value={percent} onChange={(e) => setPercent(e.target.value)} />
+                </Field>
+              )}
+              {percentNeedsLink && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  % of 1RM needs the exercise to come from the library. Remove this one and add it from the library.
+                </p>
+              )}
             </div>
-          )}
-        </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="RPE">
+                <input type="number" inputMode="decimal" className={fieldCls} value={rpe} onChange={(e) => setRpe(e.target.value)} />
+              </Field>
+              <Field label="Rest (seconds)">
+                <input type="number" inputMode="numeric" className={fieldCls} value={rest} onChange={(e) => setRest(e.target.value)} />
+              </Field>
+            </div>
+
+            <Field label="Coaching notes">
+              <textarea
+                rows={2}
+                className={fieldCls}
+                placeholder="e.g. pause for a second at the bottom"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </Field>
+            <Field label="Video link">
+              <input className={fieldCls} value={video} placeholder="https://" onChange={(e) => setVideo(e.target.value)} />
+            </Field>
+            <Field label="Superset letter (same letter = done together)">
+              <input className={fieldCls} value={superset} maxLength={3} placeholder="A" onChange={(e) => setSuperset(e.target.value)} />
+            </Field>
+
+            {showProgression && prescription === 'absolute' && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Add (kg)">
+                  <input type="number" inputMode="decimal" className={fieldCls} value={incr} placeholder="0" onChange={(e) => setIncr(e.target.value)} />
+                </Field>
+                <Field label="Every (weeks)">
+                  <input type="number" inputMode="numeric" className={fieldCls} value={every} onChange={(e) => setEvery(e.target.value)} />
+                </Field>
+              </div>
+            )}
+          </>
+        )}
+
+        <Field label="Section">
+          <select className={fieldCls} value={target} onChange={(e) => setTarget(e.target.value)}>
+            {blockOptions.map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         <button
           type="button"
-          onClick={() => setBrowseOpen(true)}
-          className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+          disabled={busy || percentNeedsLink}
+          onClick={save}
+          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
-          Browse exercises
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={() => runDelete(onDelete, { success: 'Removed', onDone: onClose })}
+          className="w-full rounded-full py-2 text-sm font-bold text-danger"
+        >
+          Remove from workout
         </button>
       </div>
+    </BottomSheet>
+  );
+}
 
-      {!isCircuit && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <LabeledField label="Sets">
-            <input type="number" className={inputCls} value={sets} onChange={(e) => setSets(e.target.value === '' ? '' : Number(e.target.value))} />
-          </LabeledField>
-          <LabeledField label="Reps">
-            <input className={inputCls} value={reps} onChange={(e) => setReps(e.target.value)} />
-          </LabeledField>
-          {prescriptionType === 'percent_1rm' ? (
-            <LabeledField label="% 1RM">
-              <input type="number" className={inputCls} value={percent1rm} onChange={(e) => setPercent1rm(e.target.value === '' ? '' : Number(e.target.value))} />
-            </LabeledField>
-          ) : (
-            <LabeledField label="Load">
-              <input type="number" className={inputCls} value={load} onChange={(e) => setLoad(e.target.value === '' ? '' : Number(e.target.value))} />
-            </LabeledField>
-          )}
-          <LabeledField label="RPE">
-            <input type="number" className={inputCls} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-          </LabeledField>
-          <LabeledField label="Rest (s)">
-            <input type="number" className={inputCls} value={restSeconds} onChange={(e) => setRestSeconds(e.target.value === '' ? '' : Number(e.target.value))} />
-          </LabeledField>
-          <LabeledField label="Superset">
-            <input placeholder="e.g. A" className={inputCls} value={supersetGroup} onChange={(e) => setSupersetGroup(e.target.value)} />
-          </LabeledField>
+// ------------------------------------------------------------------ add pickers
+
+function ExercisePickerSheet({
+  library,
+  title,
+  onPick,
+  onCustom,
+  onClose,
+}: {
+  library: ExerciseLibraryRow[];
+  title: string;
+  onPick: (entry: ExerciseLibraryRow) => Promise<unknown>;
+  onCustom: (name: string) => Promise<unknown>;
+  onClose: () => void;
+}) {
+  const { run, busy } = useAction();
+  const [query, setQuery] = useState('');
+  const [muscle, setMuscle] = useState<string | null>(null);
+  const [added, setAdded] = useState<Record<string, number>>({});
+
+  const muscles = Array.from(new Set(library.map((l) => l.muscle_group).filter((m): m is string => !!m))).sort();
+  const q = query.trim().toLowerCase();
+  const matches = library.filter(
+    (l) => (!muscle || l.muscle_group === muscle) && (!q || l.name.toLowerCase().includes(q))
+  );
+  const shown = matches.slice(0, 40);
+  const exact = library.some((l) => l.name.toLowerCase() === q);
+  const addedCount = Object.values(added).reduce((a, b) => a + b, 0);
+
+  return (
+    <BottomSheet title={title} onClose={onClose}>
+      <div className="space-y-3">
+        <input
+          autoFocus
+          className={fieldCls}
+          placeholder="Search exercises"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {[null, ...muscles].map((m) => (
+            <button
+              key={m ?? 'all'}
+              type="button"
+              onClick={() => setMuscle(m)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${
+                muscle === m ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+              }`}
+            >
+              {m ?? 'All'}
+            </button>
+          ))}
         </div>
-      )}
-      <LabeledField label="Video URL (optional)">
-        <input className={inputCls} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
-      </LabeledField>
 
-      {isCircuit && (
-        <LabeledField label="Instructions">
+        <div className="max-h-[48vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+          {q && !exact && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                run(() => onCustom(query.trim()), {
+                  onDone: () => {
+                    setAdded((a) => ({ ...a, [`custom:${q}`]: (a[`custom:${q}`] ?? 0) + 1 }));
+                    setQuery('');
+                  },
+                })
+              }
+              className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm font-bold text-accent"
+            >
+              + Add “{query.trim()}” as its own exercise
+            </button>
+          )}
+          {shown.map((entry) => {
+            const Icon = MUSCLE_GROUP_ICONS[entry.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                disabled={busy}
+                onClick={() => run(() => onPick(entry), { onDone: () => setAdded((a) => ({ ...a, [entry.id]: (a[entry.id] ?? 0) + 1 })) })}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10">
+                  <Icon className="h-4 w-4 text-zinc-500" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.name}</span>
+                  {entry.muscle_group && <span className="text-xs text-zinc-500">{entry.muscle_group}</span>}
+                </span>
+                {added[entry.id] ? (
+                  <span className="shrink-0 text-xs font-bold text-success">Added{added[entry.id] > 1 ? ` ×${added[entry.id]}` : ''} ✓</span>
+                ) : (
+                  <span className="shrink-0 text-lg font-bold text-accent">+</span>
+                )}
+              </button>
+            );
+          })}
+          {shown.length === 0 && !(q && !exact) && <p className="p-3 text-sm text-zinc-500">No exercises match.</p>}
+          {matches.length > shown.length && (
+            <p className="p-3 text-xs text-zinc-500">Showing the first {shown.length} of {matches.length}. Search to narrow down.</p>
+          )}
+        </div>
+
+        <button type="button" onClick={onClose} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground">
+          {addedCount > 0 ? `Done (${addedCount} added)` : 'Done'}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function InstructionsSheet({
+  title,
+  defaultFormat,
+  onAdd,
+  onClose,
+}: {
+  title: string;
+  defaultFormat: string | null;
+  onAdd: (name: string, notes: string) => Promise<unknown>;
+  onClose: () => void;
+}) {
+  const { run, busy } = useAction();
+  const [name, setName] = useState(defaultFormat ? `${defaultFormat}` : 'Instructions');
+  const [notes, setNotes] = useState('');
+  return (
+    <BottomSheet title={title} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          A line or two of text for the block, such as the rounds and reps. It sits in the list like an exercise.
+        </p>
+        <Field label="Title">
+          <input className={fieldCls} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="What to do">
           <textarea
-            placeholder="e.g. 3 rounds: 20 mountain climbers, 15 KB swings, 400m row"
-            className={inputCls}
-            rows={2}
+            autoFocus
+            rows={4}
+            className={fieldCls}
+            placeholder="e.g. 10 min AMRAP: 40s row, 20 push press, 8 burpees, 40s sit-ups"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-        </LabeledField>
-      )}
-
-      {showProgression && !isCircuit && prescriptionType === 'absolute' && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-zinc-500">Progression:</span>
-          <span className="text-[11px] text-zinc-500">+</span>
-          <input type="number" placeholder="0" className={`${inputCls} w-14`} value={progressionIncrement} onChange={(e) => setProgressionIncrement(e.target.value === '' ? '' : Number(e.target.value))} />
-          <span className="text-[11px] text-zinc-500">load every</span>
-          <input type="number" placeholder="1" className={`${inputCls} w-14`} value={progressionWeeks} onChange={(e) => setProgressionWeeks(e.target.value === '' ? '' : Number(e.target.value))} />
-          <span className="text-[11px] text-zinc-500">week(s)</span>
-        </div>
-      )}
-
-      <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
-        Add
-      </button>
-
-      {browseOpen && (
-        <BrowseExercisesModal library={library} onPick={(entry: ExerciseLibraryRow) => handlePickLibrary(entry.id)} onClose={() => setBrowseOpen(false)} />
-      )}
-    </form>
+        </Field>
+        <button
+          type="button"
+          disabled={busy || !notes.trim()}
+          onClick={() => run(() => onAdd(name.trim() || 'Instructions', notes.trim()), { success: 'Added', onDone: onClose })}
+          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+        >
+          {busy ? 'Adding…' : 'Add'}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
-// A single editable value box: local state seeded from `value`, saves onBlur only if changed,
-// synced back if the parent's value changes underneath it (e.g. after a save round-trips
-// through router.refresh()). Mirrors the same pattern already used by PhaseLabelInput.
-function EditableField({
-  label,
-  value,
-  numeric,
-  onSave,
+function FormatSheet({
+  title,
+  current,
+  onPick,
+  onClose,
 }: {
-  label: string;
-  value: string | number | null;
-  numeric?: boolean;
-  onSave: (raw: string) => void;
-}) {
-  const initial = value == null ? '' : String(value);
-  const [local, setLocal] = useState(initial);
-  const prevInitial = useRef(initial);
-
-  useEffect(() => {
-    if (prevInitial.current !== initial) {
-      prevInitial.current = initial;
-      setLocal(initial);
-    }
-  }, [initial]);
-
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</p>
-      <input
-        type={numeric ? 'number' : 'text'}
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => {
-          if (local !== initial) onSave(local);
-        }}
-        className="mt-0.5 w-full rounded-md border border-black/10 bg-transparent px-1.5 py-1 text-xs dark:border-white/10"
-      />
-    </div>
-  );
-}
-
-function SortableExerciseRow<T extends EditableExercise>({
-  exercise,
-  previousExercise,
-  index,
-  library,
-  canEdit,
-  onDelete,
-  onUpdate,
-  clientExerciseMaxes,
-  renderExtra,
-}: {
-  exercise: T;
-  previousExercise: T | undefined;
-  index: number;
-  library: ExerciseLibraryRow[];
-  canEdit: boolean;
-  onDelete: (id: string, name: string) => Promise<unknown>;
-  onUpdate: (id: string, fields: Partial<EditableExercise>) => Promise<unknown>;
-  clientExerciseMaxes?: ClientExerciseMaxRow[];
-  renderExtra?: (exercise: T) => ReactNode;
+  title: string;
+  current: string | null;
+  onPick: (format: string | null) => Promise<unknown>;
+  onClose: () => void;
 }) {
   const { run } = useAction();
-  const { run: runLink } = useAction();
-  const { run: runField } = useAction();
+  const row = (name: string | null, description?: string) => (
+    <button
+      key={name ?? 'none'}
+      type="button"
+      onClick={() => run(() => onPick(name), { onDone: onClose })}
+      className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-black dark:text-zinc-50">{name ?? 'No format'}</span>
+        {description && <span className="text-xs text-zinc-500">{description}</span>}
+      </span>
+      {current === name && <span className="text-sm font-bold text-accent">✓</span>}
+    </button>
+  );
+  return (
+    <BottomSheet title={title} onClose={onClose}>
+      <div className="max-h-[60vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+        {row(null, 'Plain sets and reps')}
+        {BLOCK_FORMATS.map((f) => row(f.name, f.description))}
+      </div>
+    </BottomSheet>
+  );
+}
+
+// ------------------------------------------------------------------ rows
+
+function BuilderRow<T extends EditableExercise>({
+  exercise,
+  index,
+  library,
+  menuItems,
+  onOpen,
+}: {
+  exercise: T;
+  index: number;
+  library: ExerciseLibraryRow[];
+  menuItems: DropdownMenuItem[];
+  onOpen: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
-
-  async function handleDelete() {
-    await run(() => onDelete(exercise.id, exercise.name), { success: 'Exercise deleted' });
-  }
-
-  async function handleLinkWithPrevious() {
-    if (!previousExercise) return;
-    const group = previousExercise.superset_group ?? nextSupersetLetter([previousExercise, exercise]);
-    if (!previousExercise.superset_group) {
-      await runLink(() => onUpdate(previousExercise.id, { superset_group: group }));
-    }
-    await runLink(() => onUpdate(exercise.id, { superset_group: group }));
-  }
-
-  async function handleUnlink() {
-    await runLink(() => onUpdate(exercise.id, { superset_group: null }));
-  }
-
-  function saveField(field: keyof EditableExercise, raw: string, numeric: boolean) {
-    const value = numeric ? (raw.trim() === '' ? null : Number(raw)) : raw.trim() === '' ? null : raw;
-    runField(() => onUpdate(exercise.id, { [field]: value }));
-  }
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const isCircuit = exercise.block_type === 'circuit';
-  const isPercent = exercise.prescription_type === 'percent_1rm';
-  const resolvedMax = isPercent ? latestMax(clientExerciseMaxes, exercise.exercise_library_id) : null;
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const libraryEntry = exercise.exercise_library_id ? library.find((e) => e.id === exercise.exercise_library_id) : undefined;
   const Icon = MUSCLE_GROUP_ICONS[libraryEntry?.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
-
-  const menuItems: DropdownMenuItem[] = [];
-  if (canEdit) {
-    if (!isCircuit && exercise.superset_group) {
-      menuItems.push({ label: 'Unlink', onSelect: handleUnlink });
-    } else if (!isCircuit && previousExercise) {
-      menuItems.push({ label: 'Link with previous', onSelect: handleLinkWithPrevious });
-    }
-    menuItems.push({ label: 'Delete', onSelect: handleDelete, destructive: true });
-  }
-
-  // A member's view: a roomy card with the name and prescription on top, and everything they act
-  // on (video, last time, logging) running full width underneath rather than squeezed beside a
-  // number and an icon.
-  if (!canEdit) {
-    const pill = 'rounded-full bg-black/[.06] px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
-    return (
-      <div ref={setNodeRef} style={style} className="rounded-2xl border border-black/[.06] bg-card p-4 shadow-sm dark:border-white/10">
-        <div className="flex items-start gap-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-extrabold text-accent">
-            {index + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-extrabold leading-snug text-black dark:text-zinc-50">{exercise.name}</p>
-            {!isCircuit && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {exercise.sets != null && (
-                  <span className={pill}>
-                    <span className="font-extrabold text-black dark:text-zinc-50">{exercise.sets}</span> sets
-                  </span>
-                )}
-                {exercise.reps != null && (
-                  <span className={pill}>
-                    <span className="font-extrabold text-black dark:text-zinc-50">{exercise.reps}</span> reps
-                  </span>
-                )}
-                {isPercent
-                  ? exercise.percent_1rm != null && (
-                      <span className={pill}>
-                        <span className="font-extrabold text-black dark:text-zinc-50">{exercise.percent_1rm}%</span> 1RM
-                      </span>
-                    )
-                  : exercise.load != null && (
-                      <span className={pill}>
-                        <span className="font-extrabold text-black dark:text-zinc-50">{exercise.load}</span> kg
-                      </span>
-                    )}
-                {exercise.rpe != null && (
-                  <span className={pill}>
-                    RPE <span className="font-extrabold text-black dark:text-zinc-50">{exercise.rpe}</span>
-                  </span>
-                )}
-              </div>
-            )}
-            {isPercent && resolvedMax != null && exercise.percent_1rm != null && (
-              <p className="mt-1.5 text-xs text-zinc-500">≈ {Math.round((resolvedMax.estimated1RM * exercise.percent_1rm) / 100)} kg</p>
-            )}
-          </div>
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-white/10">
-            {libraryEntry?.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
-              <img src={libraryEntry.image_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <Icon className="h-5 w-5 text-zinc-500" />
-            )}
-          </span>
-        </div>
-        {isCircuit && exercise.notes && (
-          <p className="mt-3 whitespace-pre-wrap rounded-xl bg-black/[.03] p-3 text-sm leading-relaxed text-zinc-600 dark:bg-white/[.04] dark:text-zinc-400">
-            {exercise.notes}
-          </p>
-        )}
-        {renderExtra?.(exercise)}
-      </div>
-    );
-  }
-
   return (
-    <div ref={setNodeRef} style={style} className="rounded-xl border border-black/[.05] bg-black/[.02] p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/5 dark:bg-white/[.03]">
-      <div className="flex items-start gap-2">
-        {canEdit && (
-          <button
-            {...attributes}
-            {...listeners}
-            aria-label="Drag to reorder"
-            className="mt-1 shrink-0 cursor-grab touch-none text-zinc-400 active:cursor-grabbing dark:text-zinc-600"
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        )}
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/5 text-[11px] font-semibold text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded-xl border border-black/[.06] bg-card px-2 py-2 dark:border-white/10"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        className="shrink-0 cursor-grab touch-none p-1 text-zinc-400 active:cursor-grabbing dark:text-zinc-600"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/5 text-[11px] font-bold text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
           {index + 1}
         </span>
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-black/5 dark:bg-white/10">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/5 dark:bg-white/10">
           {libraryEntry?.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
             <img src={libraryEntry.image_url} alt="" className="h-full w-full object-cover" />
@@ -588,81 +583,110 @@ function SortableExerciseRow<T extends EditableExercise>({
             <Icon className="h-4 w-4 text-zinc-500" />
           )}
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate font-bold text-black dark:text-zinc-50">{exercise.name}</p>
-            {canEdit && menuItems.length > 0 && <DropdownMenu items={menuItems} triggerLabel={`${exercise.name} actions`} />}
-          </div>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{exercise.name}</span>
+          <span className="block truncate text-xs text-zinc-500">{prescriptionSummary(exercise)}</span>
+        </span>
+      </button>
+      <DropdownMenu items={menuItems} triggerLabel={`${exercise.name} actions`} />
+    </div>
+  );
+}
 
+// A member's view: a roomy card with the name and prescription on top, and everything they act
+// on (video, last time, logging) running full width underneath rather than squeezed beside a
+// number and an icon.
+function MemberExerciseRow<T extends EditableExercise>({
+  exercise,
+  index,
+  library,
+  clientExerciseMaxes,
+  renderExtra,
+}: {
+  exercise: T;
+  index: number;
+  library: ExerciseLibraryRow[];
+  clientExerciseMaxes?: ClientExerciseMaxRow[];
+  renderExtra?: (exercise: T) => ReactNode;
+}) {
+  const { setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id, disabled: true });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const isCircuit = exercise.block_type === 'circuit';
+  const isPercent = exercise.prescription_type === 'percent_1rm';
+  const resolvedMax = isPercent ? latestMax(clientExerciseMaxes, exercise.exercise_library_id) : null;
+  const libraryEntry = exercise.exercise_library_id ? library.find((e) => e.id === exercise.exercise_library_id) : undefined;
+  const Icon = MUSCLE_GROUP_ICONS[libraryEntry?.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
+  const pill = 'rounded-full bg-black/[.06] px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-2xl border border-black/[.06] bg-card p-4 shadow-sm dark:border-white/10">
+      <div className="flex items-start gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-extrabold text-accent">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-extrabold leading-snug text-black dark:text-zinc-50">{exercise.name}</p>
           {!isCircuit && (
-            <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm text-zinc-500">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {exercise.sets != null && (
-                <span>
-                  <span className="font-bold text-black dark:text-zinc-50">{exercise.sets}</span> sets
+                <span className={pill}>
+                  <span className="font-extrabold text-black dark:text-zinc-50">{exercise.sets}</span> sets
                 </span>
               )}
               {exercise.reps != null && (
-                <span>
-                  <span className="font-bold text-black dark:text-zinc-50">{exercise.reps}</span> reps
+                <span className={pill}>
+                  <span className="font-extrabold text-black dark:text-zinc-50">{exercise.reps}</span> reps
                 </span>
               )}
               {isPercent
                 ? exercise.percent_1rm != null && (
-                    <span className="font-bold text-black dark:text-zinc-50">{exercise.percent_1rm}% 1RM</span>
+                    <span className={pill}>
+                      <span className="font-extrabold text-black dark:text-zinc-50">{exercise.percent_1rm}%</span> 1RM
+                    </span>
                   )
-                : exercise.load != null && <span className="font-bold text-black dark:text-zinc-50">{exercise.load}kg</span>}
+                : exercise.load != null && (
+                    <span className={pill}>
+                      <span className="font-extrabold text-black dark:text-zinc-50">{exercise.load}</span> kg
+                    </span>
+                  )}
               {exercise.rpe != null && (
-                <span>
-                  RPE <span className="font-bold text-black dark:text-zinc-50">{exercise.rpe}</span>
+                <span className={pill}>
+                  RPE <span className="font-extrabold text-black dark:text-zinc-50">{exercise.rpe}</span>
                 </span>
               )}
-            </p>
-          )}
-          {!isCircuit && canEdit && (
-            <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1.5 sm:grid-cols-5">
-              <EditableField label="Sets" value={exercise.sets} numeric onSave={(v) => saveField('sets', v, true)} />
-              <EditableField label="Reps" value={exercise.reps} onSave={(v) => saveField('reps', v, false)} />
-              {isPercent ? (
-                <EditableField label="% 1RM" value={exercise.percent_1rm} numeric onSave={(v) => saveField('percent_1rm', v, true)} />
-              ) : (
-                <EditableField label="Load" value={exercise.load} numeric onSave={(v) => saveField('load', v, true)} />
-              )}
-              <EditableField label="RPE" value={exercise.rpe} numeric onSave={(v) => saveField('rpe', v, true)} />
-              <EditableField label="Rest (s)" value={exercise.rest_seconds} numeric onSave={(v) => saveField('rest_seconds', v, true)} />
             </div>
           )}
           {isPercent && resolvedMax != null && exercise.percent_1rm != null && (
-            <p className="mt-1 text-[11px] text-zinc-500">
-              ≈ {Math.round((resolvedMax.estimated1RM * exercise.percent_1rm) / 100)}
-              {' ('}
-              {resolvedMax.source.reps > 1
-                ? `from ${resolvedMax.source.tested_max}×${resolvedMax.source.reps} → est. 1RM ${Math.round(resolvedMax.estimated1RM)}`
-                : `from tested 1RM ${resolvedMax.source.tested_max}`}
-              {')'}
-            </p>
+            <p className="mt-1.5 text-xs text-zinc-500">≈ {Math.round((resolvedMax.estimated1RM * exercise.percent_1rm) / 100)} kg</p>
           )}
-
-          {isCircuit && canEdit && (
-            <div className="mt-1.5">
-              <textarea
-                defaultValue={exercise.notes ?? ''}
-                rows={2}
-                onBlur={(e) => {
-                  if (e.target.value !== (exercise.notes ?? '')) runField(() => onUpdate(exercise.id, { notes: e.target.value || null }));
-                }}
-                className="w-full whitespace-pre-wrap rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-              />
-            </div>
-          )}
-          {isCircuit && !canEdit && exercise.notes && (
-            <p className="mt-1 whitespace-pre-wrap text-xs text-zinc-500">{exercise.notes}</p>
-          )}
-          {renderExtra?.(exercise)}
         </div>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-white/10">
+          {libraryEntry?.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
+            <img src={libraryEntry.image_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <Icon className="h-5 w-5 text-zinc-500" />
+          )}
+        </span>
       </div>
+      {exercise.notes && !isCircuit && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{exercise.notes}</p>}
+      {isCircuit && exercise.notes && (
+        <p className="mt-3 whitespace-pre-wrap rounded-xl bg-black/[.03] p-3 text-sm leading-relaxed text-zinc-600 dark:bg-white/[.04] dark:text-zinc-400">
+          {exercise.notes}
+        </p>
+      )}
+      {renderExtra?.(exercise)}
     </div>
   );
 }
+
+// ------------------------------------------------------------------ editor
+
+type SheetState =
+  | { kind: 'edit'; id: string }
+  | { kind: 'pick'; key: string }
+  | { kind: 'note'; key: string }
+  | { kind: 'format'; key: string }
+  | null;
 
 export function ExerciseEditor<T extends EditableExercise>({
   exercises,
@@ -680,7 +704,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   library: ExerciseLibraryRow[];
   canEdit: boolean;
   onAdd: (fields: NewExerciseFields) => Promise<unknown>;
-  onUpdate: (id: string, fields: Partial<EditableExercise>) => Promise<unknown>;
+  onUpdate: (id: string, fields: ExerciseUpdate) => Promise<unknown>;
   onDelete: (id: string, name: string) => Promise<unknown>;
   onReorder: (orderedIds: string[]) => Promise<unknown>;
   clientExerciseMaxes?: ClientExerciseMaxRow[];
@@ -688,10 +712,14 @@ export function ExerciseEditor<T extends EditableExercise>({
   renderExtra?: (exercise: T) => ReactNode;
 }) {
   const { run: runReorder } = useAction();
+  const { run: runMutate } = useAction();
   const sorted = [...exercises].sort((a, b) => a.sort_order - b.sort_order);
   const idsKey = sorted.map((e) => e.id).join(',');
   const [orderedIds, setOrderedIds] = useState<string[]>(() => sorted.map((e) => e.id));
   const prevIdsKey = useRef(idsKey);
+  const [sheet, setSheet] = useState<SheetState>(null);
+  // A format chosen for a block that has no exercises yet; it is stamped on the first one added.
+  const [pendingFormats, setPendingFormats] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (prevIdsKey.current !== idsKey) {
@@ -706,94 +734,384 @@ export function ExerciseEditor<T extends EditableExercise>({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const byId = new Map(sorted.map((e) => [e.id, e]));
+  const displayOrder = orderedIds.map((id) => byId.get(id)).filter((e): e is T => e != null);
+  const blocks = new Map<string, T[]>();
+  for (const ex of displayOrder) {
+    const key = exerciseBlockKey(ex);
+    const list = blocks.get(key);
+    if (list) list.push(ex);
+    else blocks.set(key, [ex]);
+  }
+
+  async function persistOrder(next: string[], previous: string[]) {
+    setOrderedIds(next);
+    const success = await runReorder(() => onReorder(next));
+    if (!success) setOrderedIds(previous);
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldOrder = orderedIds;
-    const oldIndex = oldOrder.indexOf(String(active.id));
-    const newIndex = oldOrder.indexOf(String(over.id));
-    const next = arrayMove(oldOrder, oldIndex, newIndex);
-    setOrderedIds(next);
-    const success = await runReorder(() => onReorder(next));
-    if (!success) setOrderedIds(oldOrder);
+    const a = byId.get(String(active.id));
+    const o = byId.get(String(over.id));
+    // Dragging only reorders inside a block; moving between sections is done from the edit sheet.
+    if (!a || !o || exerciseBlockKey(a) !== exerciseBlockKey(o)) return;
+    const oldIndex = orderedIds.indexOf(String(active.id));
+    const newIndex = orderedIds.indexOf(String(over.id));
+    await persistOrder(arrayMove(orderedIds, oldIndex, newIndex), orderedIds);
   }
 
-  const byId = new Map(sorted.map((e) => [e.id, e]));
-  const displayOrder = orderedIds.map((id) => byId.get(id)).filter((e): e is T => e != null);
-  const supersetGroups = groupBySuperset(displayOrder);
+  const nextSort = (sorted.length === 0 ? -1 : Math.max(...sorted.map((e) => e.sort_order))) + 1;
 
+  function formatFor(key: string): string | null {
+    return blockFormatOf(blocks.get(key)) ?? pendingFormats[key] ?? null;
+  }
+
+  async function addRow(key: string, partial: Partial<NewExerciseFields> & Pick<NewExerciseFields, 'name' | 'block_type'>) {
+    const { section, blockNo } = parseBlockKey(key);
+    return onAdd({
+      exercise_library_id: null,
+      sets: null,
+      reps: null,
+      load: null,
+      rpe: null,
+      notes: null,
+      video_url: null,
+      superset_group: null,
+      rest_seconds: null,
+      sort_order: nextSort,
+      prescription_type: 'absolute',
+      percent_1rm: null,
+      progression_load_increment: null,
+      progression_every_weeks: 1,
+      section,
+      block_no: blockNo,
+      block_format: formatFor(key),
+      ...partial,
+    });
+  }
+
+  function addFromLibrary(key: string, entry: ExerciseLibraryRow) {
+    const { section } = parseBlockKey(key);
+    // Warm-up and conditioning are timed or "as many as you can", so they don't start with sets and reps.
+    const setsAndReps = section === 'lift' || section === 'strong';
+    return addRow(key, {
+      block_type: 'exercise',
+      exercise_library_id: entry.id,
+      name: entry.name,
+      sets: setsAndReps ? (entry.default_sets ?? 3) : null,
+      reps: setsAndReps ? (entry.default_reps ?? '8-10') : (entry.default_reps ?? null),
+      rpe: entry.default_rpe ?? null,
+      rest_seconds: entry.default_rest_seconds ?? null,
+      video_url: entry.video_url ?? null,
+    });
+  }
+
+  async function setFormat(key: string, format: string | null) {
+    const rows = blocks.get(key) ?? [];
+    if (rows.length === 0) {
+      setPendingFormats((p) => ({ ...p, [key]: format }));
+      return;
+    }
+    await Promise.all(rows.map((r) => onUpdate(r.id, { block_format: format })));
+  }
+
+  function moveWithinBlock(ex: T, direction: -1 | 1) {
+    const list = blocks.get(exerciseBlockKey(ex)) ?? [];
+    const i = list.findIndex((e) => e.id === ex.id);
+    const neighbour = list[i + direction];
+    if (!neighbour) return;
+    const next = [...orderedIds];
+    const a = next.indexOf(ex.id);
+    const b = next.indexOf(neighbour.id);
+    [next[a], next[b]] = [next[b], next[a]];
+    return persistOrder(next, orderedIds);
+  }
+
+  function duplicate(ex: T) {
+    const rest = ex;
+    return runMutate(
+      () =>
+        onAdd({
+          exercise_library_id: rest.exercise_library_id,
+          name: rest.name,
+          sets: rest.sets,
+          reps: rest.reps,
+          load: rest.load,
+          rpe: rest.rpe,
+          notes: rest.notes,
+          video_url: rest.video_url,
+          superset_group: null,
+          rest_seconds: rest.rest_seconds,
+          sort_order: nextSort,
+          block_type: rest.block_type,
+          prescription_type: rest.prescription_type,
+          percent_1rm: rest.percent_1rm,
+          section: rest.section ?? 'lift',
+          block_no: rest.block_no ?? null,
+          block_format: rest.block_format ?? null,
+          progression_load_increment: null,
+          progression_every_weeks: 1,
+        }),
+      { success: 'Duplicated' }
+    );
+  }
+
+  function menuFor(ex: T, listInBlock: T[]): DropdownMenuItem[] {
+    const i = listInBlock.findIndex((e) => e.id === ex.id);
+    const prev = listInBlock[i - 1];
+    const items: DropdownMenuItem[] = [{ label: 'Edit', onSelect: () => setSheet({ kind: 'edit', id: ex.id }) }];
+    items.push({ label: 'Duplicate', onSelect: () => duplicate(ex) });
+    if (i > 0) items.push({ label: 'Move up', onSelect: () => moveWithinBlock(ex, -1) });
+    if (i < listInBlock.length - 1) items.push({ label: 'Move down', onSelect: () => moveWithinBlock(ex, 1) });
+    if (ex.block_type === 'exercise') {
+      if (ex.superset_group) {
+        items.push({ label: 'Unlink from superset', onSelect: () => runMutate(() => onUpdate(ex.id, { superset_group: null })) });
+      } else if (prev && prev.block_type === 'exercise') {
+        items.push({
+          label: 'Superset with previous',
+          onSelect: () =>
+            runMutate(async () => {
+              const group = prev.superset_group ?? nextSupersetLetter(displayOrder);
+              if (!prev.superset_group) await onUpdate(prev.id, { superset_group: group });
+              await onUpdate(ex.id, { superset_group: group });
+            }),
+        });
+      }
+    }
+    items.push({
+      label: 'Delete',
+      destructive: true,
+      onSelect: () => runMutate(() => onDelete(ex.id, ex.name), { success: 'Exercise deleted' }),
+    });
+    return items;
+  }
+
+  const blockOptions = SECTIONS.flatMap((s) =>
+    s.blocks.map((b) => ({ key: blockKey(s.key, b), label: blockLabel(s.key, b) }))
+  );
+
+  const editing = sheet?.kind === 'edit' ? byId.get(sheet.id) : undefined;
+
+  // ---- the member's and read-only view: plain list, with section headings only if the day uses them.
+  if (!canEdit) {
+    const sectioned = usesSections(displayOrder);
+    const orderedBlocks: { key: string; title: string | null; rows: T[] }[] = [];
+    if (sectioned) {
+      for (const s of SECTIONS) {
+        for (const b of s.blocks) {
+          const key = blockKey(s.key, b);
+          const rows = blocks.get(key) ?? [];
+          if (rows.length === 0) continue;
+          const format = blockFormatOf(rows);
+          orderedBlocks.push({
+            key,
+            title: `${blockLabel(s.key, b)}${format ? ` · ${format}` : ''}`,
+            rows,
+          });
+        }
+      }
+    } else {
+      orderedBlocks.push({ key: 'all', title: null, rows: displayOrder });
+    }
+    return (
+      <DndContext sensors={sensors} collisionDetection={closestCenter}>
+        <div className="mt-2 space-y-5">
+          {orderedBlocks.map((blk) => {
+            const description = blk.title ? formatDescription(blockFormatOf(blk.rows)) : undefined;
+            return (
+              <section key={blk.key}>
+                {blk.title && (
+                  <div className="mb-2">
+                    <h3 className="text-sm font-extrabold uppercase tracking-wide text-accent">{blk.title}</h3>
+                    {description && <p className="text-xs text-zinc-500">{description}</p>}
+                  </div>
+                )}
+                <SortableContext items={blk.rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                  <ul className="space-y-4">
+                    {groupBySuperset(blk.rows).map((sg, sgIndex) => (
+                      <li
+                        key={sgIndex}
+                        className={sg.group ? 'space-y-3 border-l-[3px] border-accent pl-3' : 'space-y-2'}
+                      >
+                        {sg.group && (
+                          <div className="flex items-center gap-1.5 px-0.5">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+                              {sg.group}
+                            </span>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-accent">Superset</span>
+                            {sg.exercises.length >= 2 && sg.exercises.every((e) => e.block_type === 'exercise') && (
+                              <span className="text-[11px] text-zinc-500">
+                                · alternate {sg.exercises.map((_, idx) => idx + 1).join(' → ')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {sg.exercises.map((ex) => (
+                          <MemberExerciseRow
+                            key={ex.id}
+                            exercise={ex}
+                            index={displayOrder.findIndex((e) => e.id === ex.id)}
+                            library={library}
+                            clientExerciseMaxes={clientExerciseMaxes}
+                            renderExtra={renderExtra}
+                          />
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                </SortableContext>
+              </section>
+            );
+          })}
+        </div>
+      </DndContext>
+    );
+  }
+
+  // ---- the coach's builder
   return (
-    <div>
+    <div className="mt-2 space-y-4">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
-          <ul className={`mt-2 ${canEdit ? 'space-y-2' : 'space-y-4'}`}>
-            {supersetGroups.map((sg, sgIndex) => {
-              const isSequenceable = sg.group && sg.exercises.length >= 2 && sg.exercises.every((e) => e.block_type === 'exercise');
-              const minSets = isSequenceable ? Math.min(...sg.exercises.map((e) => e.sets ?? 1)) : 0;
-              return (
-                <li
-                  key={sgIndex}
-                  className={
-                    sg.group
-                      ? canEdit
-                        ? 'space-y-2 rounded-md border-l-4 border-accent/40 bg-accent-soft/40 py-2 pl-3 pr-1'
-                        : 'space-y-3 border-l-[3px] border-accent pl-3'
-                      : 'space-y-2'
-                  }
-                >
-                  {sg.group && (
-                    <div className="flex items-center gap-1.5 px-0.5">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
-                        {sg.group}
-                      </span>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-accent">Superset</span>
-                      {!canEdit && isSequenceable && (
-                        <span className="text-[11px] text-zinc-500">
-                          · alternate {sg.exercises.map((_, idx) => idx + 1).join(' → ')}
-                        </span>
-                      )}
+        {SECTIONS.map((section) => (
+          <div key={section.key} className="rounded-2xl border border-black/[.06] p-3 dark:border-white/10">
+            <div className="mb-2 flex items-baseline gap-2">
+              <h3 className="text-sm font-extrabold uppercase tracking-wide text-black dark:text-zinc-50">{section.title}</h3>
+              {section.hint && <span className="text-xs text-zinc-500">{section.hint}</span>}
+            </div>
+            <div className="space-y-3">
+              {section.blocks.map((blockNo) => {
+                const key = blockKey(section.key, blockNo);
+                const rows = blocks.get(key) ?? [];
+                const format = formatFor(key);
+                return (
+                  <div key={key}>
+                    {(blockNo != null || rows.length > 0) && (
+                      <div className="mb-1.5 flex items-center gap-2">
+                        {blockNo != null && <span className="text-xs font-bold text-zinc-500">Block {blockNo} · 10 min</span>}
+                        {blockNo != null && (
+                          <button
+                            type="button"
+                            onClick={() => setSheet({ kind: 'format', key })}
+                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                              format ? 'bg-accent-soft text-accent' : 'border border-dashed border-black/20 text-zinc-500 dark:border-white/20'
+                            }`}
+                          >
+                            {format ?? 'Set format'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                      <ul className="space-y-2">
+                        {groupBySuperset(rows).map((sg, sgIndex) => (
+                          <li
+                            key={sgIndex}
+                            className={sg.group ? 'space-y-2 rounded-lg border-l-4 border-accent/40 bg-accent-soft/40 py-2 pl-2 pr-1' : 'space-y-2'}
+                          >
+                            {sg.group && (
+                              <div className="flex items-center gap-1.5 px-0.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+                                  {sg.group}
+                                </span>
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-accent">Superset</span>
+                              </div>
+                            )}
+                            {sg.exercises.map((ex) => (
+                              <BuilderRow
+                                key={ex.id}
+                                exercise={ex}
+                                index={rows.findIndex((r) => r.id === ex.id)}
+                                library={library}
+                                menuItems={menuFor(ex, rows)}
+                                onOpen={() => setSheet({ kind: 'edit', id: ex.id })}
+                              />
+                            ))}
+                          </li>
+                        ))}
+                      </ul>
+                    </SortableContext>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSheet({ kind: 'pick', key })}
+                        className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-extrabold text-accent-foreground"
+                      >
+                        + Exercise
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSheet({ kind: 'note', key })}
+                        className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+                      >
+                        + Instructions
+                      </button>
                     </div>
-                  )}
-                  {sg.exercises.map((ex) => {
-                    const indexInDay = displayOrder.findIndex((e) => e.id === ex.id);
-                    return (
-                      <SortableExerciseRow
-                        key={ex.id}
-                        exercise={ex}
-                        previousExercise={displayOrder[indexInDay - 1]}
-                        index={indexInDay}
-                        library={library}
-                        canEdit={canEdit}
-                        onDelete={onDelete}
-                        onUpdate={onUpdate}
-                        clientExerciseMaxes={clientExerciseMaxes}
-                        renderExtra={renderExtra}
-                      />
-                    );
-                  })}
-                  {isSequenceable && canEdit && (
-                    <div className="flex flex-wrap gap-1 px-0.5">
-                      {Array.from({ length: minSets }).map((_, i) => (
-                        <span key={i} className="rounded-md bg-black/5 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-white/10">
-                          {sg.exercises.map((_, idx) => idx + 1).join('-')}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </SortableContext>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </DndContext>
 
-      {canEdit && (
-        <AddExerciseForm
+      {editing && (
+        <ExerciseSheet
+          key={editing.id}
+          exercise={editing}
           library={library}
-          nextSortOrder={displayOrder.length}
-          onAdd={onAdd}
-          clientExerciseMaxes={clientExerciseMaxes}
           showProgression={showProgression}
+          progression={
+            showProgression
+              ? (() => {
+                  const t = editing as T & { progression_load_increment?: number | null; progression_every_weeks?: number };
+                  return { increment: t.progression_load_increment ?? null, everyWeeks: t.progression_every_weeks ?? 1 };
+                })()
+              : null
+          }
+          blockOptions={blockOptions}
+          currentBlock={exerciseBlockKey(editing)}
+          onSave={async (fields) => {
+            if (fields.section !== undefined) {
+              // Moving to another block: take on that block's format.
+              const dest = blockKey(fields.section, fields.block_no ?? null);
+              fields.block_format = blockFormatOf(blocks.get(dest)) ?? null;
+            }
+            await onUpdate(editing.id, fields);
+          }}
+          onDelete={async () => {
+            await onDelete(editing.id, editing.name);
+          }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+
+      {sheet?.kind === 'pick' && (
+        <ExercisePickerSheet
+          library={library}
+          title={`Add to ${blockLabel(parseBlockKey(sheet.key).section, parseBlockKey(sheet.key).blockNo)}`}
+          onPick={(entry) => addFromLibrary(sheet.key, entry)}
+          onCustom={(name) => addRow(sheet.key, { block_type: 'exercise', name, sets: 3, reps: '8-10' })}
+          onClose={() => setSheet(null)}
+        />
+      )}
+
+      {sheet?.kind === 'note' && (
+        <InstructionsSheet
+          title={`Instructions for ${blockLabel(parseBlockKey(sheet.key).section, parseBlockKey(sheet.key).blockNo)}`}
+          defaultFormat={formatFor(sheet.key)}
+          onAdd={(name, notes) => addRow(sheet.key, { block_type: 'circuit', name, notes })}
+          onClose={() => setSheet(null)}
+        />
+      )}
+
+      {sheet?.kind === 'format' && (
+        <FormatSheet
+          title={`Format · ${blockLabel(parseBlockKey(sheet.key).section, parseBlockKey(sheet.key).blockNo)}`}
+          current={formatFor(sheet.key)}
+          onPick={(format) => setFormat(sheet.key, format)}
+          onClose={() => setSheet(null)}
         />
       )}
     </div>

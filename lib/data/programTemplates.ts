@@ -217,6 +217,9 @@ export async function duplicateTemplateDay(dayId: string, weekNum: number, dayLa
       percent_1rm: ex.percent_1rm,
       progression_load_increment: ex.progression_load_increment,
       progression_every_weeks: ex.progression_every_weeks,
+      section: ex.section,
+      block_no: ex.block_no,
+      block_format: ex.block_format,
     }));
     const { error: insertExercisesError } = await supabase.from('program_template_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);
@@ -288,6 +291,10 @@ function validateTemplateExport(data: unknown): TemplateExport | null {
         percent_1rm: typeof ex.percent_1rm === 'number' ? ex.percent_1rm : null,
         progression_load_increment: typeof ex.progression_load_increment === 'number' ? ex.progression_load_increment : null,
         progression_every_weeks: typeof ex.progression_every_weeks === 'number' ? ex.progression_every_weeks : 1,
+        section:
+          ex.section === 'warmup' || ex.section === 'strong' || ex.section === 'conditioning' ? ex.section : 'lift',
+        block_no: ex.block_no === 1 || ex.block_no === 2 ? ex.block_no : null,
+        block_format: typeof ex.block_format === 'string' ? ex.block_format : null,
       });
     }
     days.push({

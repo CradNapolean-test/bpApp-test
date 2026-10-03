@@ -1,3 +1,4 @@
+import type { WorkoutSection } from '@/lib/workoutSections';
 export interface ClientProfileRow {
   client_id: string;
   name: string;
@@ -240,6 +241,11 @@ export type SetType = 'working' | 'warmup' | 'failure' | 'drop';
 // identical except for the parent-day FK name and the two progression fields, which are
 // template-only (a live program's per-week rows are already materialized, no ongoing rule).
 export interface ExerciseCoreFields {
+  // Which part of the session it belongs to (migration 0091). Strong/Conditioning rows also say which
+  // of the two 10-minute blocks and may carry the block's format.
+  section: WorkoutSection;
+  block_no: number | null;
+  block_format: string | null;
   exercise_library_id: string | null;
   name: string;
   sets: number | null;

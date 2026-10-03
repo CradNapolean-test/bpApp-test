@@ -151,6 +151,9 @@ export async function duplicateProgramDay(dayId: string, weekNum: number, dayLab
       block_type: ex.block_type,
       prescription_type: ex.prescription_type,
       percent_1rm: ex.percent_1rm,
+      section: ex.section,
+      block_no: ex.block_no,
+      block_format: ex.block_format,
     }));
     const { error: insertExercisesError } = await supabase.from('workout_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);
