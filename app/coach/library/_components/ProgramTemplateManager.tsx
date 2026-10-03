@@ -30,6 +30,7 @@ import {
   reorderTemplateExercises,
   updateTemplateDay,
   updateTemplateExercise,
+  updateTemplateExercises,
 } from '@/lib/data/programTemplates';
 import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
@@ -737,6 +738,7 @@ export function ProgramTemplateManager({
             showProgression
             onAdd={(fields) => addTemplateExercise(openDay.id, fields)}
             onUpdate={(id, fields) => updateTemplateExercise(id, fields)}
+            onUpdateMany={(ids, fields) => updateTemplateExercises(ids, fields)}
             onDelete={(id) => deleteTemplateExercise(id)}
             onReorder={reorderTemplateExercises}
           />

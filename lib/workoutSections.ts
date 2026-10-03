@@ -134,9 +134,10 @@ export interface SlotOption {
 }
 
 function optionFor(key: string): SlotOption {
-  const { section, part } = parseBlockKey(key);
+  const { section, blockNo, part } = parseBlockKey(key);
   const base = SECTION_TITLE[section];
-  return { key, label: part ? `${base} · ${PART_TITLE[part]}` : base, section: section as 'strong' | 'conditioning' };
+  const label = part ? `${base} · ${PART_TITLE[part]}` : blockNo === 0 ? `${base} · 20 min` : base;
+  return { key, label, section: section as 'strong' | 'conditioning' };
 }
 
 // What a member can pick for each of the two 10-minute slots, given which blocks have exercises.

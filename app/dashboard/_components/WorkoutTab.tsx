@@ -26,6 +26,7 @@ import {
   logSet,
   reorderExercises,
   updateExercise,
+  updateExercises,
   updateProgram,
   updateProgramDay, updateSet, deleteSet } from '@/lib/data/workouts';
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
@@ -1179,6 +1180,7 @@ export function WorkoutTab({
               })
             }
             onUpdate={(id, fields) => updateExercise(id, fields)}
+            onUpdateMany={(ids, fields) => updateExercises(ids, fields)}
             onDelete={(id) => deleteExercise(id)}
             onReorder={reorderExercises}
             renderExtra={(ex) => {

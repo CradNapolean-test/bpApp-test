@@ -710,6 +710,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   canEdit,
   onAdd,
   onUpdate,
+  onUpdateMany,
   onDelete,
   onReorder,
   clientExerciseMaxes,
@@ -722,6 +723,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   canEdit: boolean;
   onAdd: (fields: NewExerciseFields) => Promise<unknown>;
   onUpdate: (id: string, fields: ExerciseUpdate) => Promise<unknown>;
+  // The same change to several exercises in one save. Falls back to one save each if not given.
+  onUpdateMany?: (ids: string[], fields: ExerciseUpdate) => Promise<unknown>;
   onDelete: (id: string, name: string) => Promise<unknown>;
   onReorder: (orderedIds: string[]) => Promise<unknown>;
   clientExerciseMaxes?: ClientExerciseMaxRow[];
@@ -838,13 +841,16 @@ export function ExerciseEditor<T extends EditableExercise>({
     });
   }
 
+  const updateMany = (ids: string[], fields: ExerciseUpdate) =>
+    onUpdateMany ? onUpdateMany(ids, fields) : Promise.all(ids.map((id) => onUpdate(id, fields)));
+
   async function setFormat(key: string, format: string | null) {
     const rows = blocks.get(key) ?? [];
     if (rows.length === 0) {
       setPendingFormats((p) => ({ ...p, [key]: format }));
       return;
     }
-    await Promise.all(rows.map((r) => onUpdate(r.id, { block_format: format })));
+    await updateMany(rows.map((r) => r.id), { block_format: format });
   }
 
   function moveWithinBlock(ex: T, direction: -1 | 1) {
@@ -938,7 +944,7 @@ export function ExerciseEditor<T extends EditableExercise>({
       setPendingSplit(split);
       return;
     }
-    await runMutate(() => Promise.all(rows.map((r) => onUpdate(r.id, { block_part: split ? 'upper' : null }))));
+    await runMutate(() => updateMany(rows.map((r) => r.id), { block_part: split ? 'upper' : null }));
   }
 
   // Switches Conditioning between two 10-minute blocks and one 20-minute block, moving what is in it.
@@ -948,7 +954,7 @@ export function ExerciseEditor<T extends EditableExercise>({
       setPendingSingle(single);
       return;
     }
-    await runMutate(() => Promise.all(rows.map((r) => onUpdate(r.id, { block_no: single ? 0 : 1 }))));
+    await runMutate(() => updateMany(rows.map((r) => r.id), { block_no: single ? 0 : 1 }));
   }
 
   const editing = sheet?.kind === 'edit' ? byId.get(sheet.id) : undefined;
@@ -1028,32 +1034,31 @@ export function ExerciseEditor<T extends EditableExercise>({
       if (!memberChoices) return null;
       const slot1 = memberChoices.slot1;
       const { options, locked } = slotOptions(present, slot, slot1);
-      if (options.length === 0 && !locked) return null;
-      const chosen = locked ?? (slot === 1 ? slot1 : memberChoices.slot2);
+      // One long conditioning block covers both slots: it is shown once, with the first slot.
+      if (locked) return null;
+      if (options.length === 0) return null;
+      const chosen = slot === 1 ? slot1 : memberChoices.slot2;
       const rows = chosen ? (blocks.get(chosen) ?? []) : [];
       const format = blockFormatOf(rows);
       return (
         <div key={`slot-${slot}`} className="space-y-3">
           <p className="text-sm font-extrabold text-black dark:text-zinc-50">
-            {locked ? 'Blocks 1 and 2 · 20 minutes' : `Block ${slot} · 10 minutes`}
+            {chosen === 'conditioning:0' ? 'Both blocks · 20 minutes' : `Block ${slot} · 10 minutes`}
           </p>
-          {!locked && (
-            <div className="flex flex-wrap gap-2">
-              {options.map((o) => (
-                <button
-                  key={o.key}
-                  type="button"
-                  onClick={() => memberChoices.onChoose(slot, o.key)}
-                  className={`rounded-full px-4 py-2 text-sm font-bold ${
-                    chosen === o.key ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {locked && <p className="text-xs text-zinc-500">One long conditioning block covers both, so there is nothing to pick for block 2.</p>}
+          <div className="flex flex-wrap gap-2">
+            {options.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => memberChoices.onChoose(slot, o.key)}
+                className={`rounded-full px-4 py-2 text-sm font-bold ${
+                  chosen === o.key ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
           {!chosen && (
             <p className="text-xs text-zinc-500">
               {slot === 1 ? 'Pick what you are doing for the first 10 minutes.' : 'Pick again for the second 10 minutes. You can switch.'}

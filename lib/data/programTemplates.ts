@@ -159,6 +159,18 @@ export async function updateTemplateExercise(
   if (error) raise(error);
 }
 
+// Applies the same change to several exercises in one save (e.g. setting a block's format, or
+// splitting Strong block 2 into Upper / Lower), instead of one request per exercise.
+export async function updateTemplateExercises(
+  exerciseIds: string[],
+  fields: Partial<Omit<ProgramTemplateExerciseRow, 'id' | 'template_day_id'>>
+): Promise<void> {
+  if (exerciseIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase.from('program_template_exercises').update(fields).in('id', exerciseIds);
+  if (error) raise(error);
+}
+
 export async function updateTemplateDay(
   dayId: string,
   fields: Partial<Pick<ProgramTemplateDayRow, 'week_num' | 'day_label' | 'phase_label' | 'notes' | 'day_position'>>

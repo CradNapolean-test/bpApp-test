@@ -102,6 +102,17 @@ export async function updateExercise(
   if (error) raise(error);
 }
 
+// Applies the same change to several exercises in one save, instead of one request per exercise.
+export async function updateExercises(
+  exerciseIds: string[],
+  fields: Partial<Omit<WorkoutExerciseRow, 'id' | 'program_day_id'>>
+): Promise<void> {
+  if (exerciseIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase.from('workout_exercises').update(fields).in('id', exerciseIds);
+  if (error) raise(error);
+}
+
 export async function updateProgramDay(
   dayId: string,
   fields: Partial<Pick<WorkoutProgramDayRow, 'week_num' | 'day_label' | 'phase_label' | 'notes' | 'day_position'>>
