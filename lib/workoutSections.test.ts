@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { strongBlock2IsSplit, blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
+import { chosenBlockKeys, describeChoices, slotOptions, strongBlock2IsSplit, blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
 
 const ex = (section: 'warmup' | 'lift' | 'strong' | 'conditioning', block_no: number | null, sort_order: number, block_format: string | null = null) => ({
   section,
@@ -57,5 +57,33 @@ describe('workout sections', () => {
     expect(exerciseBlockKey({ section: 'strong', block_no: 2, block_part: 'upper' })).toBe('strong:2:upper');
     expect(strongBlock2IsSplit([{ section: 'strong', block_no: 2, block_part: 'upper' }])).toBe(true);
     expect(strongBlock2IsSplit([{ section: 'strong', block_no: 2, block_part: null }])).toBe(false);
+  });
+
+  it('offers Strong or Conditioning for each slot', () => {
+    const present = new Set(['strong:1', 'strong:2', 'conditioning:1', 'conditioning:2']);
+    expect(slotOptions(present, 1, null).options.map((o) => o.key)).toEqual(['strong:1', 'conditioning:1']);
+    expect(slotOptions(present, 2, 'strong:1').options.map((o) => o.key)).toEqual(['strong:2', 'conditioning:2']);
+  });
+
+  it('offers Upper or Lower when Strong block 2 is split', () => {
+    const present = new Set(['strong:1', 'strong:2:upper', 'strong:2:lower', 'conditioning:1', 'conditioning:2']);
+    const keys = slotOptions(present, 2, 'conditioning:1').options;
+    expect(keys.map((o) => o.label)).toEqual(['Strong · Upper body', 'Strong · Lower body', 'Conditioning']);
+  });
+
+  it('lets a single 20-minute conditioning block cover both slots', () => {
+    const present = new Set(['strong:1', 'strong:2', 'conditioning:0']);
+    expect(slotOptions(present, 1, null).options.map((o) => o.key)).toEqual(['strong:1', 'conditioning:0']);
+    expect(slotOptions(present, 2, 'conditioning:0')).toEqual({ options: [], locked: 'conditioning:0' });
+    // having started with Strong, the 20-minute block is not offered for the second slot
+    expect(slotOptions(present, 2, 'strong:1').options.map((o) => o.key)).toEqual(['strong:2']);
+    expect(chosenBlockKeys('conditioning:0', null)).toEqual(['conditioning:0']);
+  });
+
+  it('says what they did and whether they switched', () => {
+    expect(describeChoices('strong:1', 'conditioning:2')).toEqual({ text: 'Strong, then Conditioning', switched: true });
+    expect(describeChoices('strong:1', 'strong:2:lower')).toEqual({ text: 'Strong, then Strong · Lower body', switched: false });
+    expect(describeChoices(null, null)).toBeNull();
+    expect(chosenBlockKeys('strong:1', 'strong:2')).toEqual(['strong:1', 'strong:2']);
   });
 });

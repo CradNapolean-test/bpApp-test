@@ -22,6 +22,7 @@ import { getBigDogResults } from './bigDog';
 import { getUpcomingEvents } from './community';
 import { getRewardsForMember } from './rewards';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
+import { getBlockChoices } from './blockChoices';
 import { getCreditPacks, getMyMembership, getPackages } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
@@ -69,6 +70,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     workoutLogs,
     clientExerciseMaxes,
     workoutDayFeedback,
+    blockChoices,
     membership,
     packages,
     creditPacks,
@@ -107,6 +109,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getWorkoutLogs(clientId),
     getClientExerciseMaxes(clientId),
     getWorkoutDayFeedback(clientId),
+    getBlockChoices(clientId),
     getMyMembership(clientId),
     getPackages(),
     getCreditPacks(),
@@ -162,6 +165,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     workoutLogs,
     clientExerciseMaxes,
     workoutDayFeedback,
+    blockChoices,
     membership,
     packages,
     creditPacks,

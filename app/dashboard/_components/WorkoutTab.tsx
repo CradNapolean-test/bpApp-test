@@ -30,9 +30,11 @@ import {
   updateProgramDay, updateSet, deleteSet } from '@/lib/data/workouts';
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
+import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
+import { chosenBlockKeys, describeChoices, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
@@ -40,6 +42,7 @@ import type {
   ExerciseLibraryRow,
   ProgramTemplateRow,
   SetType,
+  WorkoutBlockChoiceRow,
   WorkoutDayFeedbackRow,
   WorkoutLogRow,
   WorkoutProgramRow,
@@ -616,6 +619,7 @@ export function WorkoutTab({
   workoutLogs,
   clientExerciseMaxes,
   workoutDayFeedback,
+  blockChoices = [],
   exerciseLibrary,
   programTemplates,
   focusDay = null,
@@ -627,6 +631,8 @@ export function WorkoutTab({
   workoutLogs: WorkoutLogRow[];
   clientExerciseMaxes: ClientExerciseMaxRow[];
   workoutDayFeedback: WorkoutDayFeedbackRow[];
+  // What the member chose for each 10-minute slot of their workouts (Strong / Conditioning, Upper / Lower).
+  blockChoices?: WorkoutBlockChoiceRow[];
   exerciseLibrary: ExerciseLibraryRow[];
   programTemplates: ProgramTemplateRow[];
   // Set by DashboardShell when the client arrives here via a classes check-in -- expands and
@@ -807,6 +813,23 @@ export function WorkoutTab({
   const todayDow = new Date(`${todayIsoLocal}T00:00:00Z`).getUTCDay();
   const currentWeek = (program: WorkoutProgramRow) => resolveActiveProgram([program], todayIsoLocal)?.weekNum ?? -1;
 
+  // The member's picks per workout, and so which Strong / Conditioning blocks count as part of what they
+  // are doing. The coach always sees every block.
+  const choicesByDay = new Map<string, { slot1: string | null; slot2: string | null }>();
+  for (const c of blockChoices) {
+    const cur = choicesByDay.get(c.program_day_id) ?? { slot1: null, slot2: null };
+    if (c.slot === 1) cur.slot1 = c.block_key;
+    else cur.slot2 = c.block_key;
+    choicesByDay.set(c.program_day_id, cur);
+  }
+  const chosenFor = (dayId: string) => {
+    const c = choicesByDay.get(dayId);
+    return chosenBlockKeys(c?.slot1 ?? null, c?.slot2 ?? null);
+  };
+  const visibleFor = (day: WorkoutProgramRow['workout_program_days'][number]) =>
+    !isCoachView && usesSections(day.workout_exercises)
+      ? day.workout_exercises.filter((ex) => exerciseIsVisible(ex, true, chosenFor(day.id)))
+      : day.workout_exercises;
   const { current, upcoming, past } = pickCurrentProgram(programs, todayIsoLocal);
   const shownPrograms = current ? [current] : [];
   const progressLine = (program: WorkoutProgramRow) => {
@@ -914,13 +937,13 @@ export function WorkoutTab({
                 exerciseCount: day.workout_exercises.length,
                 exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
                 done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
-                liftCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise').length,
-                highlights: [...day.workout_exercises]
+                liftCount: visibleFor(day).filter((ex) => ex.block_type === 'exercise').length,
+                highlights: [...visibleFor(day)]
                   .filter((ex) => ex.block_type === 'exercise')
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .slice(0, 2)
                   .map((ex) => ex.name),
-                loggedCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise' && (logsByExercise[ex.id]?.length ?? 0) > 0).length,
+                loggedCount: visibleFor(day).filter((ex) => ex.block_type === 'exercise' && (logsByExercise[ex.id]?.length ?? 0) > 0).length,
                 dayPosition: day.day_position,
                 isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
               }))}
@@ -1072,7 +1095,7 @@ export function WorkoutTab({
           )}
 
           {!isCoachView && (() => {
-            const lifts = openDay.workout_exercises.filter((e) => e.block_type === 'exercise');
+            const lifts = visibleFor(openDay).filter((e) => e.block_type === 'exercise');
             if (lifts.length === 0) return null;
             const done = lifts.filter((e) => (logsByExercise[e.id]?.length ?? 0) > 0).length;
             return (
@@ -1090,10 +1113,31 @@ export function WorkoutTab({
             );
           })()}
 
+          {isCoachView && (() => {
+            const c = choicesByDay.get(openDay.id);
+            const said = describeChoices(c?.slot1 ?? null, c?.slot2 ?? null);
+            if (!said) return null;
+            return (
+              <p className="mb-3 rounded-xl bg-accent-soft px-3 py-2 text-sm font-semibold text-accent">
+                Member did: {said.text}
+                {said.switched ? ' (switched after block 1)' : ''}
+              </p>
+            );
+          })()}
+
           <ExerciseEditor
             exercises={openDay.workout_exercises}
             library={exerciseLibrary}
             canEdit={isCoachView}
+            memberChoices={
+              !isCoachView
+                ? {
+                    slot1: choicesByDay.get(openDay.id)?.slot1 ?? null,
+                    slot2: choicesByDay.get(openDay.id)?.slot2 ?? null,
+                    onChoose: (slot, key) => chooseBlock(openDay.id, slot, key),
+                  }
+                : undefined
+            }
             clientExerciseMaxes={clientExerciseMaxes}
             onAdd={(fields) =>
               addExercise(openDay.id, {

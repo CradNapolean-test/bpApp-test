@@ -41,6 +41,7 @@ import {
   PART_TITLE,
   type BlockPart,
   usesSections,
+  slotOptions,
   type WorkoutSection,
 } from '@/lib/workoutSections';
 
@@ -714,6 +715,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   clientExerciseMaxes,
   showProgression,
   renderExtra,
+  memberChoices,
 }: {
   exercises: T[];
   library: ExerciseLibraryRow[];
@@ -725,9 +727,17 @@ export function ExerciseEditor<T extends EditableExercise>({
   clientExerciseMaxes?: ClientExerciseMaxRow[];
   showProgression?: boolean;
   renderExtra?: (exercise: T) => ReactNode;
+  // A member's Strong / Conditioning (and Upper / Lower) picks for this workout. When given, the member
+  // chooses what to do in each 10-minute slot and only the chosen blocks show.
+  memberChoices?: {
+    slot1: string | null;
+    slot2: string | null;
+    onChoose: (slot: 1 | 2, blockKey: string) => Promise<unknown>;
+  };
 }) {
   const { run: runReorder } = useAction();
   const { run: runMutate } = useAction();
+  const { run: runChoose, busy: choosing } = useAction();
   const sorted = [...exercises].sort((a, b) => a.sort_order - b.sort_order);
   const idsKey = sorted.map((e) => e.id).join(',');
   const [orderedIds, setOrderedIds] = useState<string[]>(() => sorted.map((e) => e.id));
@@ -946,79 +956,129 @@ export function ExerciseEditor<T extends EditableExercise>({
   // ---- the member's and read-only view: plain list, with section headings only if the day uses them.
   if (!canEdit) {
     const sectioned = usesSections(displayOrder);
+    const present = new Set(Array.from(blocks.entries()).filter(([, rows]) => rows.length > 0).map(([k]) => k));
+    // With choices, only Warm-up and Lift are shown straight away; Strong / Conditioning appear as the
+    // member's picks for the two 10-minute slots.
+    const choosing_ = sectioned && !!memberChoices && Array.from(present).some((k) => k.startsWith('strong') || k.startsWith('conditioning'));
     const orderedBlocks: { key: string; title: string | null; rows: T[] }[] = [];
     if (sectioned) {
-      for (const s of SECTIONS) {
+      for (const sec of SECTIONS) {
+        if (choosing_ && (sec.key === 'strong' || sec.key === 'conditioning')) continue;
         const keys =
-          s.key === 'conditioning'
-            ? [blockKey(s.key, 0), blockKey(s.key, 1), blockKey(s.key, 2)]
-            : s.key === 'strong'
-              ? [blockKey(s.key, 1), blockKey(s.key, 2), blockKey(s.key, 2, 'upper'), blockKey(s.key, 2, 'lower')]
-              : s.blocks.map((b) => blockKey(s.key, b));
+          sec.key === 'conditioning'
+            ? [blockKey(sec.key, 0), blockKey(sec.key, 1), blockKey(sec.key, 2)]
+            : sec.key === 'strong'
+              ? [blockKey(sec.key, 1), blockKey(sec.key, 2), blockKey(sec.key, 2, 'upper'), blockKey(sec.key, 2, 'lower')]
+              : sec.blocks.map((bn) => blockKey(sec.key, bn));
         for (const key of keys) {
           const rows = blocks.get(key) ?? [];
           if (rows.length === 0) continue;
           const format = blockFormatOf(rows);
-          orderedBlocks.push({
-            key,
-            title: `${keyLabel(key)}${format ? ` · ${format}` : ''}`,
-            rows,
-          });
+          orderedBlocks.push({ key, title: `${keyLabel(key)}${format ? ` · ${format}` : ''}`, rows });
         }
       }
     } else {
       orderedBlocks.push({ key: 'all', title: null, rows: displayOrder });
     }
+
+    const renderBlock = (key: string, title: string | null, rows: T[]) => {
+      const description = title ? formatDescription(blockFormatOf(rows)) : undefined;
+      return (
+        <section key={key}>
+          {title && (
+            <div className="mb-2">
+              <h3 className="text-sm font-extrabold uppercase tracking-wide text-accent">{title}</h3>
+              {description && <p className="text-xs text-zinc-500">{description}</p>}
+            </div>
+          )}
+          <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+            <ul className="space-y-4">
+              {groupBySuperset(rows).map((sg, sgIndex) => (
+                <li key={sgIndex} className={sg.group ? 'space-y-3 border-l-[3px] border-accent pl-3' : 'space-y-2'}>
+                  {sg.group && (
+                    <div className="flex items-center gap-1.5 px-0.5">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+                        {sg.group}
+                      </span>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-accent">Superset</span>
+                      {sg.exercises.length >= 2 && sg.exercises.every((e) => e.block_type === 'exercise') && (
+                        <span className="text-[11px] text-zinc-500">· alternate {sg.exercises.map((_, idx) => idx + 1).join(' → ')}</span>
+                      )}
+                    </div>
+                  )}
+                  {sg.exercises.map((ex) => (
+                    <MemberExerciseRow
+                      key={ex.id}
+                      exercise={ex}
+                      index={rows.findIndex((e) => e.id === ex.id)}
+                      library={library}
+                      clientExerciseMaxes={clientExerciseMaxes}
+                      renderExtra={renderExtra}
+                    />
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </SortableContext>
+        </section>
+      );
+    };
+
+    const slotView = (slot: 1 | 2) => {
+      if (!memberChoices) return null;
+      const slot1 = memberChoices.slot1;
+      const { options, locked } = slotOptions(present, slot, slot1);
+      if (options.length === 0 && !locked) return null;
+      const chosen = locked ?? (slot === 1 ? slot1 : memberChoices.slot2);
+      const rows = chosen ? (blocks.get(chosen) ?? []) : [];
+      const format = blockFormatOf(rows);
+      return (
+        <div key={`slot-${slot}`} className="space-y-3">
+          <p className="text-sm font-extrabold text-black dark:text-zinc-50">
+            {locked ? 'Blocks 1 and 2 · 20 minutes' : `Block ${slot} · 10 minutes`}
+          </p>
+          {!locked && (
+            <div className="flex flex-wrap gap-2">
+              {options.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  disabled={choosing}
+                  onClick={() => runChoose(() => memberChoices.onChoose(slot, o.key))}
+                  className={`rounded-full px-4 py-2 text-sm font-bold ${
+                    chosen === o.key ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {locked && <p className="text-xs text-zinc-500">One long conditioning block covers both, so there is nothing to pick for block 2.</p>}
+          {!chosen && (
+            <p className="text-xs text-zinc-500">
+              {slot === 1 ? 'Pick what you are doing for the first 10 minutes.' : 'Pick again for the second 10 minutes. You can switch.'}
+            </p>
+          )}
+          {chosen && rows.length > 0 && renderBlock(chosen, `${keyLabel(chosen)}${format ? ` · ${format}` : ''}`, rows)}
+        </div>
+      );
+    };
+
     return (
       <DndContext sensors={sensors} collisionDetection={closestCenter}>
-        <div className="mt-2 space-y-5">
-          {orderedBlocks.map((blk) => {
-            const description = blk.title ? formatDescription(blockFormatOf(blk.rows)) : undefined;
-            return (
-              <section key={blk.key}>
-                {blk.title && (
-                  <div className="mb-2">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wide text-accent">{blk.title}</h3>
-                    {description && <p className="text-xs text-zinc-500">{description}</p>}
-                  </div>
-                )}
-                <SortableContext items={blk.rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                  <ul className="space-y-4">
-                    {groupBySuperset(blk.rows).map((sg, sgIndex) => (
-                      <li
-                        key={sgIndex}
-                        className={sg.group ? 'space-y-3 border-l-[3px] border-accent pl-3' : 'space-y-2'}
-                      >
-                        {sg.group && (
-                          <div className="flex items-center gap-1.5 px-0.5">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
-                              {sg.group}
-                            </span>
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-accent">Superset</span>
-                            {sg.exercises.length >= 2 && sg.exercises.every((e) => e.block_type === 'exercise') && (
-                              <span className="text-[11px] text-zinc-500">
-                                · alternate {sg.exercises.map((_, idx) => idx + 1).join(' → ')}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {sg.exercises.map((ex) => (
-                          <MemberExerciseRow
-                            key={ex.id}
-                            exercise={ex}
-                            index={displayOrder.findIndex((e) => e.id === ex.id)}
-                            library={library}
-                            clientExerciseMaxes={clientExerciseMaxes}
-                            renderExtra={renderExtra}
-                          />
-                        ))}
-                      </li>
-                    ))}
-                  </ul>
-                </SortableContext>
-              </section>
-            );
-          })}
+        <div className="mt-2 space-y-6">
+          {orderedBlocks.map((blk) => renderBlock(blk.key, blk.title, blk.rows))}
+          {choosing_ && (
+            <section className="space-y-4 rounded-2xl border border-accent/30 bg-accent-soft/40 p-4">
+              <div>
+                <h3 className="text-sm font-extrabold uppercase tracking-wide text-accent">Strong or Conditioning</h3>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">Choose for each 10-minute block, and switch after the first if you want.</p>
+              </div>
+              {slotView(1)}
+              {slotView(2)}
+            </section>
+          )}
         </div>
       </DndContext>
     );

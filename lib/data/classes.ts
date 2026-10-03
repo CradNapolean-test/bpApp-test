@@ -286,6 +286,7 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Pro
     p_class_ids: classIds,
     p_dates: dates,
   });
+  if (totalsError) console.warn('class_booking_counts failed, using own-bookings count:', totalsError.message);
   if (!totalsError && totals) {
     countMap.clear();
     for (const t of totals as { class_id: string; booking_date: string; booked_count: number }[]) {

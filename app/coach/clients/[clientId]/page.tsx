@@ -85,6 +85,7 @@ export default async function CoachClientPage({
       workoutLogs={bundle.workoutLogs}
       clientExerciseMaxes={bundle.clientExerciseMaxes}
       workoutDayFeedback={bundle.workoutDayFeedback}
+      blockChoices={bundle.blockChoices}
       membership={bundle.membership}
       packages={bundle.packages}
       creditPacks={bundle.creditPacks}

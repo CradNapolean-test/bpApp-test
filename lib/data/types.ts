@@ -298,6 +298,16 @@ export interface WorkoutProgramRow {
   workout_program_days: WorkoutProgramDayRow[];
 }
 
+// What a member did in one of the two 10-minute slots of a workout (migration 0095).
+export interface WorkoutBlockChoiceRow {
+  id: string;
+  client_id: string;
+  program_day_id: string;
+  slot: 1 | 2;
+  block_key: string;
+  chosen_at: string;
+}
+
 export interface WorkoutLogRow {
   id: string;
   client_id: string;

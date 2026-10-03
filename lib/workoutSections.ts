@@ -127,6 +127,66 @@ export function usesSections(exercises: Pick<SectionedExercise, 'section'>[]): b
   return exercises.some((e) => e.section && e.section !== 'lift');
 }
 
+export interface SlotOption {
+  key: string;
+  label: string;
+  section: 'strong' | 'conditioning';
+}
+
+function optionFor(key: string): SlotOption {
+  const { section, part } = parseBlockKey(key);
+  const base = SECTION_TITLE[section];
+  return { key, label: part ? `${base} · ${PART_TITLE[part]}` : base, section: section as 'strong' | 'conditioning' };
+}
+
+// What a member can pick for each of the two 10-minute slots, given which blocks have exercises.
+//  - slot 1: Strong block 1, Conditioning block 1, or the single 20-minute Conditioning block.
+//  - slot 2: Strong block 2 (or its Upper / Lower halves) or Conditioning block 2. If they took the
+//    single 20-minute Conditioning block in slot 1, it covers slot 2 as well (`locked`).
+export function slotOptions(
+  present: Set<string>,
+  slot: 1 | 2,
+  slot1Choice: string | null
+): { options: SlotOption[]; locked: string | null } {
+  if (slot === 1) {
+    return { options: ['strong:1', 'conditioning:0', 'conditioning:1'].filter((k) => present.has(k)).map(optionFor), locked: null };
+  }
+  if (slot1Choice === 'conditioning:0') return { options: [], locked: 'conditioning:0' };
+  const keys = ['strong:2', 'strong:2:upper', 'strong:2:lower'].filter((k) => present.has(k));
+  // Taking the single 20-minute block means taking it from the start, so it is not offered mid-way.
+  if (!present.has('conditioning:0') && present.has('conditioning:2')) keys.push('conditioning:2');
+  return { options: keys.map(optionFor), locked: null };
+}
+
+// The blocks a member's choices put them in, in order.
+export function chosenBlockKeys(slot1: string | null, slot2: string | null): string[] {
+  if (slot1 === 'conditioning:0') return [slot1];
+  return [slot1, slot2].filter((k): k is string => !!k);
+}
+
+// "Strong, then Conditioning", and whether they switched between the two.
+export function describeChoices(slot1: string | null, slot2: string | null): { text: string; switched: boolean } | null {
+  if (!slot1) return null;
+  if (slot1 === 'conditioning:0') return { text: 'Conditioning (one 20-minute block)', switched: false };
+  const a = optionFor(slot1);
+  if (!slot2) return { text: `${a.label} (block 1 only so far)`, switched: false };
+  const b = optionFor(slot2);
+  return { text: `${a.label}, then ${b.label}`, switched: a.section !== b.section };
+}
+
+// Whether an exercise shows in a member's workout: Warm-up and Lift always; a Strong or Conditioning
+// exercise only once its block is one they chose. Days that don't use sections show everything.
+export function exerciseIsVisible(
+  ex: Pick<SectionedExercise, 'section' | 'block_no' | 'block_part'>,
+  daySectioned: boolean,
+  chosen: string[]
+): boolean {
+  if (!daySectioned) return true;
+  const section = ex.section ?? 'lift';
+  if (section === 'warmup' || section === 'lift') return true;
+  return chosen.includes(exerciseBlockKey(ex));
+}
+
 // Picker value for "move to": e.g. 'strong:2'.
 export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 0 | 1 | 2 | null; part: BlockPart | null } {
   const [section, block, part] = key.split(':');
