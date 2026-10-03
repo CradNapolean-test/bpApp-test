@@ -24,7 +24,7 @@ export function FocusOverlay({
   useBackHandler(true, onClose);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]">
+    <div className="fixed inset-0 z-[55] flex flex-col bg-[var(--background)]">
       <div className="flex items-center justify-between gap-2 border-b border-black/10 p-4 pt-[max(1rem,env(safe-area-inset-top))] dark:border-white/10">
         <button
           onClick={onClose}

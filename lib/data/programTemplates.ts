@@ -59,6 +59,43 @@ export async function createProgramTemplate(name: string): Promise<void> {
   if (error) raise(error);
 }
 
+export async function updateProgramTemplate(
+  templateId: string,
+  fields: { name?: string; description?: string | null }
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('program_templates').update(fields).eq('id', templateId);
+  if (error) raise(error);
+}
+
+// Creates a template and returns its id so the editor can open straight onto it.
+export async function createProgramTemplateAndGetId(name: string): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const gymId = await resolveScopingGymId(supabase);
+  const { data, error } = await supabase
+    .from('program_templates')
+    .insert({ coach_id: user.id, gym_id: gymId, name })
+    .select('id')
+    .single();
+  if (error) raise(error);
+  return data.id;
+}
+
+// Removes every day (and its exercises) in one week of a template.
+export async function deleteTemplateWeek(templateId: string, weekNum: number): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('program_template_days')
+    .delete()
+    .eq('template_id', templateId)
+    .eq('week_num', weekNum);
+  if (error) raise(error);
+}
+
 export async function deleteProgramTemplate(templateId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('program_templates').delete().eq('id', templateId);
@@ -201,11 +238,18 @@ export async function applyFieldsToTemplateDay(
 // not a client, so an edit afterward never touches anything already assigned to clients.
 export async function duplicateProgramTemplate(templateId: string, newName: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc('duplicate_program_template', {
+  const { data, error } = await supabase.rpc('duplicate_program_template', {
     p_template_id: templateId,
     p_new_name: newName,
   });
-  return error ? fail(error, 'Could not duplicate that template') : ok();
+  if (error) return fail(error, 'Could not duplicate that template');
+  // The RPC predates descriptions, so carry it across here (ignored if migration 0090 is missing).
+  const created = data as { id?: string } | null;
+  const { data: source } = await supabase.from('program_templates').select('description').eq('id', templateId).maybeSingle();
+  if (created?.id && source?.description) {
+    await supabase.from('program_templates').update({ description: source.description }).eq('id', created.id);
+  }
+  return ok();
 }
 
 // Structural validation for an uploaded file's parsed JSON -- this crossed a trust boundary

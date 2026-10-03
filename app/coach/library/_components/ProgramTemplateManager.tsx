@@ -1,11 +1,12 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronRight, ClipboardList, Download } from 'lucide-react';
+import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
+import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
@@ -14,7 +15,9 @@ import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workou
 import {
   addTemplateDay,
   addTemplateExercise,
-  createProgramTemplate,
+  createProgramTemplateAndGetId,
+  deleteTemplateWeek,
+  updateProgramTemplate,
   deleteProgramTemplate,
   deleteTemplateDay,
   deleteTemplateExercise,
@@ -35,26 +38,6 @@ function exportTemplate(template: ProgramTemplateWithDays) {
   const json = JSON.stringify(toTemplateExport(template), null, 2);
   const slug = template.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'template';
   downloadTextFile(`${slug}.json`, json, 'application/json');
-}
-
-function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | null }) {
-  const { run } = useAction();
-  const [value, setValue] = useState(initial ?? '');
-
-  async function handleBlur() {
-    if (value === (initial ?? '')) return;
-    await run(() => updateTemplateDay(dayId, { phase_label: value || null }));
-  }
-
-  return (
-    <input
-      placeholder="Phase (optional)"
-      className="w-28 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  );
 }
 
 function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | null }) {
@@ -104,30 +87,91 @@ function DayNotesField({ dayId, initial }: { dayId: string; initial: string | nu
   );
 }
 
+function WeekdayChips({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {PROGRAM_WEEKDAYS.map((d) => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => onChange(value === d ? null : d)}
+          className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+            value === d ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+          }`}
+        >
+          {WEEKDAY_SHORT[d]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Name + description, saved when you leave the field.
+function TemplateDetails({ template }: { template: ProgramTemplateWithDays }) {
+  const { run } = useAction();
+  const [name, setName] = useState(template.name);
+  const [description, setDescription] = useState(template.description ?? '');
+  return (
+    <div className="space-y-2">
+      <input
+        aria-label="Template name"
+        className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm font-bold dark:border-white/10"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={() => {
+          const next = name.trim();
+          if (!next) return setName(template.name);
+          if (next !== template.name) run(() => updateProgramTemplate(template.id, { name: next }));
+        }}
+      />
+      <textarea
+        aria-label="Description"
+        rows={2}
+        placeholder="Describe it, e.g. 4 weeks, 3 days a week, fat loss, beginner"
+        className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        onBlur={() => {
+          if (description.trim() !== (template.description ?? '')) {
+            run(() => updateProgramTemplate(template.id, { description: description.trim() || null }), {
+              success: 'Saved',
+            });
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 export function ProgramTemplateManager({
   initialTemplates,
   library,
   groups,
+  members,
 }: {
   initialTemplates: ProgramTemplateWithDays[];
   library: ExerciseLibraryRow[];
   groups: ClientGroupWithMembers[];
+  members: { id: string; name: string }[];
 }) {
   const confirm = useConfirm();
   const toast = useToast();
   const { run: runCreate, busy: creating } = useAction();
-  const { run: runMutate } = useAction();
-  const { run: runAssignGroup, busy: assigningGroup } = useAction();
-  const [assignGroupId, setAssignGroupId] = useState<Record<string, string>>({});
+  const { run: runMutate, busy: mutating } = useAction();
+  const { run: runAssign, busy: assigning } = useAction();
   const { run: runDuplicate } = useAction();
   const { run: runImport, busy: importing } = useAction();
   const [newTemplateName, setNewTemplateName] = useState('');
-  const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
-  const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
-  const { run: runDuplicateWeek, busy: duplicatingWeek } = useAction();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [addingTemplate, setAddingTemplate] = useState(false);
+  const [activeWeek, setActiveWeek] = useState<number | null>(null);
+  const [addWorkout, setAddWorkout] = useState<{ label: string; position: number | null } | null>(null);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignName, setAssignName] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [groupId, setGroupId] = useState('');
+  const [memberSearch, setMemberSearch] = useState('');
   const importFileRef = useRef<HTMLInputElement>(null);
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -148,40 +192,65 @@ export function ProgramTemplateManager({
     reader.readAsText(file);
   }
 
+  function openTemplate(id: string) {
+    setActiveWeek(null);
+    setPreviewId(id);
+  }
+
+  // Creates the template and opens it straight away so the coach can start building.
   async function handleCreateTemplate(e: React.FormEvent) {
     e.preventDefault();
-    await runCreate(() => createProgramTemplate(newTemplateName), {
-      success: 'Programme template created',
-      onDone: () => {
-        setNewTemplateName('');
-        setAddingTemplate(false);
+    let newId: string | null = null;
+    await runCreate(
+      async () => {
+        newId = await createProgramTemplateAndGetId(newTemplateName.trim());
       },
+      {
+        onDone: () => {
+          setNewTemplateName('');
+          setAddingTemplate(false);
+          if (newId) openTemplate(newId);
+        },
+      }
+    );
+  }
+
+  async function handleAddWorkout(template: ProgramTemplateWithDays, week: number) {
+    if (!addWorkout) return;
+    const label = addWorkout.label.trim() || 'Workout';
+    await runMutate(() => addTemplateDay(template.id, week, label, addWorkout.position), {
+      success: 'Workout added',
+      onDone: () => setAddWorkout(null),
     });
   }
 
-  async function handleAddDay(templateId: string) {
-    const form = dayForms[templateId] ?? { weekNum: 1, dayLabel: 'Day 1', dayPosition: '' };
-    const dayPosition = form.dayPosition === '' ? null : Number(form.dayPosition);
-    await runMutate(() => addTemplateDay(templateId, form.weekNum, form.dayLabel, dayPosition), { success: 'Day added' });
+  // A new week starts as a copy of the last one (every workout and exercise), so building a block
+  // is "make week 1, tap Add week until you have enough", then tweak. An empty template gets a
+  // first blank workout instead.
+  async function handleAddWeek(template: ProgramTemplateWithDays) {
+    const weekNums = template.program_template_days.map((d) => d.week_num);
+    if (weekNums.length === 0) {
+      await runMutate(() => addTemplateDay(template.id, 1, 'Workout 1'), { onDone: () => setActiveWeek(1) });
+      return;
+    }
+    const last = Math.max(...weekNums);
+    const source = template.program_template_days.filter((d) => d.week_num === last);
+    await runMutate(() => Promise.all(source.map((d) => duplicateTemplateDay(d.id, last + 1, d.day_label))), {
+      success: `Week ${last + 1} added, copied from week ${last}`,
+      onDone: () => setActiveWeek(last + 1),
+    });
   }
 
-  // Builds the rest of the block by copying an already-built week's days (with their
-  // exercises -- duplicateTemplateDay copies both) into every remaining week, instead of
-  // generating blank numbered day shells. day_position carries over unchanged from the source
-  // day, so check-in resolution (lib/utils/checkin.ts) still works on any client the template
-  // gets instantiated onto, with no per-week retyping.
-  async function handleDuplicateWeek(template: ProgramTemplateWithDays) {
-    const form = dupForms[template.id] ?? { sourceWeek: 1, totalWeeks: 4 };
-    const sourceDays = template.program_template_days.filter((d) => d.week_num === form.sourceWeek);
-    if (sourceDays.length === 0) return;
-    const inserts: Promise<void>[] = [];
-    for (let week = form.sourceWeek + 1; week <= form.totalWeeks; week++) {
-      for (const day of sourceDays) {
-        inserts.push(duplicateTemplateDay(day.id, week, day.day_label));
-      }
-    }
-    await runDuplicateWeek(() => Promise.all(inserts), {
-      success: `Week ${form.sourceWeek} copied through week ${form.totalWeeks}`,
+  async function handleDeleteWeek(template: ProgramTemplateWithDays, week: number) {
+    const ok = await confirm({
+      title: `Delete week ${week}?`,
+      body: 'Removes every workout and exercise in this week of the template. Members already on this programme keep their own copy.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runMutate(() => deleteTemplateWeek(template.id, week), {
+      success: `Week ${week} deleted`,
+      onDone: () => setActiveWeek(null),
     });
   }
 
@@ -192,13 +261,16 @@ export function ProgramTemplateManager({
       destructive: true,
     });
     if (!ok) return;
-    await runMutate(() => deleteProgramTemplate(templateId), { success: 'Template deleted' });
+    await runMutate(() => deleteProgramTemplate(templateId), {
+      success: 'Template deleted',
+      onDone: () => setPreviewId(null),
+    });
   }
 
   async function handleDeleteDay(dayId: string, label: string) {
-    const ok = await confirm({ title: `Delete “${label}”?`, body: 'This removes the day and all its exercises.', destructive: true });
+    const ok = await confirm({ title: `Delete “${label}”?`, body: 'This removes the workout and all its exercises.', destructive: true });
     if (!ok) return;
-    await runMutate(() => deleteTemplateDay(dayId), { success: 'Day deleted' });
+    await runMutate(() => deleteTemplateDay(dayId), { success: 'Workout deleted' });
   }
 
   async function handleCopyDay(dayId: string, weekNum: number, dayLabel: string) {
@@ -209,25 +281,33 @@ export function ProgramTemplateManager({
     await runDuplicate(() => duplicateProgramTemplate(templateId, `${name} (copy)`), { success: 'Template duplicated' });
   }
 
-  // Loops the same instantiate_program_template RPC (already used for single-client "Start
-  // from a programme template" on WorkoutTab.tsx) over every member of the chosen group --
-  // no new RPC needed, since instantiating N times is exactly "assign to N clients."
-  async function handleAssignGroup(template: ProgramTemplateWithDays) {
-    const groupId = assignGroupId[template.id];
-    const group = groups.find((g) => g.id === groupId);
-    if (!group || group.memberIds.length === 0) return;
-    await runAssignGroup(
+  function openAssign(template: ProgramTemplateWithDays) {
+    setAssignName(template.name);
+    setPicked([]);
+    setGroupId('');
+    setMemberSearch('');
+    setAssignOpen(true);
+  }
+
+  // Gives the programme to each chosen member (and everyone in a chosen group) as their own copy.
+  const groupMemberIds = groups.find((g) => g.id === groupId)?.memberIds ?? [];
+  const targetIds = Array.from(new Set([...picked, ...groupMemberIds]));
+
+  async function handleAssign(template: ProgramTemplateWithDays) {
+    if (targetIds.length === 0) return;
+    await runAssign(
       async () => {
         const results = await Promise.all(
-          group.memberIds.map((clientId) => instantiateProgramTemplate(template.id, clientId, template.name))
+          targetIds.map((id) => instantiateProgramTemplate(template.id, id, assignName.trim() || template.name))
         );
         const failed = results.filter((r) => !r.ok).length;
-        if (failed > 0) {
-          return { ok: false, error: `${failed} of ${results.length} assignments failed` } as const;
-        }
+        if (failed > 0) return { ok: false, error: `${failed} of ${results.length} could not be assigned` } as const;
         return { ok: true } as const;
       },
-      { success: `Assigned to ${group.memberIds.length} client${group.memberIds.length === 1 ? '' : 's'} in "${group.name}"` }
+      {
+        success: `Programme given to ${targetIds.length} member${targetIds.length === 1 ? '' : 's'}`,
+        onDone: () => setAssignOpen(false),
+      }
     );
   }
 
@@ -235,6 +315,12 @@ export function ProgramTemplateManager({
     ? initialTemplates.flatMap((t) => t.program_template_days).find((d) => d.id === openDayId)
     : undefined;
   const previewTemplate = previewId ? initialTemplates.find((t) => t.id === previewId) : undefined;
+  const previewWeeks = previewTemplate
+    ? Array.from(new Set(previewTemplate.program_template_days.map((d) => d.week_num))).sort((a, b) => a - b)
+    : [];
+  const shownWeek = activeWeek != null && previewWeeks.includes(activeWeek) ? activeWeek : (previewWeeks[0] ?? 1);
+  const shownWeekDays = previewTemplate?.program_template_days.filter((d) => d.week_num === shownWeek) ?? [];
+  const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(memberSearch.trim().toLowerCase()));
 
   return (
     <div className="space-y-4">
@@ -255,23 +341,26 @@ export function ProgramTemplateManager({
       </div>
 
       {addingTemplate && (
-        <form onSubmit={handleCreateTemplate} className="flex items-end gap-2 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <div className="flex-1 space-y-1">
-            <label className="text-xs font-medium text-zinc-500">New template name</label>
+        <form onSubmit={handleCreateTemplate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Template name</label>
             <input
               required
               autoFocus
+              placeholder="e.g. 4 week fat loss, 3 days"
               className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
               value={newTemplateName}
               onChange={(e) => setNewTemplateName(e.target.value)}
             />
           </div>
-          <Button type="submit" variant="primary" disabled={creating}>
-            {creating ? 'Creating…' : 'Create template'}
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => setAddingTemplate(false)}>
-            Cancel
-          </Button>
+          <div className="flex gap-2">
+            <Button type="submit" variant="primary" disabled={creating}>
+              {creating ? 'Creating…' : 'Create and start building'}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setAddingTemplate(false)}>
+              Cancel
+            </Button>
+          </div>
         </form>
       )}
 
@@ -279,39 +368,42 @@ export function ProgramTemplateManager({
         <EmptyState
           icon={ClipboardList}
           title="No programme templates yet"
-          hint="Build one here, then start it on any client from their Training tab instead of building each program from scratch."
+          hint="Build one here, then give it to a member or a whole group in one go instead of building each programme from scratch."
         />
       )}
 
       <div className="space-y-2">
         {initialTemplates.map((template) => {
-          const weeks = Math.max(0, ...template.program_template_days.map((d) => d.week_num));
+          const weekNums = Array.from(new Set(template.program_template_days.map((d) => d.week_num)));
+          const perWeek = Math.max(0, ...weekNums.map((w) => template.program_template_days.filter((d) => d.week_num === w).length));
+          const exercises = template.program_template_days.reduce((n, d) => n + d.program_template_exercises.length, 0);
           return (
             <div
               key={template.id}
               className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
             >
-              <button
-                type="button"
-                onClick={() => setPreviewId(template.id)}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-              >
+              <button type="button" onClick={() => openTemplate(template.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                 <div className="min-w-0">
                   <p className="font-bold text-black dark:text-zinc-50">{template.name}</p>
-                  <p className="mt-0.5 text-sm text-zinc-500">
-                    {template.program_template_days.length} day{template.program_template_days.length === 1 ? '' : 's'} ·{' '}
-                    {weeks} week{weeks === 1 ? '' : 's'}
+                  {template.description && (
+                    <p className="mt-0.5 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
+                  )}
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {weekNums.length === 0
+                      ? 'Empty, tap to start building'
+                      : `${weekNums.length} week${weekNums.length === 1 ? '' : 's'} · ${perWeek} workout${perWeek === 1 ? '' : 's'} a week · ${exercises} exercise${exercises === 1 ? '' : 's'}`}
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
               </button>
-              <div className="flex shrink-0 items-center gap-1 text-sm font-semibold">
-                <button type="button" onClick={() => setPreviewId(template.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
+              <div className="ml-auto flex shrink-0 items-center gap-1 text-sm font-semibold">
+                <button type="button" onClick={() => openTemplate(template.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
                   Edit
                 </button>
                 <DropdownMenu
                   triggerLabel={`More actions for ${template.name}`}
                   items={[
+                    { label: 'Duplicate', onSelect: () => handleDuplicate(template.id, template.name) },
                     { label: 'Export as JSON', onSelect: () => exportTemplate(template) },
                     { label: 'Delete template', destructive: true, onSelect: () => handleDeleteTemplate(template.id, template.name) },
                   ]}
@@ -324,76 +416,61 @@ export function ProgramTemplateManager({
 
       {previewTemplate && (
         <FocusOverlay title={previewTemplate.name} onClose={() => setPreviewId(null)}>
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="ghost" size="sm" className="flex items-center gap-1" onClick={() => exportTemplate(previewTemplate)}>
-              <Download className="h-3.5 w-3.5" />
-              Export
+          <div className="flex items-center gap-2">
+            <Button variant="primary" size="sm" className="flex items-center gap-1.5" onClick={() => openAssign(previewTemplate)}>
+              <UserPlus className="h-3.5 w-3.5" />
+              Give to members
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleDuplicate(previewTemplate.id, previewTemplate.name)}>
-              Duplicate
-            </Button>
-            <Button variant="danger" size="sm" onClick={() => handleDeleteTemplate(previewTemplate.id, previewTemplate.name)}>
-              Delete template
-            </Button>
+            <div className="ml-auto">
+              <DropdownMenu
+                variant="header"
+                triggerLabel="Template actions"
+                items={[
+                  { label: 'Duplicate', onSelect: () => handleDuplicate(previewTemplate.id, previewTemplate.name) },
+                  { label: 'Export as JSON', onSelect: () => exportTemplate(previewTemplate) },
+                  {
+                    label: 'Delete template',
+                    destructive: true,
+                    onSelect: () => handleDeleteTemplate(previewTemplate.id, previewTemplate.name),
+                  },
+                ]}
+              />
+            </div>
           </div>
 
-          {groups.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-black/10 p-2.5 dark:border-white/10">
-              <span className="text-xs text-zinc-500">Assign to group:</span>
-              <select
-                className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-                value={assignGroupId[previewTemplate.id] ?? ''}
-                onChange={(e) => setAssignGroupId({ ...assignGroupId, [previewTemplate.id]: e.target.value })}
-              >
-                <option value="">Choose a group…</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} ({g.memberIds.length})
-                  </option>
-                ))}
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={assigningGroup || !assignGroupId[previewTemplate.id]}
-                onClick={() => handleAssignGroup(previewTemplate)}
-              >
-                {assigningGroup ? 'Assigning…' : 'Assign'}
-              </Button>
-              <p className="w-full text-xs text-zinc-500">
-                Starts this programme for every client in the group at once, same as starting it
-                for one client from their Training tab.
-              </p>
-            </div>
-          )}
+          <div className="mt-3">
+            <TemplateDetails key={previewTemplate.id} template={previewTemplate} />
+          </div>
 
           <ProgramDayList
             ownerId={previewTemplate.id}
             library={library}
             showPhaseLabel={false}
             onOpenDay={setOpenDayId}
+            activeWeek={shownWeek}
+            onChangeWeek={setActiveWeek}
             days={previewTemplate.program_template_days.map((day) => ({
               id: day.id,
               weekNum: day.week_num,
               dayLabel: day.day_label,
               phaseLabel: day.phase_label,
+              dayPosition: day.day_position,
               exerciseCount: day.program_template_exercises.length,
               exerciseLibraryIds: day.program_template_exercises.map((ex) => ex.exercise_library_id),
+              highlights: day.program_template_exercises.slice(0, 3).map((ex) => ex.name),
             }))}
             renderDayControls={(summary: ProgramDaySummary) => {
               const day = previewTemplate.program_template_days.find((d) => d.id === summary.id)!;
               return (
                 <>
-                  <PhaseLabelInput dayId={day.id} initial={day.phase_label} />
                   <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
                   <DropdownMenu
-                    triggerLabel="Day actions"
+                    triggerLabel="Workout actions"
                     items={[
-                      { label: 'Copy Workout', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
+                      { label: 'Copy to next week', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
                       {
-                        label: 'Delete day',
-                        onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num} — ${day.day_label}`),
+                        label: 'Delete workout',
+                        onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num}: ${day.day_label}`),
                         destructive: true,
                       },
                     ]}
@@ -403,126 +480,145 @@ export function ProgramTemplateManager({
             }}
           />
 
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-black/10 p-2.5 dark:border-white/10">
-            <span className="text-xs text-zinc-500">Duplicate week</span>
-            <input
-              type="number"
-              min={1}
-              title="Which week to copy from"
-              className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-              value={dupForms[previewTemplate.id]?.sourceWeek ?? 1}
-              onChange={(e) =>
-                setDupForms({
-                  ...dupForms,
-                  [previewTemplate.id]: {
-                    sourceWeek: Math.max(1, Number(e.target.value) || 1),
-                    totalWeeks: dupForms[previewTemplate.id]?.totalWeeks ?? 4,
-                  },
-                })
-              }
-            />
-            <span className="text-xs text-zinc-500">through week</span>
-            <input
-              type="number"
-              min={1}
-              title="Total weeks in the block"
-              className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-              value={dupForms[previewTemplate.id]?.totalWeeks ?? 4}
-              onChange={(e) =>
-                setDupForms({
-                  ...dupForms,
-                  [previewTemplate.id]: {
-                    sourceWeek: dupForms[previewTemplate.id]?.sourceWeek ?? 1,
-                    totalWeeks: Math.max(1, Number(e.target.value) || 1),
-                  },
-                })
-              }
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={duplicatingWeek}
-              onClick={() => handleDuplicateWeek(previewTemplate)}
-            >
-              {duplicatingWeek ? 'Duplicating…' : 'Duplicate'}
-            </Button>
-            <p className="w-full text-xs text-zinc-500">
-              Build one week fully, then copy it (with all its exercises) into every remaining
-              week of the block.
+          {previewWeeks.length === 0 && (
+            <p className="mt-4 rounded-2xl border border-dashed border-black/10 p-4 text-sm text-zinc-500 dark:border-white/15">
+              Nothing here yet. Add the first workout, fill in its exercises, then use Add week to copy it forward.
             </p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {previewWeeks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAddWorkout({ label: `Workout ${shownWeekDays.length + 1}`, position: null })}
+                className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+              >
+                + Add workout
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={mutating}
+              onClick={() => handleAddWeek(previewTemplate)}
+              className={
+                previewWeeks.length === 0
+                  ? 'rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40'
+                  : 'rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 disabled:opacity-40 dark:border-white/15 dark:text-zinc-200'
+              }
+            >
+              {previewWeeks.length === 0 ? '+ Add first workout' : '+ Add week (copy of last)'}
+            </button>
+            {previewWeeks.length > 1 && (
+              <button
+                type="button"
+                onClick={() => handleDeleteWeek(previewTemplate, shownWeek)}
+                className="rounded-full px-3 py-2 text-sm font-semibold text-danger hover:bg-danger/10"
+              >
+                Delete week {shownWeek}
+              </button>
+            )}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <input
-              type="number"
-              placeholder="Week"
-              className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-              value={dayForms[previewTemplate.id]?.weekNum ?? 1}
-              onChange={(e) =>
-                setDayForms({
-                  ...dayForms,
-                  [previewTemplate.id]: {
-                    weekNum: Number(e.target.value),
-                    dayLabel: dayForms[previewTemplate.id]?.dayLabel ?? 'Day 1',
-                    dayPosition: dayForms[previewTemplate.id]?.dayPosition ?? '',
-                  },
-                })
-              }
-            />
-            <input
-              placeholder="Day label"
-              className="w-32 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-              value={dayForms[previewTemplate.id]?.dayLabel ?? 'Day 1'}
-              onChange={(e) =>
-                setDayForms({
-                  ...dayForms,
-                  [previewTemplate.id]: {
-                    weekNum: dayForms[previewTemplate.id]?.weekNum ?? 1,
-                    dayLabel: e.target.value,
-                    dayPosition: dayForms[previewTemplate.id]?.dayPosition ?? '',
-                  },
-                })
-              }
-            />
-            <select
-              title="Day of the week -- carried onto every program instantiated from this template"
-              className="w-20 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-              value={dayForms[previewTemplate.id]?.dayPosition ?? ''}
-              onChange={(e) =>
-                setDayForms({
-                  ...dayForms,
-                  [previewTemplate.id]: {
-                    weekNum: dayForms[previewTemplate.id]?.weekNum ?? 1,
-                    dayLabel: dayForms[previewTemplate.id]?.dayLabel ?? 'Day 1',
-                    dayPosition: e.target.value,
-                  },
-                })
-              }
-            >
-              <option value="">Day…</option>
-              {PROGRAM_WEEKDAYS.map((d) => (
-                <option key={d} value={d}>
-                  {WEEKDAY_SHORT[d]}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => handleAddDay(previewTemplate.id)}
-              className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
-            >
-              + Day
-            </button>
-          </div>
+          {addWorkout && (
+            <BottomSheet title={`Add a workout to week ${shownWeek}`} onClose={() => setAddWorkout(null)}>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-500">Name</label>
+                  <input
+                    autoFocus
+                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
+                    value={addWorkout.label}
+                    onChange={(e) => setAddWorkout({ ...addWorkout, label: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-500">Day of the week (optional)</label>
+                  <WeekdayChips value={addWorkout.position} onChange={(v) => setAddWorkout({ ...addWorkout, position: v })} />
+                </div>
+                <Button variant="primary" className="w-full" disabled={mutating} onClick={() => handleAddWorkout(previewTemplate, shownWeek)}>
+                  {mutating ? 'Adding…' : 'Add workout'}
+                </Button>
+              </div>
+            </BottomSheet>
+          )}
+
+          {assignOpen && (
+            <BottomSheet title="Give this programme to…" onClose={() => setAssignOpen(false)}>
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Each member gets their own copy to follow. Editing this template later does not change copies already given out.
+                </p>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-zinc-500">Programme name for them</label>
+                  <input
+                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
+                    value={assignName}
+                    onChange={(e) => setAssignName(e.target.value)}
+                  />
+                </div>
+                {groups.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-500">A whole group</label>
+                    <select
+                      className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-sm dark:border-white/10"
+                      value={groupId}
+                      onChange={(e) => setGroupId(e.target.value)}
+                    >
+                      <option value="">No group</option>
+                      {groups.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name} ({g.memberIds.length})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-500">Members</label>
+                  <input
+                    placeholder="Search your members"
+                    className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                  />
+                  <div className="max-h-56 divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+                    {filteredMembers.length === 0 && <p className="p-3 text-sm text-zinc-500">No members found.</p>}
+                    {filteredMembers.map((m) => {
+                      const inGroup = groupMemberIds.includes(m.id);
+                      return (
+                        <label key={m.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(m.id) || inGroup}
+                            disabled={inGroup}
+                            onChange={() => setPicked(picked.includes(m.id) ? picked.filter((x) => x !== m.id) : [...picked, m.id])}
+                          />
+                          <span className="font-medium text-black dark:text-zinc-50">{m.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  disabled={assigning || targetIds.length === 0}
+                  onClick={() => handleAssign(previewTemplate)}
+                >
+                  {assigning
+                    ? 'Assigning…'
+                    : targetIds.length === 0
+                      ? 'Choose who to give it to'
+                      : `Give to ${targetIds.length} member${targetIds.length === 1 ? '' : 's'}`}
+                </Button>
+              </div>
+            </BottomSheet>
+          )}
         </FocusOverlay>
       )}
 
       {openDay && (
-        <FocusOverlay
-          title={openDay.day_label}
-          subtitle={`Week ${openDay.week_num}`}
-          onClose={() => setOpenDayId(null)}
-        >
+        <FocusOverlay title={openDay.day_label} subtitle={`Week ${openDay.week_num}`} onClose={() => setOpenDayId(null)}>
           <DayNotesField dayId={openDay.id} initial={openDay.notes} />
 
           <ExerciseEditor

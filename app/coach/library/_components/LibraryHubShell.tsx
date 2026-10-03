@@ -39,6 +39,7 @@ export function LibraryHubShell({
   initialCourses,
   unreadCount,
   groups,
+  members,
   email,
 }: {
   initialExercises: ExerciseLibraryRow[];
@@ -47,6 +48,7 @@ export function LibraryHubShell({
   initialCourses: EducationCourseWithModules[];
   unreadCount: number;
   groups: ClientGroupWithMembers[];
+  members: { id: string; name: string }[];
   email: string;
 }) {
   const searchParams = useSearchParams();
@@ -66,7 +68,7 @@ export function LibraryHubShell({
 
       {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} />}
       {tab === 'Program templates' && (
-        <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} />
+        <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} />
       )}
       {tab === 'Education' && <EducationPane initialCourses={initialCourses} />}
       {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}

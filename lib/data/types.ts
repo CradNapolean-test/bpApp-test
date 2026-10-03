@@ -368,6 +368,8 @@ export interface ProgramTemplateRow {
   coach_id: string;
   gym_id: string;
   name: string;
+  // Added by migration 0090; undefined until it has been applied.
+  description?: string | null;
   created_at: string;
 }
 
