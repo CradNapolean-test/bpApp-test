@@ -7,8 +7,9 @@ export interface SectionDef {
   key: WorkoutSection;
   title: string;
   hint: string;
-  // Warm-up and Lift are one list; Strong and Conditioning are two 10-minute blocks.
-  blocks: (1 | 2 | null)[];
+  // Warm-up and Lift are one list; Strong and Conditioning are two 10-minute blocks. Conditioning can
+  // instead be one 20-minute block, stored as block 0.
+  blocks: (0 | 1 | 2 | null)[];
 }
 
 export const SECTIONS: SectionDef[] = [
@@ -69,7 +70,8 @@ export interface SectionedExercise {
 }
 
 // Strong and Conditioning exercises with no block number sit in block 1; Warm-up and Lift have none.
-export function normalisedBlock(section: WorkoutSection, blockNo: number | null): 1 | 2 | null {
+export function normalisedBlock(section: WorkoutSection, blockNo: number | null): 0 | 1 | 2 | null {
+  if (section === 'conditioning' && blockNo === 0) return 0;
   if (section === 'strong' || section === 'conditioning') return blockNo === 2 ? 2 : 1;
   return null;
 }
@@ -100,6 +102,11 @@ export function blockFormatOf(rows: Pick<SectionedExercise, 'block_format'>[] | 
   return rows?.find((r) => r.block_format)?.block_format ?? null;
 }
 
+// Conditioning is a single 20-minute block when any of its rows sit in block 0.
+export function conditioningIsSingle(exercises: Pick<SectionedExercise, 'section' | 'block_no'>[]): boolean {
+  return exercises.some((e) => e.section === 'conditioning' && e.block_no === 0);
+}
+
 // True when a day uses anything other than the default Lift list, so older, plain days keep their
 // plain look.
 export function usesSections(exercises: Pick<SectionedExercise, 'section'>[]): boolean {
@@ -107,7 +114,7 @@ export function usesSections(exercises: Pick<SectionedExercise, 'section'>[]): b
 }
 
 // Picker value for "move to": e.g. 'strong:2'.
-export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 1 | 2 | null } {
+export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 0 | 1 | 2 | null } {
   const [section, block] = key.split(':');
-  return { section: section as WorkoutSection, blockNo: block === '2' ? 2 : block === '1' ? 1 : null };
+  return { section: section as WorkoutSection, blockNo: block === '2' ? 2 : block === '1' ? 1 : block === '0' ? 0 : null };
 }

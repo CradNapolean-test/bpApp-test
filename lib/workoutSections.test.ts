@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockFormatOf, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
+import { blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
 
 const ex = (section: 'warmup' | 'lift' | 'strong' | 'conditioning', block_no: number | null, sort_order: number, block_format: string | null = null) => ({
   section,
@@ -40,5 +40,12 @@ describe('workout sections', () => {
   it('parses a block key back', () => {
     expect(parseBlockKey('conditioning:2')).toEqual({ section: 'conditioning', blockNo: 2 });
     expect(parseBlockKey('lift')).toEqual({ section: 'lift', blockNo: null });
+  });
+
+  it('knows when conditioning is one 20-minute block', () => {
+    expect(blockKey('conditioning', 0)).toBe('conditioning:0');
+    expect(blockKey('strong', 0)).toBe('strong:1');
+    expect(conditioningIsSingle([ex('conditioning', 0, 0)])).toBe(true);
+    expect(conditioningIsSingle([ex('conditioning', 1, 0)])).toBe(false);
   });
 });

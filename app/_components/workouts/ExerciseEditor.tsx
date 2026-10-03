@@ -32,6 +32,7 @@ import {
   SECTION_TITLE,
   blockKey,
   blockFormatOf,
+  conditioningIsSingle,
   exerciseBlockKey,
   formatDescription,
   normalisedBlock,
@@ -126,7 +127,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function blockLabel(section: WorkoutSection, blockNo: number | null) {
   const b = normalisedBlock(section, blockNo);
-  return b == null ? SECTION_TITLE[section] : `${SECTION_TITLE[section]} · Block ${b}`;
+  if (b == null) return SECTION_TITLE[section];
+  return b === 0 ? `${SECTION_TITLE[section]} · 20 min` : `${SECTION_TITLE[section]} · Block ${b}`;
 }
 
 // One line saying what to do, e.g. "3 × 8-10 · 20kg · RPE 8 · rest 60s".
@@ -720,6 +722,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   const [sheet, setSheet] = useState<SheetState>(null);
   // A format chosen for a block that has no exercises yet; it is stamped on the first one added.
   const [pendingFormats, setPendingFormats] = useState<Record<string, string | null>>({});
+  // Conditioning as one 20-minute block, chosen before any exercise is in it.
+  const [pendingSingle, setPendingSingle] = useState(false);
 
   useEffect(() => {
     if (prevIdsKey.current !== idsKey) {
@@ -888,9 +892,21 @@ export function ExerciseEditor<T extends EditableExercise>({
     return items;
   }
 
+  const condSingle = conditioningIsSingle(displayOrder) || (pendingSingle && !displayOrder.some((e) => e.section === 'conditioning'));
+  const blocksFor = (s: (typeof SECTIONS)[number]) => (s.key === 'conditioning' && condSingle ? [0 as const] : s.blocks);
   const blockOptions = SECTIONS.flatMap((s) =>
-    s.blocks.map((b) => ({ key: blockKey(s.key, b), label: blockLabel(s.key, b) }))
+    blocksFor(s).map((b) => ({ key: blockKey(s.key, b), label: blockLabel(s.key, b) }))
   );
+
+  // Switches Conditioning between two 10-minute blocks and one 20-minute block, moving what is in it.
+  async function setConditioningSingle(single: boolean) {
+    const rows = displayOrder.filter((e) => e.section === 'conditioning');
+    if (rows.length === 0) {
+      setPendingSingle(single);
+      return;
+    }
+    await runMutate(() => Promise.all(rows.map((r) => onUpdate(r.id, { block_no: single ? 0 : 1 }))));
+  }
 
   const editing = sheet?.kind === 'edit' ? byId.get(sheet.id) : undefined;
 
@@ -900,7 +916,7 @@ export function ExerciseEditor<T extends EditableExercise>({
     const orderedBlocks: { key: string; title: string | null; rows: T[] }[] = [];
     if (sectioned) {
       for (const s of SECTIONS) {
-        for (const b of s.blocks) {
+        for (const b of s.key === 'conditioning' ? ([0, 1, 2] as const) : s.blocks) {
           const key = blockKey(s.key, b);
           const rows = blocks.get(key) ?? [];
           if (rows.length === 0) continue;
@@ -976,12 +992,28 @@ export function ExerciseEditor<T extends EditableExercise>({
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         {SECTIONS.map((section) => (
           <div key={section.key} className="rounded-2xl border border-black/[.06] p-3 dark:border-white/10">
-            <div className="mb-2 flex items-baseline gap-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-extrabold uppercase tracking-wide text-black dark:text-zinc-50">{section.title}</h3>
-              {section.hint && <span className="text-xs text-zinc-500">{section.hint}</span>}
+              {section.key !== 'conditioning' && section.hint && <span className="text-xs text-zinc-500">{section.hint}</span>}
+              {section.key === 'conditioning' && (
+                <div className="flex gap-1.5">
+                  {[false, true].map((single) => (
+                    <button
+                      key={String(single)}
+                      type="button"
+                      onClick={() => setConditioningSingle(single)}
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                        condSingle === single ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/15'
+                      }`}
+                    >
+                      {single ? '1 × 20 min' : '2 × 10 min'}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-3">
-              {section.blocks.map((blockNo) => {
+              {blocksFor(section).map((blockNo) => {
                 const key = blockKey(section.key, blockNo);
                 const rows = blocks.get(key) ?? [];
                 const format = formatFor(key);
@@ -989,7 +1021,9 @@ export function ExerciseEditor<T extends EditableExercise>({
                   <div key={key}>
                     {(blockNo != null || rows.length > 0) && (
                       <div className="mb-1.5 flex items-center gap-2">
-                        {blockNo != null && <span className="text-xs font-bold text-zinc-500">Block {blockNo} · 10 min</span>}
+                        {blockNo != null && (
+                          <span className="text-xs font-bold text-zinc-500">{blockNo === 0 ? 'One block · 20 min' : `Block ${blockNo} · 10 min`}</span>
+                        )}
                         {blockNo != null && (
                           <button
                             type="button"
