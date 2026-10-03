@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Dumbbell } from 'lucide-react';
+import { AddWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -20,6 +21,7 @@ import {
   deleteExercise,
   deleteProgram,
   deleteProgramDay,
+  deleteProgramWeek,
   duplicateProgramDay,
   logSet,
   reorderExercises,
@@ -30,6 +32,7 @@ import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
+import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
@@ -42,46 +45,86 @@ import type {
   WorkoutProgramRow,
 } from '@/lib/data/types';
 
-function StartFromTemplateForm({ clientId, templates }: { clientId: string; templates: ProgramTemplateRow[] }) {
+// Starting a programme for this member: from a template, or a blank one to build by hand. The new
+// programme becomes theirs once its start date arrives; the old one and its logged weights stay on file.
+function StartProgrammeSheet({
+  clientId,
+  templates,
+  onClose,
+}: {
+  clientId: string;
+  templates: ProgramTemplateRow[];
+  onClose: () => void;
+}) {
   const { run, busy } = useAction();
+  const [mode, setMode] = useState<'template' | 'blank'>(templates.length > 0 ? 'template' : 'blank');
   const [templateId, setTemplateId] = useState('');
+  const [name, setName] = useState('');
+  const [startDate, setStartDate] = useState(() => todayIsoInTz(DEFAULT_TIMEZONE));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!templateId) return;
-    const template = templates.find((t) => t.id === templateId);
-    await run(() => instantiateProgramTemplate(templateId, clientId, template?.name ?? ''), {
-      success: 'Programme started from template',
-      onDone: () => setTemplateId(''),
-    });
+    if (mode === 'template') {
+      if (!templateId) return;
+      const template = templates.find((t) => t.id === templateId);
+      await run(() => instantiateProgramTemplate(templateId, clientId, name.trim() || template?.name || '', startDate || null), {
+        success: 'Programme started',
+        onDone: onClose,
+      });
+    } else {
+      await run(() => createProgram(clientId, name.trim(), startDate || null), { success: 'Programme created', onDone: onClose });
+    }
   }
 
-  if (templates.length === 0) return null;
-
+  const field = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
-      <div className="flex-1 space-y-1">
-        <label className="text-xs font-medium text-zinc-500">Start from a programme template</label>
-        <select
-          required
-          className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-          value={templateId}
-          onChange={(e) => setTemplateId(e.target.value)}
-        >
-          <option value="" disabled>
-            Choose a template…
-          </option>
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button type="submit" disabled={busy} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50">
-        {busy ? 'Starting…' : 'Start programme'}
-      </button>
-    </form>
+    <BottomSheet title="Start a programme" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {templates.length > 0 && (
+          <div className="flex gap-2">
+            {(['template', 'blank'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
+                  mode === m ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
+                }`}
+              >
+                {m === 'template' ? 'From a template' : 'Build from scratch'}
+              </button>
+            ))}
+          </div>
+        )}
+        {mode === 'template' && (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-500">Template</label>
+            <select required className={field} value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+              <option value="" disabled>
+                Choose a template…
+              </option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500">{mode === 'template' ? 'Name for them (optional)' : 'Programme name'}</label>
+          <input required={mode === 'blank'} className={field} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-zinc-500">Starts</label>
+          <input type="date" className={field} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <p className="text-xs text-zinc-500">Their current programme carries on until this date, then this one takes over.</p>
+        </div>
+        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Saving…' : 'Start programme'}
+        </button>
+      </form>
+    </BottomSheet>
   );
 }
 
@@ -412,26 +455,6 @@ function DayFeedbackForm({
   );
 }
 
-function PhaseLabelInput({ dayId, initial }: { dayId: string; initial: string | null }) {
-  const { run } = useAction();
-  const [value, setValue] = useState(initial ?? '');
-
-  async function handleBlur() {
-    if (value === (initial ?? '')) return;
-    await run(() => updateProgramDay(dayId, { phase_label: value || null }));
-  }
-
-  return (
-    <input
-      placeholder="Phase (optional)"
-      className="w-28 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={handleBlur}
-    />
-  );
-}
-
 // Which weekday (Mon-Sat) this day falls on -- shared by every week of the block (Week 1's
 // Monday and Week 2's Monday share the same value). A class scheduled for the same weekday
 // auto-links to it for client check-in, see lib/utils/checkin.ts. Editable after the fact,
@@ -474,11 +497,11 @@ function ProgramStartDateInput({ programId, initial }: { programId: string; init
   }
 
   return (
-    <label className="flex items-center gap-1.5 text-xs text-zinc-500">
-      Start date
+    <label className="flex items-center gap-2 text-sm text-zinc-500">
+      Starts
       <input
         type="date"
-        className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+        className="rounded-xl border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
       />
@@ -540,6 +563,51 @@ function BatchApplyForm({ dayId }: { dayId: string }) {
   );
 }
 
+function RenameSheet({
+  initial,
+  busy,
+  onSubmit,
+  onClose,
+}: {
+  initial: string;
+  busy: boolean;
+  onSubmit: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <BottomSheet title="Rename programme" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(value);
+        }}
+        className="space-y-4"
+      >
+        <input
+          autoFocus
+          required
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </form>
+    </BottomSheet>
+  );
+}
+
+const prettyDate = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+type Sheet =
+  | { kind: 'start' }
+  | { kind: 'max' }
+  | { kind: 'rename'; programId: string; name: string }
+  | { kind: 'addWorkout'; programId: string; week: number; count: number };
+
 export function WorkoutTab({
   clientId,
   isCoachView,
@@ -568,15 +636,8 @@ export function WorkoutTab({
   profile?: ClientProfileRow | null;
 }) {
   const confirm = useConfirm();
-  const { run: runCreate, busy: creating } = useAction();
-  const { run: runMutate } = useAction();
-  // A coach's program-setup forms (new program, start from a template, record a max) stay tucked
-  // away once a program exists.
-  const [showSetup, setShowSetup] = useState(false);
-  const [newProgramName, setNewProgramName] = useState('');
-  const [dayForms, setDayForms] = useState<Record<string, { weekNum: number; dayLabel: string; dayPosition: string }>>({});
-  const [dupForms, setDupForms] = useState<Record<string, { sourceWeek: number; totalWeeks: number }>>({});
-  const { run: runDuplicateWeek, busy: duplicatingWeek } = useAction();
+  const { run: runMutate, busy: mutating } = useAction();
+  const [sheet, setSheet] = useState<Sheet | null>(null);
   // One week shown at a time via a Wk 1/2/3... pill selector (see ProgramDayList), defaulted
   // per-program to its current week (by start_date) so the day list (icon chips, exercise
   // counts, phase badges) opens on the relevant week instead of always Week 1. Days are no
@@ -611,43 +672,55 @@ export function WorkoutTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on a genuinely new focus request, not on every programs re-render
   }, [focusDay?.dayId, focusDay?.nonce]);
 
-  async function handleCreateProgram(e: React.FormEvent) {
-    e.preventDefault();
-    await runCreate(() => createProgram(clientId, newProgramName), {
-      success: 'Program created',
-      onDone: () => setNewProgramName(''),
+  async function handleAddWorkout(program: WorkoutProgramRow, week: number, label: string, weekday: number | null) {
+    await runMutate(() => addProgramDay(program.id, week, label, weekday), {
+      success: 'Workout added',
+      onDone: () => setSheet(null),
     });
   }
 
-  async function handleAddDay(programId: string) {
-    const form = dayForms[programId] ?? { weekNum: 1, dayLabel: 'Day 1', dayPosition: '' };
-    const dayPosition = form.dayPosition === '' ? null : Number(form.dayPosition);
-    await runMutate(() => addProgramDay(programId, form.weekNum, form.dayLabel, dayPosition), { success: 'Day added' });
-  }
-
-  // Builds a full block by copying an already-built week's days (with their exercises --
-  // duplicateProgramDay copies both) into every remaining week, instead of generating blank
-  // numbered day shells. day_position carries over unchanged from the source day, so check-in
-  // resolution (lib/utils/checkin.ts) still works without retyping a day # per week.
-  async function handleDuplicateWeek(program: WorkoutProgramRow) {
-    const form = dupForms[program.id] ?? { sourceWeek: 1, totalWeeks: 4 };
-    const sourceDays = program.workout_program_days.filter((d) => d.week_num === form.sourceWeek);
-    if (sourceDays.length === 0) return;
-    const inserts: Promise<void>[] = [];
-    for (let week = form.sourceWeek + 1; week <= form.totalWeeks; week++) {
-      for (const day of sourceDays) {
-        inserts.push(duplicateProgramDay(day.id, week, day.day_label));
-      }
+  // A new week starts as a copy of the last one (every workout and exercise), so building a block is
+  // "make week 1, tap Add week until there are enough", then tweak. An empty programme gets a first
+  // blank workout instead.
+  async function handleAddWeek(program: WorkoutProgramRow) {
+    const weekNums = program.workout_program_days.map((d) => d.week_num);
+    if (weekNums.length === 0) {
+      await runMutate(() => addProgramDay(program.id, 1, 'Workout 1', null), {
+        onDone: () => setActiveWeeks((st) => ({ ...st, [program.id]: 1 })),
+      });
+      return;
     }
-    await runDuplicateWeek(() => Promise.all(inserts), {
-      success: `Week ${form.sourceWeek} copied through week ${form.totalWeeks}`,
+    const last = Math.max(...weekNums);
+    const source = program.workout_program_days.filter((d) => d.week_num === last);
+    await runMutate(() => Promise.all(source.map((d) => duplicateProgramDay(d.id, last + 1, d.day_label))), {
+      success: `Week ${last + 1} added, copied from week ${last}`,
+      onDone: () => setActiveWeeks((st) => ({ ...st, [program.id]: last + 1 })),
     });
+  }
+
+  async function handleDeleteWeek(program: WorkoutProgramRow, week: number) {
+    const ok = await confirm({
+      title: `Delete week ${week}?`,
+      body: 'Removes every workout and exercise in this week of this member’s programme.',
+      destructive: true,
+    });
+    if (!ok) return;
+    await runMutate(() => deleteProgramWeek(program.id, week), {
+      success: `Week ${week} deleted`,
+      onDone: () => setActiveWeeks((st) => ({ ...st, [program.id]: 1 })),
+    });
+  }
+
+  async function handleRename(programId: string, name: string) {
+    const next = name.trim();
+    if (!next) return;
+    await runMutate(() => updateProgram(programId, { name: next }), { success: 'Renamed', onDone: () => setSheet(null) });
   }
 
   async function handleDeleteProgram(programId: string, name: string) {
     const ok = await confirm({
       title: `Delete “${name}”?`,
-      body: 'This removes every week, day and exercise in the program. This cannot be undone.',
+      body: 'This removes every week, day and exercise in the programme, and unlinks the weights and reps already logged on it. To keep that history, start a new programme instead: only the latest one is shown, and the old one stays on file.',
       destructive: true,
     });
     if (!ok) return;
@@ -721,6 +794,17 @@ export function WorkoutTab({
   const todayDow = new Date(`${todayIsoLocal}T00:00:00Z`).getUTCDay();
   const currentWeek = (program: WorkoutProgramRow) => resolveActiveProgram([program], todayIsoLocal)?.weekNum ?? -1;
 
+  const { current, upcoming, past } = pickCurrentProgram(programs, todayIsoLocal);
+  const shownPrograms = current ? [current] : [];
+  const progressLine = (program: WorkoutProgramRow) => {
+    const total = Math.max(0, ...program.workout_program_days.map((d) => d.week_num));
+    if (!program.start_date) return 'No start date yet. Set one so check-ins find the right workout.';
+    const week = Math.floor(daysBetween(program.start_date, todayIsoLocal) / 7) + 1;
+    return week > total && total > 0
+      ? `Finished · started ${prettyDate(program.start_date)}`
+      : `Week ${Math.max(week, 1)} of ${total || 1} · started ${prettyDate(program.start_date)}`;
+  };
+
   const libraryVideo = (libraryId: string | null) =>
     (libraryId ? exerciseLibrary.find((l) => l.id === libraryId)?.video_url : null) ?? null;
 
@@ -730,247 +814,210 @@ export function WorkoutTab({
 
   return (
     <div className="space-y-6">
-      {isCoachView ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-bold text-black dark:text-zinc-50">
-              {programs.length === 0 ? 'Set up a program' : 'Programs'}
-            </p>
-            {programs.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowSetup((v) => !v)}
-                aria-expanded={showSetup}
-                className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
-              >
-                {showSetup ? 'Hide tools' : '+ New program & tools'}
-              </button>
-            )}
-          </div>
-          {(showSetup || programs.length === 0) && (
-            <div className="space-y-3">
-        <form onSubmit={handleCreateProgram} className="flex items-end gap-2 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
-              <div className="flex-1 space-y-1">
-                <label className="text-xs font-medium text-zinc-500">New program name</label>
-                <input
-                  required
-                  className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
-                  value={newProgramName}
-                  onChange={(e) => setNewProgramName(e.target.value)}
-                />
-              </div>
-              <button type="submit" disabled={creating} className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50">
-                {creating ? 'Creating…' : 'Create program'}
-              </button>
-            </form>
-              <StartFromTemplateForm clientId={clientId} templates={programTemplates} />
-              <RecordMaxForm clientId={clientId} library={exerciseLibrary} />
-            </div>
-          )}
-        </div>
-) : null}
-
-      {programs.length === 0 && (
+      {!current && (
         <EmptyState
           icon={Dumbbell}
-          title="No workout program yet"
+          title={upcoming.length > 0 ? 'Your next programme is on its way' : 'No workout programme yet'}
           hint={
-            isCoachView
-              ? 'Create a program above, then add weeks, days and exercises to it.'
-              : "Your coach hasn't built your program yet — it'll show up here once they do."
+            upcoming.length > 0
+              ? `${upcoming[0].name} starts ${prettyDate(upcoming[0].start_date ?? todayIsoLocal)}.`
+              : isCoachView
+                ? 'Start one from a template, or build one from scratch.'
+                : "Your coach hasn't built your program yet — it'll show up here once they do."
           }
         />
       )}
+      {isCoachView && !current && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setSheet({ kind: 'start' })}
+            className="rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground"
+          >
+            Start a programme
+          </button>
+        </div>
+      )}
 
-      {programs.map((program) => (
-        <div
-          key={program.id}
-          className={isCoachView ? 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10' : ''}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className={isCoachView ? 'font-medium text-black dark:text-zinc-50' : 'px-1 text-xl font-black text-black dark:text-zinc-50'}>
-              {program.name}
-            </h3>
-            <div className="flex items-center gap-2">
-              {isCoachView && <ProgramStartDateInput programId={program.id} initial={program.start_date} />}
+      {upcoming.length > 0 && current && (
+        <div className="rounded-2xl bg-accent-soft px-4 py-3 text-sm">
+          {upcoming.map((u) => (
+            <p key={u.id} className="font-semibold text-accent">
+              Next: {u.name} starts {prettyDate(u.start_date ?? todayIsoLocal)}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {shownPrograms.map((program) => {
+        const weeks = Array.from(new Set(program.workout_program_days.map((d) => d.week_num))).sort((x, y) => x - y);
+        const wantedWeek = activeWeeks[program.id] ?? (currentWeek(program) > 0 ? currentWeek(program) : weeks[0] ?? 1);
+        const shownWeek = weeks.includes(wantedWeek) ? wantedWeek : (weeks[0] ?? 1);
+        const daysThisWeek = program.workout_program_days.filter((d) => d.week_num === shownWeek).length;
+        return (
+          <div
+            key={program.id}
+            className={isCoachView ? 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10' : ''}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className={isCoachView ? 'truncate text-base font-extrabold text-black dark:text-zinc-50' : 'px-1 text-xl font-black text-black dark:text-zinc-50'}>
+                  {program.name}
+                </h3>
+                {isCoachView && <p className="mt-0.5 text-xs text-zinc-500">{progressLine(program)}</p>}
+              </div>
               {isCoachView && (
-                <button
-                  onClick={() => handleDeleteProgram(program.id, program.name)}
-                  className="text-xs text-red-600 hover:underline dark:text-red-400"
-                >
-                  Delete program
-                </button>
+                <DropdownMenu
+                  variant="header"
+                  triggerLabel="Programme actions"
+                  items={[
+                    { label: 'Start another programme', onSelect: () => setSheet({ kind: 'start' }) },
+                    { label: 'Record a tested max', onSelect: () => setSheet({ kind: 'max' }) },
+                    { label: 'Rename', onSelect: () => setSheet({ kind: 'rename', programId: program.id, name: program.name }) },
+                    { label: 'Delete this programme', destructive: true, onSelect: () => handleDeleteProgram(program.id, program.name) },
+                  ]}
+                />
               )}
             </div>
-          </div>
+            {isCoachView && (
+              <div className="mt-2">
+                <ProgramStartDateInput programId={program.id} initial={program.start_date} />
+              </div>
+            )}
 
-          <ProgramDayList
-            ownerId={program.id}
-            library={exerciseLibrary}
-            showPhaseLabel={!isCoachView}
-            onOpenDay={setOpenDayId}
-            activeWeek={activeWeeks[program.id]}
-            currentWeek={currentWeek(program) > 0 ? currentWeek(program) : undefined}
-            onChangeWeek={(week) => setActiveWeeks((s) => ({ ...s, [program.id]: week }))}
-            days={program.workout_program_days.map((day) => ({
-              id: day.id,
-              weekNum: day.week_num,
-              dayLabel: day.day_label,
-              phaseLabel: day.phase_label,
-              exerciseCount: day.workout_exercises.length,
-              exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
-              done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
-              liftCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise').length,
-              highlights: [...day.workout_exercises]
-                .filter((ex) => ex.block_type === 'exercise')
-                .sort((a, b) => a.sort_order - b.sort_order)
-                .slice(0, 2)
-                .map((ex) => ex.name),
-              loggedCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise' && (logsByExercise[ex.id]?.length ?? 0) > 0).length,
-              dayPosition: day.day_position,
-              isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
-            }))}
-            renderDayControls={
-              isCoachView
-                ? (summary: ProgramDaySummary) => {
-                    const day = program.workout_program_days.find((d) => d.id === summary.id)!;
-                    return (
-                      <>
-                        <PhaseLabelInput dayId={day.id} initial={day.phase_label} />
-                        <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
-                        <DropdownMenu
-                          triggerLabel="Day actions"
-                          items={[
-                            { label: 'Copy Workout', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
-                            {
-                              label: 'Delete day',
-                              onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num} — ${day.day_label}`),
-                              destructive: true,
-                            },
-                          ]}
-                        />
-                      </>
-                    );
+            <ProgramDayList
+              ownerId={program.id}
+              library={exerciseLibrary}
+              showPhaseLabel={!isCoachView}
+              onOpenDay={setOpenDayId}
+              activeWeek={shownWeek}
+              currentWeek={currentWeek(program) > 0 ? currentWeek(program) : undefined}
+              onChangeWeek={(week) => setActiveWeeks((st) => ({ ...st, [program.id]: week }))}
+              days={program.workout_program_days.map((day) => ({
+                id: day.id,
+                weekNum: day.week_num,
+                dayLabel: day.day_label,
+                phaseLabel: day.phase_label,
+                exerciseCount: day.workout_exercises.length,
+                exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
+                done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
+                liftCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise').length,
+                highlights: [...day.workout_exercises]
+                  .filter((ex) => ex.block_type === 'exercise')
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .slice(0, 2)
+                  .map((ex) => ex.name),
+                loggedCount: day.workout_exercises.filter((ex) => ex.block_type === 'exercise' && (logsByExercise[ex.id]?.length ?? 0) > 0).length,
+                dayPosition: day.day_position,
+                isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
+              }))}
+              renderDayControls={
+                isCoachView
+                  ? (summary: ProgramDaySummary) => {
+                      const day = program.workout_program_days.find((d) => d.id === summary.id)!;
+                      return (
+                        <>
+                          <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
+                          <DropdownMenu
+                            triggerLabel="Workout actions"
+                            items={[
+                              { label: 'Copy to next week', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
+                              {
+                                label: 'Delete workout',
+                                onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num}: ${day.day_label}`),
+                                destructive: true,
+                              },
+                            ]}
+                          />
+                        </>
+                      );
+                    }
+                  : undefined
+              }
+            />
+
+            {isCoachView && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {weeks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSheet({ kind: 'addWorkout', programId: program.id, week: shownWeek, count: daysThisWeek })}
+                    className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+                  >
+                    + Add workout
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={mutating}
+                  onClick={() => handleAddWeek(program)}
+                  className={
+                    weeks.length === 0
+                      ? 'rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40'
+                      : 'rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 disabled:opacity-40 dark:border-white/15 dark:text-zinc-200'
                   }
-                : undefined
-            }
-          />
+                >
+                  {weeks.length === 0 ? '+ Add first workout' : '+ Add week (copy of last)'}
+                </button>
+                {weeks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteWeek(program, shownWeek)}
+                    className="rounded-full px-3 py-2 text-sm font-semibold text-danger hover:bg-danger/10"
+                  >
+                    Delete week {shownWeek}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
 
-          {isCoachView && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-black/10 p-2.5 dark:border-white/10">
-              <span className="text-xs text-zinc-500">Duplicate week</span>
-              <input
-                type="number"
-                min={1}
-                title="Which week to copy from"
-                className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-                value={dupForms[program.id]?.sourceWeek ?? 1}
-                onChange={(e) =>
-                  setDupForms({
-                    ...dupForms,
-                    [program.id]: {
-                      sourceWeek: Math.max(1, Number(e.target.value) || 1),
-                      totalWeeks: dupForms[program.id]?.totalWeeks ?? 4,
-                    },
-                  })
-                }
-              />
-              <span className="text-xs text-zinc-500">through week</span>
-              <input
-                type="number"
-                min={1}
-                title="Total weeks in the block"
-                className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-                value={dupForms[program.id]?.totalWeeks ?? 4}
-                onChange={(e) =>
-                  setDupForms({
-                    ...dupForms,
-                    [program.id]: {
-                      sourceWeek: dupForms[program.id]?.sourceWeek ?? 1,
-                      totalWeeks: Math.max(1, Number(e.target.value) || 1),
-                    },
-                  })
-                }
-              />
-              <button
-                onClick={() => handleDuplicateWeek(program)}
-                disabled={duplicatingWeek}
-                className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium disabled:opacity-50 dark:border-white/10"
-              >
-                {duplicatingWeek ? 'Duplicating…' : 'Duplicate'}
-              </button>
-              <p className="w-full text-xs text-zinc-500">
-                Build one week fully, then copy it (with all its exercises) into every remaining
-                week of the block.
-              </p>
-            </div>
-          )}
+      {isCoachView && past.length > 0 && (
+        <details className="rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-black dark:text-zinc-50">
+            Previous programmes ({past.length})
+          </summary>
+          <ul className="divide-y divide-black/5 px-4 pb-2 dark:divide-white/10">
+            {past.map((pp) => (
+              <li key={pp.id} className="py-2.5 text-sm">
+                <span className="font-semibold text-black dark:text-zinc-50">{pp.name}</span>
+                <span className="ml-2 text-xs text-zinc-500">
+                  {pp.start_date ? `started ${prettyDate(pp.start_date)}` : 'no start date'}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="px-4 pb-3 text-xs text-zinc-500">Kept on file. Every weight and rep logged on them is still stored.</p>
+        </details>
+      )}
 
-          {isCoachView && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <input
-                type="number"
-                placeholder="Week"
-                className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-                value={dayForms[program.id]?.weekNum ?? 1}
-                onChange={(e) =>
-                  setDayForms({
-                    ...dayForms,
-                    [program.id]: {
-                      weekNum: Number(e.target.value),
-                      dayLabel: dayForms[program.id]?.dayLabel ?? 'Day 1',
-                      dayPosition: dayForms[program.id]?.dayPosition ?? '',
-                    },
-                  })
-                }
-              />
-              <input
-                placeholder="Day label"
-                className="w-32 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-                value={dayForms[program.id]?.dayLabel ?? 'Day 1'}
-                onChange={(e) =>
-                  setDayForms({
-                    ...dayForms,
-                    [program.id]: {
-                      weekNum: dayForms[program.id]?.weekNum ?? 1,
-                      dayLabel: e.target.value,
-                      dayPosition: dayForms[program.id]?.dayPosition ?? '',
-                    },
-                  })
-                }
-              />
-              <select
-                title="Day of the week -- a class scheduled the same day auto-links here for client check-in"
-                className="w-20 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
-                value={dayForms[program.id]?.dayPosition ?? ''}
-                onChange={(e) =>
-                  setDayForms({
-                    ...dayForms,
-                    [program.id]: {
-                      weekNum: dayForms[program.id]?.weekNum ?? 1,
-                      dayLabel: dayForms[program.id]?.dayLabel ?? 'Day 1',
-                      dayPosition: e.target.value,
-                    },
-                  })
-                }
-              >
-                <option value="">Day…</option>
-                {PROGRAM_WEEKDAYS.map((d) => (
-                  <option key={d} value={d}>
-                    {WEEKDAY_SHORT[d]}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => handleAddDay(program.id)}
-                className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
-              >
-                + Day
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+      {isCoachView && sheet?.kind === 'start' && (
+        <StartProgrammeSheet clientId={clientId} templates={programTemplates} onClose={() => setSheet(null)} />
+      )}
+      {isCoachView && sheet?.kind === 'max' && (
+        <BottomSheet title="Record a tested max" onClose={() => setSheet(null)}>
+          <RecordMaxForm clientId={clientId} library={exerciseLibrary} bare />
+        </BottomSheet>
+      )}
+      {isCoachView && sheet?.kind === 'rename' && (
+        <RenameSheet
+          initial={sheet.name}
+          busy={mutating}
+          onSubmit={(name) => handleRename(sheet.programId, name)}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {isCoachView && sheet?.kind === 'addWorkout' && current && (
+        <AddWorkoutSheet
+          title={`Add a workout to week ${sheet.week}`}
+          defaultLabel={`Workout ${sheet.count + 1}`}
+          busy={mutating}
+          onSubmit={(label, weekday) => handleAddWorkout(current, sheet.week, label, weekday)}
+          onClose={() => setSheet(null)}
+        />
+      )}
 
       {!isCoachView && (
         <details className="group rounded-2xl border border-black/[.06] bg-card dark:border-white/10">

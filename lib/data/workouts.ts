@@ -15,9 +15,9 @@ export async function getPrograms(clientId: string): Promise<WorkoutProgramRow[]
   return (data ?? []) as unknown as WorkoutProgramRow[];
 }
 
-export async function createProgram(clientId: string, name: string): Promise<void> {
+export async function createProgram(clientId: string, name: string, startDate: string | null = null): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase.from('workout_programs').insert({ client_id: clientId, name });
+  const { error } = await supabase.from('workout_programs').insert({ client_id: clientId, name, start_date: startDate });
   if (error) raise(error);
 }
 
@@ -52,6 +52,16 @@ export async function addProgramDay(
 export async function deleteProgramDay(dayId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_program_days').delete().eq('id', dayId);
+  if (error) raise(error);
+}
+
+export async function deleteProgramWeek(programId: string, weekNum: number): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('workout_program_days')
+    .delete()
+    .eq('program_id', programId)
+    .eq('week_num', weekNum);
   if (error) raise(error);
 }
 
