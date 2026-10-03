@@ -732,12 +732,12 @@ export function ExerciseEditor<T extends EditableExercise>({
   memberChoices?: {
     slot1: string | null;
     slot2: string | null;
-    onChoose: (slot: 1 | 2, blockKey: string) => Promise<unknown>;
+    // Called straight away on a tap; the caller updates the screen immediately and saves in the background.
+    onChoose: (slot: 1 | 2, blockKey: string) => void;
   };
 }) {
   const { run: runReorder } = useAction();
   const { run: runMutate } = useAction();
-  const { run: runChoose, busy: choosing } = useAction();
   const sorted = [...exercises].sort((a, b) => a.sort_order - b.sort_order);
   const idsKey = sorted.map((e) => e.id).join(',');
   const [orderedIds, setOrderedIds] = useState<string[]>(() => sorted.map((e) => e.id));
@@ -1043,8 +1043,7 @@ export function ExerciseEditor<T extends EditableExercise>({
                 <button
                   key={o.key}
                   type="button"
-                  disabled={choosing}
-                  onClick={() => runChoose(() => memberChoices.onChoose(slot, o.key))}
+                  onClick={() => memberChoices.onChoose(slot, o.key)}
                   className={`rounded-full px-4 py-2 text-sm font-bold ${
                     chosen === o.key ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
                   }`}

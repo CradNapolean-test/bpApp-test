@@ -645,6 +645,7 @@ export function WorkoutTab({
   const confirm = useConfirm();
   const { run: runMutate, busy: mutating } = useAction();
   const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [localChoices, setLocalChoices] = useState<Record<string, { slot1: string | null; slot2: string | null }>>({});
   // One week shown at a time via a Wk 1/2/3... pill selector (see ProgramDayList), defaulted
   // per-program to its current week (by start_date) so the day list (icon chips, exercise
   // counts, phase badges) opens on the relevant week instead of always Week 1. Days are no
@@ -821,6 +822,22 @@ export function WorkoutTab({
     if (c.slot === 1) cur.slot1 = c.block_key;
     else cur.slot2 = c.block_key;
     choicesByDay.set(c.program_day_id, cur);
+  }
+  // Taps show at once from local state; the save happens in the background and the page's own data
+  // catches up next time it reloads.
+  for (const [dayId, c] of Object.entries(localChoices)) choicesByDay.set(dayId, c);
+  function handleChoose(dayId: string, slot: 1 | 2, key: string) {
+    const prev = choicesByDay.get(dayId) ?? { slot1: null, slot2: null };
+    const next = { ...prev, [slot === 1 ? 'slot1' : 'slot2']: key };
+    // One long conditioning block covers both slots.
+    if (slot === 1 && key === 'conditioning:0') next.slot2 = null;
+    setLocalChoices((st) => ({ ...st, [dayId]: next }));
+    void chooseBlock(dayId, slot, key).then((result) => {
+      if (!result.ok) {
+        toast.error(result.error);
+        setLocalChoices((st) => ({ ...st, [dayId]: prev }));
+      }
+    });
   }
   const chosenFor = (dayId: string) => {
     const c = choicesByDay.get(dayId);
@@ -1134,7 +1151,7 @@ export function WorkoutTab({
                 ? {
                     slot1: choicesByDay.get(openDay.id)?.slot1 ?? null,
                     slot2: choicesByDay.get(openDay.id)?.slot2 ?? null,
-                    onChoose: (slot, key) => chooseBlock(openDay.id, slot, key),
+                    onChoose: (slot, key) => handleChoose(openDay.id, slot, key),
                   }
                 : undefined
             }
