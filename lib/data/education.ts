@@ -4,7 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
-import type { EducationCourseAssignmentWithDetails, EducationCourseWithModules } from './types';
+import type { CourseRollupRow, EducationCourseAssignmentWithDetails, EducationCourseWithModules } from './types';
 
 // Fetches every course already nested with its modules/lessons in one round trip (mirrors
 // getProgramTemplatesWithDays) -- lets the coach-authoring UI derive its currently-open
@@ -33,6 +33,18 @@ export async function createCourse(title: string, description: string | null): P
   const { error } = await supabase
     .from('education_courses')
     .insert({ coach_id: user.id, gym_id: gymId, title, description });
+  if (error) raise(error);
+}
+
+export async function updateCourse(id: string, fields: { title?: string; description?: string | null }): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('education_courses').update(fields).eq('id', id);
+  if (error) raise(error);
+}
+
+export async function updateModule(id: string, title: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('education_modules').update({ title }).eq('id', id);
   if (error) raise(error);
 }
 
@@ -167,4 +179,69 @@ export async function markLessonIncomplete(lessonId: string, clientId: string): 
     .eq('lesson_id', lessonId)
     .eq('client_id', clientId);
   if (error) raise(error);
+}
+
+// Who has each of this gym's courses and how many of its lessons they have finished. Only what the
+// signed-in coach is allowed to see comes back. Empty (never an error) so the Library still loads.
+export async function getCourseRollup(): Promise<CourseRollupRow[]> {
+  const supabase = await createClient();
+  const gymId = await resolveScopingGymId(supabase);
+  const { data: courses, error } = await supabase
+    .from('education_courses')
+    .select('id, education_modules(education_lessons(id))')
+    .eq('gym_id', gymId);
+  if (error || !courses || courses.length === 0) return [];
+
+  const lessonsByCourse = new Map<string, Set<string>>();
+  for (const c of courses) {
+    const set = new Set<string>();
+    for (const m of (c.education_modules ?? []) as { education_lessons: { id: string }[] }[]) {
+      for (const l of m.education_lessons ?? []) set.add(l.id);
+    }
+    lessonsByCourse.set(c.id, set);
+  }
+
+  const { data: assignments, error: aError } = await supabase
+    .from('education_course_assignments')
+    .select('course_id, client_id, assigned_at')
+    .in('course_id', courses.map((c) => c.id));
+  if (aError || !assignments || assignments.length === 0) return [];
+
+  const clientIds = Array.from(new Set(assignments.map((a) => a.client_id)));
+  const { data: completions } = await supabase
+    .from('education_lesson_completions')
+    .select('lesson_id, client_id')
+    .in('client_id', clientIds);
+
+  const doneByClient = new Map<string, Set<string>>();
+  for (const c of completions ?? []) {
+    const set = doneByClient.get(c.client_id) ?? new Set<string>();
+    set.add(c.lesson_id);
+    doneByClient.set(c.client_id, set);
+  }
+
+  return assignments.map((a) => {
+    const lessons = lessonsByCourse.get(a.course_id) ?? new Set<string>();
+    const done = Array.from(doneByClient.get(a.client_id) ?? []).filter((id) => lessons.has(id)).length;
+    return { course_id: a.course_id, client_id: a.client_id, assigned_at: a.assigned_at, done };
+  });
+}
+
+// Gives a course to several members at once. Anyone who already has it is skipped, so it is safe to run
+// again after adding people.
+export async function assignCourseToMany(courseId: string, clientIds: string[]): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from('education_course_assignments').select('client_id').eq('course_id', courseId);
+  const already = new Set((existing ?? []).map((e) => e.client_id));
+  const targets = Array.from(new Set(clientIds)).filter((id) => !already.has(id));
+  if (targets.length === 0) return ok();
+
+  const results = await Promise.all(
+    targets.map((clientId) => supabase.rpc('assign_education_course', { p_course_id: courseId, p_client_id: clientId }))
+  );
+  const failed = results.filter((r) => r.error);
+  if (failed.length > 0) {
+    return fail(failed[0].error, `${failed.length} of ${targets.length} could not be assigned`);
+  }
+  return ok();
 }

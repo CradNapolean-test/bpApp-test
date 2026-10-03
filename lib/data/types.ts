@@ -656,6 +656,14 @@ export interface FormAssignmentWithDetails extends FormAssignmentRow {
   responses: FormResponseRow[];
 }
 
+// Who has a course and how far they have got: lessons done, for one member on one course.
+export interface CourseRollupRow {
+  course_id: string;
+  client_id: string;
+  assigned_at: string;
+  done: number;
+}
+
 export interface EducationLessonRow {
   id: string;
   module_id: string;
