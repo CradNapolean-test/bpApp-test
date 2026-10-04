@@ -6,6 +6,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Native pop-ups (select lists, date pickers) follow the theme instead of staying white. */
+  color-scheme: light;
   --background: #fdfcfb;
   --foreground: #171717;
 
@@ -56,6 +58,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   /* Ballistic Performance brand: black background, teal #2ABFBF (from the owner's logo files
      and BP app mockups). */
   --background: #111111;
