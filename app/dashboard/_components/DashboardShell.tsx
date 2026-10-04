@@ -397,7 +397,7 @@ export function DashboardShell({
   }
 
   const sidebar = isCoachView ? (
-    <CoachMemberSideNav groups={coachNavGroups} active={activeGroup?.key} onSelect={selectCoachTab} />
+    <CoachMemberSideNav groups={coachNavGroups} active={activeGroup?.key} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
   ) : (
     <ClientSideNav
       activeTab={activeClientTab}
@@ -654,7 +654,9 @@ export function DashboardShell({
         </button>
       )}
       {showCoaching && isCoachView && activeGroup && activeGroup.tabs.length > 1 && (
-        <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
+        <div className="md:hidden">
+          <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
+        </div>
       )}
       {showPills && (
         <div className="mb-3 flex gap-2 overflow-x-auto">

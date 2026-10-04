@@ -202,3 +202,16 @@ input[type='checkbox'].themed-checkbox:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Drop-down lists. Most selects here are transparent, which leaves the browser's own list white (with
+   pale text) on the dark theme. Give the field and its options solid theme colours so the open list
+   matches the page. */
+select {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+select option,
+select optgroup {
+  background-color: var(--card);
+  color: var(--foreground);
+}

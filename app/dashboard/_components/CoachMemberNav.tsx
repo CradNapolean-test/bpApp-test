@@ -88,30 +88,61 @@ export function activeCoachGroup(groups: CoachGroup[], category: Category, scree
 
 type Select = (tab: CoachTab) => void;
 
-// Desktop left menu: six flat entries, no expanding sub-lists.
-export function CoachMemberSideNav({ groups, active, onSelect }: { groups: CoachGroup[]; active: string | undefined; onSelect: Select }) {
+// Desktop left menu: six sections; the open one lists its screens underneath.
+export function CoachMemberSideNav({
+  groups,
+  active,
+  category,
+  screen,
+  onSelect,
+}: {
+  groups: CoachGroup[];
+  active: string | undefined;
+  category: Category;
+  screen: Screen;
+  onSelect: Select;
+}) {
   return (
     <nav className="space-y-1" aria-label="Member sections">
       {groups.map((g) => {
         const isActive = g.key === active;
         const Icon = g.icon;
         return (
-          <button
-            key={g.key}
-            type="button"
-            onClick={() => onSelect(g.tabs[0])}
-            aria-current={isActive ? 'page' : undefined}
-            className={`flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
-              isActive
-                ? 'bg-accent text-accent-foreground shadow-sm'
-                : 'text-zinc-600 hover:bg-black/5 hover:text-black dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-200'
-            }`}
-          >
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-white/20' : 'bg-black/5 dark:bg-white/10'}`}>
-              <Icon className="h-4 w-4" />
-            </span>
-            {g.label}
-          </button>
+          <div key={g.key}>
+            <button
+              type="button"
+              onClick={() => onSelect(g.tabs[0])}
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex w-full items-center gap-2.5 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
+                isActive
+                  ? 'bg-accent text-accent-foreground shadow-sm'
+                  : 'text-zinc-600 hover:bg-black/5 hover:text-black dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-white/20' : 'bg-black/5 dark:bg-white/10'}`}>
+                <Icon className="h-4 w-4" />
+              </span>
+              {g.label}
+            </button>
+            {isActive && g.tabs.length > 1 && (
+              <div className="ml-3 mt-2 space-y-0.5 border-l-2 border-accent/30 pl-3.5">
+                {g.tabs.map((t) => (
+                  <button
+                    key={`${t.category}:${t.screen}`}
+                    type="button"
+                    onClick={() => onSelect(t)}
+                    className={`block w-full rounded-md px-2 py-1 text-left text-sm transition-colors ${
+                      t.category === category && t.screen === screen
+                        ? 'font-medium text-black dark:text-zinc-50'
+                        : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         );
       })}
     </nav>
@@ -145,7 +176,8 @@ export function CoachMemberBottomNav({ groups, active, onSelect }: { groups: Coa
   );
 }
 
-// The tabs inside the current section, always on screen at the top of the page (phone and desktop).
+// The tabs inside the current section, along the top of the page on a phone (a desktop screen lists them in
+// the left menu instead).
 // Scrolls sideways if there are more than fit, with a fade at the edge, and keeps the chosen one in view.
 export function CoachMemberTabs({
   tabs,
