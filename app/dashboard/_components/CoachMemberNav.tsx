@@ -7,7 +7,7 @@ import { screensForCategory } from './categories';
 import type { Category, NutritionTrackingMode, Screen } from './categories';
 
 // How a coach moves around one member's workspace: six sections, and inside a section a row of tabs.
-//   Overview   Overview, Chat
+//   Overview   Overview (Chat is opened from the Message button)
 //   Nutrition  Food tracking / meal planner / recipes (whichever the member's mode uses)
 //   Training   Workout, Activity
 //   Check-in   Daily check-in, Forms
@@ -27,6 +27,9 @@ export interface CoachGroup {
   label: string;
   icon: LucideIcon;
   tabs: CoachTab[];
+  // Pages that belong to this section without being listed as one of its tabs (Chat sits under Overview;
+  // it is opened from the Message button or the chat icon, not from the menu).
+  alsoCategories?: Category[];
 }
 
 const SCREEN_LABEL: Partial<Record<Screen, string>> = {
@@ -52,7 +55,8 @@ export function coachGroups(disabled: Set<Screen>, nutritionMode: NutritionTrack
       key: 'overview',
       label: 'Overview',
       icon: House,
-      tabs: [...tabsFor('Home', { Today: 'Overview' }), ...tabsFor('Messages', { Messages: 'Chat' })],
+      tabs: tabsFor('Home', { Today: 'Overview' }),
+      alsoCategories: ['Messages'] as Category[],
     },
     { key: 'nutrition', label: 'Nutrition', icon: Apple, tabs: tabsFor('Nutrition') },
     { key: 'training', label: 'Training', icon: Dumbbell, tabs: tabsFor('Training') },
@@ -82,7 +86,7 @@ export function coachGroups(disabled: Set<Screen>, nutritionMode: NutritionTrack
 export function activeCoachGroup(groups: CoachGroup[], category: Category, screen: Screen): CoachGroup | undefined {
   return (
     groups.find((g) => g.tabs.some((t) => t.category === category && t.screen === screen)) ??
-    groups.find((g) => g.tabs.some((t) => t.category === category))
+    groups.find((g) => g.tabs.some((t) => t.category === category) || g.alsoCategories?.includes(category))
   );
 }
 
