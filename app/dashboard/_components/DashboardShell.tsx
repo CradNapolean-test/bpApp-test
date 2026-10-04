@@ -284,7 +284,21 @@ export function DashboardShell({
   }, [viewingMessages]);
 
   // A tab / top-level switch: starts a fresh trail.
+  // The coach's chat with this member lives in a panel beside whatever page they are on (a full-screen
+  // sheet on a phone). It stays mounted once opened, so a half-typed message is still there when it is
+  // closed and reopened or the coach moves between sections.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMounted, setChatMounted] = useState(false);
+  function openChat() {
+    setChatMounted(true);
+    setChatOpen(true);
+  }
+
   function handleCategoryClick(c: Category) {
+    if (isCoachView && c === 'Messages') {
+      openChat();
+      return;
+    }
     // Categories only render while area === 'Coaching' (see showCoaching below) -- without
     // this, selecting a category while the client's Classes area is active would set
     // category/screen but never actually show anything.
@@ -298,6 +312,10 @@ export function DashboardShell({
   // where we came from so the back arrow returns there, e.g. Home -> Events -> back to Home, or
   // Coach hub -> Big Dog -> back to the Coach hub.
   function handleNavigate(c: Category, s?: Screen) {
+    if (isCoachView && c === 'Messages') {
+      openChat();
+      return;
+    }
     setBackStack((stack) => [...stack, { area, category, screen: effectiveScreen }]);
     setArea('Coaching');
     setCategory(c);
@@ -518,6 +536,17 @@ export function DashboardShell({
       >
         &larr; All clients
       </Link>
+      <button
+        type="button"
+        onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
+        aria-pressed={chatOpen}
+        className={`relative flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold transition-colors ${
+          chatOpen ? 'bg-accent text-accent-foreground' : 'text-accent hover:bg-accent/10'
+        }`}
+      >
+        <MessageSquare className="h-4 w-4" /> Chat
+        {!chatOpen && perClientUnreadCount > 0 && <span className="h-2 w-2 rounded-full bg-danger" />}
+      </button>
       {healthStatus && (
         <span
           className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
@@ -580,8 +609,8 @@ export function DashboardShell({
         <>
           {isCoachView && (
           <button
-            onClick={() => handleCategoryClick('Messages')}
-            aria-label="Messages"
+            onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
+            aria-label="Chat with this member"
             className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
             <MessageSquare className="h-5 w-5" />
@@ -644,6 +673,8 @@ export function DashboardShell({
         )
       }
     >
+      <div className={isCoachView && chatOpen ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-4' : ''}>
+      <div className="min-w-0">
       {showCoaching && !isCoachView && isSubScreen && (
         <button
           onClick={goBack}
@@ -923,7 +954,7 @@ export function DashboardShell({
           {effectiveScreen === 'Notifications' && (
             <NotificationsTab notifications={notifications} />
           )}
-          {effectiveScreen === 'Messages' && (
+          {!isCoachView && effectiveScreen === 'Messages' && (
             <ChatTab
               clientId={clientId}
               initialMessages={messages}
@@ -950,6 +981,29 @@ export function DashboardShell({
 
       {!isCoachView && <PushPrompt clientId={clientId} />}
       {!isCoachView && <OfflineSnapshot name={clientLabel} profile={profile} programWeek={programWeek} programs={programs} weekLogs={weekLogs} />}
+      </div>
+      {isCoachView && chatMounted && (
+        <div
+          className={
+            chatOpen
+              ? 'fixed inset-0 z-50 flex flex-col bg-[var(--background)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:block lg:h-[calc(100dvh-2rem)] lg:bg-transparent lg:p-0'
+              : 'hidden'
+          }
+        >
+          <ChatTab
+            fill
+            clientId={clientId}
+            initialMessages={messages}
+            currentUserId={currentUserId}
+            otherPartyName={otherPartyName}
+            readOnly={!isOwnClient}
+            draftKey={`coach-${clientId}`}
+            active={chatOpen}
+            onClose={() => setChatOpen(false)}
+          />
+        </div>
+      )}
+      </div>
     </AppShell>
     </ClientOnly>
   );

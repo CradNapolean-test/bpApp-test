@@ -100,6 +100,10 @@ export function ChatTab({
   currentUserId,
   otherPartyName = 'Them',
   readOnly = false,
+  fill = false,
+  draftKey,
+  active = true,
+  onClose,
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -111,9 +115,33 @@ export function ChatTab({
   // thread, but sendMessage would fail RLS (owns_client) anyway since they aren't the
   // assigned coach.
   readOnly?: boolean;
+  // Take the height of the box it sits in (the coach's docked chat) instead of sizing itself to the screen.
+  fill?: boolean;
+  // Remembers what is typed but not sent, per conversation, so it survives leaving the page and coming back.
+  draftKey?: string;
+  // False while the chat is tucked away (kept mounted so a draft and the live connection are not lost).
+  active?: boolean;
+  onClose?: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => {
+    if (!draftKey || typeof window === 'undefined') return '';
+    try {
+      return window.sessionStorage.getItem(`chat-draft:${draftKey}`) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  function changeText(value: string) {
+    setText(value);
+    if (!draftKey) return;
+    try {
+      if (value) window.sessionStorage.setItem(`chat-draft:${draftKey}`, value);
+      else window.sessionStorage.removeItem(`chat-draft:${draftKey}`);
+    } catch {
+      // storage can be blocked; the draft still lives in memory
+    }
+  }
   const [sending, setSending] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -178,8 +206,10 @@ export function ChatTab({
   useEffect(() => {
     // Viewing the thread marks it read -- best-effort, a failure here just means the badge
     // doesn't clear this time rather than blocking anything the user is doing.
+    if (!active) return;
     markChatRead(clientId).catch(() => {});
-  }, [clientId]);
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [clientId, active]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -187,7 +217,7 @@ export function ChatTab({
     setSending(true);
     try {
       await sendMessage(clientId, text.trim());
-      setText('');
+      changeText('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not send message. Please try again.');
     } finally {
@@ -234,13 +264,27 @@ export function ChatTab({
   }
 
   return (
-    <div className="flex h-[calc(100dvh-10.5rem-env(safe-area-inset-bottom))] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div
+      className={`flex flex-col overflow-hidden rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10 ${
+        fill ? 'h-full min-h-0' : 'h-[calc(100dvh-10.5rem-env(safe-area-inset-bottom))] min-h-[420px]'
+      }`}
+    >
       <div className="flex items-center gap-3 border-b border-black/[.05] px-4 py-3 dark:border-white/10">
         <Avatar name={otherPartyName} size="md" />
-        <div>
-          <p className="text-sm font-extrabold text-black dark:text-zinc-50">{otherPartyName}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-extrabold text-black dark:text-zinc-50">{otherPartyName}</p>
           <p className="text-[11px] text-zinc-500">{readOnly ? 'Read-only' : 'Messages, photos and voice notes'}</p>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Hide chat"
+            className="shrink-0 rounded-full p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
       <div ref={listRef} className="flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3.5 py-4">
         {messages.length === 0 && (
@@ -317,7 +361,7 @@ export function ChatTab({
             <input
               type="text"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => changeText(e.target.value)}
               placeholder={`Message ${otherPartyName}…`}
               className="min-w-0 flex-1 bg-transparent py-2.5 text-base outline-none placeholder:text-zinc-400 sm:text-sm"
             />
