@@ -515,6 +515,7 @@ export interface NotificationRow {
   message: string;
   created_at: string;
   read_at: string | null;
+  cleared_at?: string | null;
 }
 
 export interface PushSubscriptionRow {

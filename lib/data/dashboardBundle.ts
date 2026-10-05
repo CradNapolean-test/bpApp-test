@@ -28,7 +28,7 @@ import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
 import { getNutritionFeedback } from './nutritionFeedback';
 import { getHabitsWithLogs } from './habits';
-import { getUnreadNotifications } from './notifications';
+import { getNotifications } from './notifications';
 import { getFormTemplates, getClientFormAssignments } from './forms';
 import { getExerciseLibrary } from './exerciseLibrary';
 import { getProgramTemplates } from './programTemplates';
@@ -118,7 +118,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getNutritionFeedback(clientId),
     getMeasurementLogs(clientId),
     getHabitsWithLogs(clientId, profile?.timezone ?? DEFAULT_TIMEZONE),
-    getUnreadNotifications(clientId),
+    getNotifications(clientId),
     getFormTemplates(),
     getClientFormAssignments(clientId),
     getExerciseLibrary(),

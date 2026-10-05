@@ -644,7 +644,7 @@ export function DashboardShell({
             className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
             <Bell className="h-5 w-5" />
-            {notifications.length > 0 && (
+            {notifications.some((n) => !n.read_at) && (
               <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
             )}
           </button>
@@ -952,7 +952,7 @@ export function DashboardShell({
             />
           )}
           {effectiveScreen === 'Notifications' && (
-            <NotificationsTab notifications={notifications} />
+            <NotificationsTab clientId={clientId} notifications={notifications} readOnly={isCoachView} />
           )}
           {!isCoachView && effectiveScreen === 'Messages' && (
             <ChatTab
