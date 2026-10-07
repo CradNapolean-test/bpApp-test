@@ -284,15 +284,21 @@ export function DashboardShell({
   }, [viewingMessages]);
 
   // A tab / top-level switch: starts a fresh trail.
-  // The coach's chat with this member lives in a panel beside whatever page they are on (a full-screen
-  // sheet on a phone). It stays mounted once opened, so a half-typed message is still there when it is
-  // closed and reopened or the coach moves between sections.
+  // The coach's chat with this member slides over from the right, like the Messages drawer in the header.
+  // It stays mounted once opened, so a half-typed message is still there when it is closed and reopened or
+  // the coach moves between sections.
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMounted, setChatMounted] = useState(false);
   function openChat() {
     setChatMounted(true);
     setChatOpen(true);
   }
+  useEffect(() => {
+    if (!chatOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setChatOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chatOpen]);
 
   function handleCategoryClick(c: Category) {
     if (isCoachView && c === 'Messages') {
@@ -673,8 +679,6 @@ export function DashboardShell({
         )
       }
     >
-      <div className={isCoachView && chatOpen ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-4' : ''}>
-      <div className="min-w-0">
       {showCoaching && !isCoachView && isSubScreen && (
         <button
           onClick={goBack}
@@ -981,29 +985,24 @@ export function DashboardShell({
 
       {!isCoachView && <PushPrompt clientId={clientId} />}
       {!isCoachView && <OfflineSnapshot name={clientLabel} profile={profile} programWeek={programWeek} programs={programs} weekLogs={weekLogs} />}
-      </div>
       {isCoachView && chatMounted && (
-        <div
-          className={
-            chatOpen
-              ? 'fixed inset-0 z-50 flex flex-col bg-[var(--background)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:block lg:h-[calc(100dvh-2rem)] lg:bg-transparent lg:p-0'
-              : 'hidden'
-          }
-        >
-          <ChatTab
-            fill
-            clientId={clientId}
-            initialMessages={messages}
-            currentUserId={currentUserId}
-            otherPartyName={otherPartyName}
-            readOnly={!isOwnClient}
-            draftKey={`coach-${clientId}`}
-            active={chatOpen}
-            onClose={() => setChatOpen(false)}
-          />
+        <div className={chatOpen ? 'fixed inset-0 z-50' : 'hidden'}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => setChatOpen(false)} />
+          <aside className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black/10 bg-[var(--background)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] shadow-xl dark:border-white/10">
+            <ChatTab
+              fill
+              clientId={clientId}
+              initialMessages={messages}
+              currentUserId={currentUserId}
+              otherPartyName={otherPartyName}
+              readOnly={!isOwnClient}
+              draftKey={`coach-${clientId}`}
+              active={chatOpen}
+              onClose={() => setChatOpen(false)}
+            />
+          </aside>
         </div>
       )}
-      </div>
     </AppShell>
     </ClientOnly>
   );
