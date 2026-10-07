@@ -16,7 +16,7 @@ import { ChatTab } from '@/app/dashboard/_components/ChatTab';
 import { useCoachMessages } from '@/app/coach/_components/useCoachMessages';
 import { ConversationList } from '@/app/coach/_components/ConversationList';
 import { BroadcastsPane } from './BroadcastsPane';
-import type { ChatOverviewRow, ClientGroupWithMembers, ScheduledCommunicationRow } from '@/lib/data/types';
+import type { ChatOverviewRow, ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
 
 type Tab = 'inbox' | 'broadcasts';
 
@@ -27,12 +27,16 @@ export function MessagesHubShell({
   currentUserId,
   groups,
   communications,
+  templates,
+  counts,
   email,
 }: {
   overview: ChatOverviewRow[];
   currentUserId: string;
   groups: ClientGroupWithMembers[];
   communications: ScheduledCommunicationRow[];
+  templates: MessageTemplateRow[];
+  counts: { mine: number; gym: number };
   email: string;
 }) {
   const [tab, setTab] = useState<Tab>('inbox');
@@ -97,7 +101,7 @@ export function MessagesHubShell({
         sidebar={tab === 'inbox' ? <ConversationList overview={localOverview} selected={selected} onSelect={pick} /> : undefined}
       >
         {tab === 'broadcasts' ? (
-          <BroadcastsPane overview={overview} groups={groups} communications={communications} />
+          <BroadcastsPane groups={groups} communications={communications} templates={templates} counts={counts} />
         ) : (
           <>
             {/* Phone: a conversation list first, then the thread with a back arrow. The sidebar

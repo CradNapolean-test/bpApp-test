@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { personaliseMessage } from '@/lib/broadcastMessages';
 
 // Server-only, mirrors lib/ai/estimateFoodPhoto.ts's graceful-degradation contract: reads
 // RESEND_API_KEY the same way lib/supabase/admin.ts reads SUPABASE_SERVICE_ROLE_KEY (server-only,
@@ -31,6 +32,36 @@ export function subjectFromMessage(message: string): string {
 export function messageToHtml(message: string): string {
   const escaped = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<p>${escaped.replace(/\n/g, '<br />')}</p>`;
+}
+
+// Same as sendBroadcastEmail, but the message is personalised for each person ("{first name}") before it is
+// turned into their email.
+export async function sendPersonalisedEmails(
+  recipients: { email: string; name: string | null }[],
+  message: string
+): Promise<BroadcastEmailResult> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || recipients.length === 0) {
+    return { sent: 0, skipped: !apiKey };
+  }
+
+  const resend = new Resend(apiKey);
+  let sent = 0;
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    const chunk = recipients.slice(i, i + BATCH_SIZE);
+    try {
+      const { error } = await resend.batch.send(
+        chunk.map((r) => {
+          const text = personaliseMessage(message, r.name);
+          return { from: FROM_EMAIL, to: r.email, subject: subjectFromMessage(text), html: messageToHtml(text) };
+        })
+      );
+      if (!error) sent += chunk.length;
+    } catch {
+      // Best-effort, same as sendBroadcastEmail.
+    }
+  }
+  return { sent, skipped: false };
 }
 
 export async function sendBroadcastEmail(

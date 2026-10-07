@@ -1,9 +1,10 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
-import { messageToHtml, sendBroadcastEmail, subjectFromMessage } from '@/lib/email';
+import { sendPersonalisedEmails } from '@/lib/email';
 import type { ScheduledCommunicationRow } from './types';
 
 export async function getCommunications(): Promise<ScheduledCommunicationRow[]> {
@@ -16,75 +17,68 @@ export async function getCommunications(): Promise<ScheduledCommunicationRow[]> 
   return data ?? [];
 }
 
-// "Send now" never calls the send_due_communications RPC -- it inserts chat_messages directly
-// under the caller's own RLS-scoped session, exactly like sendMessage() in chat.ts does for a
-// single client. This keeps the RPC genuinely cron-only (see migration 0031's comment) with no
-// application code path that could race it or need it granted to `authenticated`. Email for an
-// immediate send goes out the same way, in this same request, rather than waiting on the cron --
-// profiles.email is already RLS-readable for the coach's own clients (see schema.sql), so no
-// admin client is needed here even though the cron route uses one for the scheduled path.
-export async function composeCommunication(
-  message: string,
-  target: { type: 'all_clients' } | { type: 'group'; groupId: string },
-  sendAt: string,
-  clientIds: string[],
-  channel: 'message' | 'email' | 'both' = 'message'
-): Promise<void> {
+// Creates a broadcast. The database does the work (create_communication, migration 0097): it works out who the
+// audience is (a coach's own clients, the whole gym, or a group), posts the in-app message to each of them when the
+// time is now, and otherwise schedules it (once, or repeating weekly). Email can't be sent from the database, so for
+// an immediate send the people it reached come back and the email goes out here.
+export async function composeCommunication(input: {
+  message: string;
+  target: 'my_clients' | 'gym' | 'group';
+  groupId?: string | null;
+  sendAt: string;
+  channel: 'message' | 'email' | 'both';
+  repeat: 'none' | 'weekly';
+}): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('create_communication', {
+    p_message: input.message,
+    p_target: input.target,
+    p_group: input.target === 'group' ? (input.groupId ?? null) : null,
+    p_send_at: input.sendAt,
+    p_channel: input.channel,
+    p_repeat: input.repeat,
+  });
+  if (error) return fail(error, 'Could not send that');
+
+  const result = data as { id: string; sent_now: boolean; recipients: string[] } | null;
+  if (result?.sent_now && result.recipients.length > 0 && (input.channel === 'email' || input.channel === 'both')) {
+    const { data: people } = await supabase
+      .from('profiles')
+      .select('email, client_profiles(name, email_notifications_enabled)')
+      .in('id', result.recipients);
+    // Opted-out clients are skipped, not just muted -- same shape as notifications_enabled's existing gate on
+    // send_checkin_reminders.
+    const optedIn = (people ?? [])
+      .map((r) => {
+        const profile = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
+        return { email: r.email as string, name: (profile?.name as string | null) ?? null, on: profile?.email_notifications_enabled ?? true };
+      })
+      .filter((r) => r.on && r.email);
+    const sent = await sendPersonalisedEmails(optedIn, input.message);
+    if (!sent.skipped) {
+      await supabase.from('scheduled_communications').update({ email_sent_at: new Date().toISOString() }).eq('id', result.id);
+    }
+  }
+  return ok();
+}
+
+// How many clients each audience reaches, for the "This will message N" line: the coach's own, and the whole gym.
+export async function getAudienceCounts(): Promise<{ mine: number; gym: number }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  if (!user) return { mine: 0, gym: 0 };
   const gymId = await resolveScopingGymId(supabase);
-
-  const sendImmediately = new Date(sendAt).getTime() <= Date.now();
-
-  const { data: inserted, error } = await supabase
-    .from('scheduled_communications')
-    .insert({
-      coach_id: user.id,
-      gym_id: gymId,
-      message,
-      target_type: target.type,
-      target_group_id: target.type === 'group' ? target.groupId : null,
-      send_at: sendAt,
-      channel,
-    })
-    .select('id')
-    .single();
-  if (error) raise(error);
-
-  if (sendImmediately) {
-    if (clientIds.length > 0 && (channel === 'message' || channel === 'both')) {
-      const { error: sendError } = await supabase
-        .from('chat_messages')
-        .insert(clientIds.map((clientId) => ({ client_id: clientId, sender_id: user.id, text: message })));
-      if (sendError) raise(sendError);
-    }
-
-    let emailSentAt: string | null = null;
-    if (clientIds.length > 0 && (channel === 'email' || channel === 'both')) {
-      const { data: recipients, error: profilesError } = await supabase
-        .from('profiles')
-        .select('email, client_profiles(email_notifications_enabled)')
-        .in('id', clientIds);
-      if (profilesError) raise(profilesError);
-      // Opted-out clients are skipped, not just muted -- same shape as notifications_enabled's
-      // existing gate on send_checkin_reminders.
-      const optedIn = (recipients ?? []).filter((r) => {
-        const profile = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
-        return profile?.email_notifications_enabled ?? true;
-      });
-      const result = await sendBroadcastEmail(optedIn, subjectFromMessage(message), messageToHtml(message));
-      if (!result.skipped) emailSentAt = new Date().toISOString();
-    }
-
-    const { error: markError } = await supabase
-      .from('scheduled_communications')
-      .update({ sent_at: new Date().toISOString(), email_sent_at: emailSentAt })
-      .eq('id', inserted!.id);
-    if (markError) raise(markError);
-  }
+  const [{ count: mine }, { data: coaches }] = await Promise.all([
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('coach_id', user.id),
+    supabase.from('profiles').select('id').eq('role', 'coach').eq('gym_id', gymId),
+  ]);
+  const coachIds = (coaches ?? []).map((c) => c.id);
+  const { count: gym } = coachIds.length
+    ? await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').in('coach_id', coachIds)
+    : { count: 0 };
+  return { mine: mine ?? 0, gym: gym ?? 0 };
 }
 
 export async function deleteCommunication(id: string): Promise<void> {

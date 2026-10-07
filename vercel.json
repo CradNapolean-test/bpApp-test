@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/send-communications",
-      "schedule": "0 5 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/apply-programme-rollouts",

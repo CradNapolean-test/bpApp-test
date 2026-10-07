@@ -757,12 +757,26 @@ export interface ScheduledCommunicationRow {
   coach_id: string;
   gym_id: string;
   message: string;
-  target_type: 'group' | 'all_clients';
+  target_type: 'group' | 'all_clients' | 'my_clients' | 'gym';
   target_group_id: string | null;
   send_at: string;
   sent_at: string | null;
   channel: 'message' | 'email' | 'both';
   email_sent_at: string | null;
+  created_at: string;
+  // Weekly repeats (migration 0097). A repeating row is a series: it is never "sent", it just keeps moving its
+  // own send_at on a week; each occurrence is written as its own sent row pointing back via series_id.
+  repeat?: 'none' | 'weekly';
+  last_sent_at?: string | null;
+  series_id?: string | null;
+}
+
+export interface MessageTemplateRow {
+  id: string;
+  gym_id: string;
+  coach_id: string;
+  title: string;
+  body: string;
   created_at: string;
 }
 

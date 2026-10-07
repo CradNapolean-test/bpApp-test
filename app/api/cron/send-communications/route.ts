@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { messageToHtml, sendBroadcastEmail, subjectFromMessage } from '@/lib/email';
+import { sendPersonalisedEmails } from '@/lib/email';
 
 // Triggered daily by Vercel Cron (see vercel.json). Only processes scheduled_communications
 // rows whose send_at has passed -- "send now" broadcasts never reach this function at all,
@@ -36,24 +36,14 @@ export async function GET(request: Request) {
 
   let emailsSent = 0;
   for (const comm of dueEmails ?? []) {
-    let clientIds: string[] = [];
-    if (comm.target_type === 'all_clients') {
-      // Gym-wide, not just the sending coach's own roster -- scheduled_communications is
-      // gym-shared (0054), matches send_due_communications' RPC resolution for the message
-      // channel above.
-      const { data: coaches } = await admin.from('profiles').select('id').eq('role', 'coach').eq('gym_id', comm.gym_id);
-      const coachIds = (coaches ?? []).map((c) => c.id);
-      const { data: clients } = coachIds.length
-        ? await admin.from('profiles').select('id').in('coach_id', coachIds)
-        : { data: [] };
-      clientIds = (clients ?? []).map((c) => c.id);
-    } else if (comm.target_group_id) {
-      const { data: members } = await admin
-        .from('client_group_members')
-        .select('client_id')
-        .eq('group_id', comm.target_group_id);
-      clientIds = (members ?? []).map((m) => m.client_id);
-    }
+    // Same recipient list the in-app messages used (the coach's clients, the whole gym, or a group).
+    const { data: recipientIds } = await admin.rpc('communication_recipients', {
+      p_gym: comm.gym_id,
+      p_coach: comm.coach_id,
+      p_target: comm.target_type,
+      p_group: comm.target_group_id,
+    });
+    const clientIds = (recipientIds ?? []) as string[];
     if (clientIds.length === 0) {
       await admin.from('scheduled_communications').update({ email_sent_at: new Date().toISOString() }).eq('id', comm.id);
       continue;
@@ -61,15 +51,17 @@ export async function GET(request: Request) {
 
     const { data: recipients } = await admin
       .from('profiles')
-      .select('email, client_profiles(email_notifications_enabled)')
+      .select('email, client_profiles(name, email_notifications_enabled)')
       .in('id', clientIds);
     // Opted-out clients are skipped, not just muted -- same shape as notifications_enabled's
     // existing gate on send_checkin_reminders.
-    const optedIn = (recipients ?? []).filter((r) => {
-      const profile = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
-      return profile?.email_notifications_enabled ?? true;
-    });
-    const result = await sendBroadcastEmail(optedIn, subjectFromMessage(comm.message), messageToHtml(comm.message));
+    const optedIn = (recipients ?? [])
+      .map((r) => {
+        const profile = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
+        return { email: r.email as string, name: (profile?.name as string | null) ?? null, on: profile?.email_notifications_enabled ?? true };
+      })
+      .filter((r) => r.on && r.email);
+    const result = await sendPersonalisedEmails(optedIn, comm.message);
     if (!result.skipped) {
       emailsSent += result.sent;
       await admin.from('scheduled_communications').update({ email_sent_at: new Date().toISOString() }).eq('id', comm.id);
