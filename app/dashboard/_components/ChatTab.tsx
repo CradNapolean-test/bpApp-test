@@ -161,7 +161,9 @@ export function ChatTab({
     supabase.auth.getSession().then(() => {
       if (cancelled) return;
       channel = supabase
-        .channel(`chat-${clientId}`)
+        // Unique per mounted chat: the coach's Messages drawer and the member chat panel can both show the same
+        // conversation, and two chats sharing one channel name throws.
+        .channel(`chat-${clientId}-${Math.random().toString(36).slice(2, 8)}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `client_id=eq.${clientId}` },
