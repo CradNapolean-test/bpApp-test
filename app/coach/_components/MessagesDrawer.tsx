@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ArrowLeft, X } from 'lucide-react';
 import { ChatTab } from '@/app/dashboard/_components/ChatTab';
 import { useCoachMessages } from './useCoachMessages';
@@ -63,6 +64,13 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
             <p className="p-4 text-sm text-zinc-500">Loading…</p>
           ) : !selected ? (
             <div className="p-2">
+              <Link
+                href="/coach/messages?tab=broadcasts"
+                onClick={onClose}
+                className="mb-2 block rounded-xl bg-accent-soft px-3 py-2.5 text-sm font-bold text-accent"
+              >
+                Broadcasts and the full Messages page
+              </Link>
               <ConversationList overview={localOverview} selected={selected} onSelect={selectClient} />
             </div>
           ) : loading ? (

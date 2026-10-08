@@ -6,6 +6,11 @@ import { usePathname } from 'next/navigation';
 import { Ellipsis } from 'lucide-react';
 import { COACH_NAV, MOBILE_PRIMARY_COUNT, isCoachNavActive } from './coachNavItems';
 
+// Messages is the chat icon in every page header on a phone, so it does not take a place on the bar.
+const PHONE_NAV = COACH_NAV.filter((n) => n.href !== '/coach/messages');
+// All of them fit on the bar when there are five or fewer; otherwise the rest go under "More".
+const PHONE_PRIMARY_COUNT = PHONE_NAV.length <= 5 ? PHONE_NAV.length : MOBILE_PRIMARY_COUNT;
+
 // Coach-side mobile nav -- replaces the hamburger drawer on small screens (see AppShell's
 // bottomBar prop). Real routes (Link + usePathname), not in-page state. The first few
 // destinations sit on the bar; the rest (Library, Community, Settings) are under "More", so
@@ -14,8 +19,8 @@ export function CoachBottomTabBar() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const primary = COACH_NAV.slice(0, MOBILE_PRIMARY_COUNT);
-  const overflow = COACH_NAV.slice(MOBILE_PRIMARY_COUNT);
+  const primary = PHONE_NAV.slice(0, PHONE_PRIMARY_COUNT);
+  const overflow = PHONE_NAV.slice(PHONE_PRIMARY_COUNT);
   const overflowActive = overflow.some((n) => isCoachNavActive(pathname, n.href));
 
   const tabCls = (active: boolean) =>
@@ -63,12 +68,14 @@ export function CoachBottomTabBar() {
             </Link>
           );
         })}
-        <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className={tabCls(moreOpen || overflowActive)}>
-          <span className={chipCls(moreOpen || overflowActive)}>
-            <Ellipsis className="h-5 w-5" />
-          </span>
-          More
-        </button>
+        {overflow.length > 0 && (
+          <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className={tabCls(moreOpen || overflowActive)}>
+            <span className={chipCls(moreOpen || overflowActive)}>
+              <Ellipsis className="h-5 w-5" />
+            </span>
+            More
+          </button>
+        )}
       </nav>
     </>
   );

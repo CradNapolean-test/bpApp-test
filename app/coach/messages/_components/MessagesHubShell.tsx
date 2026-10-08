@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -39,7 +40,8 @@ export function MessagesHubShell({
   counts: { mine: number; gym: number };
   email: string;
 }) {
-  const [tab, setTab] = useState<Tab>('inbox');
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') === 'broadcasts' ? 'broadcasts' : 'inbox'));
   // Phone only: whether a conversation is open (otherwise the list shows).
   const [threadOpen, setThreadOpen] = useState(false);
   const { localOverview, selected, selectClient, messages, loading, selectedClient } = useCoachMessages(
