@@ -55,8 +55,18 @@ export async function startHold(clientId: string, startedOn: string, note: strin
   return error ? fail(error, 'Could not put them on hold') : ok();
 }
 
-export async function endHold(holdId: string, endedOn: string): Promise<ActionResult> {
+// Resuming means they are back from today: the hold's last day was yesterday. A hold that only started today never
+// really ran, so it is removed.
+export async function endHold(holdId: string, today: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.from('membership_holds').update({ ended_on: endedOn }).eq('id', holdId);
+  const { data: hold } = await supabase.from('membership_holds').select('started_on').eq('id', holdId).maybeSingle();
+  if (!hold) return fail(null, 'That hold was not found');
+  if (hold.started_on >= today) {
+    const { error } = await supabase.from('membership_holds').delete().eq('id', holdId);
+    return error ? fail(error, 'Could not end the hold') : ok();
+  }
+  const yesterday = new Date(`${today}T00:00:00Z`);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const { error } = await supabase.from('membership_holds').update({ ended_on: yesterday.toISOString().slice(0, 10) }).eq('id', holdId);
   return error ? fail(error, 'Could not end the hold') : ok();
 }
