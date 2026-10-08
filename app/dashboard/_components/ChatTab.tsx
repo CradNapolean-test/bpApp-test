@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ImageIcon, MessageSquare, Pause, Play, Send, UserRound, X } from 'lucide-react';
+import { ImageIcon, MailOpen, MessageSquare, Pause, Play, Send, UserRound, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -106,6 +106,7 @@ export function ChatTab({
   active = true,
   onClose,
   memberHref,
+  onMarkUnread,
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -126,6 +127,8 @@ export function ChatTab({
   onClose?: () => void;
   // Where to open this person's page from the chat (the coach's Messages page and drawer).
   memberHref?: string;
+  // Shows a "Mark unread" button in the header (the coach's inbox).
+  onMarkUnread?: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState(() => {
@@ -149,6 +152,10 @@ export function ChatTab({
   const [sending, setSending] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  });
   const photoInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   useBackHandler(viewingPhoto != null, () => setViewingPhoto(null));
@@ -193,6 +200,8 @@ export function ChatTab({
             if (cancelled) return;
             const newMessage: ChatMessage = { ...row, signedAudioUrl, signedImageUrl };
             setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+            // Looking at the conversation as it arrives: it is read.
+            if (activeRef.current && row.sender_id !== currentUserId) markChatRead(clientId).catch(() => {});
           }
         )
         .subscribe();
@@ -202,7 +211,7 @@ export function ChatTab({
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [clientId]);
+  }, [clientId, currentUserId]);
 
   useEffect(() => {
     // Scroll just the message list (scrollIntoView would also scroll the whole page).
@@ -281,6 +290,15 @@ export function ChatTab({
           <p className="truncate text-sm font-extrabold text-black dark:text-zinc-50">{otherPartyName}</p>
           <p className="text-[11px] text-zinc-500">{readOnly ? 'Read-only' : 'Messages, photos and voice notes'}</p>
         </div>
+        {onMarkUnread && (
+          <button
+            type="button"
+            onClick={onMarkUnread}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+          >
+            <MailOpen className="h-3.5 w-3.5" /> Mark unread
+          </button>
+        )}
         {memberHref && (
           <Link
             href={memberHref}

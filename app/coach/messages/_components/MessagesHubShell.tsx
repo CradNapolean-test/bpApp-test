@@ -44,7 +44,7 @@ export function MessagesHubShell({
   const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') === 'broadcasts' ? 'broadcasts' : 'inbox'));
   // Phone only: whether a conversation is open (otherwise the list shows).
   const [threadOpen, setThreadOpen] = useState(false);
-  const { localOverview, selected, selectClient, messages, loading, selectedClient } = useCoachMessages(
+  const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, selectedClient } = useCoachMessages(
     overview,
     currentUserId
   );
@@ -100,7 +100,11 @@ export function MessagesHubShell({
         headerAction={headerExtras}
         banner={header}
         mobileHeader={<CoachMobileBrand />}
-        sidebar={tab === 'inbox' ? <ConversationList overview={localOverview} selected={selected} onSelect={pick} /> : undefined}
+        sidebar={
+          tab === 'inbox' ? (
+            <ConversationList overview={localOverview} selected={selected} onSelect={pick} onMarkRead={markRead} onMarkUnread={markUnread} />
+          ) : undefined
+        }
       >
         {tab === 'broadcasts' ? (
           <BroadcastsPane groups={groups} communications={communications} templates={templates} counts={counts} />
@@ -109,7 +113,7 @@ export function MessagesHubShell({
             {/* Phone: a conversation list first, then the thread with a back arrow. The sidebar
                 list is desktop-only, so the list is repeated here for small screens. */}
             <div className={threadOpen ? 'hidden' : 'md:hidden'}>
-              <ConversationList overview={localOverview} selected={selected} onSelect={pick} />
+              <ConversationList overview={localOverview} selected={selected} onSelect={pick} onMarkRead={markRead} onMarkUnread={markUnread} />
             </div>
             <div className={threadOpen ? '' : 'hidden md:block'}>
               {selected && (
@@ -137,6 +141,10 @@ export function MessagesHubShell({
                   currentUserId={currentUserId}
                   otherPartyName={selectedClient?.client_name ?? 'Client'}
                   memberHref={`/coach/clients/${selected}`}
+                  onMarkUnread={() => {
+                    markUnread(selected);
+                    setThreadOpen(false);
+                  }}
                 />
               )}
             </div>

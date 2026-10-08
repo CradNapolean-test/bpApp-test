@@ -133,6 +133,13 @@ export async function markChatRead(clientId: string): Promise<void> {
   if (error) raise(error);
 }
 
+// Puts a conversation back to unread (their latest message counts as new again). Needs migration 0099.
+export async function markChatUnread(clientId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mark_chat_unread', { p_client_id: clientId });
+  if (error) raise(error);
+}
+
 // For the client's own unread indicator (the header Messages icon) -- mirrors the shape
 // get_coach_chat_overview uses for the coach's side, just scoped to one thread.
 export async function getClientUnreadCount(clientId: string): Promise<number> {

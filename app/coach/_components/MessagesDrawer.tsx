@@ -19,7 +19,7 @@ const EMPTY_OVERVIEW: ChatOverviewRow[] = [];
 // renders in a narrow slide-over instead of the whole viewport.
 export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: string; onClose: () => void }) {
   const [overview, setOverview] = useState<ChatOverviewRow[] | null>(null);
-  const { localOverview, selected, selectClient, clearSelection, messages, loading, selectedClient } = useCoachMessages(
+  const { localOverview, selected, selectClient, clearSelection, markRead, markUnread, messages, loading, selectedClient } = useCoachMessages(
     overview ?? EMPTY_OVERVIEW,
     currentUserId
   );
@@ -71,7 +71,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
               >
                 Broadcasts and the full Messages page
               </Link>
-              <ConversationList overview={localOverview} selected={selected} onSelect={selectClient} />
+              <ConversationList overview={localOverview} selected={selected} onSelect={selectClient} onMarkRead={markRead} onMarkUnread={markUnread} />
             </div>
           ) : loading ? (
             <p className="p-4 text-sm text-zinc-500">Loading messages…</p>
@@ -84,6 +84,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
                 currentUserId={currentUserId}
                 otherPartyName={selectedClient?.client_name ?? 'Client'}
                 memberHref={`/coach/clients/${selected}`}
+                onMarkUnread={() => markUnread(selected)}
               />
             </div>
           )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { getMessages } from '@/lib/data/chat';
+import { getMessages, markChatRead, markChatUnread } from '@/lib/data/chat';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from '@/lib/data/types';
 
 // Extracted from MessagesHubShell.tsx so the same selected-thread/realtime logic can back
@@ -27,6 +27,23 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
     setMessages(msgs);
     setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? { ...c, unread_count: 0 } : c)));
     setLoading(false);
+  }
+
+  // Mark a conversation read or unread from the list. Shown straight away; the save follows. Marking one unread
+  // while it is the open thread closes the thread, so it is not both open and unread.
+  function markRead(clientId: string) {
+    setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? { ...c, unread_count: 0 } : c)));
+    markChatRead(clientId).catch(() => {});
+  }
+
+  function markUnread(clientId: string) {
+    setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId && c.last_message_at ? { ...c, unread_count: Math.max(1, c.unread_count) } : c)));
+    markChatUnread(clientId).catch(() => {});
+    if (selectedRef.current === clientId) {
+      setSelected(null);
+      selectedRef.current = null;
+      setMessages([]);
+    }
   }
 
   function clearSelection() {
@@ -102,5 +119,5 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
   const unreadTotal = localOverview.reduce((sum, c) => sum + c.unread_count, 0);
   const selectedClient = localOverview.find((c) => c.client_id === selected);
 
-  return { localOverview, selected, selectClient, clearSelection, messages, loading, unreadTotal, selectedClient };
+  return { localOverview, selected, selectClient, clearSelection, markRead, markUnread, messages, loading, unreadTotal, selectedClient };
 }
