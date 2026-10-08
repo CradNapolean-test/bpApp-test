@@ -771,6 +771,62 @@ export interface ScheduledCommunicationRow {
   series_id?: string | null;
 }
 
+// ---- Red flag report (migration 0098) ----
+export type RedFlagStatus = 'covered' | 'new' | 'hold' | 'ended';
+
+export interface RedFlagStat {
+  client_id: string;
+  name: string;
+  coach_id: string | null;
+  status: RedFlagStatus;
+  attended: number;
+  late_cancels: number;
+  no_shows: number;
+  // Past bookings in the week not yet marked attended or no-show.
+  unmarked: number;
+}
+
+export interface RedFlagEntry {
+  id: string;
+  client_id: string;
+  week_start: string;
+  attended: number;
+  late_cancels: number;
+  no_shows: number;
+  low_attendance: boolean;
+  late_or_no_show: boolean;
+  contacted: 'no' | 'yes' | 'na';
+  reason: string | null;
+  tier: 'red' | 'amber' | 'green' | null;
+  coach_id: string | null;
+}
+
+export interface RedFlagThresholds {
+  min_attended: number;
+  late_cancels: number;
+  no_shows: number;
+}
+
+export interface RedFlagReport {
+  week_start: string;
+  thresholds: RedFlagThresholds;
+  stats: RedFlagStat[];
+  entries: RedFlagEntry[];
+  master: {
+    weeks: string[];
+    // counts per week, oldest first; null = not a covered member that week
+    members: { client_id: string; name: string; coach_id: string | null; counts: (number | null)[] }[];
+  };
+}
+
+export interface MembershipHoldRow {
+  id: string;
+  client_id: string;
+  started_on: string;
+  ended_on: string | null;
+  note: string | null;
+}
+
 export interface MessageTemplateRow {
   id: string;
   gym_id: string;

@@ -17,6 +17,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/red-flags",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/apply-programme-rollouts",
       "schedule": "15 3 * * *"
     }

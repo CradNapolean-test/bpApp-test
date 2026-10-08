@@ -335,6 +335,8 @@ Conditioning methods also include Pyramid, Descending and Ascending reps.
 
 ## 11. At-Risk Reporting → Red Flag Tracker (coach-side report)
 
+**Built (Oct 2026, migration 0098):** the Red Flag report is the first view under Classes > Reports. It follows the SOP: Monday to Sunday weeks, attended fewer than 2 classes, or 2+ late cancels or no-shows (thresholds editable), new starters / members on hold / ended members left out (a hold can now be set under Credits & plan), the team's Contact made / Reason / Tier / Coach columns saved per week and never overwritten, a six-week grid, and last week's list written automatically each morning. A "full member" is an ongoing plan (a fixed-length challenge does not count). A late cancel is a cancelled booking whose credit was not given back. The notes below are the original SOP summary.
+
 **Decision:** the Red Flag Tracker is a **report available coach-side in the app**. The Google Sheet and Apps Script described in the automation SOP are the reference behaviour, not something to keep running.
 
 **What the SOPs say**

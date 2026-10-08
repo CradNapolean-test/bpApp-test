@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { CoachReport } from '@/lib/data/types';
+import { RedFlagsView } from './RedFlagsView';
 
 // Quotes any field containing a comma/quote/newline, doubling internal quotes -- minimal
 // correct CSV escaping, not a full RFC 4180 library for two simple flat tables.
@@ -21,15 +22,15 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-type Section = 'Overview' | 'No-shows' | 'Busiest sessions';
-const SECTIONS: Section[] = ['Overview', 'No-shows', 'Busiest sessions'];
+type Section = 'Red flags' | 'Overview' | 'No-shows' | 'Busiest sessions';
+const SECTIONS: Section[] = ['Red flags', 'Overview', 'No-shows', 'Busiest sessions'];
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card dark:border-white/10';
 
 // Last 30 days across the gym's classes. The three sections are real views (one at a time), not
 // page anchors. `onOpenAttendance` jumps to the Attendance tab, where sessions get marked.
 export function ReportsPane({ report, onOpenAttendance }: { report: CoachReport; onOpenAttendance?: () => void }) {
-  const [section, setSection] = useState<Section>('Overview');
+  const [section, setSection] = useState<Section>('Red flags');
 
   function exportNoShows() {
     downloadCsv('no-shows.csv', [
@@ -67,8 +68,10 @@ export function ReportsPane({ report, onOpenAttendance }: { report: CoachReport;
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-500">Last 30 days, across all classes</p>
+        {section !== 'Red flags' && <p className="text-xs text-zinc-500">Last 30 days, across all classes</p>}
       </div>
+
+      {section === 'Red flags' && <RedFlagsView onOpenAttendance={onOpenAttendance} />}
 
       {section === 'Overview' && (
         <>

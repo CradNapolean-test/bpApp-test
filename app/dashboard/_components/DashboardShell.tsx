@@ -377,6 +377,7 @@ export function DashboardShell({
         else if (open === 'forms') handleNavigate('Accountability', 'Forms');
         else if (open === 'bigdog') handleCategoryClick('Achievements');
         else if (open === 'profile') handleCategoryClick('Account Settings');
+        else if (open === 'messages') handleCategoryClick('Messages');
       } else if (open === 'messages') handleCategoryClick('Messages');
       else if (open === 'book') handleClientTab('Book');
       else if (open === 'checkin') handleCategoryClick('Accountability');

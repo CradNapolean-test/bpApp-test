@@ -17,8 +17,9 @@ import {
   startMembership,
 } from '@/lib/data/memberships';
 import { updateCheckinReminderDays } from '@/lib/data/clientProfile';
+import { endHold, getActiveHold, startHold } from '@/lib/data/redFlags';
 import { addDays, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
-import type { ClientMembershipRow, CreditBucketBalances, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from '@/lib/data/types';
+import type { ClientMembershipRow, CreditBucketBalances, CreditPackRow, CreditsLedgerRow, MembershipHoldRow, MembershipPackageRow } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
 const labelCls = 'block text-xs font-medium text-zinc-500';
@@ -51,7 +52,7 @@ function friendlyReason(reason: string): string {
   return reason;
 }
 
-type SheetKind = 'start' | 'end' | 'add' | 'remove' | null;
+type SheetKind = 'start' | 'end' | 'add' | 'remove' | 'hold' | null;
 
 // Everything a coach does with a member's membership and credits: start or change a plan (on a
 // chosen date), set or clear an end date, end it now, add or take off credits, and see what has
@@ -81,6 +82,11 @@ export function CreditsTab({
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [history, setHistory] = useState<{ memberships: ClientMembershipRow[]; credits: CreditsLedgerRow[] } | null>(null);
   const [reminderDays, setReminderDays] = useState(checkinReminderDays);
+  // A hold keeps them off the red flag lists while they are away (holiday, injury).
+  const [hold, setHold] = useState<MembershipHoldRow | null>(null);
+  const [holdFrom, setHoldFrom] = useState(todayIso);
+  const [holdNote, setHoldNote] = useState('');
+  const [holdTick, setHoldTick] = useState(0);
 
   // Start-plan form
   const [packageId, setPackageId] = useState(membership?.package_id ?? '');
@@ -105,6 +111,16 @@ export function CreditsTab({
       live = false;
     };
   }, [clientId, membership?.id, membership?.scheduled_end, creditsBalance]);
+
+  useEffect(() => {
+    let live = true;
+    getActiveHold(clientId).then((h) => {
+      if (live) setHold(h);
+    });
+    return () => {
+      live = false;
+    };
+  }, [clientId, holdTick]);
 
   const startIso = startMode === 'saturday' ? nextSaturday(todayIso) : startMode === 'today' ? todayIso : customStart;
   const pkg = packages.find((p) => p.id === packageId) ?? null;
@@ -222,6 +238,23 @@ export function CreditsTab({
           </dl>
         )}
 
+        {hold && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/10 px-3 py-2.5">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              <b className="text-warning">On hold</b> since {dayLabel(hold.started_on)}
+              {hold.note ? `, ${hold.note}` : ''}. They are left out of the red flag lists.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(() => endHold(hold.id, todayIso), { success: 'Hold ended', onDone: () => setHoldTick((n) => n + 1) })}
+              className={ghostBtnCls}
+            >
+              Resume
+            </button>
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" onClick={openStart} className={btnCls}>
             {membership ? 'Change plan' : 'Start a plan'}
@@ -234,6 +267,11 @@ export function CreditsTab({
           {membership?.scheduled_end && (
             <button type="button" disabled={busy} onClick={() => run(() => clearScheduledEnd(membership.id), { success: 'End date removed' })} className={ghostBtnCls}>
               Remove end date
+            </button>
+          )}
+          {membership && !hold && (
+            <button type="button" onClick={() => openSheet('hold')} className={ghostBtnCls}>
+              Put on hold
             </button>
           )}
           {membership && (
@@ -420,6 +458,41 @@ export function CreditsTab({
 
             <button type="button" disabled={busy || !packageId || futureStartBlocked} onClick={submitStart} className={`${btnCls} w-full py-3`}>
               {busy ? 'Saving…' : membership ? 'Change plan' : 'Start plan'}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {sheet === 'hold' && (
+        <BottomSheet title="Put the membership on hold" onClose={() => setSheet(null)}>
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              While on hold they are left out of the weekly red flag lists. Resume them when they are back.
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">From</label>
+              <input type="date" className={inputCls} value={holdFrom} onChange={(e) => setHoldFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Reason (optional)</label>
+              <input className={inputCls} value={holdNote} placeholder="e.g. holiday, injury" onChange={(e) => setHoldNote(e.target.value)} />
+            </div>
+            <button
+              type="button"
+              disabled={busy || !holdFrom}
+              onClick={() =>
+                run(() => startHold(clientId, holdFrom, holdNote.trim() || null), {
+                  success: 'Put on hold',
+                  onDone: () => {
+                    setSheet(null);
+                    setHoldNote('');
+                    setHoldTick((n) => n + 1);
+                  },
+                })
+              }
+              className={`${btnCls} w-full py-3`}
+            >
+              {busy ? 'Saving…' : 'Put on hold'}
             </button>
           </div>
         </BottomSheet>
