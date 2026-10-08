@@ -35,6 +35,8 @@ Paths: coach UI `app/coach/...`, client UI `app/dashboard/_components/...`, data
 | 11 | At-Risk Reporting + Red Flag Tracker automation | Coach report (new), bookings, memberships | Partial |
 | 12 | Onboarding a New Member After the Challenge | Join link, memberships, onboarding | Partial |
 | 13 | Booking App (TeamUp) staff and member instructions | Classes, credits, booking rules | Covered / Partial |
+| 14 | Intro Session SOP (delivery) | Join link, onboarding, measurements, forms, education | Partial |
+| 15 | Intro Session Admin (pre and post) | Join link, memberships, classes, messaging | Partial |
 
 ---
 
@@ -424,10 +426,96 @@ After the six-week challenge, confirm contract length (3, 6 or 12 months), then 
 
 ---
 
+## 14. Intro Session SOP (delivery)
+
+**What the SOP says**
+A Saturday-morning group onboarding for new trialists and challengers (meet and greet at **11.00am**). Aim: a great first impression, everyone set up on the apps, and a baseline measurement.
+
+*Before the session*
+- Open the Calendly attendee list; load the Intro Session presentation on the TV; lay out benches; put **Welcome Packs** (training diary + water bottle) on the Front Desk; have measuring tape and pad out.
+
+*Flow*
+1. **Meet and greet** at the front desk: handshake, name, hand out the Welcome Pack. No hands in pockets, hoods, coffee or phones.
+2. **Welcome** (slides 1–2): what the morning covers (values and rules, how everything works and app set-up, a taste of training, then measurements).
+3. **Ice breaker:** dowel reaction circle game; whoever drops the dowel introduces themselves, their goal and why.
+4. **Presentation** (slides 3–22):
+   - **Values:** community, professional service, committed to improving people's lives, knowledgeable, approachable and friendly (community is the most important).
+   - **What's included:** personal coach, goal-specific training programme, group coaching (up to **3 sessions a week**), nutrition guidance, body composition measurements, member education (members site).
+   - **Your coach:** assigned in the coaching app, direct point of contact, messages a few times a week.
+   - **Etiquette:** everyone equal, keep the gym tidy, limit phone use (members record training on the coaching app).
+   - **The session:** one coach leads, **max 12 per session, 6 rigs, paired up**; coach explains each block and sets the timer; after a couple of sessions members take control of their own weights and recording.
+   - **Example session** (shown on the TV): **Warm Up, Block A** (main compound lift: squat, deadlift or bench), **Block B** (accessories, core, corrective, single-limb), **Block C** (choice: **conditioning** to get out of breath, or **strong**, a body-part finisher).
+   - **Booking app:** must book every session; capacity is enforced, no booking = can't train; one day's recovery between sessions is recommended; cancel with as much notice as possible. Live exercise: everyone books **the coming Tuesday 7.30pm**, then cancels it (head icon > name > My Activities > Bookings > cancel).
+   - **Coaching app:** record measurements (logbook > Results tracking > Add), complete the **accountability sheet** (sleep, steps, water), message the coach.
+   - **Members area:** nutrition and training videos and PDFs; register from the "complete your registration" email; add a phone shortcut; keep apps in a "Ballistic" folder.
+   - **Equipment tour,** then **Consistency** (show up, work hard, follow nutrition, sleep, interact with your coach).
+   - **Training taste:** a short **10-minute block** (warm-up with the **100m ski erg game**) so they know what to expect and the coach can check technique.
+   - **Summary:** book 3 sessions for next week, watch the first nutrition video (setting up your diet), keep a food diary and accountability sheet daily.
+   - **Measurements, goal setting:** while waiting their turn each person completes a short **goal-setting task** in the coaching app (goal, why, how).
+5. **Measurements**, one person at a time: **weight** (shoes off), **circumferences** (chest, hips, waist), **3 photos** (front, side, back, arms by side; top off if they're comfortable, fine if not). Recorded on a notepad.
+6. **Leaving:** any questions; watch for **today's email about setting up their diet**; start booking next week's sessions.
+
+**App areas affected**
+- Baseline measurements → `lib/data/progress.ts`, `ProgressTab.tsx` (weight, chest/waist/hips, 3 progress photos), `lib/data/bodyScans.ts` (if InBody is also done), `0084_body_scans.sql`. The SOP records on **paper then types them in**; a coach entering them directly on a member's profile (tablet at the intro) would replace the notepad.
+- Setting members up on apps: the join link and sign-up flow → `app/join/[token]/page.tsx`, `app/api/join`, `lib/data/onboarding.ts`, `0083_onboarding.sql`, `app/coach/_components/JoinLinkCard.tsx`. Install prompts → `InstallBanner.tsx`, `useInstall.ts`, `PushPrompt.tsx`.
+- Booking and cancelling practice → `ClassesArea.tsx`, `lib/data/classes.ts`; the live Tuesday 7.30pm exercise needs a Tuesday 7.30pm class on the timetable. **Capacity (12) and 6 rigs** → `classes.capacity`, `0094_class_booking_counts.sql`; **rig pairing is not modelled**.
+- Goal-setting task → `lib/starterForms.ts` has only the PAR-Q and a lifestyle intake; **no goal-setting form** (SOP 2 and SOP 12 also reference goal setting). Forms → `app/coach/forms`, `lib/data/forms.ts`, `FormsTab.tsx`. Goals also live in the profile (`goal` fields, `lib/data/clientProfile.ts`).
+- Accountability sheet → `AccountabilityTracker.tsx`, `lib/utils/accountability.ts` (in-app; the SOP's Google Sheet is replaced).
+- Members area and "first nutrition video" → Education (`EducationTab.tsx`, `lib/data/education.ts`, `0018`, `0026`).
+- Example session on the TV: the presentation shows the Warm Up / Block A / B / C format; the app's workout screen and builder are the live version (`WorkoutTab.tsx`, `app/_components/workouts/*`, `0091_workout_sections.sql`, `0095_workout_block_choices.sql`).
+- Welcome pack, seating, equipment tour, ice breaker: physical, **off-app**. The presentation itself is a slide deck, not in the app.
+- "Email today about setting up their diet" → a scheduled or triggered message (`lib/data/communications.ts`, `lib/broadcastMessages.ts`, `lib/data/messageTemplates.ts`, `0097_broadcasts_audience_repeat_templates.sql`, `app/api/cron/send-communications`); SOP 4's nutrition set-up applies after.
+
+**Gaps and open questions**
+- **Session structure is out of date in the slides.** The presentation says Warm Up / Block A / B / C with a choice only at Block C. The owner's current structure (see Decisions and SOP 9) is a **45-minute session: warm-up, 12-minute Lift, then Strong or Conditioning in two 10-minute blocks that members can switch between**. Slides 7–8 and 19 ("a short ten minute block", "our first block is slightly longer") should be reworded when the content moves into the app.
+- The intro SOP names the booking app **FIT** (and "Legit Fit" appears in the booking SOP); the booking system is now this app or TeamUp, so the slide and the practice-booking steps need updating whichever is used.
+- **Value list:** "committed to improving people's lives, knowledgeable and approachable and friendly" is listed as five items; check wording.
+- A one-off Saturday **Intro Session** class could be a class row with `specific_date` (`0070_one_off_sessions.sql`), with booking replacing Calendly. Today Calendly is the attendee list and is **off-app**.
+- Whether intro measurements should be entered on the member's profile in the app instead of paper (and then re-typed).
+- "Max 12 per session / 6 rigs, paired" — enforced capacity exists; rig assignment does not.
+
+---
+
+## 15. Intro Session Admin (pre and post)
+
+**What the SOP says**
+Intro admin makes Saturday run smoothly and gets each trialist onto the coaching app and the email funnel, to improve results and conversion to full membership.
+
+*Pre intro (earlier in the week)*
+1. Open the Calendly list of people attending and write them on the **Intro Register** (Google Doc); use it to tick off each step and cross-reference names and emails in Ontraport, TeamUp and PTD.
+2. **TeamUp downloaded?** Customers > Customer List > search name. If they aren't there, text them (junk-folder check, template in the **SALES TEXT** notes).
+3. **Coaching app downloaded and two-way messaging on?** PTD > Groups > **Holding Funnel** > View Members. Text anyone missing. For those present, open the profile > Edit Client > turn on **Two-Way Messaging**, for every attendee.
+4. **Welcome email sent?** (only if a trialist says they didn't get it) Ontraport > Contacts > **Active Trialists** > open the trialist > View Details > Contact Log > find "Welcome {name}", green tick = opened. If not opened, text them.
+
+*Post intro (after the session)*
+1. **Ontraport:** in Active Trialists, tick everyone who attended and add the tag **Intro Session Complete**.
+2. **PTD:** Holding Funnel > View Members > open each attendee > Groups > **remove from Holding Funnel** and **add to one of the coach's "Active Trial Members" groups**, keeping "Copy group content to client's account" ticked, so they can see measurements.
+3. **TeamUp:** Customer List > Add Membership > **6-Week Challenge**, start date typically Saturday afternoon, otherwise end date = 6 weeks + 1 day, don't change uses or price, Save > Checkout.
+
+*Troubleshooting:* if someone is struggling with the apps, don't hold up the group; sort it out at the end.
+
+**App areas affected**
+- **The register, the Holding Funnel and "Active Trial Members" groups** are the app's **client list and groups** → `app/coach/clients`, `app/coach/_components/GroupsManager.tsx`, `lib/data/clientGroups.ts`, `0030_client_groups.sql`. A "Holding" status for booked-but-not-yet-attended intros has no equivalent; a group could play that role.
+- **"Has the trialist installed and signed in?"** → a member who has accepted the join link exists as a client (`app/join/[token]/page.tsx`, `app/api/join`, `lib/data/onboarding.ts`); `last_active` and push subscriptions (`0010_client_last_active.sql`, `0060_push_subscriptions.sql`) show if they've opened the app. Join-link management → `JoinLinkCard.tsx`.
+- **Messaging on:** the app's chat has no per-member "two-way messaging" switch that I found (`lib/data/chat.ts`, `0002`, `0014`, `0040`); likely always on, so this step disappears.
+- **6-Week Challenge membership** → `lib/data/memberships.ts` (`startMembership(clientId, packageId, start, end)`), `membership_packages` (challenge package, `advance_booking_days` 14), `app/coach/memberships`; **end date = start + 6 weeks + 1 day** is a rule worth encoding. Same step as SOP 13 ("Add a 6-Week Challenge Subscription").
+- **Pre-intro reminders and the SALES TEXT** → text messages are off-app; an in-app/email message could replace them (`lib/data/communications.ts`, `lib/email.ts`, `0039_communications_email_channel.sql`, `lib/push.ts`).
+- **Intro Session Complete tag** (Ontraport) → closest in-app equivalent is a status or group change; Ontraport tagging stays **off-app** (also used for the email funnel).
+- **New-member review** → `getClientsNeedingReview`, `ReviewQueue.tsx`, and the new-member signals in `coachDashboard.ts` (`NewMember`).
+
+**Gaps and open questions**
+- Three systems (Ontraport, PTD groups, TeamUp) plus the Intro Register are updated by hand per attendee. In the app, **one "intro complete" action** could move the member into the coach's trial group and start the 6-week challenge membership together; Ontraport tagging would still be manual.
+- No concept of intro status (booked, attended, no-show, converted) or an intro register; today it is a Google Doc.
+- Whether Calendly stays the booking tool for intros or a one-off Saturday class replaces it (see SOP 14).
+- Email funnel (welcome email and diet-set-up email) is **Ontraport**; the app would only replace it if you move the funnel in-house.
+- The SALES TEXT template lives in PTD notes, not in the exports.
+
+---
+
 ## Cross-cutting observations
 
 - **One weekly rhythm:** Sunday 9am check-in message, Wednesday nudge, Sunday-night red-flag run, Monday review, Saturday membership starts. Existing scheduler: `lib/data/communications.ts`, `app/api/cron/*`, `vercel.json`.
 - **Third-party tools named in the SOPs** (PT Distinction, Ontraport, TeamUp, MyFitnessPal, Calendly, Google Sheets): the app overlaps PT Distinction (coaching), TeamUp (booking) and MyFitnessPal (food diary). Ontraport (billing, tags) and Calendly (measurements) aren't replaced. Decide per tool whether the app is the system of record.
 - **Terminology to align:** "challenge", "full" and "premium" member → packages / tiers; "Big Dog" is already in code; "Client Overview", "Red Flag Tracker" and "Accountability Sheet" are sheets whose features exist only partly.
 - **Template-gym leftovers** in the exports: "Steel Habitat", "Steel", "Gymownr". Replace with Ballistic Performance wherever content is copied into the app.
-- **Source files:** Conditioning Programming Guide, 12 Week Training Overview, Member Standard Board, Weekly Check-In Struggle-Solution Framework, Weekly Check-In Process, Setting Member Nutrition Targets, Nutrition Calculations (Gymownr), InBody Measurements (two identical copies), Challenge Check-In Process, Onboarding a New Member After the Challenge, Nutrition Course slide scripts, At Risk Reporting, Red Flag Tracker SOP – Automation (.docx), How To Use The Booking App, Booking app Instructions (Team Up), Master Session Generator (.xlsx, 11 tabs), and three session-card PNGs.
+- **Source files:** Conditioning Programming Guide, 12 Week Training Overview, Member Standard Board, Weekly Check-In Struggle-Solution Framework, Weekly Check-In Process, Setting Member Nutrition Targets, Nutrition Calculations (Gymownr), InBody Measurements (two identical copies), Challenge Check-In Process, Onboarding a New Member After the Challenge, Nutrition Course slide scripts, At Risk Reporting, Red Flag Tracker SOP – Automation (.docx), How To Use The Booking App, Booking app Instructions (Team Up), Master Session Generator (.xlsx, 11 tabs), three session-card PNGs, Intro Session SOP, and Intro Session Admin (Pre and Post).
