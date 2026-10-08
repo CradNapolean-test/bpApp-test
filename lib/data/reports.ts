@@ -6,13 +6,15 @@ import { createClient } from '@/lib/supabase/server';
 import { formatClassTime, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { CoachReport } from './types';
 
-const WINDOW_DAYS = 30;
+const DEFAULT_WINDOW_DAYS = 30;
 
 // Gym-wide, not just this coach's own classes -- the timetable is a single shared schedule
 // across every coach at the gym now, so a report scoped to "classes I personally created"
 // would silently exclude classes a colleague set up. A "just me" filter can be added later if
 // wanted; this matches what ClassManager/AttendanceScheduler already show.
-export async function getCoachReport(): Promise<CoachReport> {
+// `windowDays` is how far back to look; `offsetDays` slides the whole window back (to get the period before, for
+// comparing). Defaults give the last 30 days.
+export async function getCoachReport(windowDays = DEFAULT_WINDOW_DAYS, offsetDays = 0): Promise<CoachReport> {
   const supabase = await createClient();
   const gymId = await resolveScopingGymId(supabase);
 
@@ -48,8 +50,11 @@ export async function getCoachReport(): Promise<CoachReport> {
   );
 
   const since = new Date();
-  since.setUTCDate(since.getUTCDate() - WINDOW_DAYS);
+  since.setUTCDate(since.getUTCDate() - offsetDays - windowDays);
   const sinceIso = since.toISOString().slice(0, 10);
+  const until = new Date();
+  until.setUTCDate(until.getUTCDate() - offsetDays);
+  const untilIso = until.toISOString().slice(0, 10);
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const { data: bookings, error: bookingsError } = await supabase
@@ -60,6 +65,7 @@ export async function getCoachReport(): Promise<CoachReport> {
       classes.map((c) => c.id)
     )
     .gte('booking_date', sinceIso)
+    .lte('booking_date', offsetDays > 0 ? untilIso : '9999-12-31')
     .neq('status', 'cancelled');
   if (bookingsError) raise(bookingsError);
 
@@ -106,17 +112,21 @@ export async function getCoachReport(): Promise<CoachReport> {
     nameMap = new Map((profiles ?? []).map((p) => [p.client_id, p.name]));
   }
   const noShows = noShowRows.map((b) => ({
+    clientId: b.client_id,
     clientName: nameMap.get(b.client_id) ?? 'Unknown',
     className: classMap.get(b.class_id) ?? 'Unknown class',
     date: b.booking_date,
   }));
 
-  const popularityMap = new Map<string, number>();
+  const popularityMap = new Map<string, { count: number; attended: number }>();
   for (const b of rows) {
-    popularityMap.set(b.class_id, (popularityMap.get(b.class_id) ?? 0) + 1);
+    const cur = popularityMap.get(b.class_id) ?? { count: 0, attended: 0 };
+    cur.count += 1;
+    if (b.attended) cur.attended += 1;
+    popularityMap.set(b.class_id, cur);
   }
   const classPopularity = [...popularityMap.entries()]
-    .map(([classId, count]) => ({ className: slotLabel.get(classId) ?? 'Unknown class', bookingCount: count }))
+    .map(([classId, v]) => ({ className: slotLabel.get(classId) ?? 'Unknown class', bookingCount: v.count, attended: v.attended }))
     .sort((a, b) => b.bookingCount - a.bookingCount);
 
   return {
@@ -130,4 +140,10 @@ export async function getCoachReport(): Promise<CoachReport> {
     noShows,
     classPopularity,
   };
+}
+
+// The chosen period and the same-length period before it, so the screen can say "up 4 points on last time".
+export async function getCoachReports(windowDays: number): Promise<{ current: CoachReport; previous: CoachReport }> {
+  const [current, previous] = await Promise.all([getCoachReport(windowDays, 0), getCoachReport(windowDays, windowDays)]);
+  return { current, previous };
 }

@@ -536,8 +536,9 @@ export interface CoachReport {
   noShowRate: number | null; // 0-100, null if no data
   avgClassesPerClient: number | null; // per unique client, over the report window
   activeBookings: number; // currently booked, today or later (not time-windowed)
-  noShows: { clientName: string; className: string; date: string }[];
-  classPopularity: { className: string; bookingCount: number }[];
+  noShows: { clientId: string; clientName: string; className: string; date: string }[];
+  // attended = how many of those bookings were marked attended (for the attendance rate of each slot).
+  classPopularity: { className: string; bookingCount: number; attended: number }[];
 }
 
 export interface MembershipPackageRow {
