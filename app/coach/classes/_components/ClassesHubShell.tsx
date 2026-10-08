@@ -65,7 +65,7 @@ export function ClassesHubShell({
           initialTarget={searchParams.get('date') && searchParams.get('class') ? { date: searchParams.get('date')!, classId: searchParams.get('class')! } : null}
         />
       )}
-      {tab === 'Timetable' && <TimetableView classes={initialClasses} />}
+      {tab === 'Timetable' && <TimetableView classes={initialClasses} occurrences={occurrences} />}
       {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} />}
     </AppShell>
     </ClientOnly>

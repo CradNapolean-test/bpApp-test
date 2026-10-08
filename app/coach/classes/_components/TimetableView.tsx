@@ -11,7 +11,7 @@ import { inputCls } from '@/app/_components/ui';
 import { createClass, deleteClass, updateClass } from '@/lib/data/classes';
 import { formatClock } from '@/lib/utils/cancelDeadline';
 import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
-import type { ClassRow } from '@/lib/data/types';
+import type { ClassRow, ScheduleOccurrence } from '@/lib/data/types';
 
 // The timetable as a real week calendar: weekly recurring slots repeat every week, one-off sessions
 // appear only on their date. Tap a block to edit, tap an empty slot to add.
@@ -61,6 +61,11 @@ function toDraft(c: ClassRow): Draft {
 // A session has no stored length, so the calendar draws each as a 45-minute block.
 const DURATION = 45;
 const HOUR_H = 56;
+// Hours with nothing scheduled are folded into a thin band this tall, so the day is not mostly empty space.
+const GAP_H = 20;
+
+// Distinct hues so different classes are told apart at a glance. A gym with one class type keeps the accent colour.
+const HUES = [172, 36, 280, 340, 210, 100, 15];
 
 const toMin = (t: string | null) => {
   const [h, m] = (t ?? '00:00').split(':').map(Number);
@@ -97,13 +102,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function TimetableView({ classes }: { classes: ClassRow[] }) {
+export function TimetableView({ classes, occurrences }: { classes: ClassRow[]; occurrences: ScheduleOccurrence[] }) {
   const { run, busy } = useAction();
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [day, setDay] = useState<number>(1);
   const [copying, setCopying] = useState(false);
   const [copyTo, setCopyTo] = useState<Set<number>>(new Set());
+  // An empty slot is tapped once to mark it and again to add, so a scroll that ends on the grid adds nothing.
+  const [pending, setPending] = useState<{ d: number; time: string } | null>(null);
 
   const names = useMemo(() => [...new Set(classes.map((c) => c.name))].sort(), [classes]);
   const [weekStart, setWeekStart] = useState(() => mondayOf(isoToday()));
@@ -119,10 +126,41 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
   const slots = weeklySlots(day);
   const fmtShort = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   const weekLabel = `${fmtShort(weekStart)} – ${fmtShort(isoAdd(weekStart, 6))}`;
-  const startMins = classes.filter((c) => c.start_time).map((c) => toMin(c.start_time));
-  const firstHour = startMins.length ? Math.min(5, Math.floor(Math.min(...startMins) / 60)) : 5;
-  const lastHour = startMins.length ? Math.max(20, Math.ceil((Math.max(...startMins) + DURATION) / 60)) : 20;
-  const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
+  // Hours worth drawing: those with a session in them, one either side, and the rest folded away.
+  const rows = useMemo(() => {
+    const visible = new Set<number>();
+    for (const c of classes) {
+      if (!c.start_time) continue;
+      const m = toMin(c.start_time);
+      for (let h = Math.floor(m / 60) - 1; h <= Math.floor((m + DURATION - 1) / 60) + 1; h++) if (h >= 0 && h < 24) visible.add(h);
+    }
+    if (visible.size === 0) for (let h = 5; h <= 20; h++) visible.add(h);
+    const out: { hour: number | null; top: number; height: number }[] = [];
+    let top = 0;
+    let prev: number | null = null;
+    for (const h of [...visible].sort((x, y) => x - y)) {
+      if (prev !== null && h - prev > 1) {
+        out.push({ hour: null, top, height: GAP_H });
+        top += GAP_H;
+      }
+      out.push({ hour: h, top, height: HOUR_H });
+      top += HOUR_H;
+      prev = h;
+    }
+    return { rows: out, total: top };
+  }, [classes]);
+  const gridH = rows.total;
+  const yOf = (min: number) => {
+    const r = rows.rows.find((x) => x.hour === Math.floor(min / 60)) ?? rows.rows[0];
+    return r.top + ((min - (r.hour ?? 0) * 60) * HOUR_H) / 60;
+  };
+
+  const classNames = useMemo(() => [...new Set(classes.map((c) => c.name))].sort(), [classes]);
+  const hueFor = (name: string) => (classNames.length > 1 ? HUES[classNames.indexOf(name) % HUES.length] : null);
+  // How full each session is. A date inside the loaded window with no entry was cancelled for that day.
+  const occMap = useMemo(() => new Map(occurrences.map((o) => [`${o.classId}|${o.date}`, o])), [occurrences]);
+  const winFrom = isoAdd(todayIso, -28);
+  const winTo = isoAdd(todayIso, 20);
 
   function newSlot(forDay: number = day, time = '06:00') {
     const template = weeklySlots(forDay)[weeklySlots(forDay).length - 1] ?? classes[0];
@@ -297,10 +335,14 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
               </div>
             ))}
 
-            <div className="relative" style={{ height: hours.length * HOUR_H }}>
-              {hours.map((h, i) => (
-                <span key={h} className="absolute right-1.5 -translate-y-1/2 text-[11px] text-zinc-400" style={{ top: i * HOUR_H + (i === 0 ? 6 : 0) }}>
-                  {formatClock(`${String(h).padStart(2, '0')}:00`)}
+            <div className="relative" style={{ height: gridH }}>
+              {rows.rows.map((r) => (
+                <span
+                  key={r.top}
+                  className="absolute right-1.5 -translate-y-1/2 text-[11px] text-zinc-400"
+                  style={{ top: r.top + (r.top === 0 ? 6 : r.hour === null ? r.height / 2 : 0) }}
+                >
+                  {r.hour === null ? '···' : formatClock(`${String(r.hour).padStart(2, '0')}:00`)}
                 </span>
               ))}
             </div>
@@ -310,46 +352,76 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
               return (
                 <div
                   key={d}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Add a session on ${WEEKDAY_LABELS[d]}`}
+                  className={`relative cursor-pointer border-l border-black/[.06] dark:border-white/10 ${dateFor(d) === todayIso ? 'bg-accent/[.06]' : ''}`}
+                  style={{ height: gridH }}
                   onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const snapped = Math.floor((((e.clientY - rect.top) / HOUR_H) * 60) / 15) * 15;
-                    const total = firstHour * 60 + snapped;
-                    newSlot(d, `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`);
-                  }}
-                  onKeyDown={(e) => e.key === 'Enter' && newSlot(d)}
-                  className="relative cursor-pointer border-l border-black/[.06] dark:border-white/10"
-                  style={{
-                    height: hours.length * HOUR_H,
-                    backgroundImage: 'linear-gradient(to bottom, transparent calc(100% - 1px), rgba(128,128,128,.18) 0)',
-                    backgroundSize: `100% ${HOUR_H}px`,
+                    const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
+                    const r = rows.rows.find((x) => y >= x.top && y < x.top + x.height);
+                    if (!r || r.hour === null) return setPending(null);
+                    const total = r.hour * 60 + Math.floor((((y - r.top) / HOUR_H) * 60) / 15) * 15;
+                    setPending({ d, time: `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}` });
                   }}
                 >
+                  {rows.rows.map((r) => (
+                    <div
+                      key={r.top}
+                      className={`absolute inset-x-0 border-t border-black/[.07] dark:border-white/10 ${r.hour === null ? 'bg-black/[.03] dark:bg-white/[.03]' : ''}`}
+                      style={{ top: r.top, height: r.height }}
+                    />
+                  ))}
+                  {pending?.d === d && (
+                    <button
+                      type="button"
+                      aria-label={`Add a session on ${WEEKDAY_LABELS[d]} at ${formatClassTime(pending.time)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        newSlot(d, pending.time);
+                        setPending(null);
+                      }}
+                      className="absolute inset-x-0.5 flex items-center justify-center gap-0.5 rounded-lg border border-dashed border-accent bg-accent/10 text-[11px] font-bold text-accent"
+                      style={{ top: yOf(toMin(pending.time)) + 1, height: (DURATION * HOUR_H) / 60 - 2 }}
+                    >
+                      <Plus className="h-3 w-3" />
+                      {shortTime(pending.time)}
+                    </button>
+                  )}
                   {placed.map(({ row, lane, lanes }) => {
                     const start = toMin(row.start_time);
+                    const date = dateFor(d);
+                    const occ = occMap.get(`${row.id}|${date}`);
+                    const off = !occ && date >= winFrom && date < winTo;
+                    const hue = hueFor(row.name);
+                    const color = hue === null ? undefined : `hsl(${hue} 65% 48%)`;
                     return (
                       <button
                         key={row.id}
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          setPending(null);
                           setDraft(toDraft(row));
                         }}
-                        aria-label={`${row.name} ${formatClassTime(row.start_time)} on ${WEEKDAY_LABELS[d]}`}
-                        className={`absolute overflow-hidden rounded-lg bg-accent/20 px-1 py-0.5 text-left hover:bg-accent/30 ${
-                          row.specific_date ? 'border border-dashed border-accent' : 'ring-1 ring-inset ring-accent/40'
-                        }`}
+                        aria-label={`${row.name} ${formatClassTime(row.start_time)} on ${WEEKDAY_LABELS[d]}${occ ? `, ${occ.bookedCount} of ${row.capacity} booked` : ''}${off ? ', cancelled for this date' : ''}`}
+                        className={`absolute overflow-hidden rounded-lg px-1 py-0.5 text-left ${hue === null ? 'border-accent bg-accent/20 ring-accent/40 hover:bg-accent/30' : ''} ${
+                          row.specific_date ? 'border border-dashed' : 'ring-1 ring-inset'
+                        } ${off ? 'opacity-40' : ''}`}
                         style={{
-                          top: ((start - firstHour * 60) * HOUR_H) / 60 + 1,
+                          top: yOf(start) + 1,
                           height: (DURATION * HOUR_H) / 60 - 2,
                           left: `calc(${(lane / lanes) * 100}% + 1px)`,
                           width: `calc(${100 / lanes}% - 2px)`,
+                          ...(hue === null
+                            ? {}
+                            : { backgroundColor: `hsl(${hue} 65% 48% / .2)`, borderColor: color, ['--tw-ring-color' as string]: `hsl(${hue} 65% 48% / .5)` }),
                         }}
                       >
-                        <span className="block text-[11px] font-bold leading-tight text-accent">{shortTime(row.start_time)}</span>
-                        <span className="block text-[11px] leading-tight text-zinc-500">max {row.capacity}</span>
+                        <span className="block text-[11px] font-bold leading-tight text-accent" style={{ color }}>
+                          {shortTime(row.start_time)}
+                        </span>
+                        {hue !== null && <span className="block truncate text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">{row.name}</span>}
+                        <span className={`block text-[10px] leading-tight ${occ && occ.bookedCount >= row.capacity ? 'font-bold text-danger' : 'text-zinc-500'}`}>
+                          {occ ? `${occ.bookedCount}/${row.capacity}` : off ? 'Off' : `max ${row.capacity}`}
+                        </span>
                       </button>
                     );
                   })}
@@ -361,8 +433,18 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
       )}
 
       <p className="px-1 text-xs text-zinc-500">
-        Solid blocks repeat every week; dashed blocks are one-off sessions. Times are the gym&apos;s local time. To cancel a single date (for example a bank holiday), use Sessions.
+        Solid blocks repeat every week; dashed blocks are one-off sessions. Numbers show booked / capacity, and a faded &ldquo;Off&rdquo; block is cancelled for that date. Tap an empty slot, then tap the + to add. Times are the gym&apos;s local time. To cancel a single date (for example a bank holiday), use Sessions.
       </p>
+      {classNames.length > 1 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 px-1">
+          {classNames.map((n) => (
+            <span key={n} className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `hsl(${hueFor(n)} 65% 48%)` }} />
+              {n}
+            </span>
+          ))}
+        </div>
+      )}
 
       {draft && (
         <BottomSheet title={draft.id ? 'Edit session' : 'New session'} onClose={() => setDraft(null)}>
@@ -450,6 +532,11 @@ export function TimetableView({ classes }: { classes: ClassRow[] }) {
                 </Field>
                 )}
               </>
+            )}
+            {draft.id && draft.kind === 'weekly' && (
+              <p className="rounded-xl bg-black/5 px-3 py-2 text-xs text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                This is a weekly slot, so changes apply to every {WEEKDAY_LABELS[draft.dayOfWeek]}, not just this week. To change a single date, use Sessions.
+              </p>
             )}
             <Field label="Class">
               <input required list="class-names" className={inputCls} value={draft.name} onChange={(e) => set('name', e.target.value)} />
