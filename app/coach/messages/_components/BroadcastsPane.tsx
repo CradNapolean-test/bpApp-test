@@ -229,12 +229,13 @@ export function BroadcastsPane({
           <p className="text-xs font-medium text-zinc-500">To</p>
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
+              size="md"
               label="Audience"
               value={target}
               onChange={setTarget}
               options={[
-                { value: 'my_clients', label: `My clients (${counts.mine})` },
-                { value: 'gym', label: `Whole gym (${counts.gym})` },
+                { value: 'my_clients', label: 'My clients' },
+                { value: 'gym', label: 'Whole gym' },
                 { value: 'group', label: 'A group', disabled: groups.length === 0 },
               ]}
             />
@@ -254,6 +255,7 @@ export function BroadcastsPane({
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-zinc-500">Send as</p>
           <Segmented
+              size="md"
             label="Channel"
             value={channel}
             onChange={setChannel}
@@ -269,6 +271,7 @@ export function BroadcastsPane({
           <p className="text-xs font-medium text-zinc-500">When</p>
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
+              size="md"
               label="Timing"
               value={timing}
               onChange={(v) => {

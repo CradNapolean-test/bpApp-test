@@ -83,6 +83,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
                 initialMessages={messages}
                 currentUserId={currentUserId}
                 otherPartyName={selectedClient?.client_name ?? 'Client'}
+                memberHref={`/coach/clients/${selected}`}
               />
             </div>
           )}

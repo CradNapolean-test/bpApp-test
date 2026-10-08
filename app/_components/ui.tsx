@@ -157,18 +157,21 @@ export function Segmented<T extends string>({
   onChange,
   label,
   fill = false,
+  size = 'sm',
 }: {
   options: { value: T; label: string; disabled?: boolean }[];
   value: T;
   onChange: (v: T) => void;
   label: string;
   fill?: boolean;
+  // 'md' is a roomier control for forms, easier to hit with a thumb.
+  size?: 'sm' | 'md';
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className={`flex gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10 ${fill ? 'w-full sm:w-max' : 'w-max max-w-full'}`}
+      className={`flex gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10 ${fill ? 'w-full sm:w-max' : 'w-max max-w-full overflow-x-auto'}`}
     >
       {options.map((o) => (
         <button
@@ -178,7 +181,7 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           disabled={o.disabled}
           onClick={() => onChange(o.value)}
-          className={`rounded-full px-3.5 py-1.5 text-center text-xs font-bold transition-colors disabled:opacity-40 ${fill ? 'flex-1' : ''} ${
+          className={`whitespace-nowrap rounded-full text-center font-bold transition-colors disabled:opacity-40 ${size === 'md' ? 'px-3.5 py-2.5 text-sm' : 'px-3.5 py-1.5 text-xs'} ${fill ? 'flex-1' : ''} ${
             value === o.value ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-200'
           }`}
         >

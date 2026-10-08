@@ -46,14 +46,14 @@ export function ConversationList({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search clients…"
-          className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 py-1.5 text-sm outline-none focus:border-accent dark:border-white/10 dark:bg-white/5"
+          className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3.5 py-2.5 text-base outline-none focus:border-accent sm:py-2 sm:text-sm dark:border-white/10 dark:bg-white/5"
         />
         <div className="flex gap-1 text-xs">
           {(['active', 'unread', 'all'] as FilterMode[]).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-full px-2.5 py-1 font-medium capitalize transition-colors ${
+              className={`rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors sm:px-2.5 sm:py-1 sm:text-xs ${
                 mode === m
                   ? 'bg-accent text-accent-foreground'
                   : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'

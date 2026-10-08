@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ImageIcon, MessageSquare, Pause, Play, Send, X } from 'lucide-react';
+import Link from 'next/link';
+import { ImageIcon, MessageSquare, Pause, Play, Send, UserRound, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -104,6 +105,7 @@ export function ChatTab({
   draftKey,
   active = true,
   onClose,
+  memberHref,
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -122,6 +124,8 @@ export function ChatTab({
   // False while the chat is tucked away (kept mounted so a draft and the live connection are not lost).
   active?: boolean;
   onClose?: () => void;
+  // Where to open this person's page from the chat (the coach's Messages page and drawer).
+  memberHref?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [text, setText] = useState(() => {
@@ -277,6 +281,14 @@ export function ChatTab({
           <p className="truncate text-sm font-extrabold text-black dark:text-zinc-50">{otherPartyName}</p>
           <p className="text-[11px] text-zinc-500">{readOnly ? 'Read-only' : 'Messages, photos and voice notes'}</p>
         </div>
+        {memberHref && (
+          <Link
+            href={memberHref}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/10 dark:border-white/15"
+          >
+            <UserRound className="h-3.5 w-3.5" /> View member
+          </Link>
+        )}
         {onClose && (
           <button
             type="button"
