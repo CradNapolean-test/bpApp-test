@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
@@ -10,7 +10,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { createClass, deleteClass, updateClass } from '@/lib/data/classes';
 import { formatClock } from '@/lib/utils/cancelDeadline';
-import { formatClassTime, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClassRow, ScheduleOccurrence } from '@/lib/data/types';
 
 // The timetable as a real week calendar: weekly recurring slots repeat every week, one-off sessions
@@ -37,10 +37,6 @@ type Draft = {
 const isoAdd = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 const dowOf = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
 const mondayOf = (iso: string) => isoAdd(iso, -((dowOf(iso) + 6) % 7));
-function isoToday(): string {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
-}
 
 function toDraft(c: ClassRow): Draft {
   return {
@@ -48,7 +44,7 @@ function toDraft(c: ClassRow): Draft {
     name: c.name,
     dayOfWeek: c.day_of_week ?? 1,
     kind: c.specific_date ? 'once' : 'weekly',
-    date: c.specific_date ?? isoToday(),
+    date: c.specific_date ?? '',
     repeatDays: [c.day_of_week ?? 1],
     startTime: c.start_time?.slice(0, 5) ?? '06:00',
     capacity: c.capacity,
@@ -102,7 +98,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function TimetableView({ classes, occurrences }: { classes: ClassRow[]; occurrences: ScheduleOccurrence[] }) {
+export function TimetableView({ classes, occurrences, timezone }: { classes: ClassRow[]; occurrences: ScheduleOccurrence[]; timezone?: string | null }) {
+  const tz = timezone ?? DEFAULT_TIMEZONE;
+  const isoToday = () => todayIsoInTz(tz);
+  // The gym's current minute of the day, refreshed every minute, for the "now" line.
+  const nowMin = () => {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+    return Number(parts.find((p) => p.type === 'hour')?.value) * 60 + Number(parts.find((p) => p.type === 'minute')?.value);
+  };
+  const [now, setNow] = useState(nowMin);
+  useEffect(() => {
+    const t = setInterval(() => setNow(nowMin()), 60_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tz]);
   const { run, busy } = useAction();
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -369,6 +378,12 @@ export function TimetableView({ classes, occurrences }: { classes: ClassRow[]; o
                       style={{ top: r.top, height: r.height }}
                     />
                   ))}
+                  {dateFor(d) === todayIso && rows.rows.some((r) => r.hour === Math.floor(now / 60)) && (
+                    <div className="pointer-events-none absolute inset-x-0 z-10 flex items-center" style={{ top: yOf(now) }}>
+                      <span className="-ml-1 h-2 w-2 rounded-full bg-danger" />
+                      <span className="h-px flex-1 bg-danger" />
+                    </div>
+                  )}
                   {pending?.d === d && (
                     <button
                       type="button"

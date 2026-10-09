@@ -35,6 +35,7 @@ export function ClassesHubShell({
   unreadCount,
   email,
   clients,
+  timezone,
 }: {
   initialClasses: ClassRow[];
   occurrences: ScheduleOccurrence[];
@@ -42,6 +43,7 @@ export function ClassesHubShell({
   unreadCount: number;
   email: string;
   clients: CoachClientRow[];
+  timezone: string | null;
 }) {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Sessions');
@@ -65,7 +67,7 @@ export function ClassesHubShell({
           initialTarget={searchParams.get('date') && searchParams.get('class') ? { date: searchParams.get('date')!, classId: searchParams.get('class')! } : null}
         />
       )}
-      {tab === 'Timetable' && <TimetableView classes={initialClasses} occurrences={occurrences} />}
+      {tab === 'Timetable' && <TimetableView classes={initialClasses} occurrences={occurrences} timezone={timezone} />}
       {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} />}
     </AppShell>
     </ClientOnly>

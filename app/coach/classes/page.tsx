@@ -19,10 +19,11 @@ export default async function CoachClassesPage({ searchParams }: { searchParams:
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, gym:gym_id(timezone)')
     .eq('id', user.id)
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
+  const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
   const [classes, occurrences, chatOverview, report, clients] = await Promise.all([
     getClasses(),
@@ -41,6 +42,7 @@ export default async function CoachClassesPage({ searchParams }: { searchParams:
       unreadCount={unreadCount}
       email={user.email ?? 'Coach'}
       clients={clients}
+      timezone={gym?.timezone ?? null}
     />
   );
 }
