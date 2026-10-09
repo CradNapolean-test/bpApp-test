@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getClientHealthStatuses, getMyClients, searchGymClients } from '@/lib/data/coach';
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getGroups } from '@/lib/data/clientGroups';
+import { getActiveHoldClientIds } from '@/lib/data/redFlags';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { CoachNav } from '../_components/CoachNav';
@@ -31,15 +32,18 @@ export default async function CoachClientsPage() {
   if (profile?.role !== 'coach') redirect('/dashboard');
   const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
-  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue] = await Promise.all([
+  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue, holdIds] = await Promise.all([
     getMyClients(supabase, user.id),
     searchGymClients(supabase, profile.gym_id, user.id),
     getClientHealthStatuses(supabase, user.id),
     getCoachChatOverview(),
     getGroups(),
     getClientsNeedingReview(),
+    getActiveHoldClientIds().catch(() => [] as string[]),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
+  const unreadByClient: Record<string, number> = {};
+  for (const c of chatOverview) if (c.unread_count > 0) unreadByClient[c.client_id] = c.unread_count;
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -65,6 +69,8 @@ export default async function CoachClientsPage() {
           gymName={gym?.name ?? 'your gym'}
           statuses={healthStatuses}
           groups={groups}
+          holdIds={holdIds}
+          unreadByClient={unreadByClient}
         />
       </div>
     </AppShell>

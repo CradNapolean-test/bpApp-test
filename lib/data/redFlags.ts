@@ -55,6 +55,18 @@ export async function startHold(clientId: string, startedOn: string, note: strin
   return error ? fail(error, 'Could not put them on hold') : ok();
 }
 
+// Members whose membership is on hold today (for the Clients list). Empty if the table cannot be read.
+export async function getActiveHoldClientIds(): Promise<string[]> {
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('membership_holds')
+    .select('client_id')
+    .lte('started_on', today)
+    .or(`ended_on.is.null,ended_on.gte.${today}`);
+  return [...new Set((data ?? []).map((h) => h.client_id as string))];
+}
+
 // Resuming means they are back from today: the hold's last day was yesterday. A hold that only started today never
 // really ran, so it is removed.
 export async function endHold(holdId: string, today: string): Promise<ActionResult> {

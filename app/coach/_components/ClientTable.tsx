@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpDown, Search, Users } from 'lucide-react';
+import { AlertTriangle, ArrowUpDown, MessageSquare, Search, Users } from 'lucide-react';
+import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Avatar } from '@/app/_components/Avatar';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
@@ -31,6 +32,8 @@ export function ClientTable({
   gymClients,
   statuses,
   groups,
+  holdIds = [],
+  unreadByClient = {},
 }: {
   clients: CoachClientRow[];
   // Every client at the gym, regardless of assigned coach -- only present when this table is
@@ -40,6 +43,9 @@ export function ClientTable({
   gymName?: string;
   statuses: ClientHealthStatus[];
   groups: ClientGroupWithMembers[];
+  // Members whose membership is on hold today, and unread message counts by member.
+  holdIds?: string[];
+  unreadByClient?: Record<string, number>;
 }) {
   const [scope, setScope] = useState<Scope>('mine');
   const [sortKey, setSortKey] = useState<SortKey>('name');
@@ -49,6 +55,8 @@ export function ClientTable({
   const [managingGroups, setManagingGroups] = useState(false);
   const [pendingDeletionOnly, setPendingDeletionOnly] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>('all');
+  const [legend, setLegend] = useState(false);
+  const onHold = useMemo(() => new Set(holdIds), [holdIds]);
 
   const activeClients: (CoachClientRow | GymClientRow)[] = scope === 'gym' && gymClients ? gymClients : clients;
 
@@ -71,7 +79,7 @@ export function ClientTable({
         quick === 'review'
           ? client.needsReview
           : quick === 'quiet'
-            ? health?.status === 'red' || health?.status === 'amber'
+            ? !onHold.has(client.id) && (health?.status === 'red' || health?.status === 'amber')
             : quick === 'credits'
               ? client.balance <= 1 && client.planName != null
               : quick === 'noplan'
@@ -95,20 +103,33 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly, quick]);
+  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly, quick, onHold]);
 
   const quickCounts = useMemo(
     () => ({
       review: activeClients.filter((c) => c.needsReview).length,
       quiet: activeClients.filter((c) => {
         const s = statusById.get(c.id)?.status;
-        return s === 'red' || s === 'amber';
+        return !onHold.has(c.id) && (s === 'red' || s === 'amber');
       }).length,
       credits: activeClients.filter((c) => c.balance <= 1 && c.planName != null).length,
       noplan: activeClients.filter((c) => c.planName == null).length,
     }),
-    [activeClients, statusById]
+    [activeClients, statusById, onHold]
   );
+
+  const filtersOn = query.trim() !== '' || groupId !== '' || quick !== 'all' || pendingDeletionOnly;
+  function clearFilters() {
+    setQuery('');
+    setGroupId('');
+    setQuick('all');
+    setPendingDeletionOnly(false);
+  }
+  const emptyText = filtersOn ? 'Nobody matches these filters.' : 'No clients here yet.';
+  // 0 or 1 credits left on a plan stands out; no plan means the number does not matter.
+  const creditCls = (c: CoachClientRow) =>
+    c.planName == null ? 'text-zinc-500' : c.balance <= 0 ? 'text-danger' : c.balance === 1 ? 'text-warning' : 'text-black dark:text-zinc-50';
+  const statusFor = (id: string, health: ClientHealthStatus | null) => (onHold.has(id) ? { label: 'On hold', cls: 'text-sky-600 dark:text-sky-400' } : STATUS_TEXT[health?.status ?? 'unmonitored']);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setAsc((v) => !v);
@@ -230,6 +251,35 @@ const scopeBtnCls = (active: boolean) =>
           </button>
         ))}
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-xs text-zinc-500">
+          {rows.length === activeClients.length ? `${rows.length} member${rows.length === 1 ? '' : 's'}` : `Showing ${rows.length} of ${activeClients.length}`}
+          {filtersOn && (
+            <button type="button" onClick={clearFilters} className="ml-2 font-bold text-accent">
+              Clear filters
+            </button>
+          )}
+        </p>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Sort by"
+            value={sortKey}
+            onChange={(e) => {
+              setSortKey(e.target.value as SortKey);
+              setAsc(true);
+            }}
+            className="rounded-lg border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+          >
+            <option value="name">Name A–Z</option>
+            <option value="lastActive">Most inactive first</option>
+            <option value="status">Needs attention first</option>
+            <option value="credits">Fewest credits first</option>
+          </select>
+          <button type="button" onClick={() => setLegend(true)} className="shrink-0 text-xs font-bold text-accent">
+            Colour key
+          </button>
+        </div>
+      </div>
       {pendingDeletionCount > 0 && (
         <button
           onClick={() => setPendingDeletionOnly((v) => !v)}
@@ -249,7 +299,8 @@ const scopeBtnCls = (active: boolean) =>
       {/* Phone: one card per client (the table needs ~34rem of width). */}
       <ul className="space-y-2 md:hidden">
         {rows.map(({ client, health }) => {
-          const status = STATUS_TEXT[health?.status ?? 'unmonitored'];
+          const status = statusFor(client.id, health);
+          const unread = unreadByClient[client.id] ?? 0;
           const last = health?.lastActiveDate
             ? health.daysSinceActive === 0
               ? 'Active today'
@@ -258,16 +309,14 @@ const scopeBtnCls = (active: boolean) =>
                 : `Active ${health.daysSinceActive}d ago`
             : 'Never logged';
           return (
-            <li key={client.id}>
-              <Link
-                href={`/coach/clients/${client.id}`}
-                className="flex items-center gap-3 rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10"
-              >
+            <li key={client.id} className="flex items-stretch rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+              <Link href={`/coach/clients/${client.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-3">
                 <Avatar name={client.name ?? client.email} size="md" />
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 truncate font-semibold text-black dark:text-zinc-50">
                     <span className="truncate">{client.name ?? client.email}</span>
                     {client.needsReview && <span className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-extrabold text-warning">NEW</span>}
+                    {onHold.has(client.id) && <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-sky-600 dark:text-sky-400">HOLD</span>}
                     {client.deletion_requested_at && <span className="shrink-0 rounded-full bg-danger/15 px-1.5 py-0.5 text-[10px] font-extrabold text-danger">DELETE</span>}
                   </p>
                   <p className="truncate text-xs text-zinc-500">
@@ -277,14 +326,22 @@ const scopeBtnCls = (active: boolean) =>
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold text-black dark:text-zinc-50">{client.balance}</p>
+                  <p className={`text-sm font-bold ${creditCls(client)}`}>{client.balance}</p>
                   <p className="text-[11px] text-zinc-500">credits</p>
                 </div>
+              </Link>
+              <Link
+                href={`/coach/clients/${client.id}?open=messages`}
+                aria-label={unread > 0 ? `Message ${client.name ?? client.email} (${unread} unread)` : `Message ${client.name ?? client.email}`}
+                className="relative flex w-12 shrink-0 items-center justify-center rounded-r-2xl border-l border-black/[.06] text-zinc-500 dark:border-white/10"
+              >
+                <MessageSquare className="h-5 w-5" />
+                {unread > 0 && <span className="absolute right-2.5 top-3 h-2.5 w-2.5 rounded-full bg-accent" />}
               </Link>
             </li>
           );
         })}
-        {rows.length === 0 && <li className="p-3 text-center text-sm text-zinc-500">No clients match &quot;{query}&quot;.</li>}
+        {rows.length === 0 && <li className="p-3 text-center text-sm text-zinc-500">{emptyText}</li>}
       </ul>
       <div className="hidden overflow-x-auto rounded-2xl border border-black/10 shadow-sm md:block dark:border-white/10">
         <table className="w-full min-w-[34rem] text-sm">
@@ -334,6 +391,14 @@ const scopeBtnCls = (active: boolean) =>
                         {client.needsReview && (
                           <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-extrabold text-warning">NEW</span>
                         )}
+                        {onHold.has(client.id) && (
+                          <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-sky-600 dark:text-sky-400">HOLD</span>
+                        )}
+                        {(unreadByClient[client.id] ?? 0) > 0 && (
+                          <Link href={`/coach/clients/${client.id}?open=messages`} aria-label="Unread messages" className="inline-flex items-center gap-1 text-xs font-bold text-accent">
+                            <MessageSquare className="h-3 w-3" /> {unreadByClient[client.id]}
+                          </Link>
+                        )}
                         {client.deletion_requested_at && (
                           <span
                             title="Deletion requested"
@@ -354,9 +419,7 @@ const scopeBtnCls = (active: boolean) =>
                   </td>
                 )}
                 <td className="p-3">
-                  <span className={`font-semibold ${STATUS_TEXT[health?.status ?? 'unmonitored'].cls}`}>
-                    {STATUS_TEXT[health?.status ?? 'unmonitored'].label}
-                  </span>
+                  <span className={`font-semibold ${statusFor(client.id, health).cls}`}>{statusFor(client.id, health).label}</span>
                 </td>
                 <td className="whitespace-nowrap p-3 text-zinc-500">
                   {health?.lastActiveDate
@@ -367,14 +430,14 @@ const scopeBtnCls = (active: boolean) =>
                         : `${health.daysSinceActive}d ago`
                     : 'Never logged'}
                 </td>
-                <td className="p-3 text-zinc-500">{client.balance}</td>
+                <td className={`p-3 font-semibold ${creditCls(client)}`}>{client.balance}</td>
               </tr>
             );
           })}
           {rows.length === 0 && (
             <tr>
               <td colSpan={scope === 'gym' ? 5 : 4} className="p-3 text-center text-zinc-500">
-                No clients match &quot;{query}&quot;.
+                {emptyText}
               </td>
             </tr>
           )}
@@ -382,6 +445,28 @@ const scopeBtnCls = (active: boolean) =>
       </table>
       </div>
       </>
+      )}
+      {legend && (
+        <BottomSheet title="What the colours mean" onClose={() => setLegend(false)}>
+          <dl className="space-y-3 text-sm">
+            {[
+              ['Green', 'text-emerald-600 dark:text-emerald-400', 'Logged recently: within their check-in reminder days (3 by default).'],
+              ['Amber', 'text-amber-600 dark:text-amber-400', 'Gone quiet: longer than the reminder days, up to double.'],
+              ['Red', 'text-red-600 dark:text-red-400', 'More than double the reminder days since they last logged anything.'],
+              ['Unmonitored', 'text-zinc-400', 'Check-in reminders are switched off for them, so no status is worked out.'],
+              ['On hold', 'text-sky-600 dark:text-sky-400', 'Membership on hold (holiday, injury). Left out of Gone quiet and the red flag lists.'],
+            ].map(([label, cls, text]) => (
+              <div key={label}>
+                <dt className={`font-bold ${cls}`}>{label}</dt>
+                <dd className="text-zinc-600 dark:text-zinc-400">{text}</dd>
+              </div>
+            ))}
+            <div>
+              <dt className="font-bold text-black dark:text-zinc-50">Credits</dt>
+              <dd className="text-zinc-600 dark:text-zinc-400">Red at 0 and amber at 1 for members on a plan. &quot;Low credits&quot; lists everyone at 1 or fewer.</dd>
+            </div>
+          </dl>
+        </BottomSheet>
       )}
     </div>
   );
