@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
@@ -22,7 +22,7 @@ import { GymSwitcher } from './GymSwitcher';
 import type { ThemePreference } from '@/app/_components/theme';
 import type { GymCoachRow, MyGymRow } from '@/lib/data/gym';
 
-type RowKey = 'password' | 'email' | 'profile' | 'notifications' | 'gym';
+type RowKey = 'password' | 'email' | 'profile' | 'gym';
 
 export function CoachSettingsShell({
   email,
@@ -79,7 +79,7 @@ export function CoachSettingsShell({
   );
 
   const rowCls =
-    'flex w-full items-center justify-between border-b border-black/5 px-4 py-3.5 text-left last:border-b-0 dark:border-white/5';
+    'flex w-full items-center justify-between px-4 py-3.5 text-left';
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
@@ -99,71 +99,45 @@ export function CoachSettingsShell({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/[.05] bg-card !p-0 dark:border-white/10">
-          <button type="button" onClick={() => setOpenRow(openRow === 'password' ? null : 'password')} className={rowCls}>
-            <span className="font-semibold text-black dark:text-zinc-50">Change password</span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-          </button>
-          <button type="button" onClick={() => setOpenRow(openRow === 'email' ? null : 'email')} className={rowCls}>
-            <span className="font-semibold text-black dark:text-zinc-50">Change email</span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-          </button>
-          <button type="button" onClick={() => setOpenRow(openRow === 'profile' ? null : 'profile')} className={rowCls}>
-            <span className="font-semibold text-black dark:text-zinc-50">Coach profile</span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-          </button>
-          <button type="button" onClick={() => setOpenRow(openRow === 'notifications' ? null : 'notifications')} className={rowCls}>
-            <span className="font-semibold text-black dark:text-zinc-50">Notification preferences</span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-          </button>
-          {showGymRow && (
-            <button type="button" onClick={() => setOpenRow(openRow === 'gym' ? null : 'gym')} className={rowCls}>
-              <span className="font-semibold text-black dark:text-zinc-50">Gym</span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-            </button>
-          )}
+        <div className="overflow-hidden rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
+          {(
+            [
+              { key: 'password', label: 'Change password', show: true, panel: <ChangePasswordForm /> },
+              { key: 'email', label: 'Change email', show: true, panel: <ChangeEmailForm currentEmail={email} /> },
+              { key: 'profile', label: 'Coach profile', show: true, panel: <CoachProfileForm initialName={displayName} logoUrl={logoUrl} /> },
+              {
+                key: 'gym',
+                label: 'Gym',
+                show: showGymRow,
+                panel: (
+                  <div className="space-y-6">
+                    {myGyms.length > 1 && <GymSwitcher gyms={myGyms} />}
+                    {isGymAdmin && (
+                      <GymAdminSection
+                        gymName={gymName}
+                        timezone={gymTimezone}
+                        blackoutStart={blackoutStart}
+                        blackoutEnd={blackoutEnd}
+                        roster={gymRoster}
+                        currentUserId={currentUserId}
+                      />
+                    )}
+                  </div>
+                ),
+              },
+            ] as { key: RowKey; label: string; show: boolean; panel: React.ReactNode }[]
+          )
+            .filter((r) => r.show)
+            .map((r) => (
+              <div key={r.key} className="border-b border-black/5 last:border-b-0 dark:border-white/5">
+                <button type="button" aria-expanded={openRow === r.key} onClick={() => setOpenRow(openRow === r.key ? null : r.key)} className={rowCls}>
+                  <span className="font-semibold text-black dark:text-zinc-50">{r.label}</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${openRow === r.key ? 'rotate-180' : ''}`} />
+                </button>
+                {openRow === r.key && <div className="border-t border-black/5 px-4 py-4 dark:border-white/5">{r.panel}</div>}
+              </div>
+            ))}
         </div>
-
-        {openRow === 'password' && (
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <ChangePasswordForm />
-          </div>
-        )}
-
-        {openRow === 'email' && (
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <ChangeEmailForm currentEmail={email} />
-          </div>
-        )}
-
-        {openRow === 'profile' && (
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <CoachProfileForm initialName={displayName} logoUrl={logoUrl} />
-          </div>
-        )}
-
-        {openRow === 'notifications' && (
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Notification preferences</h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              Per-channel notification controls aren&apos;t available yet — every alert type is on by default.
-            </p>
-          </div>
-        )}
-
-        {showGymRow && openRow === 'gym' && (
-          <div className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            {myGyms.length > 1 && <GymSwitcher gyms={myGyms} />}
-            {isGymAdmin && <GymAdminSection
-                gymName={gymName}
-                timezone={gymTimezone}
-                blackoutStart={blackoutStart}
-                blackoutEnd={blackoutEnd}
-                roster={gymRoster}
-                currentUserId={currentUserId}
-              />}
-          </div>
-        )}
 
         <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
           <DefaultCheckinReminderForm initialDays={defaultCheckinReminderDays} />

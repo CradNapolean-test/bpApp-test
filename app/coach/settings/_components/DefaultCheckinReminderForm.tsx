@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
 import { setDefaultCheckinReminderDays } from '@/lib/data/coachSettings';
+import { inputCls } from '@/app/_components/ui';
 
 const DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 14];
 
@@ -21,14 +22,14 @@ export function DefaultCheckinReminderForm({ initialDays }: { initialDays: numbe
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Default check-in reminder</h3>
       <p className="text-xs text-zinc-500">
-        How long a new client can go without logging before they get a nudge. Applied when a client&apos;s
-        Setup is first saved — you can still override it per client from their Credits tab.
+        How long a new member can go without logging before they get a nudge. It applies when a member&apos;s details are
+        first saved. You can change it for one member under their Profile → Credits &amp; plan.
       </p>
       <select
         value={days}
         disabled={busy}
         onChange={(e) => handleChange(Number(e.target.value))}
-        className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+        className={inputCls}
       >
         <option value={0}>Off</option>
         {DAY_OPTIONS.map((d) => (

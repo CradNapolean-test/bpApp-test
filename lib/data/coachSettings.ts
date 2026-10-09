@@ -15,6 +15,13 @@ export async function setDefaultCheckinReminderDays(days: number): Promise<Actio
   return error ? fail(error, 'Could not save the default reminder setting') : ok();
 }
 
+// Back to the default wordmark. The old file stays in storage; only the link is cleared.
+export async function removeCoachLogo(): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_logo_path', { p_path: null });
+  return error ? fail(error, 'Could not remove the logo') : ok();
+}
+
 // Mirrors uploadProgressPhoto's shape (lib/data/progress.ts): FormData in (the documented-safe
 // way to pass a File through a Server Action), upload to Storage, then persist the resulting
 // path via set_logo_path (0047) -- profiles has no general update policy, so a raw update
