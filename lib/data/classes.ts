@@ -191,7 +191,8 @@ export async function grantCredits(
 // which gym's classes apply either way.
 // `weeksBack` also generates recent past occurrences (the Attendance tab needs them, to mark
 // sessions that have already happened); members only ever see upcoming ones.
-export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Promise<ScheduleOccurrence[]> {
+// `includeCancelled` (coach screens) keeps dates that were cancelled, flagged, instead of dropping them.
+export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, includeCancelled = false): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
   const gymId = await resolveScopingGymId(supabase);
 
@@ -251,14 +252,18 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Pro
   // Skip generating any occurrence a coach has cancelled (0051) -- filtered out entirely
   // rather than flagged, matching the virtual-generation model: a cancelled date simply isn't
   // a bookable/attendable occurrence anymore.
-  const { data: exceptions, error: exceptionsError } = await supabase
-    .from('class_exceptions')
-    .select('class_id, occurrence_date')
-    .in('class_id', classIds)
-    .in('occurrence_date', dates);
-  if (exceptionsError) raise(exceptionsError);
-  const cancelledKeys = new Set((exceptions ?? []).map((e) => `${e.class_id}|${e.occurrence_date}`));
-  const activeOccurrences = occurrences.filter((o) => !cancelledKeys.has(`${o.classId}|${o.date}`));
+  // The reason column needs migration 0100; without it, fall back to no reasons rather than failing.
+  let exceptions: { class_id: string; occurrence_date: string; reason?: string | null }[] | null = null;
+  const withReason = await supabase.from('class_exceptions').select('class_id, occurrence_date, reason').in('class_id', classIds).in('occurrence_date', dates);
+  if (withReason.error) {
+    const plain = await supabase.from('class_exceptions').select('class_id, occurrence_date').in('class_id', classIds).in('occurrence_date', dates);
+    if (plain.error) raise(plain.error);
+    exceptions = plain.data;
+  } else {
+    exceptions = withReason.data;
+  }
+  const cancelledKeys = new Map((exceptions ?? []).map((e) => [`${e.class_id}|${e.occurrence_date}`, e.reason ?? null]));
+  const activeOccurrences = includeCancelled ? occurrences : occurrences.filter((o) => !cancelledKeys.has(`${o.classId}|${o.date}`));
   if (activeOccurrences.length === 0) return [];
 
   const { data: bookings, error: bookingsError } = await supabase
@@ -299,6 +304,9 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Pro
       ...o,
       bookedCount: countMap.get(`${o.classId}|${o.date}`) ?? 0,
       unmarkedCount: unmarkedMap.get(`${o.classId}|${o.date}`) ?? 0,
+      ...(includeCancelled && cancelledKeys.has(`${o.classId}|${o.date}`)
+        ? { cancelled: true, cancelReason: cancelledKeys.get(`${o.classId}|${o.date}`) ?? null }
+        : {}),
     }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
@@ -307,11 +315,24 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0): Pro
 // affected client -- see migration 0051's cancel_class_occurrence for the exact refund/notify
 // logic (mirrors cancel_booking's reason format, skips waitlist-promotion since the whole
 // occurrence is gone). Returns how many bookings were affected, for the UI's confirmation toast.
-export async function cancelClassOccurrence(classId: string, date: string): Promise<ActionResult & { count?: number }> {
+// `reason` goes into the notification each booked member gets (needs migration 0100; only sent when given).
+export async function cancelClassOccurrence(classId: string, date: string, reason?: string): Promise<ActionResult & { count?: number }> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('cancel_class_occurrence', { p_class_id: classId, p_date: date });
+  const note = reason?.trim();
+  const { data, error } = await supabase.rpc('cancel_class_occurrence', {
+    p_class_id: classId,
+    p_date: date,
+    ...(note ? { p_reason: note } : {}),
+  });
   if (error) return fail(error, 'Could not cancel that occurrence');
   return { ...ok(), count: data as number };
+}
+
+// Puts a cancelled date back. Bookings that were cancelled with it stay cancelled -- members book again.
+export async function restoreClassOccurrence(classId: string, date: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('restore_class_occurrence', { p_class_id: classId, p_date: date });
+  return error ? fail(error, 'Could not restore that session (has migration 0100 been run?)') : ok();
 }
 
 // A coach takes one member off a session; `refund` says whether their credit goes back.
@@ -330,10 +351,17 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     .select('id, client_id, status, attended, no_show')
     .eq('class_id', classId)
     .eq('booking_date', date)
-    .neq('status', 'cancelled')
     .order('created_at');
   if (error) raise(error);
   if (!bookings || bookings.length === 0) return [];
+
+  // A cancelled booking is a late cancel when nothing was given back for it.
+  const cancelledIds = bookings.filter((b) => b.status === 'cancelled').map((b) => b.id);
+  const refundedIds = new Set<string>();
+  if (cancelledIds.length > 0) {
+    const { data: refunds } = await supabase.from('credits_ledger').select('booking_id').in('booking_id', cancelledIds).gt('delta', 0);
+    for (const r of refunds ?? []) if (r.booking_id) refundedIds.add(r.booking_id);
+  }
 
   const clientIds = bookings.map((b) => b.client_id);
   const { data: profiles, error: profilesError } = await supabase
@@ -351,6 +379,7 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     status: b.status,
     attended: b.attended,
     noShow: b.no_show,
+    lateCancel: b.status === 'cancelled' && !refundedIds.has(b.id),
   }));
 }
 

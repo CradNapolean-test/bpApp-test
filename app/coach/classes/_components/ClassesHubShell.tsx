@@ -64,6 +64,7 @@ export function ClassesHubShell({
         <SessionsView
           occurrences={occurrences}
           clients={clients}
+          timezone={timezone}
           initialTarget={searchParams.get('date') && searchParams.get('class') ? { date: searchParams.get('date')!, classId: searchParams.get('class')! } : null}
         />
       )}

@@ -27,7 +27,7 @@ export default async function CoachClassesPage({ searchParams }: { searchParams:
 
   const [classes, occurrences, chatOverview, report, clients] = await Promise.all([
     getClasses(),
-    getScheduleOccurrences(3, 5),
+    getScheduleOccurrences(3, 5, true),
     getCoachChatOverview(),
     getCoachReport(),
     getMyClients(supabase, user.id),

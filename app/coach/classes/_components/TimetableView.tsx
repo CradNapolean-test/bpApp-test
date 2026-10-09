@@ -404,7 +404,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                     const start = toMin(row.start_time);
                     const date = dateFor(d);
                     const occ = occMap.get(`${row.id}|${date}`);
-                    const off = !occ && date >= winFrom && date < winTo;
+                    const off = occ ? !!occ.cancelled : date >= winFrom && date < winTo;
                     const hue = hueFor(row.name);
                     const color = hue === null ? undefined : `hsl(${hue} 65% 48%)`;
                     return (
@@ -416,7 +416,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                           setPending(null);
                           setDraft(toDraft(row));
                         }}
-                        aria-label={`${row.name} ${formatClassTime(row.start_time)} on ${WEEKDAY_LABELS[d]}${occ ? `, ${occ.bookedCount} of ${row.capacity} booked` : ''}${off ? ', cancelled for this date' : ''}`}
+                        aria-label={`${row.name} ${formatClassTime(row.start_time)} on ${WEEKDAY_LABELS[d]}${occ && !occ.cancelled ? `, ${occ.bookedCount} of ${row.capacity} booked` : ''}${off ? ', cancelled for this date' : ''}`}
                         className={`absolute overflow-hidden rounded-lg px-1 py-0.5 text-left ${hue === null ? 'border-accent bg-accent/20 ring-accent/40 hover:bg-accent/30' : ''} ${
                           row.specific_date ? 'border border-dashed' : 'ring-1 ring-inset'
                         } ${off ? 'opacity-40' : ''}`}
@@ -435,7 +435,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                         </span>
                         {hue !== null && <span className="block truncate text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">{row.name}</span>}
                         <span className={`block text-[10px] leading-tight ${occ && occ.bookedCount >= row.capacity ? 'font-bold text-danger' : 'text-zinc-500'}`}>
-                          {occ ? `${occ.bookedCount}/${row.capacity}` : off ? 'Off' : `max ${row.capacity}`}
+                          {off ? 'Off' : occ ? `${occ.bookedCount}/${row.capacity}` : `max ${row.capacity}`}
                         </span>
                       </button>
                     );

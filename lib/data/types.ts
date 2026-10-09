@@ -598,6 +598,9 @@ export interface ScheduleOccurrence {
   blackoutEnd: string | null;
   // Past bookings on this date not yet marked attended / no-show.
   unmarkedCount?: number;
+  // Only set when the coach asks for cancelled dates too: this date was cancelled, and why (if they said).
+  cancelled?: boolean;
+  cancelReason?: string | null;
 }
 
 export interface RosterEntry {
@@ -607,6 +610,8 @@ export interface RosterEntry {
   status: BookingStatus;
   attended: boolean;
   noShow: boolean;
+  // A cancelled booking whose credit was not given back (cancelled inside the cut-off, or removed without a refund).
+  lateCancel?: boolean;
 }
 
 export type AttendanceStatus = 'unmarked' | 'attended' | 'no_show';
