@@ -8,6 +8,7 @@ import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '
 import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
+import { getRedFlagReport } from './redFlags';
 import type { ActivityEventRow, DailyLogRow, ScheduleOccurrence } from './types';
 
 export type DashboardScope = 'mine' | 'gym' | 'coach';
@@ -76,6 +77,12 @@ export interface CoachDashboardData {
   selectedCoachId: string | null;
   userId: string;
   todayIso: string;
+  // The gym's timezone, for "now" on the client.
+  timezone: string;
+  // First name for the greeting.
+  firstName: string | null;
+  // Last completed week's red flags (whole gym); null when the report is not available.
+  redFlags: { weekStart: string; flagged: number; toContact: number } | null;
   occurrences: ScheduleOccurrence[];
   unreadThreads: UnreadThread[];
   deletionRequests: DeletionRequestItem[];
@@ -149,7 +156,13 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const { data: me } = await supabase.from('profiles').select('gym_id, is_gym_admin').eq('id', user.id).maybeSingle();
+  const { data: me } = await supabase
+    .from('profiles')
+    .select('gym_id, is_gym_admin, display_name, gym:gym_id(timezone)')
+    .eq('id', user.id)
+    .maybeSingle();
+  const gymRel = Array.isArray(me?.gym) ? me?.gym[0] : me?.gym;
+  const timezone = gymRel?.timezone || DEFAULT_TIMEZONE;
   const isAdmin = !!me?.is_gym_admin;
   const scope: DashboardScope = isAdmin ? requested : 'mine';
 
@@ -161,8 +174,9 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   }
   const selectedCoachId = scope === 'coach' ? (coachId ?? coaches[0]?.id ?? null) : null;
 
-  const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
+  const todayIso = todayIsoInTz(timezone);
   const thisWeek = isoWeekKey(todayIso);
+  const lastWeek = toIsoDate(addDays(new Date(thisWeek + 'T00:00:00Z'), -7));
   const prevWeek = toIsoDate(addDays(new Date(thisWeek + 'T00:00:00Z'), -7));
   const prev2Week = toIsoDate(addDays(new Date(thisWeek + 'T00:00:00Z'), -14));
   const since28 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -28));
@@ -191,11 +205,12 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     return buildQuery(SELECT.replace('coach_reviews!client_id(kind, ref),', ''));
   };
 
-  const [{ data: rows, error }, occurrences, chatOverview, activity] = await Promise.all([
+  const [{ data: rows, error }, occurrences, chatOverview, activity, flagResult] = await Promise.all([
     fetchMembers(),
     getScheduleOccurrences(1, 2),
     scope === 'mine' ? getCoachChatOverview().catch(() => []) : Promise.resolve([]),
     getRecentActivity(undefined, 8).catch(() => [] as ActivityEventRow[]),
+    getRedFlagReport(lastWeek).catch(() => ({ report: null, error: 'unavailable' })),
   ]);
   if (error) throw new Error(error.message);
   const members = (rows ?? []) as unknown as MemberRow[];
@@ -333,6 +348,15 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     selectedCoachId,
     userId: user.id,
     todayIso,
+    timezone,
+    firstName: (me?.display_name ?? '').trim().split(/\s+/)[0] || null,
+    redFlags: flagResult.report
+      ? {
+          weekStart: lastWeek,
+          flagged: flagResult.report.entries.length,
+          toContact: flagResult.report.entries.filter((e) => e.contacted === 'no').length,
+        }
+      : null,
     occurrences,
     unreadThreads,
     deletionRequests,

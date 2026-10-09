@@ -13,8 +13,8 @@ export function CoachTodayLabel({ className }: { className?: string }) {
   return <p className={className}>{todayLabel}</p>;
 }
 
-export function CoachTimeGreeting() {
+export function CoachTimeGreeting({ name }: { name?: string | null }) {
   const greetingHour = new Date().getHours();
   const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
-  return <>{timeGreeting}, Coach</>;
+  return <>{timeGreeting}, {name || 'Coach'}</>;
 }

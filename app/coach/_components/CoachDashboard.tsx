@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   FileText,
+  Flag,
   MessageSquare,
   Plus,
   Trash2,
@@ -64,6 +65,8 @@ interface TodoGroup {
   title: string;
   summary: string;
   items: TodoItem[];
+  // Badge number when it is not simply the number of items.
+  count?: number;
   // Single row, no expansion (e.g. one deletion request).
   direct?: boolean;
 }
@@ -82,7 +85,7 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
         <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{group.title}</span>
         <span className="block truncate text-xs text-zinc-500">{group.summary}</span>
       </span>
-      <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${tone.badge}`}>{group.items.length}</span>
+      <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${tone.badge}`}>{group.count ?? group.items.length}</span>
       {single ? <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />}
     </>
   );
@@ -130,6 +133,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   const router = useRouter();
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showAllToCheck, setShowAllToCheck] = useState(false);
   const { scope, isAdmin, coaches, selectedCoachId, stats } = data;
   const own = (mineFlag: boolean) => scope === 'mine' || mineFlag;
 
@@ -167,8 +171,29 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
         clientId: t.clientId,
         title: t.name,
         hint: `${t.unread} unread message${t.unread === 1 ? '' : 's'}`,
-        href: '/coach/messages',
+        href: `/coach/clients/${t.clientId}?open=messages`,
       })),
+    });
+  }
+
+  if (data.redFlags && data.redFlags.toContact > 0) {
+    groups.push({
+      key: 'redflags',
+      icon: Flag,
+      tone: 'urgent',
+      title: 'Red flag follow-ups',
+      summary: `${data.redFlags.toContact} of ${data.redFlags.flagged} flagged member${data.redFlags.flagged === 1 ? '' : 's'} not contacted yet (week of ${weekShort(data.redFlags.weekStart)})`,
+      direct: true,
+      count: data.redFlags.toContact,
+      items: [
+        {
+          key: 'redflags',
+          clientId: '',
+          title: 'Red flags',
+          hint: 'Open the weekly red flag list',
+          href: '/coach/classes?tab=reports',
+        },
+      ],
     });
   }
 
@@ -267,8 +292,9 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   }
 
   // ---- Today ----
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  // The gym's clock, to match the gym's date used for which sessions count as today.
+  const clock = new Intl.DateTimeFormat('en-GB', { timeZone: data.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
+  const nowMin = Number(clock.find((p) => p.type === 'hour')?.value) * 60 + Number(clock.find((p) => p.type === 'minute')?.value);
   const today = data.occurrences.filter((o) => o.date === data.todayIso).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const inProgress = today.find((s) => toMin(s.startTime) <= nowMin && nowMin < toMin(s.startTime) + SESSION_MIN);
   const upNext = inProgress ?? today.find((s) => toMin(s.startTime) > nowMin) ?? null;
@@ -281,7 +307,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   const checkinPct = stats.checkinsOf > 0 ? Math.round((stats.checkinsIn / stats.checkinsOf) * 100) : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20 lg:pb-0">
       {isAdmin && (
         <div className="space-y-2">
           <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
@@ -402,32 +428,41 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
       {/* ---- Members to check in on ---- */}
       {data.toCheck.length > 0 && (
         <div>
-          <SectionLabel>Members to check in on</SectionLabel>
-          <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden">
-            {data.toCheck.slice(0, 12).map((m) => (
-              <Link
-                key={m.clientId}
-                href={`/coach/clients/${m.clientId}`}
-                className="w-40 shrink-0 rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10"
-              >
-                <Avatar name={m.name} size="md" />
-                <span className="mt-2 block truncate text-sm font-bold text-black dark:text-zinc-50">{m.name}</span>
-                <span className="mt-1 flex flex-wrap gap-1">
-                  {m.reasons.map((r) => (
-                    <span
-                      key={r.kind}
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        r.kind === 'quiet' ? 'bg-danger/15 text-danger' : r.kind === 'stalled' ? 'bg-accent/15 text-accent' : 'bg-warning/15 text-warning'
-                      }`}
-                    >
-                      {r.label}
-                    </span>
-                  ))}
-                </span>
-                <span className="mt-1.5 block truncate text-[11px] text-zinc-500">{m.detail}</span>
-              </Link>
+          <SectionLabel>Members to check in on · {data.toCheck.length}</SectionLabel>
+          <div className={showAllToCheck ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3' : '-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden'}>
+            {(showAllToCheck ? data.toCheck : data.toCheck.slice(0, 12)).map((m) => (
+              <div key={m.clientId} className={`${showAllToCheck ? '' : 'w-40 shrink-0'} rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10`}>
+                <Link href={`/coach/clients/${m.clientId}`} className="block">
+                  <Avatar name={m.name} size="md" />
+                  <span className="mt-2 block truncate text-sm font-bold text-black dark:text-zinc-50">{m.name}</span>
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {m.reasons.map((r) => (
+                      <span
+                        key={r.kind}
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                          r.kind === 'quiet' ? 'bg-danger/15 text-danger' : r.kind === 'stalled' ? 'bg-accent/15 text-accent' : 'bg-warning/15 text-warning'
+                        }`}
+                      >
+                        {r.label}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="mt-1.5 block truncate text-[11px] text-zinc-500">{m.detail}</span>
+                </Link>
+                <Link
+                  href={`/coach/clients/${m.clientId}?open=messages`}
+                  className="mt-2 flex items-center justify-center gap-1 rounded-full bg-accent/15 py-1.5 text-xs font-bold text-accent"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" /> Message
+                </Link>
+              </div>
             ))}
           </div>
+          {data.toCheck.length > 12 && (
+            <button type="button" onClick={() => setShowAllToCheck((v) => !v)} className="mt-2 px-1 text-sm font-bold text-accent">
+              {showAllToCheck ? 'Show fewer' : `See all ${data.toCheck.length}`}
+            </button>
+          )}
         </div>
       )}
 
@@ -435,7 +470,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
       <div>
         <SectionLabel>This week · {scopeLabel}</SectionLabel>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+          <Link href="/coach/classes?tab=sessions" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.sessionsAttended}</p>
             <p className="text-xs text-zinc-500">sessions attended</p>
             {stats.sessionsAttendedLastWeek > 0 || stats.sessionsAttended > 0 ? (
@@ -443,15 +478,15 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
                 {deltaLast >= 0 ? '▲' : '▼'} {Math.abs(deltaLast)} vs last week
               </p>
             ) : null}
-          </div>
-          <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+          </Link>
+          <Link href="/coach/classes?tab=reports" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.avgFillPct != null ? `${stats.avgFillPct}%` : '—'}</p>
-            <p className="text-xs text-zinc-500">average class fill (gym)</p>
+            <p className="text-xs text-zinc-500">average class fill, all classes</p>
             <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-accent" style={{ width: `${stats.avgFillPct ?? 0}%` }} />
             </div>
-          </div>
-          <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+          </Link>
+          <Link href="/coach/clients" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">
               {stats.checkinsIn}
               <span className="text-sm font-semibold text-zinc-500"> / {stats.checkinsOf}</span>
@@ -460,12 +495,12 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
             <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-accent" style={{ width: `${checkinPct}%` }} />
             </div>
-          </div>
-          <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+          </Link>
+          <Link href="/coach/clients" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.newMembers}</p>
             <p className="text-xs text-zinc-500">new member{stats.newMembers === 1 ? '' : 's'}</p>
             <p className="mt-0.5 text-[11px] font-semibold text-zinc-500">{stats.membersTotal} members in total</p>
-          </div>
+          </Link>
         </div>
       </div>
 

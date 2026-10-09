@@ -55,7 +55,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     >
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-black dark:text-zinc-50">
-          <CoachTimeGreeting />
+          <CoachTimeGreeting name={data.firstName} />
         </h1>
         {/* Phone: one column -- today, attention, activity, habits. Wide screen: today and attention on
             the left, activity and "add client" on the right. */}
