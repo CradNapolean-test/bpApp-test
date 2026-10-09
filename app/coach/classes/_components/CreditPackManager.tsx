@@ -154,7 +154,7 @@ function AddPackCard({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function CreditPackManager({ initialPacks }: { initialPacks: CreditPackRow[] }) {
+export function CreditPackManager({ initialPacks, usage = null }: { initialPacks: CreditPackRow[]; usage?: Record<string, { times: number; last: string | null }> | null }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
   const [addingPack, setAddingPack] = useState(false);
@@ -219,6 +219,13 @@ export function CreditPackManager({ initialPacks }: { initialPacks: CreditPackRo
                   {p.expires_after_days ? `Expires ${p.expires_after_days} days after granting` : 'Never expires'}
                   {p.description ? ` · ${p.description}` : ''}
                 </p>
+                {usage && (
+                <p className="mt-1 text-xs text-zinc-400">
+                  {usage[p.id]
+                    ? `Given ${usage[p.id].times} time${usage[p.id].times === 1 ? '' : 's'}${usage[p.id].last ? `, last on ${new Date(usage[p.id].last!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`
+                    : 'Not given yet'}
+                </p>
+                )}
               </div>
             )
           )}

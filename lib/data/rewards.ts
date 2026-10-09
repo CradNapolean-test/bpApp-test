@@ -45,10 +45,10 @@ export async function getRewardOverview(): Promise<RewardOverview[]> {
   if (!rewards || rewards.length === 0) return [];
 
   const [{ data: grants }, { data: progress }] = await Promise.all([
-    supabase.from('reward_grants').select('reward_id, client_id'),
+    supabase.from('reward_grants').select('reward_id, client_id, granted_at'),
     supabase.rpc('member_reward_progress'),
   ]);
-  const ids = (progress ?? []).map((p: { client_id: string }) => p.client_id);
+  const ids = [...new Set([...(progress ?? []).map((p: { client_id: string }) => p.client_id), ...(grants ?? []).map((g) => g.client_id as string)])];
   const { data: profiles } = ids.length
     ? await supabase.from('client_profiles').select('client_id, name').in('client_id', ids)
     : { data: [] as { client_id: string; name: string | null }[] };
@@ -61,7 +61,11 @@ export async function getRewardOverview(): Promise<RewardOverview[]> {
         (r.kind === 'sessions' ? Number(p.sessions) : Number(p.months)) >= r.threshold && !granted.has(p.client_id)
       )
       .map((p: { client_id: string }) => ({ clientId: p.client_id, name: nameBy.get(p.client_id) ?? 'Member' }));
-    return { ...r, grantedCount: granted.size, eligible };
+    const given = (grants ?? [])
+      .filter((g) => g.reward_id === r.id)
+      .map((g) => ({ clientId: g.client_id as string, name: nameBy.get(g.client_id) ?? 'Member', grantedAt: g.granted_at as string }))
+      .sort((a, b) => b.grantedAt.localeCompare(a.grantedAt));
+    return { ...r, grantedCount: granted.size, eligible, given };
   });
 }
 
@@ -83,6 +87,13 @@ export async function deleteReward(rewardId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('rewards').delete().eq('id', rewardId);
   if (error) return fail(error, 'Could not delete the reward');
+  return ok();
+}
+
+export async function unmarkRewardGiven(rewardId: string, clientId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('reward_grants').delete().eq('reward_id', rewardId).eq('client_id', clientId);
+  if (error) return fail(error, 'Could not undo that');
   return ok();
 }
 

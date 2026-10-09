@@ -17,7 +17,8 @@ import { ClientTable } from '../_components/ClientTable';
 import { ReviewQueue } from '../_components/ReviewQueue';
 import { getClientsNeedingReview } from '@/lib/data/onboarding';
 
-export default async function CoachClientsPage() {
+export default async function CoachClientsPage({ searchParams }: { searchParams: Promise<{ plan?: string; scope?: string }> }) {
+  const { plan: initialPlan, scope: initialScope } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -70,6 +71,8 @@ export default async function CoachClientsPage() {
           statuses={healthStatuses}
           groups={groups}
           holdIds={holdIds}
+          initialPlan={initialPlan ?? ''}
+          initialScope={initialScope === 'gym' ? 'gym' : 'mine'}
           unreadByClient={unreadByClient}
         />
       </div>

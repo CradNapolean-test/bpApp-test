@@ -388,6 +388,11 @@ export interface BusinessOverview {
   noPlan: { clientId: string; name: string }[];
   newThisMonth: number;
   attendedThisMonth: number;
+  attendedLastMonth: number;
+  // Open plans with a planned last day in the next 14 days.
+  endingSoon: { clientId: string; name: string; plan: string; endsOn: string }[];
+  // Members whose last plan ended in the last 30 days and who have no plan now.
+  recentlyEnded: { clientId: string; name: string; plan: string; endedOn: string }[];
   plans: { name: string; count: number }[];
   team: {
     coachId: string;
@@ -415,6 +420,9 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
   const thisWeek = isoWeekKey(todayIso);
   const monthStart = `${todayIso.slice(0, 7)}-01`;
   const since14 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -14));
+  const prevMonthStart = toIsoDate(new Date(Date.UTC(Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7)) - 2, 1)));
+  const in14 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), 14));
+  const ago30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
 
   const [{ data: coachRows }, { data: rows, error }] = await Promise.all([
     supabase.from('profiles').select('id, email, display_name').eq('role', 'coach').eq('gym_id', me.gym_id),
@@ -423,14 +431,14 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
       .select(
         `id, email, coach_id, created_at,
          client_profiles(name, onboarding_completed_at, needs_coach_review),
-         client_memberships!client_id(ended_at, membership_packages(name)),
+         client_memberships!client_id(ended_at, scheduled_end, membership_packages(name)),
          daily_logs(log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes),
          bookings!client_id(booking_date, attended)`
       )
       .eq('role', 'client')
       .eq('gym_id', me.gym_id)
       .gte('daily_logs.log_date', since14)
-      .gte('bookings.booking_date', monthStart)
+      .gte('bookings.booking_date', prevMonthStart)
       .limit(1000),
   ]);
   if (error) throw new Error(error.message);
@@ -445,6 +453,9 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
   let onPlan = 0;
   let newThisMonth = 0;
   let attended = 0;
+  let attendedLast = 0;
+  const endingSoon: BusinessOverview['endingSoon'] = [];
+  const recentlyEnded: BusinessOverview['recentlyEnded'] = [];
 
   type Row = {
     id: string;
@@ -452,7 +463,7 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
     coach_id: string | null;
     created_at: string;
     client_profiles: ProfileRel<{ name: string | null; onboarding_completed_at: string | null; needs_coach_review: boolean | null }>;
-    client_memberships: { ended_at: string | null; membership_packages: ProfileRel<{ name: string }> }[] | null;
+    client_memberships: { ended_at: string | null; scheduled_end?: string | null; membership_packages: ProfileRel<{ name: string }> }[] | null;
     daily_logs: DailyLogRow[] | null;
     bookings: { booking_date: string; attended: boolean | null }[] | null;
   };
@@ -464,11 +475,24 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
       onPlan += 1;
       const planName = one(open.membership_packages)?.name ?? 'Plan';
       planCounts.set(planName, (planCounts.get(planName) ?? 0) + 1);
+      if (open.scheduled_end && open.scheduled_end >= todayIso && open.scheduled_end <= in14) {
+        endingSoon.push({ clientId: m.id, name, plan: planName, endsOn: open.scheduled_end });
+      }
     } else {
       noPlan.push({ clientId: m.id, name });
+      const last = (m.client_memberships ?? [])
+        .filter((c) => c.ended_at)
+        .sort((a, b) => (b.ended_at ?? '').localeCompare(a.ended_at ?? ''))[0];
+      if (last?.ended_at && last.ended_at.slice(0, 10) >= ago30) {
+        recentlyEnded.push({ clientId: m.id, name, plan: one(last.membership_packages)?.name ?? 'Plan', endedOn: last.ended_at.slice(0, 10) });
+      }
     }
     if (m.created_at.slice(0, 10) >= monthStart) newThisMonth += 1;
-    attended += (m.bookings ?? []).filter((b) => b.attended).length;
+    for (const b of m.bookings ?? []) {
+      if (!b.attended) continue;
+      if (b.booking_date >= monthStart) attended += 1;
+      else attendedLast += 1;
+    }
 
     const t = m.coach_id ? team.get(m.coach_id) : undefined;
     if (!t) continue;
@@ -490,6 +514,9 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
     noPlan,
     newThisMonth,
     attendedThisMonth: attended,
+    attendedLastMonth: attendedLast,
+    endingSoon: endingSoon.sort((a, b) => a.endsOn.localeCompare(b.endsOn)),
+    recentlyEnded: recentlyEnded.sort((a, b) => b.endedOn.localeCompare(a.endedOn)),
     plans: [...planCounts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     team: [...team.values()].sort((a, b) => b.members - a.members),
   };

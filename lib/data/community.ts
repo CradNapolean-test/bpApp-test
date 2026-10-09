@@ -35,6 +35,25 @@ export async function getUpcomingEvents(clientId: string | null): Promise<EventW
   return events.map((e) => ({ ...e, signups: countBy.get(e.id) ?? 0, signedUp: mine.has(e.id) }));
 }
 
+// Events that have already happened (coach view), newest first.
+export async function getPastEvents(limit = 10): Promise<EventWithSignup[]> {
+  const supabase = await createClient();
+  const { data: events, error } = await supabase
+    .from('gym_events')
+    .select('*')
+    .lt('starts_at', new Date(Date.now() - 6 * 3600 * 1000).toISOString())
+    .order('starts_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    if (MISSING_TABLE.includes(error.code ?? '')) return [];
+    raise(error);
+  }
+  if (!events || events.length === 0) return [];
+  const { data: counts } = await supabase.rpc('event_signup_counts');
+  const countBy = new Map<string, number>((counts ?? []).map((c: { event_id: string; signups: number }) => [c.event_id, Number(c.signups)]));
+  return events.map((e) => ({ ...e, signups: countBy.get(e.id) ?? 0, signedUp: false }));
+}
+
 export async function signUpForEvent(eventId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const {
@@ -80,6 +99,20 @@ export async function createEvent(fields: {
   if (gymError || !gymId) return fail(gymError, 'Could not work out your gym');
   const { error } = await supabase.from('gym_events').insert({ ...fields, gym_id: gymId });
   if (error) return fail(error, 'Could not create the event');
+  return ok();
+}
+
+export async function updateEvent(
+  eventId: string,
+  fields: { title: string; description: string | null; location: string | null; starts_at: string; capacity: number | null }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  if (fields.capacity != null) {
+    const { count } = await supabase.from('event_signups').select('*', { count: 'exact', head: true }).eq('event_id', eventId);
+    if ((count ?? 0) > fields.capacity) return fail(null, `${count} people have already signed up, so the spots cannot go below that.`);
+  }
+  const { error } = await supabase.from('gym_events').update(fields).eq('id', eventId);
+  if (error) return fail(error, 'Could not save the event');
   return ok();
 }
 

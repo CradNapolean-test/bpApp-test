@@ -49,6 +49,9 @@ export function BusinessShell({
   packages,
   creditPacks,
   events,
+  pastEvents,
+  planCountsById,
+  packUsage,
   feedback,
   rewards,
   overview,
@@ -58,6 +61,10 @@ export function BusinessShell({
   packages: MembershipPackageRow[];
   creditPacks: CreditPackRow[];
   events: EventWithSignup[];
+  pastEvents: EventWithSignup[];
+  // Members on each plan by plan id (null until migration 0101 is run), and how often each credit pack was granted.
+  planCountsById: Record<string, number> | null;
+  packUsage: Record<string, { times: number; last: string | null }> | null;
   feedback: FeedbackRow[];
   rewards: RewardOverview[];
   // Gym owners and managers only; null hides the Overview tab.
@@ -88,9 +95,9 @@ export function BusinessShell({
         <HubTabBar tabs={tabs} active={tab} onSelect={setTab} />
 
         {tab === 'Overview' && overview && <OverviewPane data={overview} />}
-        {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} />}
-        {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} />}
-        {tab === 'Events' && <EventsPane events={events} />}
+        {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} />}
+        {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} usage={packUsage} />}
+        {tab === 'Events' && <EventsPane events={events} past={pastEvents} />}
         {tab === 'Rewards' && <RewardsPane rewards={rewards} />}
         {tab === 'Feedback' && <FeedbackPane feedback={feedback} />}
       </AppShell>

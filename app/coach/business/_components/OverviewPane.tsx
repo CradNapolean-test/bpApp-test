@@ -6,11 +6,25 @@ import { Avatar } from '@/app/_components/Avatar';
 import { Card, SectionLabel } from '@/app/_components/ui';
 import type { BusinessOverview } from '@/lib/data/coachDashboard';
 
-function Stat({ value, label, hint }: { value: string | number; label: string; hint?: string }) {
+// A coach with no display name shows as their email; tidy that into something readable.
+function prettyName(name: string): string {
+  if (!name.includes('@')) return name;
+  return name
+    .split('@')[0]
+    .split(/[-_.]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+function Stat({ value, label, hint, sub }: { value: string | number; label: string; hint?: string; sub?: string }) {
   return (
     <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
       <p className="text-2xl font-black text-black dark:text-zinc-50">{value}</p>
       <p className="text-xs text-zinc-500">{label}</p>
+      {sub && <p className="mt-0.5 text-[11px] font-semibold text-zinc-400">{sub}</p>}
       {hint && <p className="mt-0.5 text-[11px] font-semibold text-warning">{hint}</p>}
     </div>
   );
@@ -26,8 +40,52 @@ export function OverviewPane({ data }: { data: BusinessOverview }) {
         <Stat value={data.members} label="members" />
         <Stat value={data.onPlan} label="on a plan" />
         <Stat value={data.newThisMonth} label="joined this month" />
-        <Stat value={data.attendedThisMonth} label="sessions attended this month" />
+        <Stat value={data.attendedThisMonth} label="sessions attended this month" sub={`${data.attendedLastMonth} last month`} />
       </div>
+
+      {data.endingSoon.length > 0 && (
+        <div>
+          <SectionLabel>Plans ending in the next 14 days · {data.endingSoon.length}</SectionLabel>
+          <Card className="!py-1">
+            <div className="divide-y divide-black/5 dark:divide-white/10">
+              {data.endingSoon.map((m) => (
+                <Link key={m.clientId} href={`/coach/clients/${m.clientId}?open=profile`} className="flex items-center gap-3 py-2.5">
+                  <Avatar name={m.name} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{m.name}</span>
+                    <span className="block truncate text-xs text-zinc-500">{m.plan}</span>
+                  </span>
+                  <span className="shrink-0 text-xs font-bold text-warning">Ends {shortDay(m.endsOn)}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {data.recentlyEnded.length > 0 && (
+        <div>
+          <SectionLabel>Plan ended in the last 30 days · {data.recentlyEnded.length}</SectionLabel>
+          <Card className="!py-1">
+            <div className="divide-y divide-black/5 dark:divide-white/10">
+              {data.recentlyEnded.map((m) => (
+                <Link key={m.clientId} href={`/coach/clients/${m.clientId}?open=messages`} className="flex items-center gap-3 py-2.5">
+                  <Avatar name={m.name} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{m.name}</span>
+                    <span className="block truncate text-xs text-zinc-500">
+                      {m.plan} · ended {shortDay(m.endedOn)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-bold text-accent">Message</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {data.noPlan.length > 0 && (
         <div>
@@ -76,11 +134,11 @@ export function OverviewPane({ data }: { data: BusinessOverview }) {
               href={`/coach?scope=coach&coach=${t.coachId}`}
               className="flex items-center gap-3 rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10"
             >
-              <Avatar name={t.name} size="md" />
+              <Avatar name={prettyName(t.name)} size="md" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-black dark:text-zinc-50">{t.name}</p>
+                <p className="truncate text-sm font-bold text-black dark:text-zinc-50">{prettyName(t.name)}</p>
                 <p className="text-xs text-zinc-500">
-                  {t.members} member{t.members === 1 ? '' : 's'} · {t.checkedIn} of {t.eligible} checked in
+                  {t.members} member{t.members === 1 ? '' : 's'} · {t.eligible > 0 ? `${t.checkedIn} of ${t.eligible} checked in` : 'no check-ins due yet'}
                 </p>
                 <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
                   <div className="h-full rounded-full bg-accent" style={{ width: `${t.eligible > 0 ? (t.checkedIn / t.eligible) * 100 : 0}%` }} />

@@ -34,6 +34,8 @@ export function ClientTable({
   groups,
   holdIds = [],
   unreadByClient = {},
+  initialPlan = '',
+  initialScope = 'mine',
 }: {
   clients: CoachClientRow[];
   // Every client at the gym, regardless of assigned coach -- only present when this table is
@@ -46,8 +48,12 @@ export function ClientTable({
   // Members whose membership is on hold today, and unread message counts by member.
   holdIds?: string[];
   unreadByClient?: Record<string, number>;
+  // Opened from a plan's member count: start on that plan, across the whole gym.
+  initialPlan?: string;
+  initialScope?: Scope;
 }) {
-  const [scope, setScope] = useState<Scope>('mine');
+  const [scope, setScope] = useState<Scope>(initialScope);
+  const [planFilter, setPlanFilter] = useState(initialPlan);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [asc, setAsc] = useState(true);
   const [query, setQuery] = useState('');
@@ -72,7 +78,8 @@ export function ClientTable({
     const filteredClients = activeClients
       .filter((c) => (q ? (c.name ?? '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) : true))
       .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true))
-      .filter((c) => (pendingDeletionOnly ? c.deletion_requested_at != null : true));
+      .filter((c) => (pendingDeletionOnly ? c.deletion_requested_at != null : true))
+      .filter((c) => (planFilter ? (planFilter === '__none' ? c.planName == null : c.planName === planFilter) : true));
     const merged = filteredClients
       .map((c) => ({ client: c, health: statusById.get(c.id) ?? null }))
       .filter(({ client, health }) =>
@@ -103,7 +110,7 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly, quick, onHold]);
+  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly, quick, onHold, planFilter]);
 
   const quickCounts = useMemo(
     () => ({
@@ -118,12 +125,14 @@ export function ClientTable({
     [activeClients, statusById, onHold]
   );
 
-  const filtersOn = query.trim() !== '' || groupId !== '' || quick !== 'all' || pendingDeletionOnly;
+  const planNames = useMemo(() => [...new Set(activeClients.map((c) => c.planName).filter((n): n is string => !!n))].sort(), [activeClients]);
+  const filtersOn = query.trim() !== '' || groupId !== '' || quick !== 'all' || pendingDeletionOnly || planFilter !== '';
   function clearFilters() {
     setQuery('');
     setGroupId('');
     setQuick('all');
     setPendingDeletionOnly(false);
+    setPlanFilter('');
   }
   const emptyText = filtersOn ? 'Nobody matches these filters.' : 'No clients here yet.';
   // 0 or 1 credits left on a plan stands out; no plan means the number does not matter.
@@ -219,6 +228,22 @@ const scopeBtnCls = (active: boolean) =>
                 {g.name}
               </option>
             ))}
+          </select>
+        )}
+        {planNames.length > 0 && (
+          <select
+            value={planFilter}
+            onChange={(e) => setPlanFilter(e.target.value)}
+            aria-label="Filter by plan"
+            className="max-w-[8.5rem] rounded-xl border border-black/10 bg-transparent px-2.5 py-2 text-sm dark:border-white/10"
+          >
+            <option value="">All plans</option>
+            {planNames.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+            <option value="__none">No plan</option>
           </select>
         )}
         <DropdownMenu

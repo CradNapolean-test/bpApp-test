@@ -41,7 +41,31 @@ export async function updatePackage(
   if (error) raise(error);
 }
 
+// Members on each plan right now, by plan id, for every coach at the gym (migration 0101). Null when the function
+// is not there yet, so the screen can fall back to what it already knows.
+export async function getPlanMemberCounts(): Promise<Record<string, number> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('plan_member_counts');
+  if (error) return null;
+  return Object.fromEntries((data ?? []).map((r: { package_id: string; member_count: number }) => [r.package_id, Number(r.member_count)]));
+}
+
+// How often each credit pack has been granted and when last (migration 0101).
+export async function getPackUsage(): Promise<Record<string, { times: number; last: string | null }> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('credit_pack_usage');
+  if (error) return null;
+  return Object.fromEntries(
+    (data ?? []).map((r: { pack_id: string; times_granted: number; last_granted: string | null }) => [r.pack_id, { times: Number(r.times_granted), last: r.last_granted }])
+  );
+}
+
 export async function deletePackage(packageId: string): Promise<void> {
+  // A plan with members on it cannot be deleted from here, whichever screen asks.
+  const counts = await getPlanMemberCounts();
+  if (counts && (counts[packageId] ?? 0) > 0) {
+    throw new Error(`${counts[packageId]} member${counts[packageId] === 1 ? ' is' : 's are'} still on this plan. Move them to another plan first.`);
+  }
   const supabase = await createClient();
   const { error } = await supabase.from('membership_packages').delete().eq('id', packageId);
   if (error) raise(error);

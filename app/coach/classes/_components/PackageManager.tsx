@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Ticket } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createPackage, deletePackage, updatePackage } from '@/lib/data/memberships';
 import { DISABLEABLE_SCREENS } from '@/app/dashboard/_components/categories';
@@ -49,14 +51,18 @@ function screensToIncludedScreens(selected: Set<string>): string[] | null {
 // used by ClassManager's row edit (plenty of width for this instead of a mobile bottom sheet).
 function EditPackageCard({
   pkg,
+  inUse,
   onClose,
   onDelete,
 }: {
   pkg: MembershipPackageRow;
+  // How many members are on this plan right now.
+  inUse: number;
   onClose: () => void;
   onDelete: (id: string, name: string) => void;
 }) {
   const { run, busy: saving } = useAction();
+  const confirm = useConfirm();
   const [name, setName] = useState(pkg.name);
   const [creditsPerWeek, setCreditsPerWeek] = useState(pkg.credits_per_week);
   const [description, setDescription] = useState(pkg.description ?? '');
@@ -64,12 +70,38 @@ function EditPackageCard({
   const [durationWeeks, setDurationWeeks] = useState<string>(pkg.duration_weeks?.toString() ?? '');
   const [screens, setScreens] = useState<Set<string>>(new Set(pkg.included_screens ?? DISABLEABLE_SCREENS));
 
+  // What this save would change, in words, so a plan other people are on is never changed blind.
+  function describeChanges(): string[] {
+    const out: string[] = [];
+    const limit = (n: number | null) => (n == null ? 'no limit' : `${n} days`);
+    const length = (n: number | null) => (n == null ? 'ongoing' : `${n} weeks`);
+    if (name.trim() !== pkg.name) out.push(`name: ${pkg.name} to ${name.trim()}`);
+    if (creditsPerWeek !== pkg.credits_per_week) out.push(`credits per week: ${pkg.credits_per_week} to ${creditsPerWeek}`);
+    const newAdv = advanceDays ? Number(advanceDays) : null;
+    if (newAdv !== (pkg.advance_booking_days ?? null)) out.push(`booking window: ${limit(pkg.advance_booking_days ?? null)} to ${limit(newAdv)}`);
+    const newLen = durationWeeks ? Number(durationWeeks) : null;
+    if (newLen !== (pkg.duration_weeks ?? null)) out.push(`length: ${length(pkg.duration_weeks ?? null)} to ${length(newLen)}`);
+    const before = new Set<string>(pkg.included_screens ?? DISABLEABLE_SCREENS);
+    if (before.size !== screens.size || [...screens].some((x) => !before.has(x))) out.push('which screens members can use');
+    return out;
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!name.trim()) return;
+    const changes = describeChanges();
+    if (inUse > 0 && changes.length > 0) {
+      const ok = await confirm({
+        title: `Change “${pkg.name}”?`,
+        body: `${inUse} member${inUse === 1 ? ' is' : 's are'} on this plan, so this changes things for ${inUse === 1 ? 'them' : 'all of them'} straight away: ${changes.join('; ')}.`,
+        confirmLabel: 'Save changes',
+      });
+      if (!ok) return;
+    }
     await run(
       () =>
         updatePackage(pkg.id, {
-          name,
+          name: name.trim(),
           credits_per_week: creditsPerWeek,
           description: description || null,
           advance_booking_days: advanceDays ? Number(advanceDays) : null,
@@ -221,13 +253,31 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function PackageManager({ initialPackages, memberCounts = {} }: { initialPackages: MembershipPackageRow[]; memberCounts?: Record<string, number> }) {
+export function PackageManager({
+  initialPackages,
+  memberCounts = {},
+  countsById = null,
+}: {
+  initialPackages: MembershipPackageRow[];
+  // By plan name, from the admin overview (fallback only).
+  memberCounts?: Record<string, number>;
+  // By plan id, for every coach (needs migration 0101).
+  countsById?: Record<string, number> | null;
+}) {
   const confirm = useConfirm();
+  const toast = useToast();
+  const countOf = (p: MembershipPackageRow): number | null => (countsById ? (countsById[p.id] ?? 0) : memberCounts[p.name] ?? null);
   const { run: runDelete } = useAction();
   const [addingPackage, setAddingPackage] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function handleDelete(id: string, packageName: string) {
+    const pkg = initialPackages.find((x) => x.id === id);
+    const n = pkg ? countOf(pkg) : null;
+    if (n != null && n > 0) {
+      toast.error(`${n} member${n === 1 ? ' is' : 's are'} still on “${packageName}”. Move them to another plan first (their Profile, Credits & plan, Change plan).`);
+      return;
+    }
     const ok = await confirm({
       title: `Delete “${packageName}”?`,
       body: 'Clients currently on this package keep their credits, but lose their weekly top-up.',
@@ -261,7 +311,7 @@ export function PackageManager({ initialPackages, memberCounts = {} }: { initial
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {initialPackages.map((p) =>
             editingId === p.id ? (
-              <EditPackageCard key={p.id} pkg={p} onClose={() => setEditingId(null)} onDelete={handleDelete} />
+              <EditPackageCard key={p.id} pkg={p} inUse={countOf(p) ?? 0} onClose={() => setEditingId(null)} onDelete={handleDelete} />
             ) : (
               <div
                 key={p.id}
@@ -290,7 +340,18 @@ export function PackageManager({ initialPackages, memberCounts = {} }: { initial
                   {p.included_screens
                     ? `Not included: ${DISABLEABLE_SCREENS.filter((s) => !p.included_screens!.includes(s)).join(', ') || 'nothing'}`
                     : 'Full app access'}
-                  {memberCounts[p.name] != null ? ` · ${memberCounts[p.name]} member${memberCounts[p.name] === 1 ? '' : 's'}` : ''}
+                  {countOf(p) != null && (
+                    <>
+                      {' · '}
+                      {countOf(p)! > 0 ? (
+                        <Link href={`/coach/clients?plan=${encodeURIComponent(p.name)}&scope=gym`} className="font-semibold text-accent">
+                          {countOf(p)} member{countOf(p) === 1 ? '' : 's'}
+                        </Link>
+                      ) : (
+                        'no members'
+                      )}
+                    </>
+                  )}
                 </p>
               </div>
             )

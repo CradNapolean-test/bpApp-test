@@ -903,4 +903,6 @@ export interface RewardsForMember {
 export interface RewardOverview extends RewardRow {
   grantedCount: number;
   eligible: { clientId: string; name: string }[];
+  // Who has already been given it, newest first.
+  given: { clientId: string; name: string; grantedAt: string }[];
 }
