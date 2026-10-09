@@ -37,10 +37,13 @@ const DIVERGENCE_FLAG_KCAL = 150;
 export function InsightsTab({
   historyLogs,
   profile,
+  isCoachView = false,
 }: {
   historyLogs: DailyLogRow[];
   profile: ClientProfileRow | null;
+  isCoachView?: boolean;
 }) {
+  const who = isCoachView ? 'their' : 'your';
   const loggedDays = historyLogs
     .filter((l) => l.protein != null && l.carbs != null && l.fat != null)
     .slice(-ADAPTIVE_WINDOW_DAYS);
@@ -93,31 +96,37 @@ export function InsightsTab({
 
   const divergenceFlag =
     adaptiveInsight && Math.abs(adaptiveInsight.divergence) > DIVERGENCE_FLAG_KCAL
-      ? `${Math.round(Math.abs(adaptiveInsight.divergence))} kcal off your plan — ask your coach to review`
+      ? `${Math.round(Math.abs(adaptiveInsight.divergence))} kcal off ${isCoachView ? 'their' : 'your'} plan${isCoachView ? ', worth reviewing' : ' — ask your coach to review'}`
       : undefined;
 
   return (
     <div className="space-y-3">
-      <InsightCard icon={Gauge} iconCls="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400" title="Your real-world maintenance calories" flag={divergenceFlag}>
+      <InsightCard icon={Gauge} iconCls="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400" title={isCoachView ? "Their real-world maintenance calories" : "Your real-world maintenance calories"} flag={divergenceFlag}>
         {adaptiveInsight ? (
           <p>
-            Maintenance calories are what you eat to stay the same weight. Your plan assumes about{' '}
-            <b className="text-black dark:text-zinc-50">{Math.round(adaptiveInsight.formulaTdee)} kcal</b>; going by what you have
-            actually eaten and how your weight moved, it looks closer to{' '}
+            Maintenance calories are what {isCoachView ? 'they' : 'you'} eat to stay the same weight. {isCoachView ? 'Their' : 'Your'} plan assumes about{' '}
+            <b className="text-black dark:text-zinc-50">{Math.round(adaptiveInsight.formulaTdee)} kcal</b>; going by what {isCoachView ? 'they have' : 'you have'}
+            actually eaten and how {who} weight moved, it looks closer to{' '}
             <b className="text-black dark:text-zinc-50">{Math.round(adaptiveInsight.adaptiveTdee)} kcal</b>.
           </p>
         ) : (
-          <p>Keep logging your food and weighing in. Once you have 5 logged days and at least 2 weigh-ins we can estimate this for you.</p>
+          <p>{isCoachView ? 'Not enough data yet. This needs 5 logged days of food and at least 2 weigh-ins.' : 'Keep logging your food and weighing in. Once you have 5 logged days and at least 2 weigh-ins we can estimate this for you.'}</p>
         )}
       </InsightCard>
 
-      <InsightCard icon={Activity} iconCls="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400" title="Is your weight stalling?">
+      <InsightCard icon={Activity} iconCls="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400" title={isCoachView ? "Is their weight stalling?" : "Is your weight stalling?"}>
         <p>
           {bodyweightSeries.length < 6
-            ? 'Weigh in a few more times (6 or more) and we will tell you if your weight has stalled.'
+            ? isCoachView
+              ? 'Not enough weigh-ins yet (needs 6 or more).'
+              : 'Weigh in a few more times (6 or more) and we will tell you if your weight has stalled.'
             : plateaued
-              ? 'Your weight has barely moved (under 0.3kg) recently. This can be normal — mention it to your coach.'
-              : 'Your weight is moving, so no stall detected.'}
+              ? isCoachView
+                ? 'Their weight has barely moved (under 0.3kg) recently. This can be normal.'
+                : 'Your weight has barely moved (under 0.3kg) recently. This can be normal — mention it to your coach.'
+              : isCoachView
+                ? 'Their weight is moving, so no stall detected.'
+                : 'Your weight is moving, so no stall detected.'}
         </p>
       </InsightCard>
 
@@ -126,7 +135,9 @@ export function InsightsTab({
           <p>
             {cycleNote
               ? `Latest entry falls on cycle day ${cycleNote} — weight is often higher from water retention at this point, not fat gain.`
-              : 'Nothing to flag from your latest entry.'}
+              : isCoachView
+                ? 'Nothing to flag from their latest entry.'
+                : 'Nothing to flag from your latest entry.'}
           </p>
         </InsightCard>
       )}

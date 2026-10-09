@@ -52,11 +52,13 @@ export function BodyScansTab({
   scans,
   profile,
   readOnly,
+  isCoachView = false,
 }: {
   clientId: string;
   scans: BodyScan[];
   profile: ClientProfileRow | null;
   readOnly: boolean;
+  isCoachView?: boolean;
 }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
@@ -98,7 +100,7 @@ export function BodyScansTab({
         <EmptyState
           icon={ScanLine}
           title="No scans yet"
-          hint={readOnly ? 'Nothing logged yet.' : 'Add your InBody results from the printout and track muscle and body fat over time.'}
+          hint={readOnly ? 'Nothing logged yet.' : isCoachView ? 'Add their InBody results from the printout to track muscle and body fat over time.' : 'Add your InBody results from the printout and track muscle and body fat over time.'}
         />
       ) : (
         <>

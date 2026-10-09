@@ -1,5 +1,6 @@
 'use client';
 
+import { ChevronDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
@@ -68,6 +69,29 @@ const BLANK: SetupFields = {
   lift_rdl_start: null, lift_rdl_goal: null,
   lift_hip_thrust_start: null, lift_hip_thrust_goal: null,
 };
+
+// A titled card. For the coach the long form is split into sections that fold, so the page is not one endless scroll.
+function SectionCard({ title, collapsible, defaultOpen = true, children }: { title: string; collapsible: boolean; defaultOpen?: boolean; children: React.ReactNode }) {
+  const shell = 'rounded-2xl border border-black/[.05] bg-card dark:border-white/10';
+  const head = 'text-sm font-semibold text-zinc-700 dark:text-zinc-300';
+  if (!collapsible) {
+    return (
+      <div className={`${shell} p-4`}>
+        <h3 className={head}>{title}</h3>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <details open={defaultOpen} className={`group ${shell}`}>
+      <summary className={`flex cursor-pointer list-none items-center justify-between p-4 ${head}`}>
+        {title}
+        <ChevronDown className="h-4 w-4 text-zinc-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="px-4 pb-4">{children}</div>
+    </details>
+  );
+}
 
 function numOrNull(v: string): number | null {
   return v === '' ? null : Number(v);
@@ -153,8 +177,7 @@ export function SetupTab({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <fieldset disabled={readOnly} className="space-y-6">
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">About you</h3>
+        <SectionCard title={isCoachView ? 'Personal details' : 'About you'} collapsible={isCoachView} defaultOpen={!isCoachView}>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <label className={labelCls}>Name</label>
@@ -220,13 +243,12 @@ export function SetupTab({
               />
             </div>
           </div>
-        </div>
+        </SectionCard>
 
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your goal</h3>
+        <SectionCard title={isCoachView ? 'Goal' : 'Your goal'} collapsible={isCoachView}>
           <div className="mt-3 space-y-4">
             <div className="space-y-1">
-              <label className={labelCls}>What do you want to achieve?</label>
+              <label className={labelCls}>{isCoachView ? 'What they want to achieve' : 'What do you want to achieve?'}</label>
               <textarea
                 rows={7}
                 className={`${inputCls} resize-y leading-relaxed`}
@@ -234,7 +256,7 @@ export function SetupTab({
                 value={form.goal_description ?? ''}
                 onChange={(e) => setForm({ ...form, goal_description: e.target.value })}
               />
-              <p className="text-xs text-zinc-500">The more your coach knows, the better they can tailor your plan.</p>
+              {!isCoachView && <p className="text-xs text-zinc-500">The more your coach knows, the better they can tailor your plan.</p>}
             </div>
             <div className="space-y-1">
               <label className={labelCls}>Training experience</label>
@@ -273,7 +295,7 @@ export function SetupTab({
               </div>
             </div>
           </div>
-        </div>
+        </SectionCard>
 
         {isCoachView && !readOnly && (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
@@ -309,8 +331,8 @@ export function SetupTab({
         {/* Calorie-engine inputs. Coach-only for now: members see their resulting targets in
             Nutrition. A fuller rework (and a proper home for this) is still to be designed. */}
         {isCoachView && (
-          <div className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Nutrition plan (coach only)</h3>
+          <SectionCard title="Nutrition plan (coach only)" collapsible>
+          <div className="mt-3 space-y-4">
             {engine && week1Target && (
               <div className="rounded-xl bg-black/[.03] p-3 text-sm dark:bg-white/[.04]">
                 <p className="font-bold text-black dark:text-zinc-50">
@@ -410,14 +432,17 @@ export function SetupTab({
               </label>
             </div>
           </div>
+          </SectionCard>
         )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         {!readOnly && (
-          <Button type="submit" variant="primary" disabled={saving} className="w-full !rounded-full py-3 text-base">
-            {saving ? 'Saving…' : 'Save changes'}
-          </Button>
+          <div className={isCoachView ? 'sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 md:bottom-4' : ''}>
+            <Button type="submit" variant="primary" disabled={saving} className="w-full !rounded-full py-3 text-base shadow-lg">
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
         )}
       </fieldset>
     </form>

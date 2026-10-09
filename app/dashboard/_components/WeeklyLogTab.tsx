@@ -315,7 +315,7 @@ function WeekLog({
           <div className="mt-3 rounded-xl bg-card-muted p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Food · {mode === 'manual_import' ? 'your totals' : 'from your diary'}
+                Food · {mode === 'manual_import' ? (isCoachView ? 'their totals' : 'your totals') : isCoachView ? 'from their diary' : 'from your diary'}
               </p>
               {onOpenFoodDiary && !isCoachView && (
                 <button type="button" onClick={onOpenFoodDiary} className="text-xs font-bold text-accent">
@@ -346,6 +346,25 @@ function WeekLog({
           </div>
         )}
 
+        {isCoachView ? (
+          <dl className="mt-3 divide-y divide-black/[.05] rounded-xl border border-black/[.05] text-sm dark:divide-white/10 dark:border-white/10">
+            {([
+              ['Bodyweight', d.bodyweight != null ? `${d.bodyweight} kg` : null],
+              ...SCALE_FIELDS.map(({ key, label }) => [label, d[key] != null ? `${d[key]} / 5` : null] as [string, string | null]),
+              ['Gym session', gymOn ? (attendedToday != null ? `Yes, ${attendedToday.label}` : 'Yes') : 'No'],
+              ...(gender === 'Female' ? [['Period started', d.period_started ? 'Yes' : 'No'] as [string, string | null]] : []),
+            ] as [string, string | null][]).map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-3 px-3 py-2">
+                <dt className="text-zinc-500">{label}</dt>
+                <dd className={value == null ? 'text-zinc-400' : 'font-semibold text-black dark:text-zinc-50'}>{value ?? 'Not logged'}</dd>
+              </div>
+            ))}
+            <div className="px-3 py-2">
+              <dt className="text-zinc-500">Notes</dt>
+              <dd className={`mt-0.5 whitespace-pre-wrap ${d.notes ? 'text-black dark:text-zinc-50' : 'text-zinc-400'}`}>{d.notes || 'No notes'}</dd>
+            </div>
+          </dl>
+        ) : (
         <fieldset
           disabled={readOnly}
           onBlur={() => {
@@ -425,6 +444,7 @@ function WeekLog({
               onChange={(e) => updateDay(focusedDate, { notes: e.target.value })} />
           </div>
         </fieldset>
+        )}
 
         {!readOnly && (savingDate === focusedDate || savedDates[focusedDate]) && (
           <p className="mt-3 text-xs text-zinc-500">

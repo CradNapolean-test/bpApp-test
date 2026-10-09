@@ -87,6 +87,7 @@ export function CreditsTab({
   const [holdFrom, setHoldFrom] = useState(todayIso);
   const [holdNote, setHoldNote] = useState('');
   const [holdTick, setHoldTick] = useState(0);
+  const [showAllCredits, setShowAllCredits] = useState(false);
 
   // Start-plan form
   const [packageId, setPackageId] = useState(membership?.package_id ?? '');
@@ -345,7 +346,7 @@ export function CreditsTab({
             <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Recent credit activity</p>
             <ul className="mt-1 divide-y divide-black/[.05] dark:divide-white/10">
               {history.credits.length === 0 && <li className="py-2 text-sm text-zinc-500">No credit activity yet.</li>}
-              {history.credits.map((c) => (
+              {(showAllCredits ? history.credits : history.credits.slice(0, 5)).map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 py-2">
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-black dark:text-zinc-50">{friendlyReason(c.reason)}</span>
@@ -361,6 +362,11 @@ export function CreditsTab({
                 </li>
               ))}
             </ul>
+            {history.credits.length > 5 && (
+              <button type="button" onClick={() => setShowAllCredits((v) => !v)} className="mt-1 py-1 text-sm font-bold text-accent">
+                {showAllCredits ? 'Show fewer' : `Show all ${history.credits.length}`}
+              </button>
+            )}
           </>
         )}
       </div>

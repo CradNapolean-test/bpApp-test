@@ -143,7 +143,7 @@ export function MealPlannerTab({
 
   return (
     <div className="space-y-4">
-      <NutritionSummary totals={dayTotals} target={dayTarget} title="Your typical day" dateLabel="vs your daily target" />
+      <NutritionSummary totals={dayTotals} target={dayTarget} title={readOnly ? "Their typical day" : "Your typical day"} dateLabel={readOnly ? "vs their daily target" : "vs your daily target"} />
 
       {canLog && initialEntries.length > 0 && (
         <button

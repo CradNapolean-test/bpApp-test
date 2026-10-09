@@ -323,6 +323,7 @@ export function FoodTrackingTab({
   profile,
   programWeek,
   nutritionMode,
+  recentDays,
 }: {
   clientId: string;
   dailyLogId: string | null;
@@ -337,7 +338,11 @@ export function FoodTrackingTab({
   profile: ClientProfileRow | null;
   programWeek: number;
   nutritionMode: NutritionTrackingMode;
+  // Coach view: the last seven days (oldest first) with calories, to see the week at a glance.
+  recentDays?: { date: string; calories: number | null }[];
 }) {
+  // The coach sets up a member's meal sections (rename, reorder, delete, add); that stays folded away until asked for.
+  const [editingSections, setEditingSections] = useState(false);
   const confirm = useConfirm();
   const { run } = useAction();
   const { run: runRecipe } = useAction();
@@ -570,6 +575,44 @@ export function FoodTrackingTab({
         </div>
       </div>
 
+      {readOnly && recentDays && (() => {
+        const logged = recentDays.filter((d) => d.calories != null);
+        const avg = logged.length ? Math.round(logged.reduce((a, d) => a + (d.calories ?? 0), 0) / logged.length) : null;
+        const top = Math.max(dayTarget?.calories ?? 0, ...logged.map((d) => d.calories ?? 0), 1);
+        return (
+          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Last 7 days</p>
+              <p className="text-xs text-zinc-500">
+                {logged.length} of 7 days logged{avg != null ? ` · avg ${avg.toLocaleString()} kcal` : ''}
+                {dayTarget ? ` · target ${Math.round(dayTarget.calories).toLocaleString()}` : ''}
+              </p>
+            </div>
+            <div className="mt-3 grid grid-cols-7 gap-1.5">
+              {recentDays.map((d) => {
+                const active = d.date === viewingDate;
+                const h = d.calories != null ? Math.max(8, Math.round((d.calories / top) * 56)) : 0;
+                return (
+                  <button
+                    key={d.date}
+                    type="button"
+                    onClick={() => loadDate(d.date)}
+                    aria-label={`${d.date}: ${d.calories != null ? `${Math.round(d.calories)} kcal` : 'nothing logged'}`}
+                    className={`flex flex-col items-center gap-1 rounded-lg py-1 ${active ? 'bg-accent/10' : ''}`}
+                  >
+                    <span className="flex h-14 w-full items-end justify-center">
+                      {d.calories != null ? <span className="w-4 rounded-sm bg-accent" style={{ height: h }} /> : <span className="h-1 w-4 rounded-sm bg-black/10 dark:bg-white/15" />}
+                    </span>
+                    <span className="text-[10px] font-semibold text-zinc-500">{new Date(d.date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }).slice(0, 2)}</span>
+                    <span className="text-[10px] text-zinc-400">{d.calories != null ? Math.round(d.calories) : '·'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       <FeedbackThread
         clientId={clientId}
         date={viewingDate}
@@ -607,7 +650,7 @@ export function FoodTrackingTab({
                 {/* Renaming/reordering/deleting a section is structural, coach-only setup --
                     the client just logs food into whatever sections already exist, matching
                     the prototype's client view (name + total + "+ Add food", nothing else). */}
-                {readOnly ? (
+                {readOnly && editingSections ? (
                   <SectionNameInput sectionId={section.id} initial={section.label} />
                 ) : (
                   <h4 className="font-medium text-black dark:text-zinc-50">{section.label}</h4>
@@ -616,7 +659,7 @@ export function FoodTrackingTab({
                   {Math.round(isManual ? sectionManualCalories : sectionTotals.calories)} kcal
                 </span>
               </div>
-              {readOnly && (
+              {readOnly && editingSections && (
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
                     variant="icon"
@@ -684,6 +727,11 @@ export function FoodTrackingTab({
       })}
 
       {readOnly && (
+        <button type="button" onClick={() => setEditingSections((v) => !v)} className="text-sm font-bold text-accent">
+          {editingSections ? 'Done editing meal sections' : 'Edit meal sections'}
+        </button>
+      )}
+      {readOnly && editingSections && (
         <form onSubmit={handleAddSection} className="flex items-center gap-2">
           <input
             value={newSectionLabel}

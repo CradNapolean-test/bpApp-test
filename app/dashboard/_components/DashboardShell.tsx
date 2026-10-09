@@ -42,7 +42,8 @@ import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
-import { DEFAULT_TIMEZONE, formatClassTime } from '@/lib/utils/dates';
+import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
+import { dayCalories } from '@/lib/calculations';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
@@ -255,6 +256,14 @@ export function DashboardShell({
     };
   }, [clientId, currentUserId, isCoachView]);
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
+  // The last seven days of food, oldest first, for the coach's at-a-glance strip on the Food screen.
+  const memberToday = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+  const recentFoodDays = Array.from({ length: 7 }, (_, i) => {
+    const date = toIsoDate(addDays(new Date(memberToday + 'T00:00:00Z'), i - 6));
+    const log = historyLogs.find((l) => l.log_date === date);
+    const logged = !!log && (log.protein != null || log.carbs != null || log.fat != null);
+    return { date, calories: logged ? dayCalories(log!.protein ?? 0, log!.carbs ?? 0, log!.fat ?? 0) : null };
+  });
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;
 
@@ -853,6 +862,7 @@ export function DashboardShell({
               nutritionMode={nutritionMode}
               canGiveFeedback={isCoachView && isOwnClient}
               feedback={nutritionFeedback}
+              recentDays={isCoachView ? recentFoodDays : undefined}
             />
           )}
           {effectiveScreen === 'Photo Diary' && (
@@ -889,10 +899,10 @@ export function DashboardShell({
               canSave={!isCoachView}
             />
           )}
-          {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} />}
+          {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
           {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
           {effectiveScreen === 'Body Scans' && (
-            <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} />
+            <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} isCoachView={isCoachView} />
           )}
           {effectiveScreen === 'Progress & Photos' && (
             <ProgressTab

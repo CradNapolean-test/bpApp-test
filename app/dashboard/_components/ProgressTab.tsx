@@ -122,7 +122,7 @@ export function ProgressTab({
 
         {initialPhotos.length === 0 && readOnly ? (
           <div className="mt-4">
-            <EmptyState icon={ImageIcon} title="No progress photos yet" hint="Nothing uploaded yet." />
+            <EmptyState icon={ImageIcon} title="No progress photos yet" hint={readOnly ? 'They have not uploaded any yet.' : 'Nothing uploaded yet.'} />
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -173,7 +173,7 @@ export function ProgressTab({
         <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements</h3>
 
         {initialMeasurements.length === 0 ? (
-          <p className="mt-4 text-sm text-zinc-500">No measurements logged yet.</p>
+          <p className="mt-4 text-sm text-zinc-500">{readOnly ? 'They have not logged any measurements yet.' : 'No measurements logged yet.'}</p>
         ) : (
           <>
             <p className="mt-3 text-xs text-zinc-500">Last logged {longDate(initialMeasurements[0].log_date)}</p>
