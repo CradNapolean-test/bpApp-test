@@ -215,3 +215,13 @@ select optgroup {
   background-color: var(--card);
   color: var(--foreground);
 }
+
+/* iPhone Safari (and every iOS browser) zooms the page when a field under 16px is focused. Keep fields at
+   16px on phones so tapping one never zooms; the unlayered rule beats the Tailwind text-size utilities. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
