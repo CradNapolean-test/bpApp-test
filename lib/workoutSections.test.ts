@@ -87,3 +87,17 @@ describe('workout sections', () => {
     expect(chosenBlockKeys('strong:1', 'strong:2')).toEqual(['strong:1', 'strong:2']);
   });
 });
+
+describe('Conditioning breath / burn', () => {
+  it('splits only conditioning block 2', () => {
+    expect(blockKey('conditioning', 2, 'breath')).toBe('conditioning:2:breath');
+    expect(blockKey('conditioning', 1, 'burn')).toBe('conditioning:1');
+    expect(blockKey('strong', 2, 'burn')).toBe('strong:2');
+    expect(parseBlockKey('conditioning:2:burn')).toEqual({ section: 'conditioning', blockNo: 2, part: 'burn' });
+  });
+
+  it('offers breath and burn as the second slot choices', () => {
+    const present = new Set(['strong:1', 'conditioning:1', 'conditioning:2:breath', 'conditioning:2:burn']);
+    expect(slotOptions(present, 2, 'conditioning:1').options.map((o) => o.key)).toEqual(['conditioning:2:breath', 'conditioning:2:burn']);
+  });
+});

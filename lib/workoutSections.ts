@@ -3,10 +3,14 @@
 
 export type WorkoutSection = 'warmup' | 'lift' | 'strong' | 'conditioning';
 
-// Strong block 2 can be split into an upper body list and a lower body list.
-export type BlockPart = 'upper' | 'lower';
+// Strong block 2 can be split into an upper body list and a lower body list; Conditioning block 2 into a
+// Breath list and a Burn list. The member picks one of the two.
+export type BlockPart = 'upper' | 'lower' | 'breath' | 'burn';
 
-export const PART_TITLE: Record<BlockPart, string> = { upper: 'Upper body', lower: 'Lower body' };
+export const PART_TITLE: Record<BlockPart, string> = { upper: 'Upper body', lower: 'Lower body', breath: 'Breath', burn: 'Burn' };
+
+export const STRONG_PARTS: BlockPart[] = ['upper', 'lower'];
+export const CONDITIONING_PARTS: BlockPart[] = ['breath', 'burn'];
 
 export interface SectionDef {
   key: WorkoutSection;
@@ -85,8 +89,10 @@ export function normalisedBlock(section: WorkoutSection, blockNo: number | null)
 export function blockKey(section: WorkoutSection, blockNo: number | null, part: BlockPart | null = null): string {
   const b = normalisedBlock(section, blockNo);
   if (b == null) return section;
-  // Only Strong block 2 splits into parts.
-  if (section === 'strong' && b === 2 && part) return `${section}:2:${part}`;
+  // Only block 2 splits into parts: Upper / Lower for Strong, Breath / Burn for Conditioning.
+  if (b === 2 && part && ((section === 'strong' && STRONG_PARTS.includes(part)) || (section === 'conditioning' && CONDITIONING_PARTS.includes(part)))) {
+    return `${section}:${b}:${part}`;
+  }
   return `${section}:${b}`;
 }
 
@@ -114,6 +120,11 @@ export function blockFormatOf(rows: Pick<SectionedExercise, 'block_format'>[] | 
 // Strong block 2 is split when any Strong block 2 row has a part.
 export function strongBlock2IsSplit(exercises: Pick<SectionedExercise, 'section' | 'block_no' | 'block_part'>[]): boolean {
   return exercises.some((e) => e.section === 'strong' && e.block_no === 2 && !!e.block_part);
+}
+
+// Conditioning block 2 is split when any Conditioning block 2 row has a part (Breath / Burn).
+export function conditioningBlock2IsSplit(exercises: Pick<SectionedExercise, 'section' | 'block_no' | 'block_part'>[]): boolean {
+  return exercises.some((e) => e.section === 'conditioning' && e.block_no === 2 && !!e.block_part);
 }
 
 // Conditioning is a single 20-minute block when any of its rows sit in block 0.
@@ -155,7 +166,7 @@ export function slotOptions(
   if (slot1Choice === 'conditioning:0') return { options: [], locked: 'conditioning:0' };
   const keys = ['strong:2', 'strong:2:upper', 'strong:2:lower'].filter((k) => present.has(k));
   // Taking the single 20-minute block means taking it from the start, so it is not offered mid-way.
-  if (!present.has('conditioning:0') && present.has('conditioning:2')) keys.push('conditioning:2');
+  if (!present.has('conditioning:0')) keys.push(...['conditioning:2', 'conditioning:2:breath', 'conditioning:2:burn'].filter((k) => present.has(k)));
   return { options: keys.map(optionFor), locked: null };
 }
 
@@ -194,6 +205,6 @@ export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 
   return {
     section: section as WorkoutSection,
     blockNo: block === '2' ? 2 : block === '1' ? 1 : block === '0' ? 0 : null,
-    part: part === 'upper' || part === 'lower' ? part : null,
+    part: part === 'upper' || part === 'lower' || part === 'breath' || part === 'burn' ? part : null,
   };
 }

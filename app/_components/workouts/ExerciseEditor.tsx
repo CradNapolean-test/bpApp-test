@@ -38,6 +38,7 @@ import {
   normalisedBlock,
   parseBlockKey,
   strongBlock2IsSplit,
+  conditioningBlock2IsSplit,
   PART_TITLE,
   type BlockPart,
   usesSections,
@@ -136,7 +137,7 @@ function blockLabel(section: WorkoutSection, blockNo: number | null, part: Block
   if (b == null) return SECTION_TITLE[section];
   if (b === 0) return `${SECTION_TITLE[section]} · 20 min`;
   const base = `${SECTION_TITLE[section]} · Block ${b}`;
-  return section === 'strong' && b === 2 && part ? `${base} · ${PART_TITLE[part]}` : base;
+  return b === 2 && part ? `${base} · ${PART_TITLE[part]}` : base;
 }
 
 function keyLabel(key: string) {
@@ -752,6 +753,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   const [pendingSingle, setPendingSingle] = useState(false);
   // Strong block 2 as Upper / Lower, chosen before any exercise is in it.
   const [pendingSplit, setPendingSplit] = useState(false);
+  // Conditioning block 2 as Breath / Burn, chosen before any exercise is in it.
+  const [pendingBreathBurn, setPendingBreathBurn] = useState(false);
 
   useEffect(() => {
     if (prevIdsKey.current !== idsKey) {
@@ -927,12 +930,13 @@ export function ExerciseEditor<T extends EditableExercise>({
 
   const condSingle = conditioningIsSingle(displayOrder) || (pendingSingle && !displayOrder.some((e) => e.section === 'conditioning'));
   const strongSplit = strongBlock2IsSplit(displayOrder) || (pendingSplit && !displayOrder.some((e) => e.section === 'strong' && e.block_no === 2));
+  const condSplit = conditioningBlock2IsSplit(displayOrder) || (pendingBreathBurn && !displayOrder.some((e) => e.section === 'conditioning' && e.block_no === 2));
   // The blocks a section shows right now, as keyed slots.
   type Slot = { key: string; blockNo: 0 | 1 | 2 | null; part: BlockPart | null };
   const slotsFor = (s: (typeof SECTIONS)[number]): Slot[] => {
     const slot = (blockNo: 0 | 1 | 2 | null, part: BlockPart | null = null): Slot => ({ key: blockKey(s.key, blockNo, part), blockNo, part });
     if (s.key === 'strong') return strongSplit ? [slot(1), slot(2, 'upper'), slot(2, 'lower')] : [slot(1), slot(2)];
-    if (s.key === 'conditioning') return condSingle ? [slot(0)] : [slot(1), slot(2)];
+    if (s.key === 'conditioning') return condSingle ? [slot(0)] : condSplit ? [slot(1), slot(2, 'breath'), slot(2, 'burn')] : [slot(1), slot(2)];
     return s.blocks.map((b) => slot(b));
   };
   const blockOptions = SECTIONS.flatMap((s) => slotsFor(s).map((sl) => ({ key: sl.key, label: keyLabel(sl.key) })));
@@ -945,6 +949,16 @@ export function ExerciseEditor<T extends EditableExercise>({
       return;
     }
     await runMutate(() => updateMany(rows.map((r) => r.id), { block_part: split ? 'upper' : null }));
+  }
+
+  // Splits Conditioning block 2 into Breath and Burn lists (what is there goes under Breath), or joins them back.
+  async function setConditioningSplit(split: boolean) {
+    const rows = displayOrder.filter((e) => e.section === 'conditioning' && e.block_no === 2);
+    if (rows.length === 0) {
+      setPendingBreathBurn(split);
+      return;
+    }
+    await runMutate(() => updateMany(rows.map((r) => r.id), { block_part: split ? 'breath' : null }));
   }
 
   // Switches Conditioning between two 10-minute blocks and one 20-minute block, moving what is in it.
@@ -972,7 +986,7 @@ export function ExerciseEditor<T extends EditableExercise>({
         if (choosing_ && (sec.key === 'strong' || sec.key === 'conditioning')) continue;
         const keys =
           sec.key === 'conditioning'
-            ? [blockKey(sec.key, 0), blockKey(sec.key, 1), blockKey(sec.key, 2)]
+            ? [blockKey(sec.key, 0), blockKey(sec.key, 1), blockKey(sec.key, 2), blockKey(sec.key, 2, 'breath'), blockKey(sec.key, 2, 'burn')]
             : sec.key === 'strong'
               ? [blockKey(sec.key, 1), blockKey(sec.key, 2), blockKey(sec.key, 2, 'upper'), blockKey(sec.key, 2, 'lower')]
               : sec.blocks.map((bn) => blockKey(sec.key, bn));
@@ -1128,6 +1142,23 @@ export function ExerciseEditor<T extends EditableExercise>({
                       {single ? '1 × 20 min' : '2 × 10 min'}
                     </button>
                   ))}
+                  {!condSingle && (
+                    <>
+                      <span className="ml-1 text-[11px] text-zinc-500">Block 2:</span>
+                      {[false, true].map((split) => (
+                        <button
+                          key={String(split)}
+                          type="button"
+                          onClick={() => setConditioningSplit(split)}
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                            condSplit === split ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/15'
+                          }`}
+                        >
+                          {split ? 'Breath / Burn' : 'One list'}
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
