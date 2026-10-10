@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Ban, CalendarDays, Check, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
+import { Ban, CalendarDays, Check, Dumbbell, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -485,6 +485,12 @@ export function SessionsView({
                   <UserPlus className="h-4 w-4" /> Add a client
                 </button>
               )}
+              <Link
+                href={`/coach/run/${open.classId}/${open.date}`}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-accent py-3 text-sm font-extrabold text-accent"
+              >
+                <Dumbbell className="h-4 w-4" /> Run this class
+              </Link>
               {!isPast(open) && (
                 <button
                   type="button"
