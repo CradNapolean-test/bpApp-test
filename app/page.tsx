@@ -34,5 +34,5 @@ export default async function Home() {
     );
   }
 
-  redirect(profile.role === 'coach' ? '/coach' : '/dashboard');
+  redirect(profile.role === 'coach' ? '/coach' : profile.role === 'owner' ? '/owner' : '/dashboard');
 }
