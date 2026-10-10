@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getOwnerGyms } from '@/lib/data/owner';
+import { getOwnerGyms, getOwnerGymStats } from '@/lib/data/owner';
 import { OwnerShell } from './_components/OwnerShell';
 
 export default async function OwnerPage() {
@@ -13,7 +13,7 @@ export default async function OwnerPage() {
   const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
   if (!profile || profile.role !== 'owner') redirect('/');
 
-  const gyms = await getOwnerGyms().catch(() => null);
+  const [gyms, stats] = await Promise.all([getOwnerGyms().catch(() => null), getOwnerGymStats().catch(() => null)]);
 
-  return <OwnerShell gyms={gyms} email={profile.email ?? user.email ?? 'Owner'} />;
+  return <OwnerShell gyms={gyms} stats={stats} email={profile.email ?? user.email ?? 'Owner'} />;
 }
