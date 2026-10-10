@@ -112,8 +112,6 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
         </div>
         <a
           href={tvHref}
-          target="_blank"
-          rel="noreferrer"
           className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-sm font-extrabold text-accent-foreground"
         >
           <Tv className="h-4 w-4" /> Show on TV
