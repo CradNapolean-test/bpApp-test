@@ -1,46 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
-import { isoWeekKey } from '@/lib/utils/dates';
-import { hasLoggedData } from '@/lib/utils/dailyLog';
-import { dayCalories } from '@/lib/calculations';
+import { Segmented } from '@/app/_components/ui';
+import { WEEKLY_METRICS, buildWeeklyAverages, formatMetric, weekChange } from '@/lib/weeklyAverages';
+import type { WeekAverages, WeeklyMetric } from '@/lib/weeklyAverages';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
-
-interface WeekPoint {
-  weekStart: string;
-  avgBodyweight: number | null;
-  avgCalories: number | null;
-  avgSteps: number | null;
-  loggedDays: number;
-}
-
-function buildWeeklyTrend(logs: DailyLogRow[]): WeekPoint[] {
-  const byWeek = new Map<string, DailyLogRow[]>();
-  for (const log of logs.filter(hasLoggedData)) {
-    const week = isoWeekKey(log.log_date);
-    if (!byWeek.has(week)) byWeek.set(week, []);
-    byWeek.get(week)!.push(log);
-  }
-
-  return Array.from(byWeek.entries())
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([weekStart, weekLogs]) => {
-      const bw = weekLogs.filter((l) => l.bodyweight != null).map((l) => l.bodyweight as number);
-      const withMacros = weekLogs.filter((l) => l.protein != null || l.carbs != null || l.fat != null);
-      const steps = weekLogs.filter((l) => l.steps != null).map((l) => l.steps as number);
-      return {
-        weekStart,
-        avgBodyweight: bw.length ? bw.reduce((a, b) => a + b, 0) / bw.length : null,
-        avgCalories: withMacros.length
-          ? withMacros.reduce((sum, l) => sum + dayCalories(l.protein ?? 0, l.carbs ?? 0, l.fat ?? 0), 0) /
-            withMacros.length
-          : null,
-        avgSteps: steps.length ? steps.reduce((a, b) => a + b, 0) / steps.length : null,
-        loggedDays: weekLogs.length,
-      };
-    });
-}
 
 function shortDate(iso: string) {
   return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -99,52 +65,72 @@ export function TrendChart({
   );
 }
 
-function TrendCard({
-  weeks, title, dataKey, color, unit, formatter, lowerIsBetter,
-}: {
-  weeks: WeekPoint[];
-  title: string;
-  dataKey: 'avgBodyweight' | 'avgCalories' | 'avgSteps';
-  color: string;
-  unit: string;
-  formatter: (v: number) => string;
-  // Colors the delta green/red by direction -- only meaningful for a metric with an
-  // unambiguous "better" direction (bodyweight, in a fat-loss-focused app). Omitted for
-  // Calories/Steps, where trending up or down isn't inherently good or bad.
-  lowerIsBetter?: boolean;
-}) {
-  const withValue = weeks.filter((w) => w[dataKey] != null);
-  const points = withValue.map((w) => w[dataKey] as number);
+// One card with a tab per measure: the weekly average as a chart, the change on the previous week, and a
+// week-by-week list underneath. Protein, sleep and water join weight, calories and steps.
+function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
+  const [metric, setMetric] = useState<WeeklyMetric>('bodyweight');
+  const info = WEEKLY_METRICS.find((m) => m.key === metric)!;
+  const withValue = weeks.filter((w) => w.avg[metric] != null);
+  const points = withValue.map((w) => w.avg[metric] as number);
   const labels = withValue.map((w) => shortDate(w.weekStart));
   const current = points.length ? points[points.length - 1] : null;
-  const prev = points.length >= 2 ? points[points.length - 2] : null;
-  const delta = current != null && prev != null ? current - prev : null;
-  const favorable = lowerIsBetter != null && delta != null ? (lowerIsBetter ? delta < 0 : delta > 0) : null;
+  const delta = weekChange(weeks, metric);
+  const favorable = info.better && delta != null ? (info.better === 'down' ? delta < 0 : delta > 0) : null;
+  const fmt = (v: number) => formatMetric(v, info);
+  const recent = [...withValue].reverse().slice(0, 6);
 
   return (
     <div className={cardCls}>
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="font-bold text-black dark:text-zinc-50">{title}</h3>
+      <Segmented<WeeklyMetric>
+        label="Weekly average of"
+        value={metric}
+        onChange={setMetric}
+        options={WEEKLY_METRICS.map((m) => ({ value: m.key, label: m.tab }))}
+      />
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <h3 className="font-bold text-black dark:text-zinc-50">{info.title}</h3>
         {delta != null && Math.abs(delta) > 0.001 && (
-          <span
-            className={`text-sm font-bold ${
-              favorable == null ? 'text-zinc-500' : favorable ? 'text-success' : 'text-danger'
-            }`}
-          >
+          <span className={`text-sm font-bold ${favorable == null ? 'text-zinc-500' : favorable ? 'text-success' : 'text-danger'}`}>
             {delta > 0 ? '+' : '-'}
-            {formatter(Math.abs(delta))}
-            {unit}
+            {fmt(Math.abs(delta))}
+            {info.unit}
           </span>
         )}
       </div>
       <p className="mt-1 text-2xl font-bold text-black dark:text-zinc-50">
-        {current != null ? formatter(current) : '—'}
-        {unit && current != null ? unit : null}
+        {current != null ? fmt(current) : '—'}
+        {info.unit && current != null ? info.unit : null}
       </p>
-      <div className="mt-3">
-        <TrendChart values={points} labels={labels} color={color} formatter={formatter} />
-      </div>
-      <p className="mt-1 text-xs text-zinc-500">Weekly average{points.length >= 2 ? ` · last ${points.length} weeks` : ''}{delta != null ? ' · change vs the week before' : ''}</p>
+      {points.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">Nothing logged for {info.title.toLowerCase()} yet.</p>
+      ) : (
+        <>
+          <div className="mt-3">
+            <TrendChart values={points} labels={labels} color="var(--chart-1)" formatter={fmt} />
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            Weekly average{points.length >= 2 ? ` · last ${points.length} weeks` : ''}
+            {delta != null ? ' · change vs the week before' : ''}
+          </p>
+          <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span>Week of</span>
+              <span className="w-12 text-right">Days</span>
+              <span className="w-20 text-right">Average</span>
+            </div>
+            {recent.map((w) => (
+              <div key={w.weekStart} className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5 text-sm">
+                <span className="text-zinc-500">{shortDate(w.weekStart)}</span>
+                <span className="w-12 text-right text-zinc-500">{w.days[metric]}</span>
+                <span className="w-20 text-right font-semibold text-black dark:text-zinc-50">
+                  {fmt(w.avg[metric] as number)}
+                  {info.unit}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -190,7 +176,7 @@ function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfile
 }
 
 export function OverviewTab({ historyLogs, profile, isCoachView = false }: { historyLogs: DailyLogRow[]; profile: ClientProfileRow | null; isCoachView?: boolean }) {
-  const weeks = buildWeeklyTrend(historyLogs).slice(-8);
+  const weeks = buildWeeklyAverages(historyLogs).slice(-8);
   const latestWeight = [...historyLogs].reverse().find((l) => l.bodyweight != null)?.bodyweight ?? null;
 
   if (weeks.length === 0) {
@@ -206,31 +192,7 @@ export function OverviewTab({ historyLogs, profile, isCoachView = false }: { his
   return (
     <div className="space-y-4">
       <WeightGoalCard profile={profile} latest={latestWeight} coachView={isCoachView} />
-      <TrendCard
-        weeks={weeks}
-        title="Bodyweight"
-        dataKey="avgBodyweight"
-        color="var(--chart-1)"
-        unit="kg"
-        formatter={(v) => v.toFixed(1)}
-        lowerIsBetter
-      />
-      <TrendCard
-        weeks={weeks}
-        title="Calories"
-        dataKey="avgCalories"
-        color="var(--chart-2)"
-        unit="kcal"
-        formatter={(v) => Math.round(v).toString()}
-      />
-      <TrendCard
-        weeks={weeks}
-        title="Steps"
-        dataKey="avgSteps"
-        color="var(--chart-3)"
-        unit=""
-        formatter={(v) => Math.round(v).toString()}
-      />
+      <WeeklyAverages weeks={weeks} />
     </div>
   );
 }
