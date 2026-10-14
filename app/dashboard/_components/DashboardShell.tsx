@@ -142,6 +142,7 @@ export function DashboardShell({
   educationCourses,
   educationAssignments,
   disabledScreens = [],
+  disabledMetrics = [],
   journalEntries = [],
   bigDogResults = [],
   events = [],
@@ -198,6 +199,7 @@ export function DashboardShell({
   educationCourses: EducationCourseWithModules[];
   educationAssignments: EducationCourseAssignmentWithDetails[];
   disabledScreens?: string[];
+  disabledMetrics?: string[];
   journalEntries?: ClientJournalEntryRow[];
   bigDogResults?: BigDogResultRow[];
   events?: EventWithSignup[];
@@ -773,6 +775,7 @@ export function DashboardShell({
               bigDogResults={bigDogResults}
               events={events}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
+              disabledMetrics={disabledMetrics}
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (
@@ -786,6 +789,7 @@ export function DashboardShell({
               pendingForms={formAssignments.filter((f) => !f.completed_at).length}
               hiddenCategories={disabledCategories}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
+              disabledMetrics={disabledMetrics}
               onNavigate={handleNavigate}
               onOpenWorkoutDay={handleCheckIn}
             />
@@ -798,7 +802,7 @@ export function DashboardShell({
               isCoachView={isCoachView}
               screenToggles={
                 isCoachView
-                  ? { disabledScreens, planIncludedScreens: membership?.package?.included_screens ?? null, planName: membership?.package?.name ?? null }
+                  ? { disabledScreens, disabledMetrics, planIncludedScreens: membership?.package?.included_screens ?? null, planName: membership?.package?.name ?? null }
                   : undefined
               }
             />
@@ -828,6 +832,7 @@ export function DashboardShell({
               startWeek={startWeek}
               gender={profile?.gender ?? null}
               periodStartDates={periodStartDates}
+              disabledMetrics={disabledMetrics}
               readOnly={isCoachView}
               isCoachView={isCoachView}
               profile={profile}

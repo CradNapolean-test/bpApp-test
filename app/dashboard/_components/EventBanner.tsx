@@ -31,7 +31,7 @@ export function EventBanner({ event, onOpen }: { event: EventWithSignup; onOpen:
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <CalendarDays className="h-5 w-5 shrink-0 text-accent" />
         <span className="min-w-0">
-          <span className="block truncate text-sm font-extrabold text-black dark:text-zinc-50">{event.title}</span>
+          <span className="block truncate text-sm font-extrabold text-black dark:text-zinc-50">Next event: {event.title}</span>
           <span className="block truncate text-xs text-zinc-500">
             {when}
             {event.location ? ` · ${event.location}` : ''}

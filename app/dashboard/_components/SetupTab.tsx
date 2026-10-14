@@ -7,7 +7,7 @@ import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR, RATE_PCT } from '@/lib/calculations';
 import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
-import { MemberScreenToggles } from './MemberScreenToggles';
+import { MemberMetricToggles, MemberScreenToggles } from './MemberScreenToggles';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
 
@@ -112,7 +112,7 @@ export function SetupTab({
   readOnly: boolean;
   // Coach-only controls (nutrition tracking method, calculation detail) show for a coach.
   isCoachView?: boolean;
-  screenToggles?: { disabledScreens: string[]; planIncludedScreens: string[] | null; planName: string | null };
+  screenToggles?: { disabledScreens: string[]; disabledMetrics: string[]; planIncludedScreens: string[] | null; planName: string | null };
 }) {
   const { run, busy: saving } = useAction();
   const { run: runMode, busy: savingMode } = useAction();
@@ -305,6 +305,7 @@ export function SetupTab({
         </SectionCard>
 
         {isCoachView && !readOnly && screenToggles && <MemberScreenToggles clientId={clientId} {...screenToggles} />}
+        {isCoachView && !readOnly && screenToggles && <MemberMetricToggles clientId={clientId} disabledMetrics={screenToggles.disabledMetrics} />}
 
         {isCoachView && !readOnly && (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
@@ -439,7 +440,6 @@ export function SetupTab({
                   <option value="muscle_gain">Muscle gain</option>
                 </select>
               </div>
-              <label className="flex items-center gap-2 pt-6 text-sm">
               <div className="space-y-1">
                 <label className={labelCls}>Setting</label>
                 <select
@@ -457,6 +457,7 @@ export function SetupTab({
                     : `Aims to gain about ${RATE_PCT.muscle_gain[form.nutrition_setting] * 100}% of bodyweight a month.`}
                 </p>
               </div>
+              <label className="flex items-center gap-2 pt-6 text-sm">
                 <input type="checkbox" checked={form.cycling} onChange={(e) => setForm({ ...form, cycling: e.target.checked })} />
                 Calorie cycling
               </label>

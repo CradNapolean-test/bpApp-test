@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Checkbox } from '@/app/_components/Checkbox';
 import { Check, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { useToast } from '@/app/_components/ToastProvider';
 import { dayCalories, cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
 import { upsertDailyLog } from '@/lib/data/dailyLogs';
@@ -11,6 +12,8 @@ import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
+import { enabledTrackers, toDisabledMetricSet, weekStats } from '@/lib/checkinMetrics';
+import type { CheckinMetric } from '@/lib/checkinMetrics';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 import { getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
@@ -76,6 +79,7 @@ function WeekLog({
   programWeek,
   onOpenFoodDiary,
   attendedSessions,
+  disabledMetrics = [],
 }: {
   clientId: string;
   weekDates: string[];
@@ -90,8 +94,11 @@ function WeekLog({
   onOpenFoodDiary?: () => void;
   // Classes the member attended, by date -- a day with one counts as a gym session automatically.
   attendedSessions: { date: string; label: string }[];
+  // Check-in measures the coach has switched off for this member (sleep, steps, water, hunger, energy, ...).
+  disabledMetrics?: string[];
 }) {
   const { run } = useAction();
+  const toast = useToast();
   const [days, setDays] = useState<Record<string, DayForm>>(() => {
     const map: Record<string, DayForm> = {};
     for (const date of weekDates) {
@@ -141,7 +148,17 @@ function WeekLog({
       // Macros are the food diary's to write; sending this form's older copy of them would
       // overwrite what the diary just recorded.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { protein, carbs, fat, fibre, ...fields } = { ...days[date], ...patch };
+      const { protein, carbs, fat, fibre, ...merged } = { ...days[date], ...patch };
+      // The database refuses a bodyweight outside 20-400 kg. Checked here too, so a typo in that one box
+      // can't stop the rest of the day (sleep, steps, water) from saving: it is reported on an explicit
+      // "Save day" or when the member just edited it, and left out of the save when another tracker commits.
+      const badWeight = merged.bodyweight != null && (merged.bodyweight < 20 || merged.bodyweight > 400);
+      if (badWeight && (Object.keys(patch).length === 0 || 'bodyweight' in patch)) {
+        toast.error('Bodyweight must be between 20 and 400 kg.');
+        return;
+      }
+      const { bodyweight, ...withoutWeight } = merged;
+      const fields = badWeight ? withoutWeight : { ...withoutWeight, bodyweight };
       await run(() => upsertDailyLog(clientId, date, fields), {
         onDone: () => setSavedDates((s) => ({ ...s, [date]: true })),
       });
@@ -177,6 +194,12 @@ function WeekLog({
   const labelCls = 'text-xs font-semibold uppercase tracking-wide text-zinc-500';
 
   const d = days[focusedDate];
+  const off = toDisabledMetricSet(disabledMetrics);
+  const trackers = enabledTrackers(off) as ('sleep' | 'steps' | 'water')[];
+  const scaleFields = SCALE_FIELDS.filter((f) => !off.has(f.key));
+  const stats = isCoachView
+    ? weekStats(weekDates.map((date) => ({ date, values: days[date] as Partial<Record<CheckinMetric, number | null>> })), off)
+    : [];
   const calories = dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0);
   const cycleDay = gender === 'Female' ? cycleDayFor(periodStartDates, focusedDate) : null;
   const dayTarget = targetForDayType(d.day_type);
@@ -222,6 +245,35 @@ function WeekLog({
             {avgBodyweight != null && 'kg'}
           </p>
         </>
+      )}
+
+      {isCoachView && stats.length > 0 && (
+        <div className={cardCls}>
+          <h4 className="text-sm font-bold text-black dark:text-zinc-50">Check-in this week</h4>
+          <p className="text-xs text-zinc-500">Average, lowest and highest day for each measure that is switched on.</p>
+          <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
+            <div className="grid grid-cols-[1fr_3.5rem_4.5rem_4.5rem] gap-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span>Measure</span>
+              <span className="text-right">Avg</span>
+              <span className="text-right">Low</span>
+              <span className="text-right">High</span>
+            </div>
+            {stats.map((m) => {
+              const fmtV = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1)) + (m.unit === '/5' || m.unit === '' ? '' : m.unit);
+              const dayName = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
+              return (
+                <div key={m.key} className="grid grid-cols-[1fr_3.5rem_4.5rem_4.5rem] items-center gap-2 py-1.5 text-sm">
+                  <span className="text-zinc-600 dark:text-zinc-300">
+                    {m.label} <span className="text-[11px] text-zinc-400">{m.days}/7 days</span>
+                  </span>
+                  <span className="text-right font-semibold text-black dark:text-zinc-50">{m.avg == null ? '-' : fmtV(Math.round(m.avg * 10) / 10)}</span>
+                  <span className="text-right text-zinc-500">{m.low ? `${fmtV(m.low.value)} ${dayName(m.low.date)}` : '-'}</span>
+                  <span className="text-right text-zinc-500">{m.high ? `${fmtV(m.high.value)} ${dayName(m.high.date)}` : '-'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -285,7 +337,7 @@ function WeekLog({
         )}
 
         <div className="mt-3 space-y-2">
-          {(['sleep', 'steps', 'water'] as const).map((metric) => (
+          {trackers.map((metric) => (
             <AccountabilityTracker
               key={metric}
               metric={metric}
@@ -350,7 +402,7 @@ function WeekLog({
           <dl className="mt-3 divide-y divide-black/[.05] rounded-xl border border-black/[.05] text-sm dark:divide-white/10 dark:border-white/10">
             {([
               ['Bodyweight', d.bodyweight != null ? `${d.bodyweight} kg` : null],
-              ...SCALE_FIELDS.map(({ key, label }) => [label, d[key] != null ? `${d[key]} / 5` : null] as [string, string | null]),
+              ...scaleFields.map(({ key, label }) => [label, d[key] != null ? `${d[key]} / 5` : null] as [string, string | null]),
               ['Gym session', gymOn ? (attendedToday != null ? `Yes, ${attendedToday.label}` : 'Yes') : 'No'],
               ...(gender === 'Female' ? [['Period started', d.period_started ? 'Yes' : 'No'] as [string, string | null]] : []),
             ] as [string, string | null][]).map(([label, value]) => (
@@ -379,6 +431,8 @@ function WeekLog({
                 type="number"
                 inputMode="decimal"
                 step="0.1"
+                min={20}
+                max={400}
                 placeholder="—"
                 aria-label="Bodyweight in kilograms"
                 className="w-28 bg-transparent text-right text-3xl font-black text-black outline-none placeholder:text-zinc-400 dark:text-zinc-50"
@@ -389,11 +443,13 @@ function WeekLog({
             </span>
           </label>
 
+          {scaleFields.length > 0 && (
+            <>
           <p className="col-span-2 -mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-4">
             How are you feeling? <span className="font-medium normal-case tracking-normal">1 = low, 5 = high</span>
           </p>
 
-          {SCALE_FIELDS.map(({ key, label }) => (
+          {scaleFields.map(({ key, label }) => (
             <MoodDots
               key={key}
               label={label}
@@ -405,6 +461,8 @@ function WeekLog({
               }}
             />
           ))}
+            </>
+          )}
 
           <button
             type="button"

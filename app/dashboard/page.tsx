@@ -86,6 +86,7 @@ export default async function DashboardPage() {
       educationCourses={bundle.educationCourses}
       educationAssignments={bundle.educationAssignments}
       disabledScreens={bundle.disabledScreens}
+      disabledMetrics={bundle.disabledMetrics}
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}
       rewardsData={bundle.rewardsData}

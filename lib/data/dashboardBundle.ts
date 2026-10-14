@@ -34,7 +34,7 @@ import { getExerciseLibrary } from './exerciseLibrary';
 import { getProgramTemplates } from './programTemplates';
 import { getRecipesWithIngredients } from './recipes';
 import { getCourses, getClientCourseAssignments } from './education';
-import { getDisabledScreens } from './clientScreenSettings';
+import { getDisabledMetrics, getDisabledScreens } from './clientScreenSettings';
 import { toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 
 const HISTORY_DAYS = 84;
@@ -90,6 +90,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     unreadMessageCount,
     mealSections,
     disabledScreens,
+    disabledMetrics,
     bigDogResults,
     events,
     rewardsData,
@@ -129,6 +130,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getClientUnreadCount(clientId),
     canWrite ? getOrCreateMealSections(clientId) : getMealSections(clientId),
     getDisabledScreens(clientId),
+    getDisabledMetrics(clientId),
     getBigDogResults(clientId),
     getUpcomingEvents(clientId),
     getRewardsForMember(clientId),
@@ -185,6 +187,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     unreadMessageCount,
     mealSections,
     disabledScreens,
+    disabledMetrics,
     bigDogResults,
     events,
     rewardsData,

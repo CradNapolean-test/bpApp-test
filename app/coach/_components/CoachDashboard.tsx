@@ -22,6 +22,7 @@ import { Avatar } from '@/app/_components/Avatar';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Card, SectionLabel } from '@/app/_components/ui';
 import { useAction } from '@/app/_components/useAction';
+import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { formatClassTime } from '@/lib/utils/dates';
 import type { CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
@@ -210,6 +211,25 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
         title: n.name,
         hint: n.reasons.filter((r) => r !== 'New member: check the starting plan').join(' · ') || 'Starting plan ready to check',
         href: `/coach/clients/${n.clientId}?open=profile`,
+      })),
+    });
+  }
+
+  if (data.challengeDue.length > 0) {
+    const finals = data.challengeDue.filter((c) => c.milestone === 'final').length;
+    groups.push({
+      key: 'challenge',
+      icon: Trophy,
+      tone: 'amber',
+      title: 'Challenge check-ins due',
+      summary: `${data.challengeDue.length} member${data.challengeDue.length === 1 ? '' : 's'} on the challenge to check in with${finals > 0 ? ` (${finals} in the final week)` : ''}`,
+      items: data.challengeDue.map((c) => ({
+        key: `${c.membershipId}|${c.milestone}`,
+        clientId: c.clientId,
+        title: c.name,
+        hint: `${c.milestone === 'final' ? 'Final week' : `Week ${c.week}`} of ${c.totalWeeks} · ${c.planName}${c.daysLeft != null ? ` · ${c.daysLeft === 0 ? 'last day today' : `${c.daysLeft} day${c.daysLeft === 1 ? '' : 's'} left`}` : ''}`,
+        href: `/coach/clients/${c.clientId}?open=messages`,
+        review: own(c.mine) ? () => markReviewed(challengeReviewKind(c.milestone), c.clientId, c.membershipId) : undefined,
       })),
     });
   }

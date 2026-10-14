@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
 import { isPlateaued } from '@/lib/calculations';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
@@ -53,6 +54,17 @@ export interface ScoreToVerify {
   result: string | null;
   mine: boolean;
 }
+export interface ChallengeDue {
+  clientId: string;
+  name: string;
+  membershipId: string;
+  planName: string;
+  milestone: 'week3' | 'final';
+  week: number;
+  totalWeeks: number;
+  daysLeft: number | null;
+  mine: boolean;
+}
 export interface DeletionRequestItem {
   clientId: string;
   name: string;
@@ -88,6 +100,7 @@ export interface CoachDashboardData {
   deletionRequests: DeletionRequestItem[];
   newMembers: NewMember[];
   checkins: WeekCheckin[];
+  challengeDue: ChallengeDue[];
   photoReviews: PhotoReview[];
   forms: FormReview[];
   scores: ScoreToVerify[];
@@ -124,7 +137,13 @@ interface MemberRow {
     checkin_reminder_days: number | null;
   }>;
   credits_balance: ProfileRel<{ balance: number }>;
-  client_memberships: { id: string; ended_at: string | null; membership_packages: ProfileRel<{ credits_per_week: number }> }[] | null;
+  client_memberships: {
+    id: string;
+    started_at: string;
+    scheduled_end: string | null;
+    ended_at: string | null;
+    membership_packages: ProfileRel<{ credits_per_week: number; duration_weeks: number | null; name: string }>;
+  }[] | null;
   daily_logs: (DailyLogRow & { food_photo_entries: { id: string; created_at: string }[] | null })[] | null;
   nutrition_feedback: { log_date: string; photo_id: string | null }[] | null;
   coach_reviews: { kind: string; ref: string }[] | null;
@@ -137,7 +156,7 @@ const SELECT = `
   id, email, coach_id, created_at,
   client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, deletion_requested_at, checkin_reminder_days),
   credits_balance(balance),
-  client_memberships!client_id(id, ended_at, membership_packages(credits_per_week)),
+  client_memberships!client_id(id, started_at, scheduled_end, ended_at, membership_packages(credits_per_week, duration_weeks, name)),
   daily_logs(id, log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(id, created_at)),
   nutrition_feedback!client_id(log_date, photo_id),
   coach_reviews!client_id(kind, ref),
@@ -223,6 +242,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const newMembers: NewMember[] = [];
   const deletionRequests: DeletionRequestItem[] = [];
   const checkins: WeekCheckin[] = [];
+  const challengeDue: ChallengeDue[] = [];
   const photoReviews: PhotoReview[] = [];
   const forms: FormReview[] = [];
   const scores: ScoreToVerify[] = [];
@@ -252,6 +272,15 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     for (const weekStart of [prevWeek, prev2Week]) {
       const days = daysIn(weekStart);
       if (days > 0 && !reviewed.has(`week|${weekStart}`)) checkins.push({ clientId: m.id, name, weekStart, days, mine: mine(m) });
+    }
+
+    // Week 3 and final-week prompts for members on a fixed-length plan (the 6 week challenge).
+    for (const ms of m.client_memberships ?? []) {
+      const pkg = one(ms.membership_packages);
+      const prompt = challengePrompt({ ...ms, durationWeeks: pkg?.duration_weeks ?? null }, todayIso, reviewed);
+      if (prompt) {
+        challengeDue.push({ clientId: m.id, name, membershipId: ms.id, planName: pkg?.name ?? 'Challenge', mine: mine(m), ...prompt });
+      }
     }
 
     // Check-ins submitted this week (progress through the week) out of members who've onboarded.
@@ -362,6 +391,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     deletionRequests,
     newMembers,
     checkins,
+    challengeDue,
     photoReviews,
     forms,
     scores,

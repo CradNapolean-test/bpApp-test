@@ -34,3 +34,25 @@ export async function setMemberScreenEnabled(clientId: string, screen: string, e
     return fail(e instanceof Error ? e : null, 'Could not change that screen');
   }
 }
+
+// ---- Daily check-in measures switched off for a member (client_disabled_metrics, 0121) ----
+
+export async function getDisabledMetrics(clientId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('client_disabled_metrics').select('metric').eq('client_id', clientId);
+  if (error) {
+    // Migration 0121 not applied yet: nothing is switched off.
+    if (error.code === '42P01' || error.code === 'PGRST205') return [];
+    raise(error);
+  }
+  return (data ?? []).map((r) => r.metric as string);
+}
+
+// Coach only (RLS: is_coach_of). Returns a result the UI can show instead of throwing.
+export async function setMemberMetricEnabled(clientId: string, metric: string, enabled: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = enabled
+    ? await supabase.from('client_disabled_metrics').delete().eq('client_id', clientId).eq('metric', metric)
+    : await supabase.from('client_disabled_metrics').upsert({ client_id: clientId, metric }, { onConflict: 'client_id,metric' });
+  return error ? fail(error, 'Could not change that measure') : ok();
+}

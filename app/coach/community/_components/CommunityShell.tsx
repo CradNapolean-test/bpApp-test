@@ -8,7 +8,9 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { createEvent, deleteEvent, getEventAttendees, updateEvent } from '@/lib/data/community';
 import { createReward, deleteReward, markRewardGiven, unmarkRewardGiven } from '@/lib/data/rewards';
-import { setShirtGiven } from '@/lib/data/bigDog';
+import { getScoresExport, setShirtGiven } from '@/lib/data/bigDog';
+import { gridCsv, scoresCsv } from '@/lib/bigDogExport';
+import { toCsv } from '@/lib/csv';
 import type { ShirtRow } from '@/lib/data/bigDog';
 import { TIER_TITLE } from '@/lib/bigDog';
 import type { EventWithSignup, FeedbackRow, RewardOverview } from '@/lib/data/types';
@@ -306,6 +308,44 @@ export function EventsPane({ events, past = [] }: { events: EventWithSignup[]; p
   );
 }
 
+function ScoresExportCard() {
+  const { run, busy } = useAction();
+  const save = (name: string, text: string) => {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+  const download = (layout: 'scores' | 'grid') =>
+    run(async () => {
+      const { raw, members } = await getScoresExport();
+      const map = new Map(Object.entries(members));
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (raw.length === 0) save(`peak-week-${layout}-${stamp}.csv`, toCsv(['Member'], []));
+      else save(`peak-week-${layout}-${stamp}.csv`, layout === 'scores' ? scoresCsv(raw, map) : gridCsv(raw, map));
+    });
+  return (
+    <div className={cardCls}>
+      <p className="text-sm font-extrabold text-black dark:text-zinc-50">Peak Week scores</p>
+      <p className="text-[11px] text-zinc-500">
+        Download every verified score for your sheet. Opens in Excel or Google Sheets. A newer score a member logged themselves is listed with Verified = No.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => download('scores')} className="rounded-full bg-accent px-4 py-2 text-xs font-bold text-accent-foreground disabled:opacity-50">
+          One row per score (CSV)
+        </button>
+        <button type="button" disabled={busy} onClick={() => download('grid')} className="rounded-full border border-black/10 px-4 py-2 text-xs font-bold text-zinc-600 disabled:opacity-50 dark:border-white/15 dark:text-zinc-300">
+          One row per member (CSV)
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ShirtsCard({ shirts }: { shirts: ShirtRow[] }) {
   const { run } = useAction();
   const owed = shirts.filter((s) => !s.givenAt);
@@ -362,6 +402,7 @@ export function RewardsPane({ rewards, shirts = [] }: { rewards: RewardOverview[
   return (
     <section className="max-w-2xl space-y-3">
       <ShirtsCard shirts={shirts} />
+      <ScoresExportCard />
       {adding ? (
         <NewRewardForm onDone={() => setAdding(false)} />
       ) : (

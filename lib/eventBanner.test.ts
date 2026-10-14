@@ -9,7 +9,11 @@ describe('bannerEvent', () => {
   it('picks the soonest upcoming event inside the window', () => {
     expect(bannerEvent([ev('b', '2026-10-20T09:00:00Z'), ev('a', '2026-10-16T09:00:00Z')], now)?.id).toBe('a');
   });
-  it('skips events that already started or are too far away', () => {
-    expect(bannerEvent([ev('past', '2026-10-14T08:00:00Z'), ev('far', '2026-12-01T09:00:00Z')], now)).toBeNull();
+  it('skips events that already started', () => {
+    expect(bannerEvent([ev('past', '2026-10-14T08:00:00Z')], now)).toBeNull();
+  });
+  it('shows the next event however far away it is, and nothing when none are scheduled', () => {
+    expect(bannerEvent([ev('far', '2026-12-01T09:00:00Z')], now)?.id).toBe('far');
+    expect(bannerEvent([], now)).toBeNull();
   });
 });

@@ -106,6 +106,8 @@ export default async function CoachClientPage({
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}
       rewardsData={bundle.rewardsData}
+      disabledScreens={bundle.disabledScreens}
+      disabledMetrics={bundle.disabledMetrics}
     />
   );
 }

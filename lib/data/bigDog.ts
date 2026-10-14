@@ -6,6 +6,7 @@ import type { ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import { EXERCISES, EXERCISE_KEYS, TIER_TITLE, bigDogCount, formatResult, genderFromProfile, levelForResult, tiersReached } from '@/lib/bigDog';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { MemberInfo, RawScore } from '@/lib/bigDogExport';
 import { sendPushToClient } from '@/lib/push';
 import type { BigDogLevel } from '@/lib/bigDog';
 import type { BigDogResultRow } from './types';
@@ -154,4 +155,44 @@ export async function setShirtGiven(clientId: string, tier: string, given: boole
     .eq('client_id', clientId)
     .eq('tier', tier);
   return error ? fail(error, 'Could not update that') : ok();
+}
+
+// ---- Peak Week scores export (coach side) ----
+
+// Every Peak Week score the coach can see, with each member's name, sex and coach, for the CSV export. RLS decides
+// whose scores these are (the coach's own members, or the gym's for an admin).
+export async function getScoresExport(): Promise<{ raw: RawScore[]; members: Record<string, MemberInfo> }> {
+  const supabase = await createClient();
+  const raw: RawScore[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('big_dog_results')
+      .select('client_id, exercise_key, level, result_text, result_value, self_reported, tested_date, created_at')
+      .order('created_at', { ascending: true })
+      .range(from, from + 999);
+    if (error) raise(error);
+    raw.push(...((data ?? []) as RawScore[]));
+    if (!data || data.length < 1000) break;
+  }
+  const ids = [...new Set(raw.map((r) => r.client_id))];
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 150) chunks.push(ids.slice(i, i + 150));
+  const members: Record<string, MemberInfo> = {};
+  const coachOf = new Map<string, string | null>();
+  for (const chunk of chunks) {
+    const [{ data: cps }, { data: profs }] = await Promise.all([
+      supabase.from('client_profiles').select('client_id, name, gender').in('client_id', chunk),
+      supabase.from('profiles').select('id, email, coach_id').in('id', chunk),
+    ]);
+    for (const p of profs ?? []) coachOf.set(p.id as string, (p.coach_id as string | null) ?? null);
+    for (const c of cps ?? []) members[c.client_id as string] = { name: (c.name as string | null) ?? 'Member', gender: (c.gender as string | null) ?? null, coach: null };
+    for (const p of profs ?? []) if (!members[p.id as string]) members[p.id as string] = { name: (p.email as string | null) ?? 'Member', gender: null, coach: null };
+  }
+  const coachIds = [...new Set([...coachOf.values()].filter((v): v is string => !!v))];
+  if (coachIds.length) {
+    const { data: coaches } = await supabase.from('profiles').select('id, email, display_name').in('id', coachIds);
+    const nameBy = new Map((coaches ?? []).map((c) => [c.id as string, ((c.display_name as string | null) || (c.email as string | null)) ?? null]));
+    for (const [clientId, coachId] of coachOf) if (members[clientId] && coachId) members[clientId].coach = nameBy.get(coachId) ?? null;
+  }
+  return { raw, members };
 }

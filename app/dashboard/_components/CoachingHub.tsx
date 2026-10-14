@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, Mail, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
 import { EmailCoachSheet } from './EmailCoachSheet';
+import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
+import type { CheckinMetric } from '@/lib/checkinMetrics';
 import { TargetRings } from './NutritionSummary';
 import { Badge, Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
@@ -38,6 +40,7 @@ export function CoachingHub({
   pendingForms,
   hiddenCategories,
   dailyCheckinHidden = false,
+  disabledMetrics = [],
   onNavigate,
   onOpenWorkoutDay,
 }: {
@@ -52,6 +55,8 @@ export function CoachingHub({
   hiddenCategories: Set<Category>;
   // The member's plan (or coach) has switched the daily check-in (Weekly Log) off.
   dailyCheckinHidden?: boolean;
+  // Check-in measures switched off for this member.
+  disabledMetrics?: string[];
   onNavigate: (category: Category, screen?: Screen) => void;
   // Opens a specific programme day in the Workout screen (today's workout from the Training card).
   onOpenWorkoutDay: (dayId: string) => void;
@@ -89,6 +94,8 @@ export function CoachingHub({
   const bdCount = bigDogCount(bigDogResults);
   const tier = tierForCount(bdCount);
   const show = (c: Category) => !hiddenCategories.has(c);
+  const offMetrics = toDisabledMetricSet(disabledMetrics);
+  const metricOn = (m: CheckinMetric) => !offMetrics.has(m);
 
   return (
     <div className="space-y-5">
@@ -198,7 +205,7 @@ export function CoachingHub({
         </div>
       )}
 
-      {show('Accountability') && !dailyCheckinHidden && (
+      {show('Accountability') && !dailyCheckinHidden && enabledTrackers(toDisabledMetricSet(disabledMetrics)).length > 0 && (
         <div>
           <SectionLabel>Daily check-in</SectionLabel>
           <Card>
@@ -213,9 +220,9 @@ export function CoachingHub({
               </button>
             </div>
             <div className="flex gap-2">
-              <TrackerStat label="Sleep" display={sleep != null ? `${sleep}h` : '—'} light={sleep != null ? trafficLight('sleep', sleep) : null} />
-              <TrackerStat label="Steps" display={steps != null ? steps.toLocaleString() : '—'} light={steps != null ? trafficLight('steps', steps) : null} />
-              <TrackerStat label="Water" display={water != null ? `${water}L` : '—'} light={water != null ? trafficLight('water', water) : null} />
+              {metricOn('sleep') && <TrackerStat label="Sleep" display={sleep != null ? `${sleep}h` : '—'} light={sleep != null ? trafficLight('sleep', sleep) : null} />}
+              {metricOn('steps') && <TrackerStat label="Steps" display={steps != null ? steps.toLocaleString() : '—'} light={steps != null ? trafficLight('steps', steps) : null} />}
+              {metricOn('water') && <TrackerStat label="Water" display={water != null ? `${water}L` : '—'} light={water != null ? trafficLight('water', water) : null} />}
             </div>
           </Card>
         </div>

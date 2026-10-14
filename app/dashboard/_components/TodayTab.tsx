@@ -22,6 +22,7 @@ import { CheckInButton } from './CheckInButton';
 import { bannerEvent } from '@/lib/eventBanner';
 import { EventBanner } from './EventBanner';
 import { showsStreak } from '@/lib/streak';
+import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
 import { BpHomeExplore, BpHomeHero, BpHomeProgress, BpMainTiles } from './BpHome';
 import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
@@ -76,6 +77,7 @@ export function TodayTab({
   bigDogResults = [],
   events = [],
   dailyCheckinHidden = false,
+  disabledMetrics = [],
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -95,6 +97,7 @@ export function TodayTab({
   bigDogResults?: BigDogResultRow[];
   events?: EventWithSignup[];
   dailyCheckinHidden?: boolean;
+  disabledMetrics?: string[];
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -115,7 +118,9 @@ export function TodayTab({
   const streakVisible = showsStreak(membership);
 
   // Sleep, steps and water are the daily check-in: how many of the three are in for today.
-  const checkinDone = [todayLog?.sleep, todayLog?.steps, todayLog?.water].filter((v) => v != null).length;
+  const trackers = enabledTrackers(toDisabledMetricSet(disabledMetrics));
+  const checkinDone = trackers.filter((k) => todayLog?.[k as 'sleep' | 'steps' | 'water'] != null).length;
+  const noTrackers = trackers.length === 0;
 
   const pendingForms = formAssignments.filter((a) => !a.completed_at).length;
 
@@ -301,8 +306,8 @@ export function TodayTab({
         )}
       </Card>}
 
-      {(streakVisible || !dailyCheckinHidden) && (
-      <Card flush className={`grid divide-x divide-black/5 dark:divide-white/10 ${streakVisible && !dailyCheckinHidden ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {(streakVisible || (!dailyCheckinHidden && !noTrackers)) && (
+      <Card flush className={`grid divide-x divide-black/5 dark:divide-white/10 ${streakVisible && !dailyCheckinHidden && !noTrackers ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {streakVisible && (
         <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
           <IconChip icon={Flame} tone="muted" />
@@ -314,12 +319,12 @@ export function TodayTab({
           </span>
         </button>
         )}
-        {!dailyCheckinHidden && (
+        {!dailyCheckinHidden && !noTrackers && (
         <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
           <IconChip icon={CheckSquare} tone="muted" />
           <span>
             <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">
-              {checkinDone} of 3
+              {checkinDone} of {trackers.length}
             </span>
             <span className="block text-xs text-zinc-500">Check-in today</span>
           </span>

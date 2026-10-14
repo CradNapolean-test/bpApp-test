@@ -13,12 +13,9 @@ import { ThemeToggle } from '@/app/_components/ThemeToggle';
 import { SignOutButton } from '@/app/_components/SignOutButton';
 import { Badge, Card, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import type { ThemePreference } from '@/app/_components/theme';
-import {
-  cancelAccountDeletionRequest,
-  requestAccountDeletion,
-  updateEmailNotificationsEnabled,
-  updateNotificationsEnabled,
-} from '@/lib/data/clientProfile';
+import { updateEmailNotificationsEnabled, updateNotificationsEnabled } from '@/lib/data/clientProfile';
+import { deleteMyAccount } from '@/lib/data/deleteAccount';
+import { createClient as createBrowserClient } from '@/lib/supabase/client';
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -56,7 +53,6 @@ export function AccountTab({
   email,
   notificationsEnabled,
   emailNotificationsEnabled,
-  deletionRequestedAt,
   themePreference,
   profile = null,
   membershipName = null,
@@ -79,7 +75,8 @@ export function AccountTab({
   const confirm = useConfirm();
   const [enabled, setEnabled] = useState(notificationsEnabled);
   const [emailEnabled, setEmailEnabled] = useState(emailNotificationsEnabled);
-  const [deletionRequested, setDeletionRequested] = useState(deletionRequestedAt != null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteText, setDeleteText] = useState('');
   const [openRow, setOpenRow] = useState<RowKey | null>(null);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -119,27 +116,26 @@ export function AccountTab({
     await run(() => updateEmailNotificationsEnabled(clientId, next));
   }
 
-  async function handleRequestDeletion() {
+  async function handleDeleteAccount() {
+    if (deleteText.trim().toUpperCase() !== 'DELETE') return;
     if (
       !(await confirm({
-        title: 'Request account deletion?',
-        body: 'Your coach will be notified and will handle deleting your account and data. This isn\'t instant.',
-        confirmLabel: 'Request deletion',
+        title: 'Delete your account for good?',
+        body: 'Your profile, logs, photos, messages and booking history are deleted now. This cannot be undone.',
+        confirmLabel: 'Delete everything',
         destructive: true,
       }))
     )
       return;
-    await run(() => requestAccountDeletion(clientId), {
-      success: 'Deletion requested — your coach has been notified.',
-      onDone: () => setDeletionRequested(true),
-    });
-  }
-
-  async function handleCancelDeletion() {
-    await run(() => cancelAccountDeletionRequest(clientId), {
-      success: 'Deletion request cancelled',
-      onDone: () => setDeletionRequested(false),
-    });
+    const done = await run(() => deleteMyAccount(deleteText));
+    if (!done) return;
+    try {
+      localStorage.removeItem('bp-offline-snapshot');
+    } catch {
+      /* ignore */
+    }
+    await createBrowserClient().auth.signOut().catch(() => {});
+    window.location.replace('/login');
   }
 
   const dob = formatDob(profile?.date_of_birth ?? null);
@@ -224,26 +220,36 @@ export function AccountTab({
       <SignOutButton variant="danger-soft" className="w-full py-3 md:hidden" />
 
       <Card>
-        {deletionRequested ? (
-          <>
-            <p className="text-sm font-semibold text-black dark:text-zinc-50">Deletion requested</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Your coach has been notified and will handle deleting your account and data.
-            </p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={handleCancelDeletion}>
-              Cancel request
-            </Button>
-          </>
+        <p className="text-sm font-semibold text-black dark:text-zinc-50">Delete my account</p>
+        <p className="mt-1 text-xs text-zinc-500">
+          This permanently deletes your profile, check-ins, food and training logs, photos, messages and booking history. It does not cancel your
+          membership: call the gym to do that.
+        </p>
+        {!deleteOpen ? (
+          <Button variant="danger" size="sm" className="mt-3" onClick={() => setDeleteOpen(true)}>
+            Delete my account
+          </Button>
         ) : (
-          <>
-            <p className="text-sm font-semibold text-black dark:text-zinc-50">Delete my account</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Your coach will be notified and will handle deleting your account and data. This isn&apos;t instant.
-            </p>
-            <Button variant="danger" size="sm" className="mt-3" onClick={handleRequestDeletion}>
-              Request account deletion
-            </Button>
-          </>
+          <div className="mt-3 space-y-2">
+            <label className="block text-xs font-semibold text-zinc-500" htmlFor="delete-confirm">
+              Type DELETE to confirm
+            </label>
+            <input
+              id="delete-confirm"
+              value={deleteText}
+              onChange={(e) => setDeleteText(e.target.value)}
+              autoComplete="off"
+              className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            />
+            <div className="flex gap-2">
+              <Button variant="danger-solid" size="sm" disabled={deleteText.trim().toUpperCase() !== 'DELETE'} onClick={handleDeleteAccount}>
+                Delete everything
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => { setDeleteOpen(false); setDeleteText(''); }}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         )}
       </Card>
     </div>

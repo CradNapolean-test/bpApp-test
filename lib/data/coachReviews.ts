@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
 
-export type ReviewKind = 'week' | 'diary_day' | 'form';
+export type ReviewKind = 'week' | 'diary_day' | 'form' | 'challenge_week3' | 'challenge_final';
 
 // A coach marks something on their own member as looked at; it drops off the dashboard's To do.
 // Idempotent (marking twice is fine).
