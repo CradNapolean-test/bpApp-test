@@ -67,9 +67,12 @@ describe('calcEngine', () => {
     expect(calcEngine(profile)!.protein).toBeCloseTo(100 * perKg, 6);
   });
 
-  it('gives High Carb Low Fat 0.8 g/kg and Higher Fat 1.2 g/kg', () => {
-    expect(calcEngine(maleFlat)!.fat).toBeCloseTo(80, 6);
-    expect(calcEngine({ ...maleFlat, dietApproach: 'Higher Fat' })!.fat).toBeCloseTo(120, 6);
+  it('gives High Carb Low Fat 20% of calories and Higher Fat 35%, with 0.5 g/kg fat and 1 g/kg carb minimums', () => {
+    const low = calcEngine(maleFlat)!;
+    expect(low.fatPct).toBeCloseTo(0.2, 6);
+    expect(calcEngine({ ...maleFlat, dietApproach: 'Higher Fat' })!.fatPct).toBeCloseTo(0.35, 6);
+    expect(low.fatMin).toBeCloseTo(50, 6);
+    expect(low.carbMin).toBeCloseTo(100, 6);
   });
 
   it.each([
@@ -94,24 +97,35 @@ describe('phaseForWeek / stepTargetForWeek', () => {
 });
 
 describe('weeklyTarget', () => {
-  it('keeps protein/fat flat across phases and only shrinks carbs as the deficit grows', () => {
+  it('keeps protein flat across phases and shrinks carbs as the deficit grows', () => {
     const w1 = weeklyTarget(maleFlat, 1)!;
     const w5 = weeklyTarget(maleFlat, 5)!;
     const w9 = weeklyTarget(maleFlat, 9)!;
     expect(w1.protein).toBe(w5.protein);
     expect(w5.protein).toBe(w9.protein);
-    expect(w1.fat).toBe(w5.fat);
-    expect(w5.fat).toBe(w9.fat);
-    // Later phases carry a bigger deficit at this tier, so carbs strictly decrease.
     expect(w1.dailyFlat!.carbs).toBeGreaterThan(w5.dailyFlat!.carbs);
     expect(w5.dailyFlat!.carbs).toBeGreaterThan(w9.dailyFlat!.carbs);
   });
 
   it('matches the golden flat-day figures for tier 1 phase 1', () => {
     const target = weeklyTarget(maleFlat, 1)!;
-    expect(target.dailyFlat!.calories).toBeCloseTo(2546.23, 2);
-    expect(target.dailyFlat!.carbs).toBeCloseTo(276.5575, 2);
-    expect(target.calories).toBeCloseTo(target.dailyFlat!.calories * 7, 6);
+    const day = target.dailyFlat!;
+    expect(day.calories).toBeCloseTo(2546.23, 2);
+    expect(day.protein).toBeCloseTo(180, 6);
+    expect(day.fat).toBeCloseTo((2546.23 * 0.2) / 9, 2);
+    expect(day.carbs).toBeCloseTo((2546.23 - 720 - day.fat * 9) / 4, 2);
+    expect(day.floorApplied).toBe(false);
+    expect(target.calories).toBeCloseTo(day.calories * 7, 6);
+  });
+
+  it('raises calories rather than letting carbs fall under 1 g/kg, and flags it', () => {
+    // 75kg, 22% BF, sedentary, tier 3: the old engine gave 0g carbs here.
+    const p: ClientProfile = { ...maleFlat, age: 35, startWeight: 75, goalWeight: 70, bodyFatPct: 22, activityLevel: 1.2, tier: 3 };
+    const day = weeklyTarget(p, 1)!.dailyFlat!;
+    expect(day.floorApplied).toBe(true);
+    expect(day.carbs).toBeCloseTo(75, 6);
+    expect(day.calories).toBeCloseTo(day.protein * 4 + day.fat * 9 + day.carbs * 4, 6);
+    expect(day.calories).toBeGreaterThan(2050 - 1000);
   });
 
   it('never lets carbs go negative even at a deficit steep enough to exceed TDEE', () => {
@@ -130,12 +144,12 @@ describe('weeklyTarget', () => {
     expect(target.dailyLow!.calories).toBeLessThan(target.dailyHigh!.calories);
   });
 
-  it('flags the known low-carb-floor tension the spec calls out (not a bug, but worth asserting the behavior)', () => {
-    // Tier 3, phase 3, low activity: a real combination where carbs can crash toward the
-    // floor the UI is supposed to warn on (~50g) -- see PROJECT_SPEC.md section 3.
+  it('never drops fat or carbs under their minimums at the tightest tier, phase and activity', () => {
     const tightProfile: ClientProfile = { ...maleFlat, activityLevel: 1.2, tier: 3 };
-    const target = weeklyTarget(tightProfile, 12)!;
-    expect(target.dailyFlat!.calories).toBeLessThan(CALORIE_FLOOR + 500); // sanity: genuinely tight, not a fluke
+    const day = weeklyTarget(tightProfile, 12)!.dailyFlat!;
+    expect(day.fat).toBeGreaterThanOrEqual(50 - 1e-9);
+    expect(day.carbs).toBeGreaterThanOrEqual(100 - 1e-9);
+    expect(CALORIE_FLOOR).toBeLessThan(day.calories + 2000); // floor constant still exported
   });
 });
 

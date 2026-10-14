@@ -1,7 +1,8 @@
 // Ballistic Performance — calculation engine
-// Ported verbatim from a validated prototype (cross-checked against a real coaching
-// spreadsheet already in use with real clients). Treat as source of truth — see
-// docs/PROJECT_SPEC.md section 3 for the reasoning behind each formula.
+// Calories (Katch-McArdle TDEE minus the tier/phase deficit) are ported verbatim from a validated
+// prototype (cross-checked against a real coaching spreadsheet). The macro split follows the
+// Muscle & Strength Nutrition Pyramid and the gym's nutrition SOP (docs/SOPS.md section 4):
+// protein scaled by the gap to goal weight, fat a share of calories, carbs the remainder, with minimum fat and carbs.
 
 export interface ClientProfile {
   age: number;
@@ -19,7 +20,9 @@ export interface EngineResult {
   bmr: number;
   tdee: number;
   protein: number; // grams/day
-  fat: number; // grams/day
+  fatPct: number; // share of daily calories from fat (0-1)
+  fatMin: number; // grams/day floor
+  carbMin: number; // grams/day floor
 }
 
 export interface DayTarget {
@@ -27,6 +30,7 @@ export interface DayTarget {
   protein: number;
   fat: number;
   carbs: number;
+  floorApplied: boolean; // calories were raised so fat and carbs stay above their minimums
 }
 
 export interface WeeklyTarget {
@@ -35,6 +39,7 @@ export interface WeeklyTarget {
   protein: number;
   fat: number;
   carbs: number;
+  floorApplied: boolean;
   dailyFlat?: DayTarget;
   dailyLow?: DayTarget;
   dailyHigh?: DayTarget;
@@ -66,6 +71,11 @@ export function stepTargetForWeek(week: number): number {
 
 // BMR via Katch-McArdle (uses lean mass, more accurate than Mifflin-St Jeor when body fat
 // % is known). TDEE = BMR * activity level multiplier.
+const FAT_PCT_LOWER = 0.2; // 'High Carb Low Fat': middle of the Pyramid's 15-25% cutting range
+const FAT_PCT_HIGHER = 0.35; // 'Higher Fat': toward the 40% ceiling for people who do better on lower carb
+const FAT_MIN_PER_KG = 0.5;
+const CARB_MIN_PER_KG = 1;
+
 export function calcEngine(profile: ClientProfile): EngineResult | null {
   const { age, gender, startWeight, goalWeight, bodyFatPct, activityLevel, dietApproach } = profile;
   if (!age || !startWeight || !goalWeight || !bodyFatPct || !activityLevel) return null;
@@ -77,52 +87,63 @@ export function calcEngine(profile: ClientProfile): EngineResult | null {
 
   const gap = startWeight - goalWeight;
   const proteinPerKg = gap <= 5 ? 2.2 : gap <= 8 ? 2.0 : gap <= 12 ? 1.8 : 1.6;
-  const fatPerKg = dietApproach === 'High Carb Low Fat' ? 0.8 : 1.2;
 
   return {
     bmr,
     tdee,
     protein: startWeight * proteinPerKg,
-    fat: startWeight * fatPerKg,
+    fatPct: dietApproach === 'High Carb Low Fat' ? FAT_PCT_LOWER : FAT_PCT_HIGHER,
+    fatMin: startWeight * FAT_MIN_PER_KG,
+    carbMin: startWeight * CARB_MIN_PER_KG,
   };
 }
 
+// Protein, fat and carbs for one day at a given calorie target. Protein is fixed, fat is a share of
+// calories, carbs are what is left. If that leaves fat or carbs under their minimums, calories are
+// raised to meet them (the Pyramid prefers a slower loss to starving fat and carbs) and
+// floorApplied is set so the coach can see it.
+function dayMacros(engine: EngineResult, targetCals: number): DayTarget {
+  const { protein, fatPct, fatMin, carbMin } = engine;
+  const fatFromPct = (targetCals * fatPct) / 9;
+  const fat = Math.max(fatFromPct, fatMin);
+  const carbs = (targetCals - protein * 4 - fat * 9) / 4;
+  if (carbs >= carbMin) return { calories: targetCals, protein, fat, carbs, floorApplied: fatMin > fatFromPct };
+  return { calories: protein * 4 + fat * 9 + carbMin * 4, protein, fat, carbs: carbMin, floorApplied: true };
+}
+
 // Full weekly target for a given profile + week number (1-12), accounting for phase and
-// calorie cycling. Carbs always fill whatever calories remain after protein (4kcal/g) and
-// fat (9kcal/g) are accounted for.
+// calorie cycling.
 export function weeklyTarget(profile: ClientProfile, week: number): WeeklyTarget | null {
   const engine = calcEngine(profile);
   if (!engine) return null;
-  const { tdee, protein, fat } = engine;
+  const { tdee } = engine;
   const phase = phaseForWeek(week);
   const d = PHASE_DEFICITS[phase][profile.tier];
-  const carbsFor = (cals: number) => Math.max((cals - protein * 4 - fat * 9) / 4, 0);
 
   if (profile.cycling) {
-    const lowCals = Math.max(tdee - d.low, 0);
-    const highCals = Math.max(tdee - d.high, 0);
-    const lowCarbs = carbsFor(lowCals);
-    const highCarbs = carbsFor(highCals);
+    const low = dayMacros(engine, Math.max(tdee - d.low, 0));
+    const high = dayMacros(engine, Math.max(tdee - d.high, 0));
     return {
       phase,
-      calories: lowCals * 5 + highCals * 2,
-      protein: protein * 7,
-      fat: fat * 7,
-      carbs: lowCarbs * 5 + highCarbs * 2,
-      dailyLow: { calories: lowCals, protein, fat, carbs: lowCarbs },
-      dailyHigh: { calories: highCals, protein, fat, carbs: highCarbs },
+      calories: low.calories * 5 + high.calories * 2,
+      protein: engine.protein * 7,
+      fat: low.fat * 5 + high.fat * 2,
+      carbs: low.carbs * 5 + high.carbs * 2,
+      floorApplied: low.floorApplied || high.floorApplied,
+      dailyLow: low,
+      dailyHigh: high,
     };
   }
 
-  const flatCals = Math.max(tdee - d.flat, 0);
-  const flatCarbs = carbsFor(flatCals);
+  const flat = dayMacros(engine, Math.max(tdee - d.flat, 0));
   return {
     phase,
-    calories: flatCals * 7,
-    protein: protein * 7,
-    fat: fat * 7,
-    carbs: flatCarbs * 7,
-    dailyFlat: { calories: flatCals, protein, fat, carbs: flatCarbs },
+    calories: flat.calories * 7,
+    protein: flat.protein * 7,
+    fat: flat.fat * 7,
+    carbs: flat.carbs * 7,
+    floorApplied: flat.floorApplied,
+    dailyFlat: flat,
   };
 }
 

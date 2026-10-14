@@ -35,10 +35,12 @@ See `lib/calculations.ts` for exact implementation. Summary:
   with a +198 offset for male gender, adjusted by age.
 - **TDEE**: BMR × activity level multiplier.
 - **Protein target**: g/kg of start weight, tiered by (start weight − goal weight) gap:
-  ≤5kg → 2.2 g/kg, ≤8kg → 2.0, ≤12kg → 1.8, >12kg → 1.6.
-- **Fat target**: g/kg of start weight — 0.8 g/kg if diet approach is "High Carb Low Fat",
-  else 1.2 g/kg.
-- **Carbs**: fill whatever calories remain after protein and fat are accounted for.
+  ≤5kg → 2.2 g/kg, ≤8kg → 2.0, ≤12kg → 1.8, >12kg → 1.6 (unchanged from the original engine).
+- **Fat target**: a share of the day's calories: 20% for "High Carb Low Fat", 35% for "Higher
+  Fat", never under 0.5 g/kg.
+- **Carbs**: fill whatever calories remain after protein and fat, never under 1 g/kg. If the
+  tier's deficit would break the fat or carb minimum, calories are raised to meet it (a slower
+  loss, as the Pyramid advises) and the target is flagged `floorApplied`.
 - **Phase-based calorie deficits**: the 12-week program splits into 3 phases (weeks 1-4,
   5-8, 9-12), each with progressively larger deficits per tier — see the
   `PHASE_DEFICITS` table in `lib/calculations.ts` for exact numbers. Fat and protein
@@ -47,12 +49,9 @@ See `lib/calculations.ts` for exact implementation. Summary:
 - **Calorie cycling**: when enabled, weekly target splits into 5 "low" days and 2 "high"
   days that average out to the same weekly deficit as the flat (non-cycling) approach.
 
-**Known design tension to flag to the coach, not silently fix:** because only carbs taper
-across phases while fat/protein stay flat, carbs can crash close to zero by phase 3 at
-higher tiers. This was true of the original spreadsheet design too — don't quietly change
-the underlying logic, but the UI should surface a warning if a computed daily target drops
-below ~1,200 kcal (a general floor, not medical advice) or if computed carbs drop below
-~50g, suggesting a coach review rather than blocking the number outright.
+**Resolved tension:** the original design tapered only carbs, so carbs could reach zero at
+higher tiers. The fat/carb minimums above now prevent that; the Setup tab tells the coach when
+calories were raised. The ~1,200 kcal floor warning is unchanged.
 
 ## 4. Weekly Log (daily check-ins)
 

@@ -342,8 +342,13 @@ export function SetupTab({
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
                   BMR {Math.round(engine.bmr)} · TDEE {Math.round(engine.tdee)} · protein {Math.round(engine.protein)}g · fat{' '}
-                  {Math.round(engine.fat)}g per day
+                  {Math.round(engine.fatPct * 100)}% of calories
                 </p>
+                {week1Target.floorApplied && (
+                  <p className="mt-2 text-amber-600 dark:text-amber-400">
+                    Calories were raised so fat and carbs stay above their minimums — this is a slower loss than the tier asks for.
+                  </p>
+                )}
                 {week1Target.calories / 7 < CALORIE_FLOOR && (
                   <p className="mt-2 text-amber-600 dark:text-amber-400">Daily target is below {CALORIE_FLOOR} kcal — worth a review.</p>
                 )}
