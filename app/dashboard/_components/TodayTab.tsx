@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, Camera, CheckSquare, Flame, Heart } from 'lucide-react';
+import { CalendarDays, Camera, CheckSquare, ChevronRight, Flame, Heart } from 'lucide-react';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
@@ -257,6 +257,18 @@ export function TodayTab({
                   <CheckInButton classRow={nextClass.class} programs={programs} workoutLogs={workoutLogs} onCheckIn={onCheckIn} timezone={profile?.timezone} date={nextClass.booking_date} attended={nextClass.attended} />
                 </div>
               )}
+              <button
+                type="button"
+                onClick={onNavigateClasses}
+                className="mt-3 flex w-full items-center justify-between gap-2 border-t border-accent/20 pt-3 text-left"
+              >
+                <span className="flex items-center gap-2.5">
+                  <CalendarDays className="h-4 w-4 text-accent" />
+                  <span className="text-sm font-bold text-black dark:text-zinc-50">My bookings</span>
+                  <span className="text-xs text-zinc-500">Book &amp; manage</span>
+                </span>
+                <ChevronRight className="h-4 w-4 text-accent" />
+              </button>
             </>
           ) : (
             <>
@@ -273,7 +285,7 @@ export function TodayTab({
         </div>
       )}
 
-      {!isCoachView && <BpMainTiles onNavigate={onNavigate} onNavigateClasses={onNavigateClasses} />}
+      {!isCoachView && <BpMainTiles onNavigate={onNavigate} />}
 
       {isCoachView && <Card className="!p-3.5">
         {(() => {

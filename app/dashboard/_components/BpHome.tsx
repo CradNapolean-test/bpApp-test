@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Award, CalendarDays, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
+import { Award, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
 import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
 import { CLUB_STEP, clubProgress } from '@/lib/clubs';
 import { Card, IconChip, SectionLabel } from '@/app/_components/ui';
@@ -37,7 +37,7 @@ export function Tile({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`relative flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${
+      className={`relative flex w-full min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${
         highlight ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-card dark:border-white/10'
       } ${disabled ? 'cursor-default opacity-50' : 'hover:bg-black/[.03] dark:hover:bg-white/[.04]'}`}
     >
@@ -50,20 +50,9 @@ export function Tile({
   );
 }
 
-// The two main doors into the app, shown right under today's session card.
-export function BpMainTiles({
-  onNavigate,
-  onNavigateClasses,
-}: {
-  onNavigate: (category: Category, screen?: Screen) => void;
-  onNavigateClasses?: () => void;
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <Tile icon={CalendarDays} title="My bookings" subtitle="Book & manage" highlight onClick={onNavigateClasses} />
-      <Tile icon={MessagesSquare} title="My coaching" subtitle="Chat & nutrition" highlight onClick={() => onNavigate('Coach')} />
-    </div>
-  );
+// The second door into the app, full width under the next-session tile (bookings live inside that tile).
+export function BpMainTiles({ onNavigate }: { onNavigate: (category: Category, screen?: Screen) => void }) {
+  return <Tile icon={MessagesSquare} title="My coaching" subtitle="Chat & nutrition" highlight onClick={() => onNavigate('Coach')} />;
 }
 
 export function BpHomeHero({ profile }: { profile: ClientProfileRow | null }) {
