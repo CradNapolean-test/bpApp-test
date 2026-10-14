@@ -8,6 +8,9 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { createEvent, deleteEvent, getEventAttendees, updateEvent } from '@/lib/data/community';
 import { createReward, deleteReward, markRewardGiven, unmarkRewardGiven } from '@/lib/data/rewards';
+import { setShirtGiven } from '@/lib/data/bigDog';
+import type { ShirtRow } from '@/lib/data/bigDog';
+import { TIER_TITLE } from '@/lib/bigDog';
 import type { EventWithSignup, FeedbackRow, RewardOverview } from '@/lib/data/types';
 import { inputCls } from '@/app/_components/ui';
 
@@ -303,10 +306,62 @@ export function EventsPane({ events, past = [] }: { events: EventWithSignup[]; p
   );
 }
 
-export function RewardsPane({ rewards }: { rewards: RewardOverview[] }) {
+function ShirtsCard({ shirts }: { shirts: ShirtRow[] }) {
+  const { run } = useAction();
+  const owed = shirts.filter((s) => !s.givenAt);
+  const given = shirts.filter((s) => s.givenAt);
+  const [showGiven, setShowGiven] = useState(false);
+  if (shirts.length === 0) return null;
+  return (
+    <div className={cardCls}>
+      <p className="text-sm font-extrabold text-black dark:text-zinc-50">Big Dog T-shirts</p>
+      <p className="text-[11px] text-zinc-500">Added automatically when a verified result takes a member into a new tier.</p>
+      {owed.length > 0 ? (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-accent">To hand out · {owed.length}</p>
+          {owed.map((s) => (
+            <div key={`${s.clientId}-${s.tier}`} className="flex items-center justify-between gap-2 text-sm">
+              <span className="min-w-0 truncate text-black dark:text-zinc-50">
+                {s.name} · <span className="font-semibold">{TIER_TITLE[s.tier].replace(' Big Dog', '')}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => run(() => setShirtGiven(s.clientId, s.tier, true), { success: `Marked given to ${s.name}` })}
+                className="shrink-0 rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
+              >
+                Mark given
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-zinc-500">No shirts waiting to be handed out.</p>
+      )}
+      {given.length > 0 && (
+        <div className="mt-3">
+          <button type="button" onClick={() => setShowGiven(!showGiven)} className="text-xs font-bold text-zinc-500">
+            {showGiven ? 'Hide' : 'Show'} given ({given.length})
+          </button>
+          {showGiven &&
+            given.map((s) => (
+              <div key={`${s.clientId}-${s.tier}`} className="mt-1.5 flex items-center justify-between gap-2 text-sm text-zinc-500">
+                <span className="truncate">{s.name} · {TIER_TITLE[s.tier].replace(' Big Dog', '')}</span>
+                <button type="button" onClick={() => run(() => setShirtGiven(s.clientId, s.tier, false), { success: 'Undone' })} className="shrink-0 text-xs font-bold underline">
+                  Undo
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function RewardsPane({ rewards, shirts = [] }: { rewards: RewardOverview[]; shirts?: ShirtRow[] }) {
   const [adding, setAdding] = useState(false);
   return (
     <section className="max-w-2xl space-y-3">
+      <ShirtsCard shirts={shirts} />
       {adding ? (
         <NewRewardForm onDone={() => setAdding(false)} />
       ) : (

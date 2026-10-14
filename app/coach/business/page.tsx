@@ -4,6 +4,7 @@ import { getCreditPacks, getPackages, getPackUsage, getPlanMemberCounts } from '
 import { getCoachChatOverview } from '@/lib/data/chat';
 import { getPastEvents, getRecentFeedback, getUpcomingEvents } from '@/lib/data/community';
 import { getRewardOverview } from '@/lib/data/rewards';
+import { getBigDogShirts } from '@/lib/data/bigDog';
 import { getBusinessOverview } from '@/lib/data/coachDashboard';
 import { BusinessShell } from './_components/BusinessShell';
 
@@ -19,7 +20,7 @@ export default async function CoachBusinessPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [packages, creditPacks, events, pastEvents, feedback, rewards, chatOverview, overview, planCountsById, packUsage] = await Promise.all([
+  const [packages, creditPacks, events, pastEvents, feedback, rewards, chatOverview, overview, planCountsById, packUsage, shirts] = await Promise.all([
     getPackages(),
     getCreditPacks(),
     getUpcomingEvents(null),
@@ -30,6 +31,7 @@ export default async function CoachBusinessPage() {
     getBusinessOverview().catch(() => null),
     getPlanMemberCounts(),
     getPackUsage(),
+    getBigDogShirts(),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
@@ -43,6 +45,7 @@ export default async function CoachBusinessPage() {
       packUsage={packUsage}
       feedback={feedback}
       rewards={rewards}
+      shirts={shirts}
       overview={overview}
       unreadCount={unreadCount}
       email={user.email ?? 'Coach'}

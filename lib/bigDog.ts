@@ -2,8 +2,9 @@
 // Three levels per exercise (Rookie / Strong / Big Dog), split by gender where they differ.
 // The total number of exercises at Big Dog level decides the T-shirt tier.
 //
-// All 13 exercises from the sheet are included and Gold means Big Dog in every one of them
-// (owner confirmed; the mockup only showed 12).
+// 12 exercises: the owner dropped the 5000m run from the original sheet (Oct 2026), so Gold means
+// Big Dog in every one of the 12. Old run_5000 result rows stay in the ledger but are ignored
+// (currentLevels skips keys that are not in EXERCISES).
 
 export type BigDogGender = 'male' | 'female';
 export type BigDogLevel = 'none' | 'rookie' | 'strong' | 'big_dog';
@@ -68,11 +69,6 @@ export const EXERCISES: BigDogExercise[] = [
     female: { rookie: '<10:40', strong: '<9:40', bigDog: '<8:50' },
   },
   {
-    key: 'run_5000', name: '5000m run', category: 'Aerobic fitness', kind: 'time',
-    male: { rookie: '<28:00', strong: '<24:00', bigDog: '<20:00' },
-    female: { rookie: '<30:00', strong: '<26:00', bigDog: '<22:00' },
-  },
-  {
     key: 'rower_30_30', name: 'Rower 30:30 x8', category: 'Anaerobic fitness', kind: 'distance',
     male: { rookie: '>960m', strong: '>1100m', bigDog: '>1210m' },
     female: { rookie: '>730m', strong: '>990m', bigDog: '>1150m' },
@@ -91,7 +87,7 @@ export const EXERCISES: BigDogExercise[] = [
 
 export const EXERCISE_KEYS = new Set(EXERCISES.map((e) => e.key));
 
-// T-shirt tiers: White 1+ exercises at Big Dog, Turquoise 3+, Silver 6+, Gold all 13.
+// T-shirt tiers: White 1+ exercises at Big Dog, Turquoise 3+, Silver 6+, Gold all of them.
 export const TIER_THRESHOLDS = { white: 1, turquoise: 3, silver: 6, gold: EXERCISES.length } as const;
 
 export const LEVEL_LABEL: Record<BigDogLevel, string> = {
@@ -107,6 +103,12 @@ export function tierForCount(bigDogCount: number): BigDogTier {
   if (bigDogCount >= TIER_THRESHOLDS.turquoise) return 'turquoise';
   if (bigDogCount >= TIER_THRESHOLDS.white) return 'white';
   return 'none';
+}
+
+// Every shirt a member with this many Big Dog exercises has earned, lowest first (3 Big Dogs = White + Turquoise).
+export function tiersReached(bigDogCount: number): Exclude<BigDogTier, 'none'>[] {
+  const all: Exclude<BigDogTier, 'none'>[] = ['white', 'turquoise', 'silver', 'gold'];
+  return all.filter((t) => bigDogCount >= TIER_THRESHOLDS[t]);
 }
 
 export const TIER_TITLE: Record<BigDogTier, string> = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestResult, bigDogCount, currentLevels, EXERCISES, formatResult, levelForResult, nextTarget, parseResultInput, tierForCount } from './bigDog';
+import { bestResult, bigDogCount, tiersReached, currentLevels, EXERCISES, formatResult, levelForResult, nextTarget, parseResultInput, tierForCount } from './bigDog';
 import type { BigDogResultLike } from './bigDog';
 
 const row = (exercise_key: string, level: BigDogResultLike['level'], tested_date: string, created_at = tested_date): BigDogResultLike => ({
@@ -76,7 +76,7 @@ describe('levelForResult', () => {
     expect(levelForResult(ex('row_2000'), 'male', 8 * 60 + 29)).toBe('strong');
     expect(levelForResult(ex('row_2000'), 'male', 8 * 60 + 30)).toBe('rookie');
     expect(levelForResult(ex('row_2000'), 'male', 9 * 60 + 10)).toBe('none');
-    expect(levelForResult(ex('run_5000'), 'female', 21 * 60 + 59)).toBe('big_dog');
+    expect(levelForResult(ex('ski_2000'), 'female', 9 * 60 + 44)).toBe('big_dog');
   });
   it('distance standards with ">" must be exceeded', () => {
     expect(levelForResult(ex('rower_30_30'), 'male', 1211)).toBe('big_dog');
@@ -128,5 +128,95 @@ describe('self-logged scores', () => {
     const b = { ...row('row_2000', 'big_dog', '2026-06-01'), result_value: 430 };
     expect(bestResult([a, b], ex('row_2000'))?.result_value).toBe(430);
     expect(bestResult([{ ...mine, result_value: 150 }, mine], ex('deadlift'))?.result_value).toBe(165);
+  });
+});
+
+describe('the 12 exercises', () => {
+  it('no longer includes the 5000m run, and Gold needs all 12', () => {
+    expect(EXERCISES).toHaveLength(12);
+    expect(EXERCISES.some((e) => e.key === 'run_5000')).toBe(false);
+    expect(tierForCount(12)).toBe('gold');
+    expect(tierForCount(11)).toBe('silver');
+  });
+  it('old run results are ignored rather than counted', () => {
+    expect(bigDogCount([row('run_5000', 'big_dog', '2026-01-01')])).toBe(0);
+  });
+});
+
+// ---- Scoring audit: every exercise, both sexes, every boundary ----------------------------------------
+// Reads each standard back out of its display text ("160kg", "<7:20", ">1210m", "2:30", "Banded", "5 BW") with a
+// separate, simple parser, then checks levelForResult on both sides of every boundary. A typo in the standards
+// table (a level that is easier than the one below it) fails here too.
+
+type Parsed = { n: number; strict: boolean };
+function readStandard(text: string): Parsed {
+  const strict = /^[<>]/.test(text);
+  const t = text.replace(/^[<>]/, '').replace(/kg|m|BW/i, '').trim();
+  if (/banded/i.test(text)) return { n: 0, strict };
+  const clock = t.match(/^(\d+):(\d{2})$/);
+  return { n: clock ? Number(clock[1]) * 60 + Number(clock[2]) : Number(t), strict };
+}
+
+describe.each(EXERCISES.flatMap((e) => (['male', 'female'] as const).map((g) => [e.key, g] as const)))('%s (%s)', (key, gender) => {
+  const exercise = ex(key);
+  const s = exercise[gender];
+  const [rookie, strong, bigDog] = [readStandard(s.rookie), readStandard(s.strong), readStandard(s.bigDog)];
+  const lowerIsBetter = exercise.kind === 'time';
+  // One unit beyond a threshold in the "harder" direction / in the "easier" direction.
+  const harder = (n: number) => (lowerIsBetter ? n - 1 : n + 1);
+  const easier = (n: number) => (lowerIsBetter ? n + 1 : n - 1);
+
+  it('has standards that get harder: rookie, then strong, then big dog', () => {
+    if (lowerIsBetter) {
+      expect(strong.n).toBeLessThan(rookie.n);
+      expect(bigDog.n).toBeLessThan(strong.n);
+    } else {
+      expect(strong.n).toBeGreaterThan(rookie.n);
+      expect(bigDog.n).toBeGreaterThan(strong.n);
+    }
+  });
+
+  it('scores a result at, just past and just short of each standard correctly', () => {
+    const levelAt = (v: number) => levelForResult(exercise, gender, v);
+    // Big Dog
+    expect(levelAt(harder(bigDog.n))).toBe('big_dog');
+    expect(levelAt(bigDog.n)).toBe(bigDog.strict ? 'strong' : 'big_dog');
+    // Strong
+    expect(levelAt(strong.n)).toBe(strong.strict ? 'rookie' : 'strong');
+    expect(levelAt(easier(bigDog.n))).not.toBe('big_dog');
+    // Rookie
+    expect(levelAt(rookie.n)).toBe(rookie.strict ? 'none' : 'rookie');
+    expect(levelAt(harder(rookie.n))).not.toBe('none');
+    // Below rookie (chin-ups: any rep count, including banded 0, is at least rookie)
+    if (exercise.kind !== 'reps') expect(levelAt(easier(rookie.n))).toBe('none');
+  });
+});
+
+describe('scoring edge cases', () => {
+  it('a result of exactly 0 is only valid for banded chin-ups', () => {
+    expect(parseResultInput('weight', '0')).toBeNull();
+    expect(parseResultInput('time', '0:00')).toBeNull();
+    expect(parseResultInput('reps', '0')).toBe(0);
+    expect(parseResultInput('reps', 'banded')).toBe(0);
+  });
+  it('reads clock times as seconds', () => {
+    expect(parseResultInput('time', '7:19')).toBe(439);
+    expect(parseResultInput('time', '439')).toBe(439);
+    expect(parseResultInput('hold', '2:30')).toBe(150);
+  });
+  it('rejects nonsense', () => {
+    expect(parseResultInput('weight', 'abc')).toBeNull();
+    expect(parseResultInput('reps', '2.5')).toBeNull();
+    expect(parseResultInput('weight', '-5')).toBeNull();
+  });
+});
+
+describe('tiersReached', () => {
+  it('lists every shirt earned so far', () => {
+    expect(tiersReached(0)).toEqual([]);
+    expect(tiersReached(1)).toEqual(['white']);
+    expect(tiersReached(3)).toEqual(['white', 'turquoise']);
+    expect(tiersReached(6)).toEqual(['white', 'turquoise', 'silver']);
+    expect(tiersReached(EXERCISES.length)).toEqual(['white', 'turquoise', 'silver', 'gold']);
   });
 });

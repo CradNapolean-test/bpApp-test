@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
-import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, Mail, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
+import { EmailCoachSheet } from './EmailCoachSheet';
 import { TargetRings } from './NutritionSummary';
 import { Badge, Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
@@ -36,6 +37,7 @@ export function CoachingHub({
   unreadMessageCount,
   pendingForms,
   hiddenCategories,
+  dailyCheckinHidden = false,
   onNavigate,
   onOpenWorkoutDay,
 }: {
@@ -48,10 +50,13 @@ export function CoachingHub({
   pendingForms: number;
   // Areas the member's plan (or coach) has switched off entirely -- their rows are hidden.
   hiddenCategories: Set<Category>;
+  // The member's plan (or coach) has switched the daily check-in (Weekly Log) off.
+  dailyCheckinHidden?: boolean;
   onNavigate: (category: Category, screen?: Screen) => void;
   // Opens a specific programme day in the Workout screen (today's workout from the Training card).
   onOpenWorkoutDay: (dayId: string) => void;
 }) {
+  const [emailOpen, setEmailOpen] = useState(false);
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
 
@@ -108,6 +113,14 @@ export function CoachingHub({
           )}
         </button>
       </Card>
+      <button
+        type="button"
+        onClick={() => setEmailOpen(true)}
+        className="-mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-black/10 py-2.5 text-sm font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+      >
+        <Mail className="h-4 w-4" /> Email your coach
+      </button>
+      {emailOpen && <EmailCoachSheet onClose={() => setEmailOpen(false)} />}
 
       {show('Nutrition') && (
         <div>
@@ -185,7 +198,7 @@ export function CoachingHub({
         </div>
       )}
 
-      {show('Accountability') && (
+      {show('Accountability') && !dailyCheckinHidden && (
         <div>
           <SectionLabel>Daily check-in</SectionLabel>
           <Card>

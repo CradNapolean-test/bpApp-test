@@ -38,7 +38,8 @@ export function messageToHtml(message: string): string {
 // turned into their email.
 export async function sendPersonalisedEmails(
   recipients: { email: string; name: string | null }[],
-  message: string
+  message: string,
+  subjectOverride?: string
 ): Promise<BroadcastEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || recipients.length === 0) {
@@ -53,7 +54,7 @@ export async function sendPersonalisedEmails(
       const { error } = await resend.batch.send(
         chunk.map((r) => {
           const text = personaliseMessage(message, r.name);
-          return { from: FROM_EMAIL, to: r.email, subject: subjectFromMessage(text), html: messageToHtml(text) };
+          return { from: FROM_EMAIL, to: r.email, subject: subjectOverride ?? subjectFromMessage(text), html: messageToHtml(text) };
         })
       );
       if (!error) sent += chunk.length;
@@ -91,4 +92,29 @@ export async function sendBroadcastEmail(
   }
 
   return { sent, skipped: false };
+}
+
+// A member's note to their coach. Reply-To is the member, so the coach's reply goes straight to them.
+export async function sendCoachEmail(opts: {
+  to: string;
+  replyTo: string;
+  memberName: string;
+  subject: string;
+  message: string;
+}): Promise<{ sent: boolean; skipped: boolean }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { sent: false, skipped: true };
+  const who = opts.memberName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  try {
+    const { error } = await new Resend(apiKey).emails.send({
+      from: FROM_EMAIL,
+      to: opts.to,
+      replyTo: opts.replyTo,
+      subject: `${opts.memberName}: ${opts.subject}`,
+      html: `${messageToHtml(opts.message)}<p style="color:#888">Sent from the Ballistic Performance app by ${who}. Reply to answer them directly.</p>`,
+    });
+    return { sent: !error, skipped: false };
+  } catch {
+    return { sent: false, skipped: false };
+  }
 }

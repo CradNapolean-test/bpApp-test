@@ -7,6 +7,7 @@ import { useAction } from '@/app/_components/useAction';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
+import { MemberScreenToggles } from './MemberScreenToggles';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
 
@@ -102,12 +103,14 @@ export function SetupTab({
   initialProfile,
   readOnly,
   isCoachView = false,
+  screenToggles,
 }: {
   clientId: string;
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
   // Coach-only controls (nutrition tracking method, calculation detail) show for a coach.
   isCoachView?: boolean;
+  screenToggles?: { disabledScreens: string[]; planIncludedScreens: string[] | null; planName: string | null };
 }) {
   const { run, busy: saving } = useAction();
   const { run: runMode, busy: savingMode } = useAction();
@@ -296,6 +299,8 @@ export function SetupTab({
             </div>
           </div>
         </SectionCard>
+
+        {isCoachView && !readOnly && screenToggles && <MemberScreenToggles clientId={clientId} {...screenToggles} />}
 
         {isCoachView && !readOnly && (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">

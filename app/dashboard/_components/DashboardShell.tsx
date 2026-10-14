@@ -36,6 +36,7 @@ import { ProgressTab } from './ProgressTab';
 import { FormsTab } from './FormsTab';
 import { EducationTab } from './EducationTab';
 import { RecipesTab } from './RecipesTab';
+import { StrengthTab } from './StrengthTab';
 import { TodayTab } from './TodayTab';
 import { ChatTab } from './ChatTab';
 import { AccountTab } from './AccountTab';
@@ -770,6 +771,8 @@ export function DashboardShell({
               isCoachView={isCoachView}
               rewards={rewardsData.rewards}
               bigDogResults={bigDogResults}
+              events={events}
+              dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (
@@ -782,6 +785,7 @@ export function DashboardShell({
               unreadMessageCount={unreadMessageCount}
               pendingForms={formAssignments.filter((f) => !f.completed_at).length}
               hiddenCategories={disabledCategories}
+              dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
               onNavigate={handleNavigate}
               onOpenWorkoutDay={handleCheckIn}
             />
@@ -792,6 +796,11 @@ export function DashboardShell({
               initialProfile={profile}
               readOnly={isCoachView && !isOwnClient}
               isCoachView={isCoachView}
+              screenToggles={
+                isCoachView
+                  ? { disabledScreens, planIncludedScreens: membership?.package?.included_screens ?? null, planName: membership?.package?.name ?? null }
+                  : undefined
+              }
             />
           )}
           {effectiveScreen === 'Account' && !isCoachView && (
@@ -901,6 +910,7 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
           {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
+          {effectiveScreen === 'Strength' && <StrengthTab workoutLogs={workoutLogs} programs={programs} profile={profile} />}
           {effectiveScreen === 'Body Scans' && (
             <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} isCoachView={isCoachView} />
           )}

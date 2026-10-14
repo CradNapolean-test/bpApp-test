@@ -4,7 +4,9 @@ import { raise } from './errors';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
-import { EXERCISES, EXERCISE_KEYS, formatResult, genderFromProfile, levelForResult } from '@/lib/bigDog';
+import { EXERCISES, EXERCISE_KEYS, TIER_TITLE, bigDogCount, formatResult, genderFromProfile, levelForResult, tiersReached } from '@/lib/bigDog';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { sendPushToClient } from '@/lib/push';
 import type { BigDogLevel } from '@/lib/bigDog';
 import type { BigDogResultRow } from './types';
 
@@ -39,6 +41,31 @@ export async function recordBigDogResult(
     result_text: resultText?.trim() || null,
   });
   if (error) raise(error);
+  await awardShirts(clientId);
+}
+
+// After a coach-verified result: make sure a shirt is owed for every tier the member has now reached, tell
+// them about any new one, and stay quiet about tiers already recorded. Self-reported scores never count
+// (bigDogCount ignores them). Best effort: a failure here must not undo the result that was just saved.
+async function awardShirts(clientId: string): Promise<void> {
+  try {
+    const results = await getBigDogResults(clientId);
+    const tiers = tiersReached(bigDogCount(results));
+    if (tiers.length === 0) return;
+    const admin = createAdminClient();
+    const { data: added } = await admin
+      .from('big_dog_shirts')
+      .upsert(tiers.map((tier) => ({ client_id: clientId, tier })), { onConflict: 'client_id,tier', ignoreDuplicates: true })
+      .select('tier');
+    for (const row of added ?? []) {
+      const title = TIER_TITLE[row.tier as keyof typeof TIER_TITLE];
+      const message = `You earned the ${title} T-shirt! Your coach will get it to you.`;
+      await admin.from('notifications').insert({ client_id: clientId, message });
+      await sendPushToClient(clientId, { title: `${title} T-shirt earned`, body: message, url: '/dashboard' }).catch(() => {});
+    }
+  } catch {
+    // Swallowed on purpose, see above. The next verified result re-checks every tier.
+  }
 }
 
 // The level is always recomputed here from the number and the client's sex, never taken from the
@@ -64,7 +91,9 @@ async function insertScore(clientId: string, exerciseKey: string, value: number,
     result_text: formatResult(scored.exercise.kind, value),
     self_reported: selfReported,
   });
-  return error ? fail(error, 'Could not save that score') : ok();
+  if (error) return fail(error, 'Could not save that score');
+  if (!selfReported) await awardShirts(clientId);
+  return ok();
 }
 
 // A member logging their own score (RLS lets them insert self-reported rows for themselves only).
@@ -82,4 +111,47 @@ export async function deleteMyBigDogScore(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('big_dog_results').delete().eq('id', id).eq('self_reported', true);
   return error ? fail(error, 'Could not delete that score') : ok();
+}
+
+// ---- Shirts owed (coach side) ----
+
+export interface ShirtRow {
+  clientId: string;
+  name: string;
+  tier: 'white' | 'turquoise' | 'silver' | 'gold';
+  earnedAt: string;
+  givenAt: string | null;
+}
+
+// Every shirt for the coach's gym, newest first (RLS scopes it). Tolerates migration 0119 not applied yet.
+export async function getBigDogShirts(): Promise<ShirtRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('big_dog_shirts').select('client_id, tier, earned_at, given_at').order('earned_at', { ascending: false });
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') return [];
+    raise(error);
+  }
+  const ids = [...new Set((data ?? []).map((r) => r.client_id as string))];
+  const { data: profiles } = ids.length
+    ? await supabase.from('client_profiles').select('client_id, name').in('client_id', ids)
+    : { data: [] as { client_id: string; name: string | null }[] };
+  const nameBy = new Map((profiles ?? []).map((p) => [p.client_id as string, (p.name as string | null) ?? 'Member']));
+  return (data ?? []).map((r) => ({
+    clientId: r.client_id as string,
+    name: nameBy.get(r.client_id as string) ?? 'Member',
+    tier: r.tier as ShirtRow['tier'],
+    earnedAt: r.earned_at as string,
+    givenAt: (r.given_at as string | null) ?? null,
+  }));
+}
+
+export async function setShirtGiven(clientId: string, tier: string, given: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from('big_dog_shirts')
+    .update({ given_at: given ? new Date().toISOString() : null, given_by: given ? auth.user?.id ?? null : null })
+    .eq('client_id', clientId)
+    .eq('tier', tier);
+  return error ? fail(error, 'Could not update that') : ok();
 }
