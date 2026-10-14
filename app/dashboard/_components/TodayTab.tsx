@@ -21,7 +21,6 @@ import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
 import { bannerEvent } from '@/lib/eventBanner';
 import { EventBanner } from './EventBanner';
-import { planCountdown } from '@/lib/planCountdown';
 import { showsStreak } from '@/lib/streak';
 import { BpHomeExplore, BpHomeHero, BpHomeProgress, BpMainTiles } from './BpHome';
 import { BigDogCard } from './BigDogTab';
@@ -111,10 +110,6 @@ export function TodayTab({
 
   const streak = currentStreak(historyLogs, todayIso);
   const upcomingEvent = useMemo(() => bannerEvent(events, new Date()), [events]);
-  const challenge =
-    membership?.package?.duration_weeks != null
-      ? planCountdown({ ...membership, durationWeeks: membership.package.duration_weeks }, todayIso)
-      : null;
   const [homeTab, setHomeTab] = useState<'today' | 'progress'>('today');
   const showToday = isCoachView || homeTab === 'today';
   const streakVisible = showsStreak(membership);
@@ -156,20 +151,6 @@ export function TodayTab({
       )}
       {showToday && (
       <>
-      {!isCoachView && membership?.package && challenge && challenge.state !== 'ended' && (
-        <Card className="!px-3.5 !py-3">
-          <p className="text-xs font-bold text-black dark:text-zinc-50">
-            {challenge.state === 'upcoming'
-              ? `${membership.package.name} starts in ${challenge.daysToStart} day${challenge.daysToStart === 1 ? '' : 's'}`
-              : `${membership.package.name}: ${challenge.lastWeek ? 'final week' : `week ${challenge.week} of ${challenge.totalWeeks}`}`}
-          </p>
-          {challenge.state === 'active' && challenge.daysLeft != null && (
-            <p className="mt-0.5 text-xs text-zinc-500">
-              {challenge.daysLeft === 0 ? 'Last day today' : `${challenge.daysLeft} day${challenge.daysLeft === 1 ? '' : 's'} to go`}
-            </p>
-          )}
-        </Card>
-      )}
       {!isCoachView && upcomingEvent && <EventBanner event={upcomingEvent} onOpen={() => onNavigate('Community', 'Events')} />}
 
       {isCoachView && (
