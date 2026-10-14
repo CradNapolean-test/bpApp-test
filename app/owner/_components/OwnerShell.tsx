@@ -8,6 +8,7 @@ import { ClientOnly } from '@/app/_components/ClientOnly';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Logo } from '@/app/_components/Logo';
 import { Segmented } from '@/app/_components/ui';
+import { ReportsPane } from './ReportsPane';
 import type { OwnerGym, OwnerGymStats, OwnerTeamRow } from '@/lib/data/owner';
 
 // The owner's home: every gym in the organisation side by side, with a filter to look at one. The numbers
@@ -169,6 +170,7 @@ function GymCard({ gym, stats }: { gym: OwnerGym; stats: OwnerGymStats | undefin
 
 export function OwnerShell({ gyms, stats, email }: { gyms: OwnerGym[] | null; stats: OwnerGymStats[] | null; email: string }) {
   const [filter, setFilter] = useState<string>('all');
+  const [view, setView] = useState<'overview' | 'reports'>('overview');
   const shown = gyms ? (filter === 'all' ? gyms : gyms.filter((g) => g.id === filter)) : [];
   const statsOf = (id: string) => stats?.find((s) => s.gymId === id);
   const shownStats = shown.map((g) => statsOf(g.id)).filter((s): s is OwnerGymStats => !!s);
@@ -204,8 +206,20 @@ export function OwnerShell({ gyms, stats, email }: { gyms: OwnerGym[] | null; st
           </div>
         }
       >
-        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">Overview</h1>
-        <p className="mb-4 text-sm text-zinc-500">Every gym in the business, side by side.</p>
+        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">{view === 'overview' ? 'Overview' : 'Reports'}</h1>
+        <p className="mb-4 text-sm text-zinc-500">
+          {view === 'overview' ? 'Every gym in the business, side by side.' : 'Check-ins and coach messaging over time.'}
+        </p>
+        {gyms !== null && gyms.length > 0 && (
+          <div className="mb-4">
+            <Segmented
+              label="Section"
+              value={view}
+              onChange={setView}
+              options={[{ value: 'overview', label: 'Overview' }, { value: 'reports', label: 'Reports' }]}
+            />
+          </div>
+        )}
 
         {gyms === null ? (
           <EmptyState icon={Users} title="Owner access is not set up yet" hint="Run migrations 0102 and 0103, then npm run create-owner." />
@@ -222,7 +236,9 @@ export function OwnerShell({ gyms, stats, email }: { gyms: OwnerGym[] | null; st
               />
             )}
 
-            {shown.length > 1 && shownStats.length > 0 && (
+            {view === 'reports' && <ReportsPane gymId={filter === 'all' ? null : filter} />}
+
+            {view === 'overview' && shown.length > 1 && shownStats.length > 0 && (
               <section className="rounded-2xl border border-accent/30 bg-accent-soft/30 p-4">
                 <h2 className="mb-3 text-lg font-extrabold text-black dark:text-zinc-50">All gyms</h2>
                 <Numbers s={totals} />
@@ -233,11 +249,13 @@ export function OwnerShell({ gyms, stats, email }: { gyms: OwnerGym[] | null; st
               </section>
             )}
 
+            {view === 'overview' && (
             <div className="grid gap-4 lg:grid-cols-2">
               {shown.map((g) => (
                 <GymCard key={g.id} gym={g} stats={statsOf(g.id)} />
               ))}
             </div>
+            )}
           </div>
         )}
       </AppShell>

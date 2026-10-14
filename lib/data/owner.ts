@@ -66,3 +66,25 @@ export async function getOwnerGymStats(): Promise<OwnerGymStats[] | null> {
   if (error) return null;
   return (data ?? []) as OwnerGymStats[];
 }
+
+// ---- Reports: check-ins and coach messages (migration 0120) ----
+
+export interface ActivityReport {
+  // Members who finished onboarding in the chosen gym(s); the base for every percentage.
+  members: number;
+  // Last 28 days, oldest first. checkIns = members who logged anything that day.
+  perDay: { date: string; checkIns: number; pct: number }[];
+  // Last N weeks (Monday start), oldest first.
+  perWeek: { weekStart: string; checkIns: number; activeMembers: number; pct: number; coachMessages: number; memberMessages: number }[];
+  // Average share of members checking in on each weekday (1 = Monday) over the last 8 complete weeks.
+  byWeekday: { dow: number; avgPct: number }[];
+  coaches: { coachId: string; name: string; members: number; sent30: number; membersMessaged30: number; checkedInThisWeek: number }[];
+}
+
+// gymId null = every gym in the organisation. Owners only (the database refuses anyone else).
+export async function getOwnerActivityReport(gymId: string | null, weeks = 12): Promise<ActivityReport | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('owner_activity_report', { p_gym: gymId, p_weeks: weeks });
+  if (error) return null;
+  return data as ActivityReport;
+}
