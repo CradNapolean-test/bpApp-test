@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { Columns2, Download, X } from 'lucide-react';
 import { ImageIcon, Plus } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { useToast } from '@/app/_components/ToastProvider';
+import { MEASUREMENT_CM, isValidMeasurement, measurementMessage } from '@/lib/limits';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
@@ -44,6 +46,7 @@ export function ProgressTab({
   const { run: runUpload, busy: uploading } = useAction();
   const { run: runDelete } = useAction();
   const { run: runMeasurement, busy: savingMeasurement } = useAction();
+  const toast = useToast();
   // Photos/measurements are saved tagged with this date -- must be the client's local day
   // (matching dashboardBundle's server-side resolution), not raw UTC, or an entry logged near
   // a UTC boundary gets silently filed under the wrong calendar day.
@@ -102,8 +105,8 @@ export function ProgressTab({
         .filter(([, v]) => v !== '')
         .map(([k, v]) => [k, Number(v)])
     );
-    if (Object.values(fields).some((v) => !Number.isFinite(v) || v < 10 || v > 300)) {
-      await runMeasurement(async () => ({ ok: false as const, error: 'Measurements must be between 10 and 300 cm.' }));
+    if (!Object.values(fields).every(isValidMeasurement)) {
+      toast.error(measurementMessage);
       return;
     }
     await runMeasurement(() => addMeasurementLog(clientId, today, fields), {
@@ -246,8 +249,8 @@ export function ProgressTab({
                   <input
                     type="number"
                     step="0.1"
-                    min={10}
-                    max={300}
+                    min={MEASUREMENT_CM.min}
+                    max={MEASUREMENT_CM.max}
                     value={measurements[key] ?? ''}
                     onChange={(e) => setMeasurements({ ...measurements, [key]: e.target.value })}
                     className={inputCls}

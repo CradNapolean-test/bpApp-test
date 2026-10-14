@@ -320,7 +320,7 @@ function AddScanSheet({ clientId, timezone, onClose }: { clientId: string; timez
         </div>
         <div className="space-y-1">
           <label className={labelCls}>Notes (optional)</label>
-          <input className={inputCls} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="e.g. Fasted, morning" />
+          <input className={inputCls} maxLength={1000} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="e.g. Fasted, morning" />
         </div>
         {error && <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
         <button

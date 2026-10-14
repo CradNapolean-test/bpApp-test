@@ -233,6 +233,7 @@ export function RecipesTab({
                 required
                 autoFocus
                 value={name}
+                maxLength={100}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Protein overnight oats"
                 className={inputCls}
@@ -240,7 +241,7 @@ export function RecipesTab({
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-zinc-500">How many servings does it make?</label>
-              <input type="number" inputMode="numeric" min={1} value={servings} onChange={(e) => setServings(e.target.value)} className={inputCls} />
+              <input type="number" inputMode="numeric" min={1} max={100} value={servings} onChange={(e) => setServings(e.target.value)} className={inputCls} />
             </div>
             <div className="flex gap-2">
               <button type="submit" disabled={creating} className="flex-1 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground disabled:opacity-50">

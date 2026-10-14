@@ -260,6 +260,7 @@ export function PhotoDiaryTab({
               </button>
             )}
             <textarea
+              maxLength={500}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What is it? e.g. Chicken salad, small portion"

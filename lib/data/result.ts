@@ -3,6 +3,8 @@
 // unexpected faults, but wrong for domain errors the user must actually read ("Not enough
 // credits", "Form already submitted"). Returned values aren't redacted, so the RPC-backed
 // mutations hand these back instead of throwing. useAction() understands the shape.
+import { friendlyMessage } from './errors';
+
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export function ok(): ActionResult {
@@ -11,5 +13,5 @@ export function ok(): ActionResult {
 
 export function fail(error: { message?: string } | null, fallback = 'Request failed'): ActionResult {
   const message = error?.message?.trim();
-  return { ok: false, error: message && message.length > 0 ? message : fallback };
+  return { ok: false, error: message && message.length > 0 ? friendlyMessage(message) : fallback };
 }

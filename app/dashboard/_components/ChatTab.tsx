@@ -392,6 +392,7 @@ export function ChatTab({
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
             <input
               type="text"
+              maxLength={4000}
               value={text}
               onChange={(e) => changeText(e.target.value)}
               placeholder={`Message ${otherPartyName}…`}

@@ -29,7 +29,6 @@ type SetupFields = Omit<
   | 'nutrition_tracking_mode'
   | 'join_date'
   | 'referral_source'
-  | 'admin_notes'
   | 'deletion_requested_at'
   | 'minutes_per_1000_steps'
     | 'height_cm'
@@ -191,6 +190,7 @@ export function SetupTab({
               <input
                 required
                 className={inputCls}
+                maxLength={100}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
@@ -211,6 +211,7 @@ export function SetupTab({
               <input
                 type="tel"
                 className={inputCls}
+                maxLength={30}
                 value={form.phone ?? ''}
                 onChange={(e) => setForm({ ...form, phone: e.target.value || null })}
               />
@@ -228,6 +229,7 @@ export function SetupTab({
               <label className={labelCls}>Address</label>
               <input
                 className={inputCls}
+                maxLength={300}
                 value={form.address ?? ''}
                 onChange={(e) => setForm({ ...form, address: e.target.value || null })}
               />
@@ -236,6 +238,7 @@ export function SetupTab({
               <label className={labelCls}>Emergency contact name</label>
               <input
                 className={inputCls}
+                maxLength={100}
                 value={form.emergency_contact_name ?? ''}
                 onChange={(e) => setForm({ ...form, emergency_contact_name: e.target.value || null })}
               />
@@ -245,6 +248,7 @@ export function SetupTab({
               <input
                 type="tel"
                 className={inputCls}
+                maxLength={30}
                 value={form.emergency_contact_phone ?? ''}
                 onChange={(e) => setForm({ ...form, emergency_contact_phone: e.target.value || null })}
               />
@@ -260,6 +264,7 @@ export function SetupTab({
                 rows={7}
                 className={`${inputCls} resize-y leading-relaxed`}
                 placeholder="Be as detailed as you can. What do you want to achieve and why does it matter to you? Is there a date or event you're working towards? What has worked or not worked before? Any injuries, health conditions or things we should know about?"
+                maxLength={5000}
                 value={form.goal_description ?? ''}
                 onChange={(e) => setForm({ ...form, goal_description: e.target.value })}
               />
@@ -271,6 +276,7 @@ export function SetupTab({
                 rows={3}
                 className={`${inputCls} resize-y leading-relaxed`}
                 placeholder="e.g. Trained on and off for 2 years, new to lifting weights, ex-athlete..."
+                maxLength={2000}
                 value={form.experience ?? ''}
                 onChange={(e) => setForm({ ...form, experience: e.target.value })}
               />

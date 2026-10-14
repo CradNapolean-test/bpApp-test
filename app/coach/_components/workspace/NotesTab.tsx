@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addJournalEntry, deleteJournalEntry } from '@/lib/data/clientJournal';
-import { updateClientAdminDetails } from '@/lib/data/clientProfile';
+import { getClientCoachNotes, updateClientAdminDetails } from '@/lib/data/clientProfile';
 import type { ClientJournalEntryRow, ClientProfileRow } from '@/lib/data/types';
 
 const SECTIONS: { kind: ClientJournalEntryRow['kind']; label: string; addLabel: string; placeholder: string }[] = [
@@ -136,7 +136,26 @@ function AdminDetailsSection({
   const { run, busy } = useAction();
   const [joinDate, setJoinDate] = useState(profile?.join_date ?? '');
   const [referralSource, setReferralSource] = useState(profile?.referral_source ?? '');
-  const [adminNotes, setAdminNotes] = useState(profile?.admin_notes ?? '');
+  const [adminNotes, setAdminNotes] = useState('');
+  // The notes are in their own coach-only table, so they are fetched here rather than arriving with the profile.
+  const [notesLoaded, setNotesLoaded] = useState(false);
+  const [notesFailed, setNotesFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getClientCoachNotes(clientId)
+      .then((notes) => {
+        if (cancelled) return;
+        setAdminNotes(notes ?? '');
+        setNotesLoaded(true);
+      })
+      // Left locked on failure: saving a blank box would otherwise delete the notes that could not be loaded.
+      .catch(() => {
+        if (!cancelled) setNotesFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -184,15 +203,17 @@ function AdminDetailsSection({
             onChange={(e) => setAdminNotes(e.target.value)}
             rows={2}
             placeholder="Business/admin notes -- never shown to the client"
-            disabled={readOnly}
+            maxLength={5000}
+            disabled={readOnly || !notesLoaded}
             className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10 disabled:opacity-60"
           />
+          {notesFailed && <p className="text-xs text-red-600">The notes could not be loaded. Refresh the page to try again.</p>}
         </div>
       </div>
       {!readOnly && (
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || !notesLoaded}
           className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
         >
           Save

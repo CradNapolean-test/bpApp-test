@@ -29,7 +29,6 @@ export async function upsertClientProfile(
     | 'nutrition_tracking_mode'
     | 'join_date'
     | 'referral_source'
-    | 'admin_notes'
     | 'deletion_requested_at'
     | 'minutes_per_1000_steps'
     | 'height_cm'
@@ -174,6 +173,15 @@ export async function cancelAccountDeletionRequest(clientId: string): Promise<Ac
     .update({ deletion_requested_at: null })
     .eq('client_id', clientId);
   return error ? fail(error, 'Could not cancel the request') : ok();
+}
+
+// The coach's private notes about a member (client_coach_notes, 0124). RLS only lets coaches read them, so a member
+// calling this gets null.
+export async function getClientCoachNotes(clientId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('client_coach_notes').select('notes').eq('client_id', clientId).maybeSingle();
+  if (error) raise(error);
+  return data?.notes ?? null;
 }
 
 export async function updateClientAdminDetails(

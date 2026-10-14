@@ -134,6 +134,7 @@ export function FeedbackTab({ readOnly }: { readOnly: boolean }) {
         ))}
       </div>
       <textarea
+        maxLength={1000}
         value={comment}
         onChange={(e) => setComment(e.target.value)}
         disabled={readOnly}

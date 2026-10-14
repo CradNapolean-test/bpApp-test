@@ -57,7 +57,8 @@ export async function upsertFoodFromBarcode(
   const supabase = await createClient();
   const { error: insertError } = await supabase
     .from('foods')
-    .insert({ barcode, source: 'scan', ...fields })
+    // The insert policy (0106) allows names of 1-200 characters; Open Food Facts names can be longer.
+    .insert({ barcode, source: 'scan', ...fields, name: fields.name.trim().slice(0, 200) })
     .select()
     .maybeSingle();
   // Conflict on the unique barcode column is expected/harmless when another session (or a

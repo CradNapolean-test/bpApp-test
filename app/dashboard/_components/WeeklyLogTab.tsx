@@ -8,6 +8,7 @@ import { useToast } from '@/app/_components/ToastProvider';
 import { dayCalories, cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
 import { upsertDailyLog } from '@/lib/data/dailyLogs';
+import { BODYWEIGHT_KG, bodyweightMessage, isValidBodyweight } from '@/lib/limits';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
@@ -152,9 +153,9 @@ function WeekLog({
       // The database refuses a bodyweight outside 20-400 kg. Checked here too, so a typo in that one box
       // can't stop the rest of the day (sleep, steps, water) from saving: it is reported on an explicit
       // "Save day" or when the member just edited it, and left out of the save when another tracker commits.
-      const badWeight = merged.bodyweight != null && (merged.bodyweight < 20 || merged.bodyweight > 400);
+      const badWeight = merged.bodyweight != null && !isValidBodyweight(merged.bodyweight);
       if (badWeight && (Object.keys(patch).length === 0 || 'bodyweight' in patch)) {
-        toast.error('Bodyweight must be between 20 and 400 kg.');
+        toast.error(bodyweightMessage);
         return;
       }
       const { bodyweight, ...withoutWeight } = merged;
@@ -431,8 +432,8 @@ function WeekLog({
                 type="number"
                 inputMode="decimal"
                 step="0.1"
-                min={20}
-                max={400}
+                min={BODYWEIGHT_KG.min}
+                max={BODYWEIGHT_KG.max}
                 placeholder="—"
                 aria-label="Bodyweight in kilograms"
                 className="w-28 bg-transparent text-right text-3xl font-black text-black outline-none placeholder:text-zinc-400 dark:text-zinc-50"
@@ -498,7 +499,7 @@ function WeekLog({
 
           <div className="col-span-2 space-y-1 sm:col-span-4">
             <label className={labelCls}>Notes</label>
-            <textarea className={inputCls} rows={2} value={d.notes ?? ''}
+            <textarea className={inputCls} rows={2} maxLength={1000} value={d.notes ?? ''}
               onChange={(e) => updateDay(focusedDate, { notes: e.target.value })} />
           </div>
         </fieldset>

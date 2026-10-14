@@ -40,11 +40,11 @@ export interface ClientProfileRow {
   emergency_contact_phone: string | null;
   address: string | null;
   date_of_birth: string | null;
-  // Coach-only admin fields -- edited via set_client_admin_details, never the client's own
-  // Setup save (see upsertClientProfile's Omit list).
+  // Coach-managed fields -- edited via set_client_admin_details, never the client's own
+  // Setup save (see upsertClientProfile's Omit list). The coach's private notes are not on this
+  // row any more: they live in client_coach_notes (0124), which members cannot read.
   join_date: string | null;
   referral_source: string | null;
-  admin_notes: string | null;
   // Client-owned request flag -- see updateClientAdminDetails/requestAccountDeletion for how
   // this differs from a real hard-delete (there isn't one; the coach handles it manually).
   deletion_requested_at: string | null;
