@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import { Award, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
 import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
-import { CLUB_STEP, clubProgress } from '@/lib/clubs';
+import { clubProgress } from '@/lib/clubs';
+import { ClubBar } from './ClubBar';
 import { Card, IconChip, SectionLabel } from '@/app/_components/ui';
 import type { Category, Screen } from './categories';
 
@@ -79,7 +80,7 @@ export function BpHomeProgress({
   // Attendance is marked by the coach after each session, so this counts sessions actually
   // attended rather than merely booked.
   const sessionsDone = bookings.filter((b) => b.attended).length;
-  const { next: nextClub, pct: clubPct, earned: clubsEarned } = clubProgress(sessionsDone);
+  const club = clubProgress(sessionsDone);
   // The nearest not-yet-reached sessions reward (e.g. "Hoodie" at 100), shown on the club bar.
   const nextReward = rewards
     .filter((r) => r.kind === 'sessions' && r.threshold > sessionsDone)
@@ -106,16 +107,14 @@ export function BpHomeProgress({
         <Card className="mt-2 !px-3.5 !py-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-xs font-bold text-black dark:text-zinc-50">
-              {nextClub} club — {nextClub - sessionsDone} {nextClub - sessionsDone === 1 ? 'session' : 'sessions'} to go
+              {club.next} club — {club.toGo} {club.toGo === 1 ? 'session' : 'sessions'} to go
             </span>
             {nextReward && <span className="truncate text-xs text-accent">{nextReward.name}</span>}
           </div>
-          <div className="h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${clubPct}%` }} />
-          </div>
-          {clubsEarned > 0 && (
+          <ClubBar progress={club} />
+          {club.earned.length > 0 && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {Array.from({ length: clubsEarned }, (_, k) => (k + 1) * CLUB_STEP).map((n) => (
+              {club.earned.map((n) => (
                 <span key={n} className="flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5 text-[11px] font-extrabold text-accent">
                   <Award className="h-3 w-3" /> {n} club
                 </span>

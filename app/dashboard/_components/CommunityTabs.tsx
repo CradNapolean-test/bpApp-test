@@ -7,6 +7,7 @@ import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { leaveEvent, signUpForEvent, submitFeedback } from '@/lib/data/community';
 import { clubBadges, clubProgress } from '@/lib/clubs';
+import { ClubBar } from './ClubBar';
 import type { EventWithSignup, RewardsForMember } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
@@ -227,7 +228,7 @@ export function ReferTab({ name }: { name: string }) {
 
 export function RewardsTab({ data }: { data: RewardsForMember }) {
   const { rewards, grantedIds, sessions, months } = data;
-  const { earned: clubs, next: nextClub, pct: clubPct } = clubProgress(sessions);
+  const club = clubProgress(sessions);
 
   const progressOf = (r: RewardsForMember['rewards'][number]) => (r.kind === 'sessions' ? sessions : months) / r.threshold;
   // Earned-but-not-received first, then nearest to being earned, then already received.
@@ -239,15 +240,15 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
       <div className={cardCls}>
         <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">Session clubs</p>
         <p className="mt-1 text-sm font-extrabold text-black dark:text-zinc-50">
-          {clubs > 0 ? `You're in the ${clubs * 100} club` : `${100 - sessions} sessions to the 100 club`}
+          {club.earned.length > 0 ? `You're in the ${club.earned[club.earned.length - 1]} club` : `${club.toGo} sessions to the ${club.next} club`}
         </p>
-        {clubs > 0 && (
+        {club.earned.length > 0 && (
           <p className="text-xs text-zinc-500">
-            {nextClub - sessions} more session{nextClub - sessions === 1 ? '' : 's'} to the {nextClub} club
+            {club.toGo} more session{club.toGo === 1 ? '' : 's'} to the {club.next} club
           </p>
         )}
-        <div className="mt-2.5 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-          <div className="h-full rounded-full bg-accent" style={{ width: `${clubPct}%` }} />
+        <div className="mt-2.5">
+          <ClubBar progress={club} />
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {clubBadges(sessions).map(({ n, reached }) => (

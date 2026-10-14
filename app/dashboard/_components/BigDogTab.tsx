@@ -16,6 +16,7 @@ import {
   levelForResult,
   levelRank,
   nextTarget,
+  showStandard,
   nextTierLabel,
   parseResultInput,
   TIER_THRESHOLDS,
@@ -181,9 +182,9 @@ function ScoreSheet({
       <div className="mb-4 grid grid-cols-3 gap-1.5">
         {(
           [
-            ['Rookie', std.rookie, 'rookie'],
-            ['Strong', std.strong, 'strong'],
-            ['Big Dog', std.bigDog, 'big_dog'],
+            ['Rookie', showStandard(exercise.kind, std.rookie), 'rookie'],
+            ['Strong', showStandard(exercise.kind, std.strong), 'strong'],
+            ['Big Dog', showStandard(exercise.kind, std.bigDog), 'big_dog'],
           ] as const
         ).map(([label, v, key]) => (
           <div
@@ -399,9 +400,9 @@ export function BigDogTab({
               <div className="flex gap-1">
                 {(
                   [
-                    ['Rookie', std.rookie, 1],
-                    ['Strong', std.strong, 2],
-                    ['Big Dog', std.bigDog, 3],
+                    ['Rookie', showStandard(ex.kind, std.rookie), 1],
+                    ['Strong', showStandard(ex.kind, std.strong), 2],
+                    ['Big Dog', showStandard(ex.kind, std.bigDog), 3],
                   ] as const
                 ).map(([label, value, n]) => (
                   <div

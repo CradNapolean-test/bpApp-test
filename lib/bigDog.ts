@@ -55,33 +55,33 @@ export const EXERCISES: BigDogExercise[] = [
   { key: 'farmer_carries', name: 'Farmer carries', category: 'Core strength', kind: 'distance', ...both('100m', '180m', '250m') },
   {
     key: 'row_2000', name: '2000m row', category: 'Aerobic fitness', kind: 'time',
-    male: { rookie: '<9:10', strong: '<8:30', bigDog: '<7:20' },
-    female: { rookie: '<10:30', strong: '<9:50', bigDog: '<9:00' },
+    male: { rookie: '9:10', strong: '8:30', bigDog: '7:20' },
+    female: { rookie: '10:30', strong: '9:50', bigDog: '9:00' },
   },
   {
     key: 'ski_2000', name: '2000m ski', category: 'Aerobic fitness', kind: 'time',
-    male: { rookie: '<10:00', strong: '<9:00', bigDog: '<8:10' },
-    female: { rookie: '<11:30', strong: '<10:30', bigDog: '<9:45' },
+    male: { rookie: '10:00', strong: '9:00', bigDog: '8:10' },
+    female: { rookie: '11:30', strong: '10:30', bigDog: '9:45' },
   },
   {
     key: 'bike_4000', name: '4000m bike', category: 'Aerobic fitness', kind: 'time',
-    male: { rookie: '<9:00', strong: '<8:15', bigDog: '<7:40' },
-    female: { rookie: '<10:40', strong: '<9:40', bigDog: '<8:50' },
+    male: { rookie: '9:00', strong: '8:15', bigDog: '7:40' },
+    female: { rookie: '10:40', strong: '9:40', bigDog: '8:50' },
   },
   {
     key: 'rower_30_30', name: 'Rower 30:30 x8', category: 'Anaerobic fitness', kind: 'distance',
-    male: { rookie: '>960m', strong: '>1100m', bigDog: '>1210m' },
-    female: { rookie: '>730m', strong: '>990m', bigDog: '>1150m' },
+    male: { rookie: '960m', strong: '1100m', bigDog: '1210m' },
+    female: { rookie: '730m', strong: '990m', bigDog: '1150m' },
   },
   {
     key: 'ski_30_30', name: 'Ski erg 30:30 x8', category: 'Anaerobic fitness', kind: 'distance',
-    male: { rookie: '>890m', strong: '>970m', bigDog: '>1050m' },
-    female: { rookie: '>720m', strong: '>880m', bigDog: '>950m' },
+    male: { rookie: '890m', strong: '970m', bigDog: '1050m' },
+    female: { rookie: '720m', strong: '880m', bigDog: '950m' },
   },
   {
     key: 'bike_30_30', name: 'Bike 30:30 x8', category: 'Anaerobic fitness', kind: 'distance',
-    male: { rookie: '>1860m', strong: '>2000m', bigDog: '>2500m' },
-    female: { rookie: '>1630m', strong: '>1800m', bigDog: '>2150m' },
+    male: { rookie: '1860m', strong: '2000m', bigDog: '2500m' },
+    female: { rookie: '1630m', strong: '1800m', bigDog: '2150m' },
   },
 ];
 
@@ -164,10 +164,10 @@ export function bigDogCount(results: BigDogResultLike[]): number {
 
 export const higherIsBetter = (kind: ResultKind): boolean => kind !== 'time';
 
+// A standard is reached by matching it or beating it: "1100m" means 1100m or more, "7:20" means 7:20 or faster
+// (the owners' rule: a score exactly on the line gets that level).
 interface Threshold {
   n: number;
-  // "<9:10" and ">960m" must be beaten; "160kg" or "1:00" only need to be matched.
-  strict: boolean;
 }
 
 function parseClock(text: string): number | null {
@@ -176,12 +176,11 @@ function parseClock(text: string): number | null {
 }
 
 function parseThreshold(text: string): Threshold {
-  const strict = text.startsWith('<') || text.startsWith('>');
   const t = text.replace(/^[<>]/, '').trim();
-  if (/^banded$/i.test(t)) return { n: 0, strict };
+  if (/^banded$/i.test(t)) return { n: 0 };
   const clock = parseClock(t);
-  if (clock != null) return { n: clock, strict };
-  return { n: parseFloat(t), strict };
+  if (clock != null) return { n: clock };
+  return { n: parseFloat(t) };
 }
 
 export function thresholdsFor(ex: BigDogExercise, gender: BigDogGender) {
@@ -190,8 +189,12 @@ export function thresholdsFor(ex: BigDogExercise, gender: BigDogGender) {
 }
 
 function meets(kind: ResultKind, value: number, t: Threshold): boolean {
-  if (kind === 'time') return t.strict ? value < t.n : value <= t.n;
-  return t.strict ? value > t.n : value >= t.n;
+  return kind === 'time' ? value <= t.n : value >= t.n;
+}
+
+// How a standard reads on screen: races are "7:20 or faster"; everything else is already "at least" ("1100m", "160kg").
+export function showStandard(kind: ResultKind, text: string): string {
+  return kind === 'time' ? `${text} or faster` : text;
 }
 
 // Chin-ups: 0 means "banded", which is already a Rookie result.
@@ -251,7 +254,7 @@ export function nextTarget(
 ): { level: BigDogLevel; label: string; gap: string | null } | null {
   if (current === 'big_dog') return null;
   const next: BigDogLevel = current === 'none' ? 'rookie' : current === 'rookie' ? 'strong' : 'big_dog';
-  const label = next === 'rookie' ? ex[gender].rookie : next === 'strong' ? ex[gender].strong : ex[gender].bigDog;
+  const label = showStandard(ex.kind, next === 'rookie' ? ex[gender].rookie : next === 'strong' ? ex[gender].strong : ex[gender].bigDog);
   const t = thresholdsFor(ex, gender)[next === 'rookie' ? 'rookie' : next === 'strong' ? 'strong' : 'bigDog'];
   let gap: string | null = null;
   if (value != null) {

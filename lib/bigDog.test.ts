@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestResult, bigDogCount, tiersReached, currentLevels, EXERCISES, formatResult, levelForResult, nextTarget, parseResultInput, tierForCount } from './bigDog';
+import { showStandard, bestResult, bigDogCount, tiersReached, currentLevels, EXERCISES, formatResult, levelForResult, nextTarget, parseResultInput, tierForCount } from './bigDog';
 import type { BigDogResultLike } from './bigDog';
 
 const row = (exercise_key: string, level: BigDogResultLike['level'], tested_date: string, created_at = tested_date): BigDogResultLike => ({
@@ -70,19 +70,25 @@ describe('levelForResult', () => {
     expect(levelForResult(ex('dead_hang'), 'male', 60)).toBe('rookie');
     expect(levelForResult(ex('dead_hang'), 'male', 59)).toBe('none');
   });
-  it('races are lower-is-better and must beat the time ("<")', () => {
+  it('races are lower-is-better and a time exactly on the line counts', () => {
     expect(levelForResult(ex('row_2000'), 'male', 7 * 60 + 19)).toBe('big_dog');
-    expect(levelForResult(ex('row_2000'), 'male', 7 * 60 + 20)).toBe('strong'); // equal does not beat <7:20
-    expect(levelForResult(ex('row_2000'), 'male', 8 * 60 + 29)).toBe('strong');
-    expect(levelForResult(ex('row_2000'), 'male', 8 * 60 + 30)).toBe('rookie');
-    expect(levelForResult(ex('row_2000'), 'male', 9 * 60 + 10)).toBe('none');
+    expect(levelForResult(ex('row_2000'), 'male', 7 * 60 + 20)).toBe('big_dog'); // exactly 7:20 is Big Dog
+    expect(levelForResult(ex('row_2000'), 'male', 7 * 60 + 21)).toBe('strong');
+    expect(levelForResult(ex('row_2000'), 'male', 8 * 60 + 30)).toBe('strong'); // exactly 8:30 is Strong
+    expect(levelForResult(ex('row_2000'), 'male', 8 * 60 + 31)).toBe('rookie');
+    expect(levelForResult(ex('row_2000'), 'male', 9 * 60 + 10)).toBe('rookie'); // exactly 9:10 is Rookie
+    expect(levelForResult(ex('row_2000'), 'male', 9 * 60 + 11)).toBe('none');
     expect(levelForResult(ex('ski_2000'), 'female', 9 * 60 + 44)).toBe('big_dog');
   });
-  it('distance standards with ">" must be exceeded', () => {
-    expect(levelForResult(ex('rower_30_30'), 'male', 1211)).toBe('big_dog');
-    expect(levelForResult(ex('rower_30_30'), 'male', 1210)).toBe('strong');
-    expect(levelForResult(ex('rower_30_30'), 'female', 1151)).toBe('big_dog');
-    expect(levelForResult(ex('farmer_carries'), 'male', 250)).toBe('big_dog'); // plain "250m" is >=
+  it('distances: matching the standard counts (the owners: exactly 1,100m on the rower is Strong, not Rookie)', () => {
+    expect(levelForResult(ex('rower_30_30'), 'male', 1210)).toBe('big_dog');
+    expect(levelForResult(ex('rower_30_30'), 'male', 1209)).toBe('strong');
+    expect(levelForResult(ex('rower_30_30'), 'male', 1100)).toBe('strong');
+    expect(levelForResult(ex('rower_30_30'), 'male', 1099)).toBe('rookie');
+    expect(levelForResult(ex('rower_30_30'), 'male', 960)).toBe('rookie');
+    expect(levelForResult(ex('rower_30_30'), 'male', 959)).toBe('none');
+    expect(levelForResult(ex('rower_30_30'), 'female', 1150)).toBe('big_dog');
+    expect(levelForResult(ex('farmer_carries'), 'male', 250)).toBe('big_dog');
   });
 });
 
@@ -144,17 +150,16 @@ describe('the 12 exercises', () => {
 });
 
 // ---- Scoring audit: every exercise, both sexes, every boundary ----------------------------------------
-// Reads each standard back out of its display text ("160kg", "<7:20", ">1210m", "2:30", "Banded", "5 BW") with a
-// separate, simple parser, then checks levelForResult on both sides of every boundary. A typo in the standards
+// Reads each standard back out of its display text ("160kg", "7:20", "1210m", "2:30", "Banded", "5 BW") with a
+// separate, simple parser, then checks levelForResult on both sides of every boundary. Every boundary is inclusive: matching a standard earns it. A typo in the standards
 // table (a level that is easier than the one below it) fails here too.
 
-type Parsed = { n: number; strict: boolean };
+type Parsed = { n: number };
 function readStandard(text: string): Parsed {
-  const strict = /^[<>]/.test(text);
-  const t = text.replace(/^[<>]/, '').replace(/kg|m|BW/i, '').trim();
-  if (/banded/i.test(text)) return { n: 0, strict };
+  const t = text.replace(/kg|m|BW/i, '').trim();
+  if (/banded/i.test(text)) return { n: 0 };
   const clock = t.match(/^(\d+):(\d{2})$/);
-  return { n: clock ? Number(clock[1]) * 60 + Number(clock[2]) : Number(t), strict };
+  return { n: clock ? Number(clock[1]) * 60 + Number(clock[2]) : Number(t) };
 }
 
 describe.each(EXERCISES.flatMap((e) => (['male', 'female'] as const).map((g) => [e.key, g] as const)))('%s (%s)', (key, gender) => {
@@ -180,12 +185,12 @@ describe.each(EXERCISES.flatMap((e) => (['male', 'female'] as const).map((g) => 
     const levelAt = (v: number) => levelForResult(exercise, gender, v);
     // Big Dog
     expect(levelAt(harder(bigDog.n))).toBe('big_dog');
-    expect(levelAt(bigDog.n)).toBe(bigDog.strict ? 'strong' : 'big_dog');
+    expect(levelAt(bigDog.n)).toBe('big_dog');
     // Strong
-    expect(levelAt(strong.n)).toBe(strong.strict ? 'rookie' : 'strong');
+    expect(levelAt(strong.n)).toBe('strong');
     expect(levelAt(easier(bigDog.n))).not.toBe('big_dog');
     // Rookie
-    expect(levelAt(rookie.n)).toBe(rookie.strict ? 'none' : 'rookie');
+    expect(levelAt(rookie.n)).toBe('rookie');
     expect(levelAt(harder(rookie.n))).not.toBe('none');
     // Below rookie (chin-ups: any rep count, including banded 0, is at least rookie)
     if (exercise.kind !== 'reps') expect(levelAt(easier(rookie.n))).toBe('none');
@@ -218,5 +223,13 @@ describe('tiersReached', () => {
     expect(tiersReached(3)).toEqual(['white', 'turquoise']);
     expect(tiersReached(6)).toEqual(['white', 'turquoise', 'silver']);
     expect(tiersReached(EXERCISES.length)).toEqual(['white', 'turquoise', 'silver', 'gold']);
+  });
+});
+
+describe('showStandard', () => {
+  it('writes race standards as "or faster" and leaves the rest alone', () => {
+    expect(showStandard('time', '7:20')).toBe('7:20 or faster');
+    expect(showStandard('distance', '1100m')).toBe('1100m');
+    expect(showStandard('weight', '160kg')).toBe('160kg');
   });
 });
