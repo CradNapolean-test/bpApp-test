@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { CalendarDays, Camera, CheckSquare, ChevronRight, Flame, Heart } from 'lucide-react';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -113,8 +113,6 @@ export function TodayTab({
 
   const streak = currentStreak(historyLogs, todayIso);
   const upcomingEvent = useMemo(() => bannerEvent(events, new Date()), [events]);
-  const [homeTab, setHomeTab] = useState<'today' | 'progress'>('today');
-  const showToday = isCoachView || homeTab === 'today';
   const streakVisible = showsStreak(membership);
 
   // Sleep, steps and water are the daily check-in: how many of the three are in for today.
@@ -136,26 +134,6 @@ export function TodayTab({
   return (
     <div className="space-y-3">
       {!isCoachView && <BpHomeHero profile={profile} />}
-      {!isCoachView && (
-        <div role="tablist" className="grid grid-cols-2 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
-          {([['today', 'Today'], ['progress', 'My progress']] as const).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={homeTab === key}
-              onClick={() => setHomeTab(key)}
-              className={`rounded-lg py-2 text-sm font-bold transition-colors ${
-                homeTab === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-500'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      {showToday && (
-      <>
       {!isCoachView && upcomingEvent && <EventBanner event={upcomingEvent} onOpen={() => onNavigate('Community', 'Events')} />}
 
       {isCoachView && (
@@ -387,11 +365,12 @@ export function TodayTab({
 
       {isCoachView && <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Achievements')} />}
 
-      {!isCoachView && <BpHomeExplore onNavigate={onNavigate} />}
-      </>
+      {!isCoachView && (
+        <div className="space-y-5">
+          <BpHomeProgress bookings={bookings} membership={membership} rewards={rewards} />
+          <BpHomeExplore onNavigate={onNavigate} />
+        </div>
       )}
-
-      {!isCoachView && homeTab === 'progress' && <BpHomeProgress bookings={bookings} membership={membership} rewards={rewards} />}
     </div>
   );
 }
