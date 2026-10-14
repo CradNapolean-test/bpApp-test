@@ -238,7 +238,7 @@ Eight lessons (scripts, with video examples at gymownr.com).
 ## 7. Member Standards Board ("Big Dog")
 
 **What the SOP says**
-Rookie / Strong / Big Dog benchmarks for 13 tests, split male and female. The first block is male, the second female. Lower body: deadlift and back squat 3RM. Upper: bench 3RM, chin-ups. Core: dead hang, farmer carries. Aerobic: 2000m row, 2000m ski, 4000m bike, 5000m run. Anaerobic: 30:30 ×8 distance on rower, ski and bike.
+Rookie / Strong / Big Dog benchmarks for 12 tests (the 5000m run was dropped in Oct 2026), split male and female. The first block is male, the second female. Lower body: deadlift and back squat 3RM. Upper: bench 3RM, chin-ups. Core: dead hang, farmer carries. Aerobic: 2000m row, 2000m ski, 4000m bike. Anaerobic: 30:30 ×8 distance on rower, ski and bike.
 
 **App areas affected**
 - Fully modelled → `lib/bigDog.ts` (+ tests), `lib/data/bigDog.ts`, `BigDogTab.tsx`, `0063_big_dog_results.sql`, `0078_big_dog_self_logging.sql`, coach verification via `ScoreToVerify` in `coachDashboard.ts`.

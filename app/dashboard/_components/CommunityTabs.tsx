@@ -6,6 +6,7 @@ import { CalendarDays, Check, ChevronDown, Copy, ExternalLink, Gift, MapPin, Sha
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { leaveEvent, signUpForEvent, submitFeedback } from '@/lib/data/community';
+import { clubBadges, clubProgress } from '@/lib/clubs';
 import type { EventWithSignup, RewardsForMember } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
@@ -226,9 +227,7 @@ export function ReferTab({ name }: { name: string }) {
 
 export function RewardsTab({ data }: { data: RewardsForMember }) {
   const { rewards, grantedIds, sessions, months } = data;
-  const clubs = Math.floor(sessions / 100);
-  const nextClub = (clubs + 1) * 100;
-  const clubPct = Math.round(((sessions - clubs * 100) / 100) * 100);
+  const { earned: clubs, next: nextClub, pct: clubPct } = clubProgress(sessions);
 
   const progressOf = (r: RewardsForMember['rewards'][number]) => (r.kind === 'sessions' ? sessions : months) / r.threshold;
   // Earned-but-not-received first, then nearest to being earned, then already received.
@@ -251,11 +250,11 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
           <div className="h-full rounded-full bg-accent" style={{ width: `${clubPct}%` }} />
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {[100, 200, 300, 400, 500].map((n) => (
+          {clubBadges(sessions).map(({ n, reached }) => (
             <span
               key={n}
               className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
-                sessions >= n ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-400 dark:bg-white/10'
+                reached ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-400 dark:bg-white/10'
               }`}
             >
               {n} club
@@ -326,6 +325,12 @@ const FAQS: { q: string; a: string }[] = [
     q: 'What are the Big Dog T-shirts?',
     a: 'Hit the Big Dog standard in one exercise for a White shirt, 3 for Turquoise, 6 for Silver, and every exercise for Gold. Your standards are on your profile.',
   },
+  { q: 'How do I check in to a session?', a: 'On the day of your session, open Home. Your next class shows a check-in button.' },
+  { q: 'What is the daily check-in?', a: 'Three quick numbers each day: sleep, steps and water. It takes a few seconds and helps your coach see how you are going.' },
+  { q: 'How do I get in touch with my coach?', a: 'Open the Coach tab. Use Message for the chat (voice notes and photos work too), or Email your coach if you would rather write an email.' },
+  { q: 'How do I add my InBody results?', a: 'Go to Progress, then Body Scans, and add the numbers from your InBody printout. You can attach a photo of the printout too.' },
+  { q: 'What are the session clubs?', a: 'Every 100 sessions you attend is a club: 100, 200, 300 and so on. Your progress towards the next club is on your Home screen under My progress.' },
+  { q: 'How do I get my reward?', a: 'When a reward shows Earned on the Rewards screen, ask your coach and they will give it to you.' },
   { q: 'How do I refer a friend?', a: 'Open Refer a friend, tap Share, and send them your link. Their discount is already applied.' },
 ];
 

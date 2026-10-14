@@ -1,13 +1,16 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Columns2, X } from 'lucide-react';
+import { Columns2, Download, X } from 'lucide-react';
 import { ImageIcon, Plus } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/progress';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
+import { downloadPhoto, downloadSideBySide } from '@/lib/utils/downloadPhotos';
+import { IDENTITY, ZoomablePhoto } from './ZoomablePhoto';
+import type { ZoomPan } from '@/lib/zoomPan';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta } from '@/lib/utils/measurementDeltas';
@@ -52,6 +55,10 @@ export function ProgressTab({
   // Photos arrive newest-first; default the comparison to oldest (before) vs newest (after).
   const [beforeId, setBeforeId] = useState<string | null>(null);
   const [afterId, setAfterId] = useState<string | null>(null);
+  // Before/after zoom together so the same body part lines up in both; the single viewer has its own.
+  const [compareZoom, setCompareZoom] = useState<ZoomPan>(IDENTITY);
+  const [viewZoom, setViewZoom] = useState<ZoomPan>(IDENTITY);
+  const { run: runDownload, busy: downloading } = useAction();
   useBackHandler(viewing != null, () => setViewing(null));
   useBackHandler(comparing, () => setComparing(false));
   const withImage = initialPhotos.filter((p) => p.signedUrl);
@@ -95,6 +102,10 @@ export function ProgressTab({
         .filter(([, v]) => v !== '')
         .map(([k, v]) => [k, Number(v)])
     );
+    if (Object.values(fields).some((v) => !Number.isFinite(v) || v < 10 || v > 300)) {
+      await runMeasurement(async () => ({ ok: false as const, error: 'Measurements must be between 10 and 300 cm.' }));
+      return;
+    }
     await runMeasurement(() => addMeasurementLog(clientId, today, fields), {
       success: 'Measurements saved',
       onDone: () => setMeasurements({}),
@@ -147,7 +158,10 @@ export function ProgressTab({
                   <img
                     src={photo.signedUrl}
                     alt={`Progress photo ${photo.photo_date}`}
-                    onClick={() => setViewing(photo)}
+                    onClick={() => {
+                      setViewZoom(IDENTITY);
+                      setViewing(photo);
+                    }}
                     className="aspect-square w-full cursor-pointer rounded-xl object-cover"
                   />
                 ) : (
@@ -232,6 +246,8 @@ export function ProgressTab({
                   <input
                     type="number"
                     step="0.1"
+                    min={10}
+                    max={300}
                     value={measurements[key] ?? ''}
                     onChange={(e) => setMeasurements({ ...measurements, [key]: e.target.value })}
                     className={inputCls}
@@ -261,8 +277,13 @@ export function ProgressTab({
             {([['Before', beforePhoto, setBeforeId], ['After', afterPhoto, setAfterId]] as const).map(([label, photo, setId]) => (
               <div key={label} className="space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.signedUrl!} alt={`${label} photo ${photo.photo_date}`} className="aspect-[3/4] w-full rounded-xl object-cover" />
+                <ZoomablePhoto
+                  src={photo.signedUrl!}
+                  alt={`${label} photo ${photo.photo_date}`}
+                  value={compareZoom}
+                  onChange={setCompareZoom}
+                  className="aspect-[3/4] w-full rounded-xl"
+                />
                 <select
                   value={photo.id}
                   onChange={(e) => setId(e.target.value)}
@@ -275,6 +296,37 @@ export function ProgressTab({
               </div>
             ))}
           </div>
+          <p className="mt-3 text-center text-xs text-zinc-400">Pinch, scroll or double-tap to zoom. Both photos move together.</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {compareZoom.scale > 1 && (
+              <button type="button" onClick={() => setCompareZoom(IDENTITY)} className="rounded-full border border-black/10 px-4 py-2 text-sm font-bold dark:border-white/15">
+                Reset zoom
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={downloading}
+              onClick={() =>
+                runDownload(async () => {
+                  const name = `before-after-${beforePhoto.photo_date}-${afterPhoto.photo_date}`;
+                  try {
+                    await downloadSideBySide(
+                      { url: beforePhoto.signedUrl!, label: longDate(beforePhoto.photo_date) },
+                      { url: afterPhoto.signedUrl!, label: longDate(afterPhoto.photo_date) },
+                      `${name}.jpg`
+                    );
+                  } catch {
+                    // The browser could not draw them together: save the two photos separately instead.
+                    await downloadPhoto(beforePhoto.signedUrl!, `before-${beforePhoto.photo_date}.jpg`);
+                    await downloadPhoto(afterPhoto.signedUrl!, `after-${afterPhoto.photo_date}.jpg`);
+                  }
+                })
+              }
+              className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" /> {downloading ? 'Saving…' : 'Download'}
+            </button>
+          </div>
           <p className="mt-4 text-center text-sm font-semibold text-zinc-500">
             {daysBetween === 0 ? 'Same day' : daysBetween > 0 ? `${daysBetween} days between photos` : 'Before photo is later than the after photo'}
           </p>
@@ -285,9 +337,27 @@ export function ProgressTab({
           <button type="button" aria-label="Close photo" className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white">
             <X className="h-5 w-5" />
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={viewing.signedUrl} alt={`Progress photo ${viewing.photo_date}`} className="max-h-[80vh] max-w-full rounded-xl object-contain" />
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md">
+            <ZoomablePhoto
+              src={viewing.signedUrl}
+              alt={`Progress photo ${viewing.photo_date}`}
+              value={viewZoom}
+              onChange={setViewZoom}
+              className="aspect-[3/4] max-h-[75vh] w-full rounded-xl"
+            />
+          </div>
           <p className="mt-3 text-sm font-semibold text-white">{longDate(viewing.photo_date)}</p>
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={(e) => {
+              e.stopPropagation();
+              void runDownload(() => downloadPhoto(viewing.signedUrl!, `progress-${viewing.photo_date}.jpg`));
+            }}
+            className="mt-2 flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" /> {downloading ? 'Saving…' : 'Download'}
+          </button>
         </div>
       )}
     </div>

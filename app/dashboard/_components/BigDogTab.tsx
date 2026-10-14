@@ -46,7 +46,7 @@ export function TierPips({ count, className = '' }: { count: number; className?:
 }
 
 // The T-shirt ladder: one pip per exercise, tinted by the tier that pip belongs to, with each tier's
-// name sitting under the pip where it starts (White at 1, Turquoise at 3, Silver at 6, Gold at 13).
+// name sitting under the pip where it starts (White at 1, Turquoise at 3, Silver at 6, Gold at the last).
 // Pips fill as exercises reach Big Dog; empty ones keep a faint tint so the whole ladder shows.
 const ZONE: { tier: Exclude<BigDogTier, 'none'>; label: string; from: number; fill: string; faint: string }[] = [
   { tier: 'white', label: 'White', from: TIER_THRESHOLDS.white, fill: 'bg-zinc-200', faint: 'bg-zinc-300/60 dark:bg-zinc-200/25' },

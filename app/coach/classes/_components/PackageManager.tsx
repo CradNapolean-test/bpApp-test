@@ -180,7 +180,8 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
   const [description, setDescription] = useState('');
   const [advanceDays, setAdvanceDays] = useState('');
   const [durationWeeks, setDurationWeeks] = useState('');
-  const [screens, setScreens] = useState<Set<string>>(new Set(DISABLEABLE_SCREENS));
+  // Ongoing plans start without the daily check-in (challenge plans keep it); tick it to include.
+  const [screens, setScreens] = useState<Set<string>>(new Set(DISABLEABLE_SCREENS.filter((s) => s !== 'Weekly Log')));
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -232,7 +233,17 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
           min={1}
           className={inputCls}
           value={durationWeeks}
-          onChange={(e) => setDurationWeeks(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDurationWeeks(v);
+            // A set length = a challenge plan, which includes the daily check-in; clearing it takes it back out.
+            setScreens((prev) => {
+              const next = new Set(prev);
+              if (v) next.add('Weekly Log');
+              else next.delete('Weekly Log');
+              return next;
+            });
+          }}
           placeholder="e.g. 6"
         />
       </div>

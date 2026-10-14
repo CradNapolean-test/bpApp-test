@@ -25,6 +25,7 @@ export type Screen =
   | 'Overview'
   | 'Progress & Photos'
   | 'Body Scans'
+  | 'Strength'
   | 'Workout'
   | 'Credits'
   | 'Messages'
@@ -120,6 +121,7 @@ export const DISABLEABLE_SCREENS: Screen[] = [
   'Overview',
   'Progress & Photos',
   'Body Scans',
+  'Strength',
 ];
 
 // Narrows + defensively filters raw DB strings against the real allowlist, so a stray/stale
@@ -178,7 +180,7 @@ export function screensForCategory(
         return ['Weekly Log', 'Forms'];
       case 'Progress':
         // Insights (adaptive maintenance / plateau checks) is coach-only for now.
-        return isCoachView ? ['Overview', 'Insights', 'Progress & Photos', 'Body Scans'] : ['Overview', 'Progress & Photos', 'Body Scans'];
+        return isCoachView ? ['Overview', 'Insights', 'Strength', 'Progress & Photos', 'Body Scans'] : ['Overview', 'Strength', 'Progress & Photos', 'Body Scans'];
       case 'Learn':
         return ['Education'];
       case 'Achievements':

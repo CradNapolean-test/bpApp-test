@@ -12,6 +12,7 @@ import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
 import { CreditPackManager } from '@/app/coach/classes/_components/CreditPackManager';
+import type { ShirtRow } from '@/lib/data/bigDog';
 import { EventsPane, FeedbackPane, RewardsPane } from '@/app/coach/community/_components/CommunityShell';
 import { OverviewPane } from './OverviewPane';
 import type { BusinessOverview } from '@/lib/data/coachDashboard';
@@ -54,6 +55,7 @@ export function BusinessShell({
   packUsage,
   feedback,
   rewards,
+  shirts,
   overview,
   unreadCount,
   email,
@@ -67,6 +69,7 @@ export function BusinessShell({
   packUsage: Record<string, { times: number; last: string | null }> | null;
   feedback: FeedbackRow[];
   rewards: RewardOverview[];
+  shirts: ShirtRow[];
   // Gym owners and managers only; null hides the Overview tab.
   overview: BusinessOverview | null;
   unreadCount: number;
@@ -98,7 +101,7 @@ export function BusinessShell({
         {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} />}
         {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} usage={packUsage} />}
         {tab === 'Events' && <EventsPane events={events} past={pastEvents} />}
-        {tab === 'Rewards' && <RewardsPane rewards={rewards} />}
+        {tab === 'Rewards' && <RewardsPane rewards={rewards} shirts={shirts} />}
         {tab === 'Feedback' && <FeedbackPane feedback={feedback} />}
       </AppShell>
     </ClientOnly>

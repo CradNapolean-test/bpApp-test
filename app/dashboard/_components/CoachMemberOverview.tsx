@@ -29,7 +29,8 @@ import { trafficLight, TRACKER_THRESHOLDS, type TrafficLight } from '@/lib/utils
 import { useAction } from '@/app/_components/useAction';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
-import { addDays, daysBetween, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
+import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
 import type { ClientHealthStatus } from '@/lib/data/coach';
@@ -262,17 +263,11 @@ export function CoachMemberOverview({
   // "6 Week Challenge · week 2 of 6 · ends 15 Nov" (or "starts 12 Oct" before it begins).
   const planLabel = (() => {
     if (!membership?.package) return 'No plan set up';
-    const name = membership.package.name;
-    const parts = [name];
-    const startedAt = membership.started_at;
-    if (startedAt && startedAt > todayIso) {
-      parts.push(`starts ${shortDate(startedAt)}`);
-    } else {
-      const total = membership.package.duration_weeks;
-      if (total && startedAt) parts.push(`week ${Math.min(Math.floor(daysBetween(startedAt, todayIso) / 7) + 1, total)} of ${total}`);
-      if (membership.scheduled_end) parts.push(`ends ${shortDate(membership.scheduled_end)}`);
-    }
-    return parts.join(' · ');
+    return planCountdownLabel(
+      membership.package.name,
+      planCountdown({ ...membership, durationWeeks: membership.package.duration_weeks ?? null }, todayIso),
+      shortDate
+    );
   })();
   const { run: runReviewed, busy: reviewing } = useAction();
   const memberSince = profile?.join_date ?? null;

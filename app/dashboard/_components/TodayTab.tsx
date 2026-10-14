@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { CalendarDays, Camera, CheckSquare, Flame, Heart } from 'lucide-react';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
@@ -12,13 +12,18 @@ import type {
   DailyLogRow,
   FormAssignmentWithDetails,
   BigDogResultRow,
+  EventWithSignup,
   RewardRow,
   WorkoutLogRow,
   WorkoutProgramRow,
 } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
-import { BpHomeHero, BpHomeSections, BpMainTiles } from './BpHome';
+import { bannerEvent } from '@/lib/eventBanner';
+import { EventBanner } from './EventBanner';
+import { planCountdown } from '@/lib/planCountdown';
+import { showsStreak } from '@/lib/streak';
+import { BpHomeExplore, BpHomeHero, BpHomeProgress, BpMainTiles } from './BpHome';
 import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
 
@@ -70,6 +75,8 @@ export function TodayTab({
   isCoachView = false,
   rewards = [],
   bigDogResults = [],
+  events = [],
+  dailyCheckinHidden = false,
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -87,6 +94,8 @@ export function TodayTab({
   isCoachView?: boolean;
   rewards?: RewardRow[];
   bigDogResults?: BigDogResultRow[];
+  events?: EventWithSignup[];
+  dailyCheckinHidden?: boolean;
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -101,6 +110,14 @@ export function TodayTab({
   }, [profile, programWeek]);
 
   const streak = currentStreak(historyLogs, todayIso);
+  const upcomingEvent = useMemo(() => bannerEvent(events, new Date()), [events]);
+  const challenge =
+    membership?.package?.duration_weeks != null
+      ? planCountdown({ ...membership, durationWeeks: membership.package.duration_weeks }, todayIso)
+      : null;
+  const [homeTab, setHomeTab] = useState<'today' | 'progress'>('today');
+  const showToday = isCoachView || homeTab === 'today';
+  const streakVisible = showsStreak(membership);
 
   // Sleep, steps and water are the daily check-in: how many of the three are in for today.
   const checkinDone = [todayLog?.sleep, todayLog?.steps, todayLog?.water].filter((v) => v != null).length;
@@ -118,7 +135,42 @@ export function TodayTab({
 
   return (
     <div className="space-y-3">
-      {!isCoachView && <BpHomeHero profile={profile} membership={membership} creditsBalance={creditsBalance} onNavigateClasses={onNavigateClasses} />}
+      {!isCoachView && <BpHomeHero profile={profile} />}
+      {!isCoachView && (
+        <div role="tablist" className="grid grid-cols-2 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+          {([['today', 'Today'], ['progress', 'My progress']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={homeTab === key}
+              onClick={() => setHomeTab(key)}
+              className={`rounded-lg py-2 text-sm font-bold transition-colors ${
+                homeTab === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {showToday && (
+      <>
+      {!isCoachView && membership?.package && challenge && challenge.state !== 'ended' && (
+        <Card className="!px-3.5 !py-3">
+          <p className="text-xs font-bold text-black dark:text-zinc-50">
+            {challenge.state === 'upcoming'
+              ? `${membership.package.name} starts in ${challenge.daysToStart} day${challenge.daysToStart === 1 ? '' : 's'}`
+              : `${membership.package.name}: ${challenge.lastWeek ? 'final week' : `week ${challenge.week} of ${challenge.totalWeeks}`}`}
+          </p>
+          {challenge.state === 'active' && challenge.daysLeft != null && (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {challenge.daysLeft === 0 ? 'Last day today' : `${challenge.daysLeft} day${challenge.daysLeft === 1 ? '' : 's'} to go`}
+            </p>
+          )}
+        </Card>
+      )}
+      {!isCoachView && upcomingEvent && <EventBanner event={upcomingEvent} onOpen={() => onNavigate('Community', 'Events')} />}
 
       {isCoachView && (
       <>
@@ -256,7 +308,9 @@ export function TodayTab({
         )}
       </Card>}
 
-      <Card flush className="grid grid-cols-2 divide-x divide-black/5 dark:divide-white/10">
+      {(streakVisible || !dailyCheckinHidden) && (
+      <Card flush className={`grid divide-x divide-black/5 dark:divide-white/10 ${streakVisible && !dailyCheckinHidden ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {streakVisible && (
         <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
           <IconChip icon={Flame} tone="muted" />
           <span>
@@ -266,6 +320,8 @@ export function TodayTab({
             <span className="block text-xs text-zinc-500">Current streak</span>
           </span>
         </button>
+        )}
+        {!dailyCheckinHidden && (
         <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
           <IconChip icon={CheckSquare} tone="muted" />
           <span>
@@ -275,7 +331,9 @@ export function TodayTab({
             <span className="block text-xs text-zinc-500">Check-in today</span>
           </span>
         </button>
+        )}
       </Card>
+      )}
 
       {!isCoachView && pendingForms > 0 && (
         <button
@@ -331,14 +389,11 @@ export function TodayTab({
 
       {isCoachView && <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Achievements')} />}
 
-      {!isCoachView && (
-        <BpHomeSections
-          bookings={bookings}
-          membership={membership}
-          rewards={rewards}
-          onNavigate={onNavigate}
-        />
+      {!isCoachView && <BpHomeExplore onNavigate={onNavigate} />}
+      </>
       )}
+
+      {!isCoachView && homeTab === 'progress' && <BpHomeProgress bookings={bookings} membership={membership} rewards={rewards} />}
     </div>
   );
 }
