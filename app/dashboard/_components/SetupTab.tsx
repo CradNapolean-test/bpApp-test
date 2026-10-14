@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
-import { calcEngine, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
+import { calcEngine, weeklyTarget, CALORIE_FLOOR, RATE_PCT } from '@/lib/calculations';
 import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { MemberScreenToggles } from './MemberScreenToggles';
@@ -51,6 +51,8 @@ const BLANK: SetupFields = {
   goal_weight: 0,
   activity_level: 1.5,
   diet_approach: 'High Carb Low Fat',
+  nutrition_goal: 'fat_loss',
+  nutrition_setting: 'steady',
   tier: 1,
   cycling: false,
   timezone: DEFAULT_TIMEZONE,
@@ -137,7 +139,8 @@ export function SetupTab({
       bodyFatPct: form.body_fat_pct,
       activityLevel: form.activity_level,
       dietApproach: form.diet_approach,
-      tier: form.tier,
+      goal: form.nutrition_goal,
+      setting: form.nutrition_setting,
       cycling: form.cycling,
     });
   }, [form]);
@@ -153,7 +156,8 @@ export function SetupTab({
         bodyFatPct: form.body_fat_pct,
         activityLevel: form.activity_level,
         dietApproach: form.diet_approach,
-        tier: form.tier,
+        goal: form.nutrition_goal,
+        setting: form.nutrition_setting,
         cycling: form.cycling,
       },
       1
@@ -351,7 +355,7 @@ export function SetupTab({
                 </p>
                 {week1Target.floorApplied && (
                   <p className="mt-2 text-amber-600 dark:text-amber-400">
-                    Calories were raised so fat and carbs stay above their minimums — this is a slower loss than the tier asks for.
+                    Calories were raised so fat and carbs stay above their minimums — this is a slower change than the setting asks for.
                   </p>
                 )}
                 {week1Target.calories / 7 < CALORIE_FLOOR && (
@@ -425,18 +429,34 @@ export function SetupTab({
                 </select>
               </div>
               <div className="space-y-1">
-                <label className={labelCls}>Tier</label>
+                <label className={labelCls}>Goal</label>
                 <select
                   className={inputCls}
-                  value={form.tier}
-                  onChange={(e) => setForm({ ...form, tier: Number(e.target.value) as 1 | 2 | 3 })}
+                  value={form.nutrition_goal}
+                  onChange={(e) => setForm({ ...form, nutrition_goal: e.target.value as ClientProfileRow['nutrition_goal'] })}
                 >
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
+                  <option value="fat_loss">Fat loss</option>
+                  <option value="muscle_gain">Muscle gain</option>
                 </select>
               </div>
               <label className="flex items-center gap-2 pt-6 text-sm">
+              <div className="space-y-1">
+                <label className={labelCls}>Setting</label>
+                <select
+                  className={inputCls}
+                  value={form.nutrition_setting}
+                  onChange={(e) => setForm({ ...form, nutrition_setting: e.target.value as ClientProfileRow['nutrition_setting'] })}
+                >
+                  <option value="steady">Steady</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="aggressive">Aggressive</option>
+                </select>
+                <p className="text-xs text-zinc-500">
+                  {form.nutrition_goal === 'fat_loss'
+                    ? `Aims to lose about ${RATE_PCT.fat_loss[form.nutrition_setting] * 100}% of bodyweight a week.`
+                    : `Aims to gain about ${RATE_PCT.muscle_gain[form.nutrition_setting] * 100}% of bodyweight a month.`}
+                </p>
+              </div>
                 <input type="checkbox" checked={form.cycling} onChange={(e) => setForm({ ...form, cycling: e.target.checked })} />
                 Calorie cycling
               </label>

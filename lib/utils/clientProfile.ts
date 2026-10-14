@@ -16,7 +16,8 @@ export function toEngineProfile(row: ClientProfileRow | null): ClientProfile | n
     bodyFatPct: row.body_fat_pct,
     activityLevel: row.activity_level,
     dietApproach: row.diet_approach,
-    tier: row.tier,
+    goal: row.nutrition_goal ?? 'fat_loss',
+    setting: row.nutrition_setting ?? 'steady',
     cycling: row.cycling,
   };
 }

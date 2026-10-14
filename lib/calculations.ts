@@ -1,8 +1,12 @@
 // Ballistic Performance — calculation engine
-// Calories (Katch-McArdle TDEE minus the tier/phase deficit) are ported verbatim from a validated
-// prototype (cross-checked against a real coaching spreadsheet). The macro split follows the
-// Muscle & Strength Nutrition Pyramid and the gym's nutrition SOP (docs/SOPS.md section 4):
-// protein scaled by the gap to goal weight, fat a share of calories, carbs the remainder, with minimum fat and carbs.
+// Maintenance is Katch-McArdle BMR x activity (ported from a validated prototype). The calorie
+// change and macro split follow the Muscle & Strength Nutrition Pyramid and the gym's nutrition SOP
+// (docs/SOPS.md section 4): a goal (fat loss or muscle gain) and a setting (steady, moderate,
+// aggressive) set the rate of weight change, which sets the daily calories; protein, fat (a share of
+// calories) and carbs (the remainder, with minimums) fill them.
+
+export type NutritionGoal = 'fat_loss' | 'muscle_gain';
+export type NutritionSetting = 'steady' | 'moderate' | 'aggressive';
 
 export interface ClientProfile {
   age: number;
@@ -12,7 +16,8 @@ export interface ClientProfile {
   bodyFatPct: number;
   activityLevel: number;
   dietApproach: 'High Carb Low Fat' | 'Higher Fat';
-  tier: 1 | 2 | 3;
+  goal: NutritionGoal;
+  setting: NutritionSetting;
   cycling: boolean;
 }
 
@@ -45,14 +50,25 @@ export interface WeeklyTarget {
   dailyHigh?: DayTarget;
 }
 
-// Weekly deficit table (kcal/day) per phase (1-4, 5-8, 9-12 weeks) and tier (1/2/3).
-// "flat" = daily deficit with no calorie cycling. "low"/"high" = cycling day types,
-// weighted 5 low + 2 high days to average out to the same weekly deficit as "flat".
-const PHASE_DEFICITS: Record<1 | 2 | 3, Record<1 | 2 | 3, { flat: number; low: number; high: number }>> = {
-  1: { 1: { flat: 500, low: 700, high: 0 }, 2: { flat: 750, low: 950, high: 50 }, 3: { flat: 1000, low: 1200, high: 300 } },
-  2: { 1: { flat: 650, low: 850, high: 150 }, 2: { flat: 900, low: 1100, high: 200 }, 3: { flat: 1150, low: 1350, high: 450 } },
-  3: { 1: { flat: 800, low: 1000, high: 300 }, 2: { flat: 1050, low: 1250, high: 350 }, 3: { flat: 1300, low: 1500, high: 600 } },
+// Rate of weight change per setting, as a share of bodyweight. Fat loss is per week (Pyramid:
+// 0.5-1%); muscle gain is per month (Pyramid: 0.5-1.5%, slower the more advanced the lifter).
+export const RATE_PCT: Record<NutritionGoal, Record<NutritionSetting, number>> = {
+  fat_loss: { steady: 0.005, moderate: 0.0075, aggressive: 0.01 }, // per week
+  muscle_gain: { steady: 0.005, moderate: 0.01, aggressive: 0.015 }, // per month
 };
+
+// 3,500 kcal per lb of bodyweight change (the Pyramid's rule), expressed per kg.
+const KCAL_PER_KG = 3500 * 2.2046;
+
+// Daily calories above (+) or below (-) maintenance for a goal and setting at a bodyweight.
+export function dailyAdjustment(goal: NutritionGoal, setting: NutritionSetting, weightKg: number): number {
+  const kgChange = weightKg * RATE_PCT[goal][setting];
+  return goal === 'fat_loss' ? (-kgChange * KCAL_PER_KG) / 7 : (kgChange * KCAL_PER_KG) / 30;
+}
+
+// Calorie cycling: 5 lower days and 2 higher days around the flat target, averaging back to it.
+const CYCLE_LOW_OFFSET = -200;
+const CYCLE_HIGH_OFFSET = 500;
 
 export function phaseForWeek(week: number): 1 | 2 | 3 {
   return week <= 4 ? 1 : week <= 8 ? 2 : 3;
@@ -71,13 +87,19 @@ export function stepTargetForWeek(week: number): number {
 
 // BMR via Katch-McArdle (uses lean mass, more accurate than Mifflin-St Jeor when body fat
 // % is known). TDEE = BMR * activity level multiplier.
-const FAT_PCT_LOWER = 0.2; // 'High Carb Low Fat': middle of the Pyramid's 15-25% cutting range
-const FAT_PCT_HIGHER = 0.35; // 'Higher Fat': toward the 40% ceiling for people who do better on lower carb
+// Fat as a share of calories. 'High Carb Low Fat' sits mid-range for the goal (Pyramid: 15-25% when
+// cutting, 20-30% when gaining); 'Higher Fat' goes toward the 40% ceiling for people who do better on
+// lower carb.
+const FAT_PCT: Record<NutritionGoal, Record<ClientProfile['dietApproach'], number>> = {
+  fat_loss: { 'High Carb Low Fat': 0.2, 'Higher Fat': 0.35 },
+  muscle_gain: { 'High Carb Low Fat': 0.25, 'Higher Fat': 0.35 },
+};
+const PROTEIN_PER_KG_GAINING = 2.2; // the gym SOP's gaining example
 const FAT_MIN_PER_KG = 0.5;
 const CARB_MIN_PER_KG = 1;
 
 export function calcEngine(profile: ClientProfile): EngineResult | null {
-  const { age, gender, startWeight, goalWeight, bodyFatPct, activityLevel, dietApproach } = profile;
+  const { age, gender, startWeight, goalWeight, bodyFatPct, activityLevel, dietApproach, goal } = profile;
   if (!age || !startWeight || !goalWeight || !bodyFatPct || !activityLevel) return null;
 
   const fatMass = startWeight * (bodyFatPct / 100);
@@ -86,13 +108,14 @@ export function calcEngine(profile: ClientProfile): EngineResult | null {
   const tdee = bmr * activityLevel;
 
   const gap = startWeight - goalWeight;
-  const proteinPerKg = gap <= 5 ? 2.2 : gap <= 8 ? 2.0 : gap <= 12 ? 1.8 : 1.6;
+  const proteinPerKg =
+    goal === 'muscle_gain' ? PROTEIN_PER_KG_GAINING : gap <= 5 ? 2.2 : gap <= 8 ? 2.0 : gap <= 12 ? 1.8 : 1.6;
 
   return {
     bmr,
     tdee,
     protein: startWeight * proteinPerKg,
-    fatPct: dietApproach === 'High Carb Low Fat' ? FAT_PCT_LOWER : FAT_PCT_HIGHER,
+    fatPct: FAT_PCT[goal][dietApproach],
     fatMin: startWeight * FAT_MIN_PER_KG,
     carbMin: startWeight * CARB_MIN_PER_KG,
   };
@@ -111,18 +134,17 @@ function dayMacros(engine: EngineResult, targetCals: number): DayTarget {
   return { calories: protein * 4 + fat * 9 + carbMin * 4, protein, fat, carbs: carbMin, floorApplied: true };
 }
 
-// Full weekly target for a given profile + week number (1-12), accounting for phase and
-// calorie cycling.
+// Full weekly target for a given profile + week number (1-12). The rate of change is the same every
+// week; the week only picks the phase label.
 export function weeklyTarget(profile: ClientProfile, week: number): WeeklyTarget | null {
   const engine = calcEngine(profile);
   if (!engine) return null;
-  const { tdee } = engine;
+  const base = engine.tdee + dailyAdjustment(profile.goal, profile.setting, profile.startWeight);
   const phase = phaseForWeek(week);
-  const d = PHASE_DEFICITS[phase][profile.tier];
 
   if (profile.cycling) {
-    const low = dayMacros(engine, Math.max(tdee - d.low, 0));
-    const high = dayMacros(engine, Math.max(tdee - d.high, 0));
+    const low = dayMacros(engine, Math.max(base + CYCLE_LOW_OFFSET, 0));
+    const high = dayMacros(engine, Math.max(base + CYCLE_HIGH_OFFSET, 0));
     return {
       phase,
       calories: low.calories * 5 + high.calories * 2,
@@ -135,7 +157,7 @@ export function weeklyTarget(profile: ClientProfile, week: number): WeeklyTarget
     };
   }
 
-  const flat = dayMacros(engine, Math.max(tdee - d.flat, 0));
+  const flat = dayMacros(engine, Math.max(base, 0));
   return {
     phase,
     calories: flat.calories * 7,

@@ -74,7 +74,8 @@ async function main() {
     bodyFatPct: clientProfile.body_fat_pct,
     activityLevel: clientProfile.activity_level,
     dietApproach: clientProfile.diet_approach,
-    tier: clientProfile.tier,
+    goal: clientProfile.nutrition_goal ?? 'fat_loss',
+    setting: clientProfile.nutrition_setting ?? 'steady',
     cycling: false, // demo data uses the flat daily target regardless of the profile's own cycling setting
   };
   const engine = calcEngine(profile);

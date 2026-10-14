@@ -71,7 +71,8 @@ export function InsightsTab({
         bodyFatPct: profile.body_fat_pct,
         activityLevel: profile.activity_level,
         dietApproach: profile.diet_approach,
-        tier: profile.tier,
+        goal: profile.nutrition_goal ?? 'fat_loss',
+        setting: profile.nutrition_setting ?? 'steady',
         cycling: profile.cycling,
       });
       if (engine) {

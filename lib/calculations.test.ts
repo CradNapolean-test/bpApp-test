@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CALORIE_FLOOR,
+  dailyAdjustment,
   calPerMinute,
   calcEngine,
   cycleDayFor,
@@ -27,7 +28,8 @@ const maleFlat: ClientProfile = {
   bodyFatPct: 25,
   activityLevel: 1.5,
   dietApproach: 'High Carb Low Fat',
-  tier: 1,
+  goal: 'fat_loss',
+  setting: 'steady',
   cycling: false,
 };
 
@@ -39,7 +41,8 @@ const femaleCycling: ClientProfile = {
   bodyFatPct: 30,
   activityLevel: 1.6,
   dietApproach: 'Higher Fat',
-  tier: 2,
+  goal: 'fat_loss',
+  setting: 'moderate',
   cycling: true,
 };
 
@@ -96,60 +99,90 @@ describe('phaseForWeek / stepTargetForWeek', () => {
   });
 });
 
-describe('weeklyTarget', () => {
-  it('keeps protein flat across phases and shrinks carbs as the deficit grows', () => {
-    const w1 = weeklyTarget(maleFlat, 1)!;
-    const w5 = weeklyTarget(maleFlat, 5)!;
-    const w9 = weeklyTarget(maleFlat, 9)!;
-    expect(w1.protein).toBe(w5.protein);
-    expect(w5.protein).toBe(w9.protein);
-    expect(w1.dailyFlat!.carbs).toBeGreaterThan(w5.dailyFlat!.carbs);
-    expect(w5.dailyFlat!.carbs).toBeGreaterThan(w9.dailyFlat!.carbs);
+describe('dailyAdjustment', () => {
+  it('turns a % of bodyweight per week into a daily deficit at 3,500 kcal/lb', () => {
+    // 75kg x 0.5% = 0.375kg/week = 0.827lb/week -> ~413 kcal/day
+    expect(dailyAdjustment('fat_loss', 'steady', 75)).toBeCloseTo(-413.4, 0);
+    expect(dailyAdjustment('fat_loss', 'moderate', 75)).toBeCloseTo(-620.1, 0);
+    expect(dailyAdjustment('fat_loss', 'aggressive', 75)).toBeCloseTo(-826.8, 0);
   });
 
-  it('matches the golden flat-day figures for tier 1 phase 1', () => {
+  it('turns a % of bodyweight per month into a daily surplus', () => {
+    // Pyramid table: 82kg at 1%/month ~ 200 kcal/day
+    expect(dailyAdjustment('muscle_gain', 'moderate', 82)).toBeCloseTo(211, 0);
+    expect(dailyAdjustment('muscle_gain', 'steady', 82)).toBeCloseTo(105.5, 0);
+    expect(dailyAdjustment('muscle_gain', 'aggressive', 82)).toBeCloseTo(316.4, 0);
+  });
+
+  it('scales with bodyweight', () => {
+    expect(dailyAdjustment('fat_loss', 'steady', 100)).toBeCloseTo(dailyAdjustment('fat_loss', 'steady', 50) * 2, 6);
+  });
+});
+
+describe('weeklyTarget', () => {
+  it('uses the same rate every week; only the phase label changes', () => {
+    const w1 = weeklyTarget(maleFlat, 1)!;
+    const w9 = weeklyTarget(maleFlat, 9)!;
+    expect(w1.phase).toBe(1);
+    expect(w9.phase).toBe(3);
+    expect(w9.dailyFlat).toEqual(w1.dailyFlat);
+  });
+
+  it('matches the golden flat-day figures for fat loss, steady', () => {
     const target = weeklyTarget(maleFlat, 1)!;
     const day = target.dailyFlat!;
-    expect(day.calories).toBeCloseTo(2546.23, 2);
+    const cals = 3046.23 + dailyAdjustment('fat_loss', 'steady', 100);
+    expect(day.calories).toBeCloseTo(cals, 1);
     expect(day.protein).toBeCloseTo(180, 6);
-    expect(day.fat).toBeCloseTo((2546.23 * 0.2) / 9, 2);
-    expect(day.carbs).toBeCloseTo((2546.23 - 720 - day.fat * 9) / 4, 2);
+    expect(day.fat).toBeCloseTo((cals * 0.2) / 9, 1);
+    expect(day.carbs).toBeCloseTo((cals - 720 - day.fat * 9) / 4, 1);
     expect(day.floorApplied).toBe(false);
     expect(target.calories).toBeCloseTo(day.calories * 7, 6);
   });
 
+  it('gives a bigger deficit, and so fewer carbs, at each step up', () => {
+    const at = (setting: ClientProfile['setting']) => weeklyTarget({ ...maleFlat, setting }, 1)!.dailyFlat!;
+    expect(at('steady').calories).toBeGreaterThan(at('moderate').calories);
+    expect(at('moderate').calories).toBeGreaterThan(at('aggressive').calories);
+    expect(at('steady').carbs).toBeGreaterThan(at('aggressive').carbs);
+  });
+
+  it('puts muscle gain above maintenance with 2.2 g/kg protein and 25% fat', () => {
+    const gain: ClientProfile = { ...maleFlat, goal: 'muscle_gain', setting: 'moderate' };
+    const engine = calcEngine(gain)!;
+    const day = weeklyTarget(gain, 1)!.dailyFlat!;
+    expect(day.calories).toBeCloseTo(engine.tdee + dailyAdjustment('muscle_gain', 'moderate', 100), 1);
+    expect(day.calories).toBeGreaterThan(engine.tdee);
+    expect(day.protein).toBeCloseTo(220, 6);
+    expect(day.fat).toBeCloseTo((day.calories * 0.25) / 9, 1);
+  });
+
   it('raises calories rather than letting carbs fall under 1 g/kg, and flags it', () => {
-    // 75kg, 22% BF, sedentary, tier 3: the old engine gave 0g carbs here.
-    const p: ClientProfile = { ...maleFlat, age: 35, startWeight: 75, goalWeight: 70, bodyFatPct: 22, activityLevel: 1.2, tier: 3 };
+    // 75kg, 22% BF, sedentary, aggressive: the old tier-3 engine gave 0g carbs here.
+    const p: ClientProfile = { ...maleFlat, age: 35, startWeight: 75, goalWeight: 70, bodyFatPct: 22, activityLevel: 1.2, setting: 'aggressive' };
     const day = weeklyTarget(p, 1)!.dailyFlat!;
     expect(day.floorApplied).toBe(true);
     expect(day.carbs).toBeCloseTo(75, 6);
     expect(day.calories).toBeCloseTo(day.protein * 4 + day.fat * 9 + day.carbs * 4, 6);
-    expect(day.calories).toBeGreaterThan(2050 - 1000);
   });
 
-  it('never lets carbs go negative even at a deficit steep enough to exceed TDEE', () => {
-    const starving: ClientProfile = { ...maleFlat, activityLevel: 1.0, tier: 3 };
-    const target = weeklyTarget(starving, 12)!;
-    expect(target.dailyFlat!.carbs).toBeGreaterThanOrEqual(0);
-  });
-
-  it('splits a cycling week into 5 low + 2 high days averaging the flat-equivalent deficit', () => {
-    const target = weeklyTarget(femaleCycling, 3)!;
-    expect(target.dailyLow).toBeDefined();
-    expect(target.dailyHigh).toBeDefined();
-    expect(target.dailyFlat).toBeUndefined();
-    expect(target.calories).toBeCloseTo(target.dailyLow!.calories * 5 + target.dailyHigh!.calories * 2, 6);
-    // Low days carry a bigger deficit than high days by construction (PHASE_DEFICITS table).
-    expect(target.dailyLow!.calories).toBeLessThan(target.dailyHigh!.calories);
-  });
-
-  it('never drops fat or carbs under their minimums at the tightest tier, phase and activity', () => {
-    const tightProfile: ClientProfile = { ...maleFlat, activityLevel: 1.2, tier: 3 };
-    const day = weeklyTarget(tightProfile, 12)!.dailyFlat!;
+  it('never lets carbs go negative or fat/carbs under their minimums', () => {
+    const tight: ClientProfile = { ...maleFlat, activityLevel: 1.0, setting: 'aggressive' };
+    const day = weeklyTarget(tight, 12)!.dailyFlat!;
     expect(day.fat).toBeGreaterThanOrEqual(50 - 1e-9);
     expect(day.carbs).toBeGreaterThanOrEqual(100 - 1e-9);
-    expect(CALORIE_FLOOR).toBeLessThan(day.calories + 2000); // floor constant still exported
+    expect(CALORIE_FLOOR).toBeGreaterThan(0);
+  });
+
+  it('splits a cycling week into 5 low + 2 high days that average to the flat target', () => {
+    const cycling = weeklyTarget(femaleCycling, 3)!;
+    const flat = weeklyTarget({ ...femaleCycling, cycling: false }, 3)!;
+    expect(cycling.dailyLow).toBeDefined();
+    expect(cycling.dailyHigh).toBeDefined();
+    expect(cycling.dailyFlat).toBeUndefined();
+    expect(cycling.calories).toBeCloseTo(cycling.dailyLow!.calories * 5 + cycling.dailyHigh!.calories * 2, 6);
+    expect(cycling.dailyLow!.calories).toBeLessThan(cycling.dailyHigh!.calories);
+    if (!cycling.floorApplied) expect(cycling.calories).toBeCloseTo(flat.calories, 4);
   });
 });
 

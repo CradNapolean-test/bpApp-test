@@ -69,7 +69,7 @@ export interface OnboardingPlan {
   reasons: string[];
 }
 
-// The starting plan shown at the end of onboarding: engine defaults (high carb/low fat, tier 1, no
+// The starting plan shown at the end of onboarding: engine defaults (high carb/low fat, fat loss, steady, no
 // cycling) and the reasons a coach should look at it. Returns null if the inputs can't be
 // calculated. Every new member is flagged for review; these reasons say what to look at.
 export function buildOnboardingPlan(input: OnboardingInputs): OnboardingPlan | null {
@@ -83,7 +83,8 @@ export function buildOnboardingPlan(input: OnboardingInputs): OnboardingPlan | n
     bodyFatPct,
     activityLevel: input.activityLevel,
     dietApproach: 'High Carb Low Fat' as const,
-    tier: 1 as const,
+    goal: 'fat_loss' as const,
+    setting: 'steady' as const,
     cycling: false,
   };
   if (!calcEngine(profile)) return null;

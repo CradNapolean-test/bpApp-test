@@ -11,7 +11,10 @@ export interface ClientProfileRow {
   goal_weight: number;
   activity_level: number;
   diet_approach: 'High Carb Low Fat' | 'Higher Fat';
+  // Deprecated, kept in the table: replaced by nutrition_goal / nutrition_setting.
   tier: 1 | 2 | 3;
+  nutrition_goal: 'fat_loss' | 'muscle_gain';
+  nutrition_setting: 'steady' | 'moderate' | 'aggressive';
   cycling: boolean;
   meas_arm_start: number | null; meas_arm_goal: number | null;
   meas_chest_start: number | null; meas_chest_goal: number | null;

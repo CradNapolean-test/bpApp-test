@@ -16,7 +16,7 @@ Two roles: `coach` and `client`. One coach account manages many client accounts.
 Fields: name, gender, goal description (free text, e.g. "Fat loss"), experience level,
 age, body fat %, **start weight (kg)**, **goal weight (kg) — required**, activity level
 (numeric multiplier, default 1.5), diet approach (`High Carb Low Fat` | `Higher Fat`),
-tier (1/2/3), calorie cycling (`Yes`/`No`).
+goal + setting (nutrition_goal / nutrition_setting; the old `tier` column is deprecated), calorie cycling (`Yes`/`No`).
 
 Also: measurements (arm/chest/waist/hips/quad, start + goal) and strength lifts
 (DB Press/Squats/Pull Ups/Romanian Deadlift/Hip Thrust, start + goal).
@@ -39,18 +39,18 @@ See `lib/calculations.ts` for exact implementation. Summary:
 - **Fat target**: a share of the day's calories: 20% for "High Carb Low Fat", 35% for "Higher
   Fat", never under 0.5 g/kg.
 - **Carbs**: fill whatever calories remain after protein and fat, never under 1 g/kg. If the
-  tier's deficit would break the fat or carb minimum, calories are raised to meet it (a slower
+  setting's deficit would break the fat or carb minimum, calories are raised to meet it (a slower
   loss, as the Pyramid advises) and the target is flagged `floorApplied`.
-- **Phase-based calorie deficits**: the 12-week program splits into 3 phases (weeks 1-4,
-  5-8, 9-12), each with progressively larger deficits per tier — see the
-  `PHASE_DEFICITS` table in `lib/calculations.ts` for exact numbers. Fat and protein
-  targets stay constant across phases; only the calorie deficit (and therefore carbs)
-  changes.
-- **Calorie cycling**: when enabled, weekly target splits into 5 "low" days and 2 "high"
-  days that average out to the same weekly deficit as the flat (non-cycling) approach.
+- **Goal and setting** (replace the old 1/2/3 tier and its phase table): goal is Fat loss or
+  Muscle gain; setting is Steady, Moderate or Aggressive. The setting sets the rate of bodyweight
+  change, which sets the daily calories at 3,500 kcal/lb (`dailyAdjustment`):
+  fat loss 0.5 / 0.75 / 1.0% of bodyweight per week; muscle gain 0.5 / 1.0 / 1.5% per month.
+  The rate is the same every week (no phase ramp). Muscle gain uses 2.2 g/kg protein and 25% fat.
+- **Calorie cycling**: when enabled, the week splits into 5 low days (flat target − 200 kcal) and
+  2 high days (flat target + 500 kcal), averaging back to the flat target.
 
 **Resolved tension:** the original design tapered only carbs, so carbs could reach zero at
-higher tiers. The fat/carb minimums above now prevent that; the Setup tab tells the coach when
+higher tiers (now settings). The fat/carb minimums above now prevent that; the Setup tab tells the coach when
 calories were raised. The ~1,200 kcal floor warning is unchanged.
 
 ## 4. Weekly Log (daily check-ins)
