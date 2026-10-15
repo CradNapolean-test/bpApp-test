@@ -6,6 +6,7 @@ import { checkInToSession } from '@/lib/data/classes';
 import { resolveCheckinTarget } from '@/lib/utils/checkin';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatClock, nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { checkinWindow } from '@/lib/checkinWindow';
 import type { ClassRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 // Shown under the button when there is no workout to open, so a member understands why tapping
@@ -16,10 +17,8 @@ const REASON_TEXT: Record<'not_linked' | 'no_active_program' | 'no_matching_day'
   no_matching_day: "Your programme doesn't have a workout set for this day of the week yet.",
 };
 
-// Check-in is only offered around the session itself: it opens shortly before the start and
-// closes a little after, so the programme opens when someone is actually turning up.
-export const CHECKIN_OPENS_BEFORE_MIN = 2;
-export const CHECKIN_CLOSES_AFTER_MIN = 15;
+// Check-in is only offered around the session itself (30 minutes before to 60 after, lib/checkinWindow.ts, the same numbers the
+// database enforces), so the programme opens when someone is actually turning up.
 
 // Checking in marks the member's booking as attended (so the coach doesn't have to) and, when
 // their programme has a workout for the day, opens it.
@@ -78,15 +77,11 @@ export function CheckInButton({
   const hasTime = !!classRow?.start_time;
   const [h, m] = (classRow?.start_time ?? '00:00').split(':').map(Number);
   const startMs = Date.parse(`${date ?? todayIso}T00:00:00Z`) + (h * 60 + (m || 0)) * 60_000;
-  const now = nowLocalMs(tz);
-  if (hasTime && now < startMs - CHECKIN_OPENS_BEFORE_MIN * 60_000) {
-    return (
-      <p className="text-xs text-zinc-500">
-        Check-in opens at {formatClock(new Date(startMs - CHECKIN_OPENS_BEFORE_MIN * 60_000).toISOString().slice(11, 16))}
-      </p>
-    );
+  const gate = checkinWindow(hasTime ? startMs : null, nowLocalMs(tz));
+  if (gate.state === 'not_yet') {
+    return <p className="text-xs text-zinc-500">Check-in opens at {formatClock(new Date(gate.opensAtMs).toISOString().slice(11, 16))}</p>;
   }
-  if (hasTime && now > startMs + CHECKIN_CLOSES_AFTER_MIN * 60_000) {
+  if (gate.state === 'closed') {
     return <p className="text-xs text-zinc-500">Check-in has closed for this session.</p>;
   }
 
