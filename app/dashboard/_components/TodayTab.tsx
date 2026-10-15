@@ -65,6 +65,7 @@ export function TodayTab({
   isCoachView = false,
   rewards = [],
   sessionsAttended,
+  showReferral = true,
   bigDogResults = [],
   events = [],
   dailyCheckinHidden = false,
@@ -88,6 +89,8 @@ export function TodayTab({
   rewards?: RewardRow[];
   // Sessions attended, ever: the rewards function's count (the bookings above are the last 90 days and what is ahead).
   sessionsAttended?: number;
+  // False when the member's gym has no referral link: the Refer a friend tile is left out (R16).
+  showReferral?: boolean;
   bigDogResults?: BigDogResultRow[];
   events?: EventWithSignup[];
   dailyCheckinHidden?: boolean;
@@ -368,7 +371,7 @@ export function TodayTab({
       {!isCoachView && (
         <div className="space-y-5">
           <BpHomeProgress bookings={bookings} membership={membership} rewards={rewards} sessionsAttended={sessionsAttended} />
-          <BpHomeExplore onNavigate={onNavigate} />
+          <BpHomeExplore onNavigate={onNavigate} showReferral={showReferral} />
         </div>
       )}
     </div>

@@ -78,7 +78,9 @@ export default async function DashboardPage() {
       exerciseLibrary={bundle.exerciseLibrary}
       programTemplates={bundle.programTemplates}
       recipes={bundle.recipes}
-      disabledScreens={bundle.disabledScreens}
+      // Hidden for a gym with no referral link (R16, D7).
+      disabledScreens={bundle.referralUrl ? bundle.disabledScreens : [...bundle.disabledScreens, 'Refer a Friend']}
+      referralUrl={bundle.referralUrl}
       disabledMetrics={bundle.disabledMetrics}
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}

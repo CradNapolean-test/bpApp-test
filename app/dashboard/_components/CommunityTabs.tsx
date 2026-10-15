@@ -4,11 +4,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Check, ChevronDown, Copy, ExternalLink, Gift, MapPin, Share2, Star, Users } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { useOnDemand } from '@/app/_components/useOnDemand';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { leaveEvent, signUpForEvent, submitFeedback } from '@/lib/data/community';
+import { getMemberTimetable } from '@/lib/data/classes';
 import { clubBadges, clubProgress } from '@/lib/clubs';
+import { cancellationPolicyText } from '@/lib/bookingRules';
+import { buildFaqs } from '@/lib/faqContent';
 import { ClubBar } from './ClubBar';
-import type { EventWithSignup, RewardsForMember } from '@/lib/data/types';
+import type { ClientMembershipRow, EventWithSignup, RewardsForMember } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
 
@@ -156,13 +160,11 @@ export function FeedbackTab({ readOnly }: { readOnly: boolean }) {
 
 // ---------------------------------------------------------------- Refer a friend
 
-// The gym's own referral sign-up page -- the referral discount is already applied there, so
-// members just share this link.
-export const REFER_URL = 'https://ballisticperformancequays.co.uk/refer';
-
-export function ReferTab({ name }: { name: string }) {
+// The member's own gym's referral page (gyms.referral_url, migration 0138). It used to be one gym's address for every member, so another
+// gym's members shared the wrong site, and it promised a discount that nothing credits. The screen is hidden for a gym that has no link.
+export function ReferTab({ name, referralUrl }: { name: string; referralUrl: string }) {
   const [copied, setCopied] = useState(false);
-  const message = `${name.split(' ')[0]} here — I train at Ballistic Performance and think you'd love it. Join with my link and your discount is already applied: ${REFER_URL}`;
+  const message = `${name.split(' ')[0]} here — I train at Ballistic Performance and think you'd love it. Have a look: ${referralUrl}`;
 
   async function share() {
     try {
@@ -191,7 +193,7 @@ export function ReferTab({ name }: { name: string }) {
       <div>
         <p className="text-sm font-extrabold text-black dark:text-zinc-50">Refer a friend or family member</p>
         <p className="text-xs text-zinc-500">
-          Send them your link. Their discount off the 6 week challenge is already applied when they sign up through it.
+          Send them your gym&apos;s link so they can find out about joining.
         </p>
       </div>
       <p className="rounded-xl bg-black/[.03] p-3 text-xs text-zinc-600 dark:bg-white/[.04] dark:text-zinc-400">{message}</p>
@@ -212,7 +214,7 @@ export function ReferTab({ name }: { name: string }) {
           {copied ? 'Copied' : 'Copy'}
         </button>
         <a
-          href={REFER_URL}
+          href={referralUrl}
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open the referral page"
@@ -311,33 +313,31 @@ export function RewardsTab({ data }: { data: RewardsForMember }) {
 
 // ---------------------------------------------------------------- FAQs
 
-// DRAFT answers, written from the booking rules in the owner's brief. Rob should review the
-// wording (and add anything from the TeamUp FAQ) before this goes in front of members.
-const FAQS: { q: string; a: string }[] = [
-  { q: 'How do I book a session?', a: 'Open the Book tab, pick a day, and tap Book on the session you want. Your credits are shown at the top.' },
-  { q: 'Where can I see my booked sessions?', a: 'Under "My bookings" on the Book tab. They also appear on your Home screen as your next class.' },
-  {
-    q: 'What is the cancellation policy?',
-    a: 'Cancel at least 3 hours before your session to keep your credit. Between 11pm and 5am does not count, so for early-morning sessions you need to cancel by 11pm the night before. Each booking shows its exact cancel-by time. Cancel later than that and the credit is lost.',
-  },
-  { q: 'What if a session is full?', a: 'Tap Waitlist. If a spot opens and you have enough credits, you are booked in automatically and we let you know.' },
-  { q: 'How far ahead can I book?', a: 'Challenge members can book 2 weeks ahead. Full and Big Dog members can book 2 weeks and 5 days ahead.' },
-  { q: 'What are Strong and Big Dog memberships?', a: 'Strong gives you 3 sessions a week. Big Dog gives you unlimited sessions.' },
-  {
-    q: 'What are the Big Dog T-shirts?',
-    a: 'Hit the Big Dog standard in one exercise for a White shirt, 3 for Turquoise, 6 for Silver, and every exercise for Gold. Your standards are on your profile.',
-  },
-  { q: 'How do I check in to a session?', a: 'On the day of your session, open Home. Your next class shows a check-in button.' },
-  { q: 'What is the daily check-in?', a: 'Three quick numbers each day: sleep, steps and water. It takes a few seconds and helps your coach see how you are going.' },
-  { q: 'How do I get in touch with my coach?', a: 'Open the Coach tab. Use Message for the chat (voice notes and photos work too), or Email your coach if you would rather write an email.' },
-  { q: 'How do I add my InBody results?', a: 'Go to Progress, then Body Scans, and add the numbers from your InBody printout. You can attach a photo of the printout too.' },
-  { q: 'What are the session clubs?', a: 'Every 100 sessions you attend is a club: 100, 200, 300 and so on. Your progress towards the next club is on your Home screen under My progress.' },
-  { q: 'How do I get my reward?', a: 'When a reward shows Earned on the Rewards screen, ask your coach and they will give it to you.' },
-  { q: 'How do I refer a friend?', a: 'Open Refer a friend, tap Share, and send them your link. Their discount is already applied.' },
-];
-
-export function FaqTab() {
+// The answers are built from the app's own data (the club list, the member's plan, the gym's cancellation rule, the check-in window) and
+// the wording the owner edits in lib/faqContent.ts, which also lists what the owner must confirm (R16).
+export function FaqTab({
+  clientId,
+  membership,
+  gymBlackout,
+  referralUrl,
+}: {
+  clientId: string;
+  membership: ClientMembershipRow | null;
+  gymBlackout: { start: string | null; end: string | null } | null;
+  referralUrl: string | null;
+}) {
   const [open, setOpen] = useState<number | null>(null);
+  // Each session has its own cancel-by time; the sessions are read when this screen opens to say whether the gym has one rule.
+  const timetable = useOnDemand(() => getMemberTimetable(clientId), clientId);
+  const cutoffs = (timetable.data ?? []).map((o) => o.cutoffHours);
+  const pkg = membership?.package ?? null;
+  const FAQS = buildFaqs({
+    planName: pkg?.name ?? null,
+    creditsPerWeek: pkg?.credits_per_week ?? null,
+    advanceBookingDays: pkg?.advance_booking_days ?? null,
+    cancellation: cancellationPolicyText(gymBlackout, cutoffs),
+    referralUrl,
+  });
   return (
     <div className="space-y-3">
       <div className={`${cardCls} !p-0`}>

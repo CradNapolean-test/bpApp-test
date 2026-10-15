@@ -129,6 +129,17 @@ export async function getGymBookingRules(gymId: string | null): Promise<{ timezo
   };
 }
 
+// The page a member shares to refer a friend (gyms.referral_url, migration 0138), or null when their gym has none or the column is not
+// there yet. The Refer a friend screen is hidden for null (R16, D7).
+export async function getGymReferralUrl(gymId: string | null): Promise<string | null> {
+  if (!gymId) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('gyms').select('referral_url').eq('id', gymId).maybeSingle();
+  if (error) return null;
+  const url = (data?.referral_url as string | null | undefined)?.trim();
+  return url && /^https:\/\//i.test(url) ? url : null;
+}
+
 // Moves the caller's active-gym pointer (profiles.gym_id/is_gym_admin) to a gym they already
 // belong to -- switch_active_gym (0056) validates membership server-side. Callers should
 // router.refresh() (or navigate) afterward since every server-loaded page depends on this.

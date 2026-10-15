@@ -144,6 +144,7 @@ export function DashboardShell({
   unreadMessageCount = 0,
   gymTimezone = null,
   streak = undefined,
+  referralUrl = null,
   gymBlackout = null,
   latestWeighIn = null,
   ownerCoachName = null,
@@ -203,6 +204,8 @@ export function DashboardShell({
   gymTimezone?: string | null;
   // Consecutive days logged, from a year of logs (the 84-day history alone cannot pass 85).
   streak?: number;
+  // The member's gym's referral page; null when it has none (the Refer a friend screen is then hidden).
+  referralUrl?: string | null;
   // The gym's overnight window that does not count towards a cancellation cut-off (L5).
   gymBlackout?: { start: string | null; end: string | null } | null;
   // Coach view: the member's most recent weigh-in however old, and the name of the coach they belong to (for the read-only note).
@@ -804,6 +807,7 @@ export function DashboardShell({
               isCoachView={isCoachView}
               rewards={rewardsData.rewards}
               sessionsAttended={rewardsData.sessions}
+              showReferral={referralUrl != null}
               bigDogResults={bigDogResults}
               events={events}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
@@ -1001,10 +1005,10 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Events' && <EventsTab events={events} readOnly={isCoachView} />}
           {effectiveScreen === 'Rewards' && <RewardsTab data={rewardsData} />}
-          {effectiveScreen === 'FAQs' && <FaqTab />}
+          {effectiveScreen === 'FAQs' && <FaqTab clientId={clientId} membership={membership} gymBlackout={gymBlackout} referralUrl={referralUrl} />}
           {effectiveScreen === 'Feedback' && <FeedbackTab readOnly={isCoachView} />}
-          {effectiveScreen === 'Refer a Friend' && !isCoachView && (
-            <ReferTab name={profile?.name ?? clientLabel} />
+          {effectiveScreen === 'Refer a Friend' && !isCoachView && referralUrl && (
+            <ReferTab name={profile?.name ?? clientLabel} referralUrl={referralUrl} />
           )}
           {effectiveScreen === 'Big Dog' && (
             <BigDogTab

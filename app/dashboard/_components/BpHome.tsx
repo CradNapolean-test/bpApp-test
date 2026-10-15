@@ -130,7 +130,7 @@ export function BpHomeProgress({
   );
 }
 
-export function BpHomeExplore({ onNavigate }: { onNavigate: (category: Category, screen?: Screen) => void }) {
+export function BpHomeExplore({ onNavigate, showReferral = true }: { onNavigate: (category: Category, screen?: Screen) => void; showReferral?: boolean }) {
   return (
     <div>
       <SectionLabel>Explore</SectionLabel>
@@ -138,7 +138,7 @@ export function BpHomeExplore({ onNavigate }: { onNavigate: (category: Category,
         <Tile icon={PlayCircle} title="Resources" subtitle="Video library" onClick={() => onNavigate('Learn', 'Education')} />
         <Tile icon={Trophy} title="Events" subtitle="Gym events" onClick={() => onNavigate('Community', 'Events')} />
         <Tile icon={Gift} title="Rewards" subtitle="Gifts & clubs" onClick={() => onNavigate('Community', 'Rewards')} />
-        <Tile icon={Users} title="Refer a friend" subtitle="Share your link" onClick={() => onNavigate('Community', 'Refer a Friend')} />
+        {showReferral && <Tile icon={Users} title="Refer a friend" subtitle="Share your link" onClick={() => onNavigate('Community', 'Refer a Friend')} />}
         <Tile icon={Star} title="Feedback" subtitle="Rate your experience" onClick={() => onNavigate('Community', 'Feedback')} />
         <Tile icon={HelpCircle} title="FAQ & T&Cs" subtitle="Help & policies" onClick={() => onNavigate('Community', 'FAQs')} />
       </div>
