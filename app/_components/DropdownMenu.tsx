@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { useClickOutside } from './useClickOutside';
+import { useMenuKeys } from './useMenuKeys';
 
 export interface DropdownMenuItem {
   label: string;
@@ -26,6 +27,8 @@ export function DropdownMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useClickOutside<HTMLDivElement>(() => setOpen(false), open);
+  // Arrow keys, Home, End and Escape; focus goes into the menu when it opens and back to the button when it closes (UI1).
+  const { menuRef, triggerRef } = useMenuKeys<HTMLDivElement, HTMLButtonElement>(open, () => setOpen(false));
 
   const triggerCls =
     variant === 'header'
@@ -35,11 +38,9 @@ export function DropdownMenu({
   return (
     <div ref={ref} className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false);
-        }}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={triggerLabel}
@@ -49,7 +50,9 @@ export function DropdownMenu({
       </button>
       {open && (
         <div
+          ref={menuRef}
           role="menu"
+          aria-label={triggerLabel}
           className="absolute right-0 z-30 mt-1.5 min-w-[11rem] rounded-xl border border-black/10 bg-card p-1 shadow-xl dark:border-white/10"
         >
           {items.map((item) => (

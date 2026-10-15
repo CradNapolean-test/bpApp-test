@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Check, ChevronDown, MapPin } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useClickOutside } from '@/app/_components/useClickOutside';
+import { useMenuKeys } from '@/app/_components/useMenuKeys';
 import { switchActiveGym } from '@/lib/data/gym';
 import { shortGymName } from '@/lib/gymNames';
 import { useCoachGyms } from './CoachGymsContext';
@@ -18,6 +19,8 @@ export function GymSwitcherMenu({ alwaysShow = false }: { alwaysShow?: boolean }
   const { run, busy } = useAction();
   const [open, setOpen] = useState(false);
   const ref = useClickOutside<HTMLDivElement>(() => setOpen(false), open);
+  // Arrow keys, Home, End and Escape work from the trigger and from inside the list; focus returns to the trigger (GS2).
+  const { menuRef, triggerRef } = useMenuKeys<HTMLDivElement, HTMLButtonElement>(open, () => setOpen(false));
 
   const active = gyms.find((g) => g.isActive) ?? gyms[0];
   if (!active || (gyms.length < 2 && !alwaysShow)) return null;
@@ -43,9 +46,11 @@ export function GymSwitcherMenu({ alwaysShow = false }: { alwaysShow?: boolean }
   return (
     <div ref={ref} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={busy}
+        aria-label={`Site: ${shortGymName(active.gymName, { siblings })}. Change site`}
         aria-haspopup="listbox"
         aria-expanded={open}
         className="rounded-full bg-black/5 px-2.5 py-1 hover:bg-black/10 disabled:opacity-60 dark:bg-white/10 dark:hover:bg-white/15"
@@ -54,7 +59,9 @@ export function GymSwitcherMenu({ alwaysShow = false }: { alwaysShow?: boolean }
       </button>
       {open && (
         <div
+          ref={menuRef}
           role="listbox"
+          aria-label="Sites"
           className="absolute left-0 z-50 mt-1.5 min-w-[12rem] rounded-xl border border-black/10 bg-card p-1 shadow-xl dark:border-white/10"
         >
           {gyms.map((g) => (
