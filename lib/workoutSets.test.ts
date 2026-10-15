@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, workoutSummary } from './workoutSets';
+import { finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, workoutSummary, applySetChange, sortedSets } from './workoutSets';
 
 describe('nextSetNumber (L4)', () => {
   it('is 1 for an exercise with nothing logged', () => {
@@ -69,5 +69,41 @@ describe('reconcileLocalChoices (L4)', () => {
       new Map([['d2', both]])
     );
     expect([...kept.keys()]).toEqual(['d1']);
+  });
+});
+
+describe('keeping the screen in step with saves (R13)', () => {
+  const row = (id: string, set_number: number | null, logged_at: string, reps = 5) => ({ id, set_number, logged_at, actual_reps: reps, actual_load: 60 });
+
+  it('shows a set that was just saved without reloading the page', () => {
+    const logs = [row('a', 1, '2026-10-15T09:00:00Z')];
+    expect(applySetChange(logs, { kind: 'added', row: row('b', 2, '2026-10-15T09:05:00Z') }).map((l) => l.id)).toEqual(['b', 'a']);
+  });
+
+  it('does not show a set twice if the page brings it too', () => {
+    const logs = [row('a', 1, '2026-10-15T09:00:00Z')];
+    expect(applySetChange(logs, { kind: 'added', row: row('a', 1, '2026-10-15T09:00:00Z') })).toHaveLength(1);
+  });
+
+  it('applies a correction to the one set and leaves the rest', () => {
+    const logs = [row('a', 1, '2026-10-15T09:00:00Z'), row('b', 2, '2026-10-15T09:05:00Z')];
+    const next = applySetChange(logs, { kind: 'updated', id: 'b', fields: { actual_reps: 8 } });
+    expect(next.find((l) => l.id === 'b')?.actual_reps).toBe(8);
+    expect(next.find((l) => l.id === 'a')?.actual_reps).toBe(5);
+  });
+
+  it('removes a deleted set', () => {
+    const logs = [row('a', 1, '2026-10-15T09:00:00Z'), row('b', 2, '2026-10-15T09:05:00Z')];
+    expect(applySetChange(logs, { kind: 'deleted', id: 'a' }).map((l) => l.id)).toEqual(['b']);
+  });
+
+  it('puts the sets of one exercise in the order they were done, even though the page sends them newest first', () => {
+    const newestFirst = [row('c', 3, '2026-10-15T09:10:00Z'), row('b', 2, '2026-10-15T09:05:00Z'), row('a', 1, '2026-10-15T09:00:00Z')];
+    expect(sortedSets(newestFirst).map((l) => l.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('falls back to the time when set numbers are missing or equal', () => {
+    const logs = [row('late', null, '2026-10-15T09:10:00Z'), row('early', null, '2026-10-15T09:00:00Z')];
+    expect(sortedSets(logs).map((l) => l.id)).toEqual(['early', 'late']);
   });
 });

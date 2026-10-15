@@ -8,6 +8,31 @@ export function nextSetNumber(logs: { set_number: number | null }[]): number {
   return highest + 1;
 }
 
+// ---- keeping the screen's copy of the sets in step with what was saved (R13) ----
+// Logging, correcting or deleting a set used to reload the whole dashboard (several seconds on a gym's signal, once per set). The workout
+// screen now keeps its own copy of the sets and changes it as each save succeeds.
+export type SetChange<T extends { id: string }> =
+  | { kind: 'added'; row: T }
+  | { kind: 'updated'; id: string; fields: Partial<T> }
+  | { kind: 'deleted'; id: string };
+
+export function applySetChange<T extends { id: string }>(logs: T[], change: SetChange<T>): T[] {
+  switch (change.kind) {
+    case 'added':
+      return logs.some((l) => l.id === change.row.id) ? logs : [change.row, ...logs];
+    case 'updated':
+      return logs.map((l) => (l.id === change.id ? { ...l, ...change.fields } : l));
+    case 'deleted':
+      return logs.filter((l) => l.id !== change.id);
+  }
+}
+
+// One exercise's sets in the order they were done. The sets come newest first, so the screen's "set 1, set 2..." chips ran backwards and
+// the next set started from the first set's numbers instead of the last one's.
+export function sortedSets<T extends { set_number: number | null; logged_at: string }>(logs: T[]): T[] {
+  return [...logs].sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0) || a.logged_at.localeCompare(b.logged_at));
+}
+
 // A set with no reps, no load and no RPE says nothing; it used to be saved anyway and counted as a set done.
 export function isEmptySet(set: { reps: number | '' | null; load: number | '' | null; rpe: number | '' | null }): boolean {
   const blank = (v: number | '' | null) => v === '' || v == null;

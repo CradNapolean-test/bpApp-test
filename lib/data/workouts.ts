@@ -231,7 +231,7 @@ export async function logSet(
     actual_rpe: number | null;
     set_type: SetType;
   }
-): Promise<void> {
+): Promise<WorkoutLogRow> {
   const supabase = await createClient();
   // Denormalizes exercise_library_id onto the log row at write time (rather than resolving
   // it via a join through workout_exercises later) so cross-program exercise history
@@ -243,13 +243,19 @@ export async function logSet(
     .maybeSingle();
   if (exerciseError) raise(exerciseError);
 
-  const { error } = await supabase.from('workout_logs').insert({
-    client_id: clientId,
-    exercise_id: exerciseId,
-    exercise_library_id: exercise?.exercise_library_id ?? null,
-    ...fields,
-  });
+  // Returns the saved row so the workout screen can show the set at once without reloading the page (R13).
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .insert({
+      client_id: clientId,
+      exercise_id: exerciseId,
+      exercise_library_id: exercise?.exercise_library_id ?? null,
+      ...fields,
+    })
+    .select('*')
+    .single();
   if (error) raise(error);
+  return data as WorkoutLogRow;
 }
 
 // Fix a mistyped set. RLS limits this to the member's own rows.

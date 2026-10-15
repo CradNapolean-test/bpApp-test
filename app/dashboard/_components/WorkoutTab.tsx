@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
@@ -38,7 +38,7 @@ import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
-import { finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, workoutSummary, type BlockChoice, type LocalBlockChoice } from '@/lib/workoutSets';
+import { applySetChange, finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
 import { chosenBlockKeys, describeChoices, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
@@ -252,6 +252,7 @@ function LogSetForm({
   initialLoad,
   lastSet,
   priorBest,
+  onChange,
 }: {
   clientId: string;
   exerciseId: string;
@@ -264,6 +265,8 @@ function LogSetForm({
   lastSet: { reps: number | null; load: number | null } | null;
   // Heaviest load from earlier sessions of this exercise; a heavier set is a new best.
   priorBest: number | null;
+  // Tells the workout screen what was saved, so it shows the set without reloading the page.
+  onChange: (change: SetChange<WorkoutLogRow>) => void;
 }) {
   const { run, busy } = useAction();
   const toast = useToast();
@@ -282,15 +285,18 @@ function LogSetForm({
       return;
     }
     await run(
-      () =>
-        logSet(clientId, exerciseId, {
+      async () => {
+        const saved = await logSet(clientId, exerciseId, {
           set_number: nextSetNumber,
           actual_reps: reps === '' ? null : reps,
           actual_load: load === '' ? null : load,
           actual_rpe: rpe === '' ? null : rpe,
           set_type: 'working' as SetType,
-        }),
+        });
+        onChange({ kind: 'added', row: saved });
+      },
       {
+        refresh: false,
         success:
           load !== '' && priorBest != null && load > priorBest ? `Set ${nextSetNumber} logged — new best! 🏆` : `Set ${nextSetNumber} logged`,
         onDone: () => {
@@ -347,7 +353,7 @@ function LogSetForm({
   );
 }
 
-function SetEditSheet({ log, index, onClose }: { log: WorkoutLogRow; index: number; onClose: () => void }) {
+function SetEditSheet({ log, index, onClose, onChange }: { log: WorkoutLogRow; index: number; onClose: () => void; onChange: (change: SetChange<WorkoutLogRow>) => void }) {
   const { run, busy } = useAction();
   const [reps, setReps] = useState<number | ''>(log.actual_reps ?? '');
   const [load, setLoad] = useState<number | ''>(log.actual_load ?? '');
@@ -373,14 +379,17 @@ function SetEditSheet({ log, index, onClose }: { log: WorkoutLogRow; index: numb
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          const fields = {
+            actual_reps: reps === '' ? null : reps,
+            actual_load: load === '' ? null : load,
+            actual_rpe: rpe === '' ? null : rpe,
+          };
           void run(
-            () =>
-              updateSet(log.id, {
-                actual_reps: reps === '' ? null : reps,
-                actual_load: load === '' ? null : load,
-                actual_rpe: rpe === '' ? null : rpe,
-              }),
-            { success: 'Set updated', onDone: onClose }
+            async () => {
+              await updateSet(log.id, fields);
+              onChange({ kind: 'updated', id: log.id, fields });
+            },
+            { success: 'Set updated', refresh: false, onDone: onClose }
           );
         }}
         className="space-y-3"
@@ -398,7 +407,13 @@ function SetEditSheet({ log, index, onClose }: { log: WorkoutLogRow; index: numb
           disabled={busy}
           onClick={() =>
             confirmingDelete
-              ? void run(() => deleteSet(log.id), { success: 'Set deleted', onDone: onClose })
+              ? void run(
+                  async () => {
+                    await deleteSet(log.id);
+                    onChange({ kind: 'deleted', id: log.id });
+                  },
+                  { success: 'Set deleted', refresh: false, onDone: onClose }
+                )
               : setConfirmingDelete(true)
           }
           className="block w-full py-1 text-sm font-semibold text-danger disabled:opacity-50"
@@ -678,6 +693,28 @@ export function WorkoutTab({
     }
     return initial;
   });
+  // The sets as this screen shows them: the page's copy, changed here as each log, correction or delete saves (R13). A fresh copy from
+  // the server replaces it. The rest of the app is refreshed once when you leave this screen (or finish a workout), not after every set.
+  const [liveLogs, setLiveLogs] = useState(workoutLogs);
+  const [seenLogs, setSeenLogs] = useState(workoutLogs);
+  if (seenLogs !== workoutLogs) {
+    setSeenLogs(workoutLogs);
+    setLiveLogs(workoutLogs);
+  }
+  const logsChanged = useRef(false);
+  const refreshRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    refreshRef.current = () => router.refresh();
+  });
+  useEffect(() => {
+    return () => {
+      if (logsChanged.current) refreshRef.current();
+    };
+  }, []);
+  function changeSets(change: SetChange<WorkoutLogRow>) {
+    logsChanged.current = true;
+    setLiveLogs((prev) => applySetChange(prev, change));
+  }
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [editingSet, setEditingSet] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   const toast = useToast();
@@ -778,11 +815,15 @@ export function WorkoutTab({
     await runMutate(() => duplicateProgramDay(dayId, weekNum + 1, dayLabel), { success: 'Workout copied to next week' });
   }
 
-  const logsByExercise = workoutLogs.reduce<Record<string, WorkoutLogRow[]>>((acc, log) => {
-    if (!log.exercise_id) return acc;
-    (acc[log.exercise_id] ??= []).push(log);
-    return acc;
-  }, {});
+  const logsByExercise = Object.fromEntries(
+    Object.entries(
+      liveLogs.reduce<Record<string, WorkoutLogRow[]>>((acc, log) => {
+        if (!log.exercise_id) return acc;
+        (acc[log.exercise_id] ??= []).push(log);
+        return acc;
+      }, {})
+    ).map(([exerciseId, sets]) => [exerciseId, sortedSets(sets)])
+  );
 
   const feedbackByDay = workoutDayFeedback.reduce<Record<string, WorkoutDayFeedbackRow>>((acc, f) => {
     acc[f.program_day_id] = f;
@@ -797,7 +838,7 @@ export function WorkoutTab({
   // Working sets from other sessions of the same exercise.
   function earlierLogs(libraryId: string | null, name: string, excludeExerciseId: string): WorkoutLogRow[] {
     const wantName = name.trim().toLowerCase();
-    return workoutLogs.filter((l) => {
+    return liveLogs.filter((l) => {
       if (!l.exercise_id || l.exercise_id === excludeExerciseId || l.set_type !== 'working') return false;
       const logged = exerciseById.get(l.exercise_id);
       const logLib = l.exercise_library_id ?? logged?.exercise_library_id ?? null;
@@ -1116,7 +1157,7 @@ export function WorkoutTab({
         </details>
       )}
 
-      {editingSet && <SetEditSheet log={editingSet.log} index={editingSet.index} onClose={() => setEditingSet(null)} />}
+      {editingSet && <SetEditSheet log={editingSet.log} index={editingSet.index} onClose={() => setEditingSet(null)} onChange={changeSets} />}
 
       {openDay && (
         <FocusOverlay
@@ -1269,6 +1310,7 @@ export function WorkoutTab({
                         initialLoad={seed?.actual_load ?? null}
                         lastSet={last ? lastFor(nextSetNumber(logs)) : null}
                         priorBest={priorBest}
+                        onChange={changeSets}
                       />
                     </>
                   )}
@@ -1300,6 +1342,7 @@ export function WorkoutTab({
                 }
                 toast.success(finishMessage(summary));
                 setOpenDayId(null);
+                logsChanged.current = false; // refreshed here; no second refresh when this screen is left
                 router.refresh();
               }}
               className="mt-4 h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground"
