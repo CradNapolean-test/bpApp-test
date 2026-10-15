@@ -73,3 +73,43 @@
 
 - Unit tests (mocked): sender-not-configured, per-batch failure counting, stamp-only-on-success, unsubscribe token sign and verify, quiet hours, collapse, birthdays paging.
 - `## Status` lists the new env vars (`UNSUBSCRIBE_SECRET`, `SUPPORT_EMAIL`), the routes and files the owner or brief 10 must allow or change (`/unsubscribe` in the middleware, `tag` in `sw.js`), and the retry behaviour.
+
+
+## Status
+
+Branch `fix/09-email-push` (started from the finished brief 08). `npm test` (101 files, 936 tests), `npx tsc --noEmit` and `npm run lint` pass (the one remaining lint warning, in `CoachMemberOverview.tsx`, was there before). **Nothing was sent or written for real:** every test uses fake Resend, fake web-push, fake database clients and a fake clock. Real delivery (a verified sender, a real phone) is not tested; see the owner steps.
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| CM1 / R2 sender check | Done | `03ce83c` | In production an unset `RESEND_FROM_EMAIL` is now "email not configured" (`skipped: true, reason: 'sender-not-configured'`) instead of sending from the sandbox address. Outside production the sandbox sender still works so a developer can try it. The coach is told ("Email is not set up for this gym yet. The message was sent in the app only."). |
+| CM1 / R2 honest results | Done | `03ce83c` | `sendPersonalisedEmails` and `sendBroadcastEmail` return `{ sent, failed, skipped, reason?, error? }`, counted per batch of 100; failures go to Sentry with counts and the provider's message with addresses removed (never an address). `email_sent_at` is stamped only when at least one email really went; the row keeps `email_sent_count`, `email_failed_count`, `email_error`, `email_attempts` (migration `0139`). The history list says "email sent to 12", "email: 10 sent, 2 failed", "email not sent: not set up yet" or "email failed". `lib/data/coachEmail.ts` uses the same shared sender check. |
+| CM1 retry behaviour | Done | `03ce83c` | The daily run retries a broadcast whose email **never went** up to **3 attempts**, and only for broadcasts **less than 3 days old** (an old "class tonight" is not emailed late). A broadcast that was **half sent is never re-sent** (that would email the same people twice); its failures stay visible. "Email not configured" does not use up an attempt, so held broadcasts go out when email is set up, inside the 3 days. |
+| Unsubscribe | Done, **needs two owner steps** | `03ce83c`, `50f103d` | Each broadcast email carries `List-Unsubscribe`, `List-Unsubscribe-Post: List-Unsubscribe=One-Click` and a footer link to `/unsubscribe?t=<token>` (an HMAC of the member id with `UNSUBSCRIBE_SECRET`; no expiry on purpose). GET shows a confirm page and changes nothing (mail scanners open every link); POST (the button, or a mail app's one-click) turns that member's email notifications off, without a login. Without `UNSUBSCRIBE_SECRET` the emails still go, with no link, and the page says it is not available. `replyTo` is the sending coach's address. |
+| Long messages | Done (screen counter is brief 04's) | `03ce83c` | `composeCommunication` refuses an empty message or one over 4,000 characters with "That message is N characters. The limit is 4,000: shorten it by M." before anything is sent. |
+| D11 scheduled time | Done (default kept) | `03ce83c` | One daily run. `lib/communicationsSchedule.ts` exports `COMMUNICATIONS_RUN_HOUR_UTC` (5) and `nextRunLabel()`; the broadcast screen now says "this one goes out at the next daily run (about 6 am UK time, tomorrow)", computed for the chosen time. If you upgrade Vercel and change the schedule in `vercel.json`, change the constant too. |
+| R40 | Done | `9a1e5c6` | `sendPushToCoach` in `lib/push.ts`; a **Message notifications** row on the coach Settings page (`CoachPushToggle`); a member's text, photo or voice note notifies the coach: "New message from {first name}", **no message text**, opens that member's conversation, `tag` per member. Quiet hours 21:00 to 07:00 **gym time** (the badge still counts); one push per burst (a message pushes only if the member sent nothing in the previous 5 minutes). Optional coach email: **not built** (flag default off). |
+| R41 | Done | `e693a91`, `9a1e5c6` | `sendPushTo*` return `{ sent, failed, skipped, reason?, reasons }` (failures by HTTP status, never an endpoint); every caller reports through `pushQuietly`/`reportPushResult` (Sentry, counts and statuses only; a 404/410 clean-up of a dead device is not reported). In `chat.ts` the push runs with `after()` so a slow push service cannot slow the send. Also done for the cancel, birthday, reminder, T-shirt and food-feedback pushes. |
+| R42 | Done | `e693a91` | The personal Gmail default is gone. The contact is `VAPID_SUBJECT` or `SUPPORT_EMAIL`; with neither, push is skipped and Sentry gets one warning. |
+| R39 | Done | `e693a91` | Comment at the top of `lib/push.ts`: phone push (`push_devices`) is not built; D10 is a later one-line drop. |
+| CM6 birthdays | Done | `8263863` | Members are read page by page (the 1,000-row cap used to skip everyone after row 1,000). The once-a-year guard, per-member timezone and the two opt-outs are unchanged; the birthday email also gets the unsubscribe link. |
+| Job health | Done | `03ce83c`, `8263863` | `job_runs` (migration `0139`, closed to the API) and `recordJobRun(job, ok, detail)`; all seven daily routes record every run (and failures), best effort, never changing what the route returns; the last 60 days are kept. Check it in the SQL editor: `select job, ran_at, ok, detail from job_runs order by ran_at desc limit 20;` |
+| Class cancellations | Done | `3e5050a` | `cancelClassOccurrence` reads who is booked or waitlisted before the cancel, then pushes each: "Strength & Conditioning on Friday 6 pm is cancelled; your credit was refunded." (waitlist members get no refund line). The SQL function is untouched. |
+| Reminder job and test accounts | Not coded | | As the brief says: the 219 seeded accounts are removed by the owner (brief 12). |
+
+### Migration
+
+`0139_email_results_and_job_runs.sql` (re-runnable). The app works before it is applied: the send job reads without the new column, the recorder falls back to the old column only for a real send, and `recordJobRun` does nothing without the table. Pre-flight is in the file (it only counts); nothing existing is rejected.
+
+### Environment variables
+
+- **`UNSUBSCRIBE_SECRET`** (new): a long random string (32+ characters), used only to sign unsubscribe links. Do not change it casually: it breaks links in emails already sent.
+- **`RESEND_FROM_EMAIL`** (existing, now **required in production**): a sender on a domain you have verified in Resend, for example `Ballistic Performance <hello@yourdomain>`. Until it is set, production email is off and coaches are told so.
+- **`SUPPORT_EMAIL`** (new) or `VAPID_SUBJECT`: the contact the push services see. Without one, push is off.
+- `NEXT_PUBLIC_SITE_URL` (optional): the address used in unsubscribe links; otherwise Vercel's production address is used.
+
+### Needed from other briefs or from you
+
+1. **Brief 10 / middleware:** let `/unsubscribe` through the login redirect in `lib/supabase/middleware.ts` (people open it signed out, from an email). I did not edit that file.
+2. **Brief 10 / `public/sw.js`:** pass the payload's `tag` to `showNotification` (and `renotify: false`) so a newer notification from the same member replaces the older. Until then pushes still arrive, they just stack.
+3. Apply `0139` (sandbox first), set the environment variables above in Vercel, then ask a coach to switch on **Settings > Message notifications**.
+4. To confirm email: send a test broadcast to yourself once the sender is verified, and look at the history line under it.
