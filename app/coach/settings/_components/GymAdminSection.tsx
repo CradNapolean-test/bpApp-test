@@ -203,6 +203,7 @@ function CoachRow({
 function AddCoachForm() {
   const router = useRouter();
   const toast = useToast();
+  const gymId = useActiveGymId();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +227,7 @@ function AddCoachForm() {
       const res = await fetch('/api/gym/create-coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, expectedGymId: gymId }),
       });
       const body = await res.json();
 
