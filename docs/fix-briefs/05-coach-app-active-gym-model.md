@@ -76,3 +76,68 @@ Measured on the dev server against the live database with 90 members: `/coach` 6
 
 - Items implemented or skipped with a reason in `## Status`; the helpers have unit tests; no write was run against the live database.
 - A list for the owner: the data to fix by hand (move "Weeks 9-11" to Salford if wanted, set Brad's active gym) so the new banner does not show.
+
+## Status
+
+Branch `fix/05-active-gym` (cut from `fix/04-coach-high-risk`, so it builds on migrations 0127 to 0135 and 0143), 13 commits plus this status commit, nothing pushed. One migration: `0141_coach_unread_total.sql`.
+
+**Not tried against a real database or in a browser.** There is no sandbox project, and the ground rules forbid clicking Save, Send, Delete, Assign or the gym switcher against live data. What did run: `npm test` (460 pass; the new pure logic is in `lib/` with tests next to it, plus a static test for the migration), `npx tsc --noEmit` (clean), `npm run lint` (0 errors, the same 9 warnings as before) and `next build` (compiles). The screens (banner, Show more, Credits tab, Red Flags gym selector) have only been checked by reading and typing, not looked at.
+
+**Deploy order matters.** This code calls database functions from the earlier briefs: `red_flag_report(p_week_start, p_gym)` and `generate_latest_red_flag_week` (0129), and `grant_credits`, `remove_credits`, `grant_credit_pack` (0133). Apply those before deploying this branch, or the Red Flags tab, "Add credits", "Remove", "Extra session" and "Grant pack" fail. `0141` can go before or after: the badge falls back to the old inbox count if the function is missing. **After this branch is deployed, apply `0143`** (drops the direct ledger insert) and run `credits-integrity-check.cjs --after-0143`; applying it earlier breaks every grant and removal from the old code.
+
+### Findings
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| R38 (1) plan names | done | `472cb26` | `planNameOf` is exported and tested. A member with an open plan whose row the coach cannot read now reads "Plan" (not "No plan"); the member header says "Plan (name not available)" instead of "No plan set up". The real fix for the name is brief 02's policy (0130). |
+| R38 (2) Change plan list | done | `472cb26` | `getPackagesForGym`, `getCreditPacksForGym`, `getClientGymId`. The member page bundle also takes forms, programme templates, courses and the timetable from the **member's** gym (small optional `forGymId` argument on `getFormTemplates`, `getProgramTemplates`, `getCourses`, `getScheduleOccurrences`). |
+| R28 / R38 (3) wrong-gym writes | done | `992faf0`, `42cfaab` | `lib/data/gymGuard.ts`: `assertActiveGym` (throws), `checkActiveGym` (returns `{ok:false,error}`, which is what a Server Action must do for the words to survive production), `withGymGuard`. Every write sends the gym the page was drawn for (`useActiveGymId()` from `CoachGymsContext`). Wired: sessions (create, edit, retire, delete), plans, credit packs, events, rewards, groups, broadcasts, forms, programme templates (create, duplicate, import, start), add client, import clients, add coach, gym name, booking rules, admin rights. |
+| R38 (4) banner and label | done | `3df6e5a`, `4e84de4` | `getClientGymMismatch()` and `lib/gymMismatch.ts` (tested). The banner shows when **most** of the coach's members are elsewhere (not for one stray member), has one Switch button, can be dismissed for the visit, and is hidden on a member's own page. Dashboard "Today", the average class fill and the Classes, Library, Business and New broadcast titles carry " · Worsley" for a coach in several gyms. |
+| R38 (5) audience count | done | `4e84de4` | `getAudienceCounts` now counts the whole gym by the members' own gym (brief 09 owns the file; only that query changed). |
+| R25 (hand-off from 04) | done | `4e84de4` | Broadcasts use the gym's own timezone; the send confirmation names the gym for a multi-gym coach. |
+| R36 (app) / RF1 / CM6 holds | done | `6f9b203` | `getRedFlagReport(week, gymId)`; gym selector for a coach in several gyms; a "No list has been written" state with a "Write the list now" button for gym admins; the week rolls over on Monday at the gym (`lastCompletedWeekIn`, tested); holds use the date at the member's gym. |
+| R32 | done | `f2ab836` | Statuses for the coach's own members **and** the whole gym in one go, so colleagues' members no longer read "Unmonitored". `computeHealth` and `lastActiveLabel` are tested with and without logs; the header says "Never logged". |
+| R27 + CM9 | done | `b661949` | `grantCredits`, `removeCredits`, `grantCreditPack` call the three RPCs. Confirmations on Extra session and Grant pack, the amount box can be emptied, and expiry and hold dates use the gym's timezone (`lib/creditsForm.ts`, tested). History is 25 at a time with Load more and filters (All / Manual / Bookings / Resets); plans 10 at a time. Nothing capped says "all". |
+| CP1 + SP1 | done | `f2ab836` | A member's page loads that member's last log (one narrow query), unread count and nothing else about the roster. The header badge is one count (`coach_unread_total`, `0141`) on the dashboard, Classes, Library, Business and Settings. Lists read every page of rows (`lib/paging.ts`, tested) and the Clients list draws 50 at a time with "Show more". |
+| CM6 (1,000 rows) | done | `f2ab836` | `getMyClients`, `searchGymClients`, `getClientHealthStatuses`, the coach dashboard and the business overview read in pages. |
+| CC3 | done | `d58e179` | The dashboard clock ticks every minute and "today" follows the gym's calendar (`lib/todaySessions.ts`, tested). |
+| CC2 | done | `f2ab836` | The deletion to-do, DELETE badge, "Deletion requested" badge and "Pending deletion" filter are gone. The member-side `requestAccountDeletion` function is still in `clientProfile.ts` (brief 06/07's file; nothing calls it). |
+| MO | partly | `14402ea` | The weight card falls back to the latest weigh-in ever ("Last weighed in on ... Nothing in the last 12 weeks"); an "N older items not reviewed" line appears in Needs you (`lib/memberReview.ts`, tested). **Not done:** "Calories (avg)" (waits for brief 06's fix). |
+| GS2 | done | `1b46ed2` | `lib/gymNames.ts` (tested): strips a known organisation name, else the words all of the person's gyms share, else (one gym) what follows the last " - ". The owner screen still has its own copy (`OwnerShell.tsx` is brief 08's). |
+| HUB1 | done | `0446890` | Classes, Library, Business and Messages write `?tab=` on change (History API, no server trip). |
+| CP2 / CR | done | `14402ea` | The read-only note names the owning coach. |
+| D3 journal | done | `013e615` | The delete button on a member note shows only to the coach who wrote it, and other coaches' notes say so. |
+| NV1 | skipped | n/a | Brief 11. |
+
+### Files outside the usual list I had to touch, kept small
+
+`lib/data/{classes,forms,education,programTemplates,community,rewards,clientGroups,communications}.ts` (an optional `expectedGymId` or `forGymId` argument), `lib/broadcastSend.ts` (an optional `gymName`), `app/api/coach/create-client`, `app/api/coach/import-clients` and `app/api/gym/create-coach` (one check each: a 409 with "You changed gym in another tab. Reload this page."), `app/coach/settings/_components/GymAdminSection.tsx` (a few one-line wirings), `app/dashboard/_components/{DashboardShell,CoachMemberOverview}.tsx`, `app/coach/_components/workspace/NotesTab.tsx`, `vitest.config.mts` (the `@/` import shortcut, so tests can import modules that use it) and `lib/data/result.ts` (`firstFailure`).
+
+### What the owner must check
+
+1. Apply nothing to live yet. On the sandbox: `0141`, then compare the badge number with the old one for the same coach (the query is in the migration's header).
+2. On a sandbox copy of the app, signed in as a coach in two gyms whose members are all in one: the banner appears and Switch works; Clients shows the right plan names; a member's Change plan lists that member's gym plans; Red Flags offers both gyms; in two tabs, switch gym in one and try to add a plan in the other (it must say "You changed gym in another tab").
+3. Credits tab on a test member: Extra session and Grant pack ask first; Add credits with the box emptied; "Load more" and the filter chips once the member has more than 25 rows.
+4. Then deploy, then apply `0143`.
+
+### Data to fix by hand so the new banner does not show
+
+- Brad's active gym is Worsley but all 90 members are in Salford Quays: set his active gym to Salford Quays (or move his members, if that is where they train now). Until then he will see the banner on every page.
+- "Weeks 9-11" was built in Worsley: copy it to Salford Quays if its other coaches need it (there is no "copy to gym" for programme templates yet; Education has one).
+
+### Things to know
+
+- **The guard fails closed but can be wrong in one case:** the gym comes from the layout, which Next does not redraw on a soft navigation. In tab A, after tab B switched gym, clicking to another page in tab A shows the new gym's data but still sends the old gym id, so the first write says "Reload this page". A reload fixes it. The opposite (writing to the wrong gym) cannot happen.
+- **Not wired to the guard:** the exercise library, education courses, message templates and per-row edits of template days or exercises (those are by id, so they cannot land in the wrong gym; creating a course or a message template can).
+- **"My clients" still includes members in every gym.** The Clients page, the Classes "add client" picker and the Library member pickers list the coach's own members whichever gym they belong to; the banner is what tells the coach why the timetable looks wrong.
+- **Hold dates on the Clients list** use the active gym's timezone for every member (members in a gym with a different timezone are off by at most a day near midnight).
+- **`get_client_last_active` is read in pages of 1,000 with `.order('client_id').range()`.** If your PostgREST rejects `.order` on that function, the Clients page will error loudly; tell me and I will change it to read the logs table directly.
+- **Unread count for a colleague's member** reads 0 (a thread is only readable by the member's own coach).
+- `remove_coach_from_gym` does not cancel the removed coach's scheduled broadcasts (brief 02's note): still open for brief 08 or 09.
+
+### Hand-offs
+
+- **Brief 06:** "Calories (avg)" on the member overview (MO).
+- **Brief 08:** switch `OwnerShell.tsx` to `lib/gymNames.ts`; adopt `useActiveGymId()` / `expectedGymId` for owner-side writes; the add-coach route already checks the gym.
+- **Brief 09:** `getAudienceCounts` is now by the members' own gym; `composeCommunication` takes `expectedGymId`.
+- **Brief 11:** `GymMismatchBanner` and `HubTabBar` (`aria-current` on the hubs and the member nav, NV1).
