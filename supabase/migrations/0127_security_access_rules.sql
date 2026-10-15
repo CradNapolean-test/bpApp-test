@@ -173,3 +173,14 @@ revoke execute on function public.mark_education_complete(uuid) from public, ano
 revoke execute on function public.sync_profile_email() from public, anon, authenticated;
 revoke execute on function public.enforce_advance_booking_window() from public, anon, authenticated;
 revoke execute on function public.sync_gym_session_from_attendance() from public, anon, authenticated;
+
+-- =====================================================================================================================
+-- R31. Event capacity. NO CHANGE IN THIS MIGRATION.
+-- The brief asked for a before-insert trigger on event_signups. It already exists: event_signup_rules (0112, with the system
+-- bypass added in 0126). It locks the event row (select ... for update, so two sign-ups queue behind each other), refuses a
+-- full event ("This event is full"), and refuses an event that started more than 6 hours ago. Because it is a trigger it
+-- also covers a direct API insert. Nothing to add.
+--
+-- PRE-FLIGHT (read-only; confirm 0112 and 0126 are applied. Expect one row, event_signup_rules, enabled 'O'):
+--   select tgname, tgenabled from pg_trigger where tgrelid = 'public.event_signups'::regclass and not tgisinternal;
+-- =====================================================================================================================
