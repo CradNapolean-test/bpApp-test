@@ -1,9 +1,11 @@
 // Ballistic Performance service worker.
+// GENERATED: edit scripts/sw.template.js, not this file. `npm run build` (prebuild) writes it with a version taken from the deployment id,
+// so every deploy changes this file's bytes and the browser installs the new worker (R8).
 //  - Web Push: shows the notification and sets the app-icon badge.
 //  - Offline: precaches a small offline page, shown only when a page load fails with no network.
 //  - Speed: caches the app's static build files and icons (never pages, API calls or user data, so
 //    nothing signed-in is ever stored or served stale).
-const VERSION = 'bp-v4';
+const VERSION = 'bp-dev';
 // Dev servers reuse the same build-file URLs for changing code, so never cache them there.
 const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 const STATIC_CACHE = `${VERSION}-static`;
@@ -54,7 +56,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'Ballistic Performance', body: '', url: '/' };
+  let payload = { title: 'Ballistic Performance', body: '', url: '/', tag: undefined };
   if (event.data) {
     try {
       payload = { ...payload, ...event.data.json() };
@@ -70,6 +72,8 @@ self.addEventListener('push', (event) => {
         icon: '/icons/icon-192.png',
         badge: '/icons/badge-96.png',
         data: { url: payload.url },
+        // Same tag = the newer notification replaces the older instead of stacking (a run of messages from one member shows once).
+        ...(payload.tag ? { tag: payload.tag, renotify: true } : {}),
       });
       // Red number on the app icon = notifications still waiting.
       if (self.navigator && 'setAppBadge' in self.navigator) {
