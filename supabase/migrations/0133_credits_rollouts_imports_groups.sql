@@ -149,3 +149,104 @@ revoke execute on function public.grant_credit_pack(uuid, uuid) from public, ano
 grant execute on function public.grant_credits(uuid, integer, text, timestamptz) to authenticated;
 grant execute on function public.remove_credits(uuid, integer, text) to authenticated;
 grant execute on function public.grant_credit_pack(uuid, uuid) to authenticated;
+
+-- =====================================================================================================================
+-- R5 (database half). A failed "Start a programme" still ran overnight.
+-- scheduleProgrammeRollout inserted a programme_rollouts row and then called apply_programme_rollout in a second request. If the
+-- apply failed the coach saw an error, but the row (applied_at null, start today) stayed and the 03:15 UTC job applied it anyway.
+--
+-- schedule_programme_rollout(template, name, start, audience, client ids, starts_now) does both in ONE transaction, so an error
+-- rolls the insert back too. It checks: the caller is a coach; the template belongs to the caller's gym; audience 'all' is for gym
+-- admins only; for 'selected', 1 to 500 members, every one in this gym (client_gym_id) and, unless the caller is a gym admin, the
+-- caller's own; a start date between 30 days ago and a year ahead. It answers the number of members it applied to (starts_now) or
+-- will apply to (later). apply_programme_rollout (0130) already picks 'all' by the member's own gym, so the audience matches what
+-- the coach sees; brief 04 asks for confirmation (with this count) before calling it.
+--
+-- PRE-FLIGHT (read-only; rollouts waiting for the overnight job right now. Check none is a left-over of a failed attempt):
+--   select r.id, g.name as gym, r.program_name, r.start_date, r.audience, cardinality(r.client_ids) as chosen, r.created_at
+--   from public.programme_rollouts r join public.gyms g on g.id = r.gym_id
+--   where r.applied_at is null order by r.start_date;
+-- =====================================================================================================================
+create or replace function public.schedule_programme_rollout(
+  p_template_id uuid,
+  p_program_name text,
+  p_start date,
+  p_audience text,
+  p_client_ids uuid[],
+  p_starts_now boolean
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gym uuid := public.my_gym_id();
+  v_admin boolean;
+  v_template program_templates;
+  v_name text;
+  v_tz text;
+  v_today date;
+  v_ids uuid[] := '{}';
+  v_id uuid;
+  v_count integer;
+begin
+  if auth.uid() is null or v_gym is null then
+    raise exception 'Only a coach can start a programme';
+  end if;
+  v_admin := exists (select 1 from profiles where id = auth.uid() and is_gym_admin);
+
+  if p_audience is null or p_audience not in ('all', 'selected') then
+    raise exception 'Choose who the programme is for';
+  end if;
+  if p_audience = 'all' and not v_admin then
+    raise exception 'Only a gym admin can start a programme for everyone.';
+  end if;
+
+  select * into v_template from program_templates where id = p_template_id;
+  if v_template is null or v_template.gym_id is distinct from v_gym then
+    raise exception 'Programme template not found';
+  end if;
+
+  v_name := left(coalesce(nullif(btrim(coalesce(p_program_name, '')), ''), v_template.name), 100);
+
+  select coalesce(nullif(timezone, ''), 'UTC') into v_tz from gyms where id = v_gym;
+  v_today := public.local_date(v_tz);
+  if p_start is null or p_start < v_today - 30 or p_start > v_today + 365 then
+    raise exception 'Choose a start date within the next year.';
+  end if;
+
+  if p_audience = 'selected' then
+    select coalesce(array_agg(distinct x), '{}'::uuid[]) into v_ids from unnest(coalesce(p_client_ids, '{}'::uuid[])) x;
+    if cardinality(v_ids) < 1 then
+      raise exception 'Choose at least one member.';
+    end if;
+    if cardinality(v_ids) > 500 then
+      raise exception 'Choose up to 500 members at a time.';
+    end if;
+    if exists (select 1 from unnest(v_ids) i where not public.same_gym_as_client(v_gym, i)) then
+      raise exception 'That belongs to a different gym.';
+    end if;
+    if not v_admin and exists (select 1 from unnest(v_ids) i where not coalesce(public.is_coach_of(i), false)) then
+      raise exception 'You can only start a programme for your own members.';
+    end if;
+  end if;
+
+  insert into programme_rollouts (gym_id, template_id, program_name, start_date, audience, client_ids, created_by)
+  values (v_gym, p_template_id, v_name, p_start, p_audience, v_ids, auth.uid())
+  returning id into v_id;
+
+  if coalesce(p_starts_now, false) then
+    v_count := public.apply_programme_rollout(v_id);
+  elsif p_audience = 'all' then
+    select count(*) into v_count from profiles c where c.role = 'client' and public.client_gym_id(c.id) is not distinct from v_gym;
+  else
+    v_count := cardinality(v_ids);
+  end if;
+
+  return v_count;
+end;
+$fn$;
+
+revoke execute on function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean) from public, anon;
+grant execute on function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean) to authenticated;
