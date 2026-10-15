@@ -94,7 +94,9 @@ export function AccountTab({
   async function handleToggle() {
     const next = !enabled;
     setEnabled(next);
-    await run(() => updateNotificationsEnabled(clientId, next));
+    // If saving fails the switch goes back to what is really stored; it used to stay flipped while nothing was saved (L3).
+    const saved = await run(() => updateNotificationsEnabled(clientId, next));
+    if (!saved) setEnabled(!next);
   }
 
   async function handlePushToggle() {
@@ -113,7 +115,8 @@ export function AccountTab({
   async function handleEmailToggle() {
     const next = !emailEnabled;
     setEmailEnabled(next);
-    await run(() => updateEmailNotificationsEnabled(clientId, next));
+    const saved = await run(() => updateEmailNotificationsEnabled(clientId, next));
+    if (!saved) setEmailEnabled(!next);
   }
 
   async function handleDeleteAccount() {

@@ -113,10 +113,20 @@ export async function getClientGymMismatch(gyms?: MyGymRow[]): Promise<GymMismat
 
 // The timezone of one gym (IANA name), for screens about a member who may belong to a different gym from the coach's active one.
 export async function getGymTimezone(gymId: string | null): Promise<string> {
-  if (!gymId) return DEFAULT_TIMEZONE;
+  return (await getGymBookingRules(gymId)).timezone;
+}
+
+// The gym's own booking settings: its timezone and the overnight window that does not count towards a cancellation cut-off (0064). The
+// booking screen takes these from here rather than from whichever session happens to be first on the timetable (L5).
+export async function getGymBookingRules(gymId: string | null): Promise<{ timezone: string; blackoutStart: string | null; blackoutEnd: string | null }> {
+  if (!gymId) return { timezone: DEFAULT_TIMEZONE, blackoutStart: null, blackoutEnd: null };
   const supabase = await createClient();
-  const { data } = await supabase.from('gyms').select('timezone').eq('id', gymId).maybeSingle();
-  return (data?.timezone as string | null | undefined) || DEFAULT_TIMEZONE;
+  const { data } = await supabase.from('gyms').select('timezone, blackout_start, blackout_end').eq('id', gymId).maybeSingle();
+  return {
+    timezone: (data?.timezone as string | null | undefined) || DEFAULT_TIMEZONE,
+    blackoutStart: (data?.blackout_start as string | null | undefined) ?? null,
+    blackoutEnd: (data?.blackout_end as string | null | undefined) ?? null,
+  };
 }
 
 // Moves the caller's active-gym pointer (profiles.gym_id/is_gym_admin) to a gym they already

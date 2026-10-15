@@ -25,7 +25,7 @@ import { getUpcomingEvents } from './community';
 import { getRewardsForMember } from './rewards';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getBlockChoices } from './blockChoices';
-import { getGymTimezone } from './gym';
+import { getGymBookingRules } from './gym';
 import { getClientGymId, getCreditPacks, getCreditPacksForGym, getMyMembership, getPackages, getPackagesForGym } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
@@ -98,7 +98,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bigDogResults,
     events,
     rewardsData,
-    gymTimezone,
+    gymRules,
     loggedDates,
     firstLoggedDate,
   ] = await Promise.all([
@@ -141,7 +141,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getBigDogResults(clientId),
     getUpcomingEvents(clientId),
     getRewardsForMember(clientId),
-    getGymTimezone(gymId),
+    getGymBookingRules(gymId),
     // A year of logged days for the streak (the 84 days above cap it at 85), and the first day ever for the programme week.
     getLoggedDates(clientId, toIsoDate(addDays(today, -400))),
     getFirstLoggedDate(clientId),
@@ -202,7 +202,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bigDogResults,
     events,
     rewardsData,
-    gymTimezone,
+    gymTimezone: gymRules.timezone,
+    gymBlackout: { start: gymRules.blackoutStart, end: gymRules.blackoutEnd },
     streak,
   };
 }

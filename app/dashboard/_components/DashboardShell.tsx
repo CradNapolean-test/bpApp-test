@@ -150,6 +150,7 @@ export function DashboardShell({
   unreadMessageCount = 0,
   gymTimezone = null,
   streak = undefined,
+  gymBlackout = null,
   latestWeighIn = null,
   ownerCoachName = null,
   healthStatus = null,
@@ -213,6 +214,8 @@ export function DashboardShell({
   gymTimezone?: string | null;
   // Consecutive days logged, from a year of logs (the 84-day history alone cannot pass 85).
   streak?: number;
+  // The gym's overnight window that does not count towards a cancellation cut-off (L5).
+  gymBlackout?: { start: string | null; end: string | null } | null;
   // Coach view: the member's most recent weigh-in however old, and the name of the coach they belong to (for the read-only note).
   latestWeighIn?: { date: string; weight: number } | null;
   ownerCoachName?: string | null;
@@ -1021,6 +1024,7 @@ export function DashboardShell({
           workoutLogs={workoutLogs}
           onCheckIn={handleCheckIn}
           timezone={profile?.timezone}
+          gymBlackout={gymBlackout}
         />
       )}
 

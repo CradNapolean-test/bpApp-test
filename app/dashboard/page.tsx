@@ -59,6 +59,7 @@ export default async function DashboardPage() {
       activities={bundle.activities}
       programWeek={bundle.programWeek}
       streak={bundle.streak}
+      gymBlackout={bundle.gymBlackout}
       messages={bundle.messages}
       bookings={bundle.bookings}
       occurrences={bundle.occurrences}

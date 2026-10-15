@@ -8,7 +8,8 @@ import { Badge, Card, Segmented } from '@/app/_components/ui';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { bookClass, cancelBooking } from '@/lib/data/classes';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, startOfWeek, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
-import { cancelDeadline, cancelNote, formatClock, nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { cancelDeadline, cancelNote, nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { cancellationPolicyText } from '@/lib/bookingRules';
 import { CheckInButton } from './CheckInButton';
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
@@ -59,6 +60,7 @@ export function ClassesArea({
   workoutLogs,
   onCheckIn,
   timezone,
+  gymBlackout = null,
 }: {
   bookings: BookingRow[];
   occurrences: ScheduleOccurrence[];
@@ -68,6 +70,9 @@ export function ClassesArea({
   workoutLogs: WorkoutLogRow[];
   onCheckIn: (dayId: string) => void;
   timezone?: string | null;
+  // The gym's own overnight window. Without it the screen used to read it from the first scheduled session, which is nothing when the
+  // timetable is empty (L5).
+  gymBlackout?: { start: string | null; end: string | null } | null;
 }) {
   const { run, busy } = useAction();
   const [view, setView] = useState<View>('book');
@@ -91,9 +96,8 @@ export function ClassesArea({
   const bookingByKey = useMemo(() => new Map(activeBookings.map((b) => [`${b.class_id}|${b.booking_date}`, b])), [activeBookings]);
   const bookedDates = useMemo(() => new Set(activeBookings.filter((b) => b.status === 'booked').map((b) => b.booking_date)), [activeBookings]);
 
-  const blackoutStart = occurrences[0]?.blackoutStart ?? null;
-  const blackoutEnd = occurrences[0]?.blackoutEnd ?? null;
-  const cutoffHours = occurrences[0]?.cutoffHours ?? 3;
+  const blackoutStart = gymBlackout?.start ?? occurrences.find((o) => o.blackoutStart)?.blackoutStart ?? null;
+  const blackoutEnd = gymBlackout?.end ?? occurrences.find((o) => o.blackoutEnd)?.blackoutEnd ?? null;
 
   function startMs(date: string, startTime: string | null): number {
     const [h, m] = (startTime ?? '00:00').split(':').map(Number);
@@ -119,10 +123,11 @@ export function ClassesArea({
     .filter((b) => b.booking_date >= todayIso)
     .sort((a, b) => (a.booking_date + (a.class?.start_time ?? '')).localeCompare(b.booking_date + (b.class?.start_time ?? '')));
 
-  const policyText =
-    blackoutStart && blackoutEnd
-      ? `Cancel at least ${cutoffHours} hours before a session to keep your credit. Overnight (${formatClock(blackoutStart.slice(0, 5))}–${formatClock(blackoutEnd.slice(0, 5))}) doesn't count, so for early-morning sessions, cancel by ${formatClock(blackoutStart.slice(0, 5))} the night before.`
-      : `Cancel at least ${cutoffHours} hours before a session to keep your credit.`;
+  // Each class has its own cut-off; the sentence names one number only when the sessions in front of the member all share it.
+  const policyText = cancellationPolicyText({ start: blackoutStart, end: blackoutEnd }, [
+    ...occurrences.map((o) => o.cutoffHours),
+    ...activeBookings.map((b) => b.class?.cutoff_hours),
+  ]);
 
   // ---- actions --------------------------------------------------------------------------------
 
