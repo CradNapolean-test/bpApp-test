@@ -9,6 +9,8 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { createClass, deleteClass, getClassBookingSummary, retireClass, updateClass, type ClassBookingSummary } from '@/lib/data/classes';
+import { firstFailure } from '@/lib/data/result';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { checkSessionEdit, isPastSessionDate, retireWording } from '@/lib/sessionEdit';
 import { useToast } from '@/app/_components/ToastProvider';
 import { formatClock } from '@/lib/utils/cancelDeadline';
@@ -102,6 +104,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function TimetableView({ classes, occurrences, timezone }: { classes: ClassRow[]; occurrences: ScheduleOccurrence[]; timezone?: string | null }) {
   const tz = timezone ?? DEFAULT_TIMEZONE;
+  const gymId = useActiveGymId();
   const isoToday = () => todayIsoInTz(tz);
   // The gym's current minute of the day, refreshed every minute, for the "now" line.
   const nowMin = () => {
@@ -254,8 +257,8 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
     await run(
       () =>
         draft.id
-          ? updateClass(draft.id, fields)
-          : Promise.all(toCreate.map((d) => createClass(d === null ? fields : { ...fields, day_of_week: d }))),
+          ? updateClass(draft.id, fields, gymId)
+          : Promise.all(toCreate.map((d) => createClass(d === null ? fields : { ...fields, day_of_week: d }, gymId))).then((results) => firstFailure(results) ?? results),
       {
         success: draft.id
           ? 'Session updated'
@@ -289,14 +292,14 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
     const ok = await confirm({ title: wording.title, body: wording.body, confirmLabel: wording.confirmLabel, destructive: true });
     if (!ok) return;
     if (wording.action === 'delete') {
-      await run(() => deleteClass(id), { success: 'Session deleted', onDone: () => setDraft(null) });
+      await run(() => deleteClass(id, gymId), { success: 'Session deleted', onDone: () => setDraft(null) });
       return;
     }
     let refunded = 0;
     let cancelled = 0;
     await run(
       async () => {
-        const result = await retireClass(id);
+        const result = await retireClass(id, gymId);
         if (result.ok) {
           refunded = result.refundedCredits;
           cancelled = result.cancelled;
@@ -329,11 +332,11 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
             credit_cost: s.credit_cost,
             cutoff_hours: s.cutoff_hours,
             coach_note: s.coach_note,
-          })
+          }, gymId)
         );
       }
     }
-    await run(() => Promise.all(jobs), {
+    await run(() => Promise.all(jobs).then((results) => firstFailure(results) ?? results), {
       success: `Copied ${WEEKDAY_LABELS[day]} to ${targets.map((d) => WEEKDAY_SHORT[d]).join(', ')}`,
       onDone: () => {
         setCopying(false);

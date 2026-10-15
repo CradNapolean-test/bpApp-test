@@ -6,16 +6,18 @@ import { useAction } from '@/app/_components/useAction';
 import { useToast } from '@/app/_components/ToastProvider';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { renameGym, setCoachAdmin, updateGymBookingSettings, type GymCoachRow } from '@/lib/data/gym';
 
 function GymNameForm({ initialName }: { initialName: string }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const [name, setName] = useState(initialName);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || name.trim() === initialName) return;
-    await run(() => renameGym(name.trim()), { success: 'Gym name saved' });
+    await run(() => renameGym(name.trim(), gymId), { success: 'Gym name saved' });
   }
 
   return (
@@ -60,6 +62,7 @@ function BookingRulesForm({
   blackoutEnd: string | null;
 }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const [tz, setTz] = useState(timezone);
   const [useBlackout, setUseBlackout] = useState(blackoutStart != null && blackoutEnd != null);
@@ -78,7 +81,7 @@ function BookingRulesForm({
       });
       if (!ok) return;
     }
-    await run(() => updateGymBookingSettings(tz, useBlackout ? start : null, useBlackout ? end : null), {
+    await run(() => updateGymBookingSettings(tz, useBlackout ? start : null, useBlackout ? end : null, gymId), {
       success: 'Booking rules saved',
     });
   }
@@ -144,6 +147,7 @@ function CoachRow({
   onChange: (id: string, admin: boolean) => void;
 }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const toast = useToast();
   const label = coach.displayName ?? coach.email;
@@ -166,7 +170,7 @@ function CoachRow({
       destructive: !next,
     });
     if (!ok) return;
-    await run(() => setCoachAdmin(coach.id, next), {
+    await run(() => setCoachAdmin(coach.id, next, gymId), {
       success: next ? `${label} is now a gym admin` : 'Admin rights removed',
       onDone: () => onChange(coach.id, next),
     });

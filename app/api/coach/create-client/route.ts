@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { GYM_CHANGED_MESSAGE, gymMatches } from '@/lib/data/gymGuard';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -24,6 +25,10 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
+  // The page sends the gym it was drawn for; a tab left open on an old gym must not add the member to the new one (R28).
+  if (!gymMatches(body?.expectedGymId, callerProfile.gym_id)) {
+    return NextResponse.json({ error: GYM_CHANGED_MESSAGE }, { status: 409 });
+  }
   const email: string | undefined = body?.email;
   if (!email) {
     return NextResponse.json({ error: 'email is required' }, { status: 400 });

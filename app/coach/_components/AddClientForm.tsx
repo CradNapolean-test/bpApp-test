@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/app/_components/ToastProvider';
+import { useActiveGymId } from './CoachGymsContext';
 
 export function AddClientForm() {
   const router = useRouter();
   const toast = useToast();
+  const gymId = useActiveGymId();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export function AddClientForm() {
       const res = await fetch('/api/coach/create-client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, expectedGymId: gymId }),
       });
       const body = await res.json();
 

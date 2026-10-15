@@ -8,6 +8,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createCreditPack, deleteCreditPack, updateCreditPack } from '@/lib/data/memberships';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import type { CreditPackRow } from '@/lib/data/types';
 import { inputCls } from '@/app/_components/ui';
 
@@ -25,6 +26,7 @@ function EditPackCard({
   onDelete: (id: string, name: string) => void;
 }) {
   const { run, busy: saving } = useAction();
+  const gymId = useActiveGymId();
   const [name, setName] = useState(pack.name);
   const [credits, setCredits] = useState(pack.credits);
   const [expiresAfterDays, setExpiresAfterDays] = useState(pack.expires_after_days ?? 0);
@@ -39,7 +41,7 @@ function EditPackCard({
           credits,
           expires_after_days: expiresAfterDays > 0 ? expiresAfterDays : null,
           description: description || null,
-        }),
+        }, gymId),
       { success: 'Pack updated', onDone: onClose }
     );
   }
@@ -93,6 +95,7 @@ function EditPackCard({
 
 function AddPackCard({ onDone }: { onDone: () => void }) {
   const { run: runCreate, busy: saving } = useAction();
+  const gymId = useActiveGymId();
   const [name, setName] = useState('');
   const [credits, setCredits] = useState(10);
   const [expiresAfterDays, setExpiresAfterDays] = useState(90);
@@ -107,7 +110,7 @@ function AddPackCard({ onDone }: { onDone: () => void }) {
           credits,
           expires_after_days: expiresAfterDays > 0 ? expiresAfterDays : null,
           description: description || null,
-        }),
+        }, gymId),
       { success: 'Pack added', onDone }
     );
   }
@@ -157,6 +160,7 @@ function AddPackCard({ onDone }: { onDone: () => void }) {
 export function CreditPackManager({ initialPacks, usage = null }: { initialPacks: CreditPackRow[]; usage?: Record<string, { times: number; last: string | null }> | null }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
+  const gymId = useActiveGymId();
   const [addingPack, setAddingPack] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -167,7 +171,7 @@ export function CreditPackManager({ initialPacks, usage = null }: { initialPacks
       destructive: true,
     });
     if (!ok) return;
-    await runDelete(() => deleteCreditPack(id), { success: 'Pack deleted', onDone: () => setEditingId(null) });
+    await runDelete(() => deleteCreditPack(id, gymId), { success: 'Pack deleted', onDone: () => setEditingId(null) });
   }
 
   return (

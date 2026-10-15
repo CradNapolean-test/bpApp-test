@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientMembershipRow, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from './types';
 
@@ -18,10 +19,14 @@ export async function getPackages(): Promise<MembershipPackageRow[]> {
   return data ?? [];
 }
 
+// expectedGymId (on every write here): the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
 export async function createPackage(
-  fields: Omit<MembershipPackageRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>
-): Promise<void> {
+  fields: Omit<MembershipPackageRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>,
+  expectedGymId?: string | null
+): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -34,9 +39,12 @@ export async function createPackage(
 
 export async function updatePackage(
   packageId: string,
-  fields: Partial<Omit<MembershipPackageRow, 'id' | 'coach_id' | 'created_at'>>
-): Promise<void> {
+  fields: Partial<Omit<MembershipPackageRow, 'id' | 'coach_id' | 'created_at'>>,
+  expectedGymId?: string | null
+): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('membership_packages').update(fields).eq('id', packageId);
   if (error) raise(error);
 }
@@ -60,7 +68,9 @@ export async function getPackUsage(): Promise<Record<string, { times: number; la
   );
 }
 
-export async function deletePackage(packageId: string): Promise<void> {
+export async function deletePackage(packageId: string, expectedGymId?: string | null): Promise<void | ActionResult> {
+  const stale = await checkActiveGym(await createClient(), expectedGymId);
+  if (stale) return stale;
   // A plan with members on it cannot be deleted from here, whichever screen asks.
   const counts = await getPlanMemberCounts();
   if (counts && (counts[packageId] ?? 0) > 0) {
@@ -105,9 +115,12 @@ export async function getCreditPacks(): Promise<CreditPackRow[]> {
 }
 
 export async function createCreditPack(
-  fields: Omit<CreditPackRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>
-): Promise<void> {
+  fields: Omit<CreditPackRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>,
+  expectedGymId?: string | null
+): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -120,15 +133,20 @@ export async function createCreditPack(
 
 export async function updateCreditPack(
   packId: string,
-  fields: Partial<Omit<CreditPackRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>>
-): Promise<void> {
+  fields: Partial<Omit<CreditPackRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>>,
+  expectedGymId?: string | null
+): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('credit_packs').update(fields).eq('id', packId);
   if (error) raise(error);
 }
 
-export async function deleteCreditPack(packId: string): Promise<void> {
+export async function deleteCreditPack(packId: string, expectedGymId?: string | null): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('credit_packs').delete().eq('id', packId);
   if (error) raise(error);
 }

@@ -5,6 +5,7 @@ import { Repeat, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Segmented } from '@/app/_components/ui';
 import { composeCommunication, deleteCommunication } from '@/lib/data/communications';
@@ -122,6 +123,7 @@ export function BroadcastsPane({
   counts: { mine: number; gym: number };
 }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const toast = useToast();
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -176,7 +178,7 @@ export function BroadcastsPane({
     const sendAt = timing === 'now' ? new Date().toISOString() : (scheduleIso as string);
     const isRepeat = timing === 'later' && repeat;
     await run(
-      () => composeCommunication({ message: message.trim(), target, groupId, sendAt, channel, repeat: isRepeat ? 'weekly' : 'none' }),
+      () => composeCommunication({ message: message.trim(), target, groupId, sendAt, channel, repeat: isRepeat ? 'weekly' : 'none', expectedGymId: gymId }),
       {
         success: isRepeat ? `Repeating every ${weekday}` : timing === 'now' ? `Sent to ${audienceCount} client${audienceCount === 1 ? '' : 's'}` : 'Scheduled',
         onDone: () => {

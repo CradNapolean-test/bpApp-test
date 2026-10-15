@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type { QuestionPayload } from '@/lib/formEdit';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
@@ -47,8 +48,11 @@ export async function getFormTemplateWithQuestions(templateId: string): Promise<
   return template;
 }
 
-export async function createFormTemplate(fields: TemplateFields, questions: QuestionInput[]): Promise<void> {
+// expectedGymId (on every write here): the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+export async function createFormTemplate(fields: TemplateFields, questions: QuestionInput[], expectedGymId?: string | null): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -87,9 +91,12 @@ export async function createFormTemplate(fields: TemplateFields, questions: Ques
 export async function updateFormTemplate(
   templateId: string,
   fields: TemplateFields,
-  questions: QuestionPayload[]
+  questions: QuestionPayload[],
+  expectedGymId?: string | null
 ): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.rpc('save_form_template', {
     p_template_id: templateId,
     p_fields: fields,
@@ -98,8 +105,10 @@ export async function updateFormTemplate(
   return error ? fail(error, 'Could not save that form') : ok();
 }
 
-export async function deleteFormTemplate(templateId: string): Promise<void> {
+export async function deleteFormTemplate(templateId: string, expectedGymId?: string | null): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('form_templates').delete().eq('id', templateId);
   if (error) raise(error);
 }

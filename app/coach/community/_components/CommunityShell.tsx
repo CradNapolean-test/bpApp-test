@@ -6,6 +6,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { CalendarDays, Gift, MessageSquare, Pencil, Plus, Star, Trash2, Users } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { createEvent, deleteEvent, getEventAttendees, updateEvent } from '@/lib/data/community';
 import { createReward, deleteReward, markRewardGiven, unmarkRewardGiven } from '@/lib/data/rewards';
 import { getScoresExport, setShirtGiven } from '@/lib/data/bigDog';
@@ -30,6 +31,7 @@ function toLocalInput(iso: string): string {
 // Create a new event, or change an existing one.
 function EventForm({ event, onDone }: { event?: EventWithSignup; onDone: () => void }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const [title, setTitle] = useState(event?.title ?? '');
   const [startsAt, setStartsAt] = useState(event ? toLocalInput(event.starts_at) : '');
   const [location, setLocation] = useState(event?.location ?? '');
@@ -45,7 +47,7 @@ function EventForm({ event, onDone }: { event?: EventWithSignup; onDone: () => v
       starts_at: new Date(startsAt).toISOString(),
       capacity: capacity ? Number(capacity) : null,
     };
-    await run(() => (event ? updateEvent(event.id, fields) : createEvent(fields)), {
+    await run(() => (event ? updateEvent(event.id, fields, gymId) : createEvent(fields, gymId)), {
       success: event ? 'Event saved' : 'Event created',
       onDone,
     });
@@ -83,6 +85,7 @@ function EventForm({ event, onDone }: { event?: EventWithSignup; onDone: () => v
 
 function EventRow({ event, past = false }: { event: EventWithSignup; past?: boolean }) {
   const { run } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const [attendees, setAttendees] = useState<{ clientId: string; name: string }[] | null>(null);
   const [editing, setEditing] = useState(false);
@@ -107,7 +110,7 @@ function EventRow({ event, past = false }: { event: EventWithSignup; past?: bool
       }))
     )
       return;
-    await run(() => deleteEvent(event.id), { success: 'Event deleted' });
+    await run(() => deleteEvent(event.id, gymId), { success: 'Event deleted' });
   }
 
   if (editing) return <EventForm event={event} onDone={() => setEditing(false)} />;
@@ -163,6 +166,7 @@ function EventRow({ event, past = false }: { event: EventWithSignup; past?: bool
 
 function NewRewardForm({ onDone }: { onDone: () => void }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [kind, setKind] = useState<'sessions' | 'months'>('sessions');
@@ -171,7 +175,7 @@ function NewRewardForm({ onDone }: { onDone: () => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     await run(
-      () => createReward({ name: name.trim(), description: description.trim() || null, kind, threshold: Number(threshold) }),
+      () => createReward({ name: name.trim(), description: description.trim() || null, kind, threshold: Number(threshold) }, gymId),
       { success: 'Reward added', onDone }
     );
   }
@@ -202,6 +206,7 @@ function NewRewardForm({ onDone }: { onDone: () => void }) {
 
 function RewardCard({ reward }: { reward: RewardOverview }) {
   const { run } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const [showGiven, setShowGiven] = useState(false);
   const unit = reward.kind === 'sessions' ? (reward.threshold === 1 ? 'session' : 'sessions') : reward.threshold === 1 ? 'month' : 'months';
@@ -216,7 +221,7 @@ function RewardCard({ reward }: { reward: RewardOverview }) {
       }))
     )
       return;
-    await run(() => deleteReward(reward.id), { success: 'Reward deleted' });
+    await run(() => deleteReward(reward.id, gymId), { success: 'Reward deleted' });
   }
 
   async function give(clientId: string, name: string) {

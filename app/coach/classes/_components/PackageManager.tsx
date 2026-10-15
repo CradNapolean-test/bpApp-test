@@ -11,6 +11,7 @@ import { useToast } from '@/app/_components/ToastProvider';
 import { validatePlan } from '@/lib/planForm';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createPackage, deletePackage, updatePackage } from '@/lib/data/memberships';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { DISABLEABLE_SCREENS } from '@/app/dashboard/_components/categories';
 import type { MembershipPackageRow } from '@/lib/data/types';
 import { inputCls } from '@/app/_components/ui';
@@ -63,6 +64,7 @@ function EditPackageCard({
   onDelete: (id: string, name: string) => void;
 }) {
   const { run, busy: saving } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const toast = useToast();
   const [name, setName] = useState(pkg.name);
@@ -116,7 +118,7 @@ function EditPackageCard({
           // Only sent when it matters, so this still saves before migration 0088 is applied.
           ...(durationWeeks !== '' || pkg.duration_weeks != null ? { duration_weeks: durationWeeks ? Number(durationWeeks) : null } : {}),
           included_screens: screensToIncludedScreens(screens),
-        }),
+        }, gymId),
       { success: 'Package updated', onDone: onClose }
     );
   }
@@ -184,6 +186,7 @@ function EditPackageCard({
 
 function AddPackageCard({ onDone }: { onDone: () => void }) {
   const { run: runCreate, busy: saving } = useAction();
+  const gymId = useActiveGymId();
   const toast = useToast();
   const [name, setName] = useState('');
   const [creditsText, setCreditsText] = useState('4');
@@ -209,7 +212,7 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
           advance_booking_days: advanceDays ? Number(advanceDays) : null,
           ...(durationWeeks ? { duration_weeks: Number(durationWeeks) } : {}),
           included_screens: screensToIncludedScreens(screens),
-        }),
+        }, gymId),
       { success: 'Package added', onDone }
     );
   }
@@ -295,6 +298,7 @@ export function PackageManager({
   const toast = useToast();
   const countOf = (p: MembershipPackageRow): number | null => (countsById ? (countsById[p.id] ?? 0) : memberCounts[p.name] ?? null);
   const { run: runDelete } = useAction();
+  const gymId = useActiveGymId();
   const [addingPackage, setAddingPackage] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -311,7 +315,7 @@ export function PackageManager({
       destructive: true,
     });
     if (!ok) return;
-    await runDelete(() => deletePackage(id), { success: 'Package deleted', onDone: () => setEditingId(null) });
+    await runDelete(() => deletePackage(id, gymId), { success: 'Package deleted', onDone: () => setEditingId(null) });
   }
 
   return (

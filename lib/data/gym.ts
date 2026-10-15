@@ -2,6 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 
 export interface GymCoachRow {
@@ -90,8 +91,11 @@ export async function switchActiveGym(gymId: string): Promise<ActionResult> {
   return error ? fail(error, 'Could not switch gyms') : ok();
 }
 
-export async function renameGym(name: string): Promise<ActionResult> {
+// expectedGymId (on the settings and roster actions below): the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+export async function renameGym(name: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.rpc('set_gym_name', { p_name: name });
   return error ? fail(error, 'Could not rename the gym') : ok();
 }
@@ -101,9 +105,12 @@ export async function renameGym(name: string): Promise<ActionResult> {
 export async function updateGymBookingSettings(
   timezone: string,
   blackoutStart: string | null,
-  blackoutEnd: string | null
+  blackoutEnd: string | null,
+  expectedGymId?: string | null
 ): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.rpc('set_gym_booking_settings', {
     p_timezone: timezone,
     p_blackout_start: blackoutStart,
@@ -112,8 +119,10 @@ export async function updateGymBookingSettings(
   return error ? fail(error, 'Could not save the booking rules') : ok();
 }
 
-export async function setCoachAdmin(coachId: string, isAdmin: boolean): Promise<ActionResult> {
+export async function setCoachAdmin(coachId: string, isAdmin: boolean, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.rpc('set_gym_admin', { p_coach_id: coachId, p_is_admin: isAdmin });
   return error ? fail(error, 'Could not update admin rights') : ok();
 }
@@ -122,8 +131,10 @@ export async function setCoachAdmin(coachId: string, isAdmin: boolean): Promise<
 // add_coach_to_gym (0056) checks the caller's own admin rights server-side. Distinct from
 // creating a brand-new account, which stays in app/api/gym/create-coach/route.ts (needs the
 // admin client to call auth.admin.createUser, which no RPC can do).
-export async function addCoachToGym(coachId: string, isAdmin: boolean): Promise<ActionResult> {
+export async function addCoachToGym(coachId: string, isAdmin: boolean, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.rpc('add_coach_to_gym', { p_coach_id: coachId, p_is_admin: isAdmin });
   return error ? fail(error, 'Could not add that coach to the gym') : ok();
 }

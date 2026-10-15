@@ -2,6 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type { RewardOverview, RewardRow, RewardsForMember } from './types';
 
@@ -69,13 +70,19 @@ export async function getRewardOverview(): Promise<RewardOverview[]> {
   });
 }
 
-export async function createReward(fields: {
-  name: string;
-  description: string | null;
-  kind: 'sessions' | 'months';
-  threshold: number;
-}): Promise<ActionResult> {
+// expectedGymId: the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+export async function createReward(
+  fields: {
+    name: string;
+    description: string | null;
+    kind: 'sessions' | 'months';
+    threshold: number;
+  },
+  expectedGymId?: string | null
+): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { data: gymId, error: gymError } = await supabase.rpc('my_gym_id');
   if (gymError || !gymId) return fail(gymError, 'Could not work out your gym');
   const { error } = await supabase.from('rewards').insert({ ...fields, gym_id: gymId });
@@ -83,8 +90,10 @@ export async function createReward(fields: {
   return ok();
 }
 
-export async function deleteReward(rewardId: string): Promise<ActionResult> {
+export async function deleteReward(rewardId: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('rewards').delete().eq('id', rewardId);
   if (error) return fail(error, 'Could not delete the reward');
   return ok();

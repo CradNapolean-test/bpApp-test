@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useActiveGymId } from './CoachGymsContext';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createGroup, deleteGroup, addClientsToGroup, removeClientsFromGroup } from '@/lib/data/clientGroups';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
@@ -20,6 +21,7 @@ export function GroupsManager({
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const [newName, setNewName] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function GroupsManager({
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
-    await run(() => createGroup(newName.trim()), { onDone: () => setNewName('') });
+    await run(() => createGroup(newName.trim(), gymId), { onDone: () => setNewName('') });
   }
 
   async function handleDelete(groupId: string) {
@@ -39,7 +41,7 @@ export function GroupsManager({
       destructive: true,
     });
     if (!ok) return;
-    await run(() => deleteGroup(groupId), { success: 'Group deleted' });
+    await run(() => deleteGroup(groupId, gymId), { success: 'Group deleted' });
   }
 
   async function handleToggleMember(groupId: string, clientId: string, isMember: boolean) {

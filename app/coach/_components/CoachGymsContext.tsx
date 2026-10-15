@@ -12,6 +12,12 @@ export function useCoachGyms(): MyGymRow[] {
   return useContext(CoachGymsContext);
 }
 
+// The gym this page was drawn for: the one every write below it sends along, so a tab left open on an old gym cannot write into
+// the new one (R28, lib/data/gymGuard.ts). null when the coach's gyms could not be loaded; the write is then not checked.
+export function useActiveGymId(): string | null {
+  return useCoachGyms().find((g) => g.isActive)?.gymId ?? null;
+}
+
 export function CoachGymsProvider({ gyms, children }: { gyms: MyGymRow[]; children: ReactNode }) {
   return <CoachGymsContext.Provider value={gyms}>{children}</CoachGymsContext.Provider>;
 }

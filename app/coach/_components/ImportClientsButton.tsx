@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Upload } from 'lucide-react';
 import { useClickOutside } from '@/app/_components/useClickOutside';
 import { useToast } from '@/app/_components/ToastProvider';
+import { useActiveGymId } from './CoachGymsContext';
 import { parseCsv, headerIndex } from '@/lib/utils/csv';
 
 interface ImportResult {
@@ -29,6 +30,7 @@ function extractEmails(text: string): string[] {
 export function ImportClientsButton() {
   const router = useRouter();
   const toast = useToast();
+  const gymId = useActiveGymId();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -58,7 +60,7 @@ export function ImportClientsButton() {
       const res = await fetch('/api/coach/import-clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails }),
+        body: JSON.stringify({ emails, expectedGymId: gymId }),
       });
       const body = await res.json();
       if (!res.ok) {

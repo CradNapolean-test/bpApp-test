@@ -7,6 +7,7 @@ import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { useToast } from '@/app/_components/ToastProvider';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import {
@@ -64,6 +65,7 @@ function FormEditorOverlay({
   onDelete: (id: string) => void;
 }) {
   const { run: runSave, busy: saving } = useAction();
+  const gymId = useActiveGymId();
   const confirm = useConfirm();
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
@@ -125,10 +127,11 @@ function FormEditorOverlay({
     await runSave(
       () =>
         editingId
-          ? updateFormTemplate(editingId, fields, payload)
+          ? updateFormTemplate(editingId, fields, payload, gymId)
           : createFormTemplate(
               fields,
-              payload.map(({ id: _id, ...rest }) => rest) // eslint-disable-line @typescript-eslint/no-unused-vars
+              payload.map(({ id: _id, ...rest }) => rest), // eslint-disable-line @typescript-eslint/no-unused-vars
+              gymId
             ),
       { success: editingId ? 'Template saved' : 'Template created', onDone: onClose }
     );
@@ -261,6 +264,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
   const toast = useToast();
   const { run: runDelete } = useAction();
   const { run: runStarter, busy: addingStarter } = useAction();
+  const gymId = useActiveGymId();
   const [editorState, setEditorState] = useState<{
     editingId: string | null;
     name: string;
@@ -313,7 +317,8 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
       () =>
         createFormTemplate(
           { name: starter.name, description: starter.description, is_default_onboarding: false },
-          starter.questions.map((q, i) => ({ order_index: i, ...q }))
+          starter.questions.map((q, i) => ({ order_index: i, ...q })),
+          gymId
         ),
       { success: `Added "${starter.name}". Edit it, or tick "default onboarding form" so new members get it.` }
     );
@@ -327,7 +332,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
       destructive: true,
     });
     if (!ok) return;
-    await runDelete(() => deleteFormTemplate(id), { success: 'Template deleted', onDone: () => setEditorState(null) });
+    await runDelete(() => deleteFormTemplate(id, gymId), { success: 'Template deleted', onDone: () => setEditorState(null) });
   }
 
   return (

@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type {
@@ -29,10 +30,15 @@ export async function getClasses(): Promise<ClassRow[]> {
   return data ?? [];
 }
 
+// expectedGymId (here and on every write below): the gym the page was drawn for. When the coach's active gym has moved
+// on (they switched in another tab) the write is refused with a message instead of landing in the wrong gym (R28).
 export async function createClass(
-  fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'specific_date'> & { specific_date?: string | null }
-): Promise<void> {
+  fields: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'specific_date'> & { specific_date?: string | null },
+  expectedGymId?: string | null
+): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -47,9 +53,12 @@ export async function createClass(
 // field -- lets a coach set up "Yoga, Mon/Wed/Fri 6am" in one submit instead of three.
 export async function createClasses(
   shared: Omit<ClassRow, 'id' | 'coach_id' | 'gym_id' | 'day_of_week' | 'start_time' | 'specific_date'>,
-  occurrences: { day_of_week: number; start_time: string }[]
-): Promise<void> {
+  occurrences: { day_of_week: number; start_time: string }[],
+  expectedGymId?: string | null
+): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -63,8 +72,10 @@ export async function createClasses(
 
 // Really deletes a session. The database refuses when ANY booking exists (migration 0132): use retireClass for a session with history.
 // Returns rather than throws so that reason reaches the screen.
-export async function deleteClass(classId: string): Promise<ActionResult> {
+export async function deleteClass(classId: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('classes').delete().eq('id', classId);
   return error ? fail(error, 'Could not delete that session') : ok();
 }
@@ -73,8 +84,10 @@ export async function deleteClass(classId: string): Promise<ActionResult> {
 // stay on file, and the session no longer appears for booking. See retire_class (migration 0132).
 export type RetireClassResult = { ok: true; cancelled: number; refundedCredits: number } | { ok: false; error: string };
 
-export async function retireClass(classId: string): Promise<RetireClassResult> {
+export async function retireClass(classId: string, expectedGymId?: string | null): Promise<RetireClassResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale as RetireClassResult;
   const { data, error } = await supabase.rpc('retire_class', { p_class_id: classId });
   if (error) return fail(error, 'Could not retire that session') as RetireClassResult;
   const result = (data ?? {}) as { cancelled?: number; refunded_credits?: number };
@@ -118,9 +131,12 @@ export async function getClassBookingSummary(classId: string, todayIso: string):
 // while members are booked, and says why (migration 0132).
 export async function updateClass(
   classId: string,
-  fields: Partial<Pick<ClassRow, 'name' | 'day_of_week' | 'specific_date' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>>
+  fields: Partial<Pick<ClassRow, 'name' | 'day_of_week' | 'specific_date' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>>,
+  expectedGymId?: string | null
 ): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('classes').update(fields).eq('id', classId);
   return error ? fail(error, 'Could not save that session') : ok();
 }

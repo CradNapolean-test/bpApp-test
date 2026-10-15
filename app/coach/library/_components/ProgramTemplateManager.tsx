@@ -5,6 +5,7 @@ import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { useToast } from '@/app/_components/ToastProvider';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
@@ -166,6 +167,7 @@ export function ProgramTemplateManager({
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const gymId = useActiveGymId();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate, busy: mutating } = useAction();
   const { run: runAssign, busy: assigning } = useAction();
@@ -202,7 +204,7 @@ export function ProgramTemplateManager({
         toast.error('That file isn’t valid JSON');
         return;
       }
-      await runImport(() => importProgramTemplate(parsed), { success: 'Programme template imported' });
+      await runImport(() => importProgramTemplate(parsed, gymId), { success: 'Programme template imported' });
     };
     reader.readAsText(file);
   }
@@ -218,7 +220,9 @@ export function ProgramTemplateManager({
     let newId: string | null = null;
     await runCreate(
       async () => {
-        newId = await createProgramTemplateAndGetId(newTemplateName.trim());
+        const created = await createProgramTemplateAndGetId(newTemplateName.trim(), gymId);
+        if (created.ok) newId = created.id;
+        return created;
       },
       {
         onDone: () => {
@@ -307,7 +311,7 @@ export function ProgramTemplateManager({
   }
 
   async function handleDuplicate(templateId: string, name: string) {
-    await runDuplicate(() => duplicateProgramTemplate(templateId, `${name} (copy)`), { success: 'Template duplicated' });
+    await runDuplicate(() => duplicateProgramTemplate(templateId, `${name} (copy)`, gymId), { success: 'Template duplicated' });
   }
 
   function openAssign(template: ProgramTemplateWithDays) {
@@ -351,6 +355,7 @@ export function ProgramTemplateManager({
           audience: assignAudience,
           clientIds: targetIds,
           startsNow,
+          expectedGymId: gymId,
         });
         if (result.ok) reached = result.count;
         return result;

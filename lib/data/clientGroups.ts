@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientGroupWithMembers } from './types';
 
@@ -27,8 +28,11 @@ export async function getGroups(): Promise<ClientGroupWithMembers[]> {
   }));
 }
 
-export async function createGroup(name: string): Promise<void> {
+// expectedGymId: the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+export async function createGroup(name: string, expectedGymId?: string | null): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -41,8 +45,10 @@ export async function createGroup(name: string): Promise<void> {
 
 // Deleting a group cancels its pending and repeating broadcasts and keeps the group's name on the ones already sent (migration 0133).
 // Returns rather than throws so a refusal reaches the screen as words.
-export async function deleteGroup(groupId: string): Promise<ActionResult> {
+export async function deleteGroup(groupId: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { error } = await supabase.from('client_groups').delete().eq('id', groupId);
   return error ? fail(error, 'Could not delete that group') : ok();
 }

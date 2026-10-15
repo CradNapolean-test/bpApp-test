@@ -2,6 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { eventCancelledMessage, eventChangeMessage, startsInThePast } from '@/lib/eventChange';
@@ -100,7 +101,10 @@ async function tellSignups(eventId: string, message: string | null): Promise<str
   return error ? (error.message || 'could not notify') : null;
 }
 
-export async function createEvent(fields: EventFields): Promise<ActionResult> {
+// expectedGymId (on every write here): the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+export async function createEvent(fields: EventFields, expectedGymId?: string | null): Promise<ActionResult> {
+  const stale = await checkActiveGym(await createClient(), expectedGymId);
+  if (stale) return stale;
   if (startsInThePast(fields.starts_at)) return fail(null, 'An event can\u2019t start in the past.');
   const supabase = await createClient();
   const { data: gymId, error: gymError } = await supabase.rpc('my_gym_id');
@@ -110,8 +114,10 @@ export async function createEvent(fields: EventFields): Promise<ActionResult> {
   return ok();
 }
 
-export async function updateEvent(eventId: string, fields: EventFields): Promise<ActionResult> {
+export async function updateEvent(eventId: string, fields: EventFields, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { data: before } = await supabase.from('gym_events').select('title, starts_at, location').eq('id', eventId).maybeSingle();
   if (!before) return fail(null, 'That event no longer exists.');
   if (new Date(before.starts_at).getTime() !== new Date(fields.starts_at).getTime() && startsInThePast(fields.starts_at)) {
@@ -132,8 +138,10 @@ export async function updateEvent(eventId: string, fields: EventFields): Promise
 
 // Tells everyone signed up that the event is cancelled, then removes it. If they cannot be told the event is NOT deleted, so nobody is
 // left expecting an event that has silently vanished.
-export async function deleteEvent(eventId: string): Promise<ActionResult> {
+export async function deleteEvent(eventId: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { data: event } = await supabase.from('gym_events').select('title, starts_at, location').eq('id', eventId).maybeSingle();
   if (event) {
     const problem = await tellSignups(eventId, eventCancelledMessage(event, DEFAULT_TIMEZONE));

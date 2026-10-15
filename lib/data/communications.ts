@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { sendPersonalisedEmails } from '@/lib/email';
 import type { ScheduledCommunicationRow } from './types';
@@ -28,8 +29,12 @@ export async function composeCommunication(input: {
   sendAt: string;
   channel: 'message' | 'email' | 'both';
   repeat: 'none' | 'weekly';
+  // The gym the page was drawn for (R28): "whole gym" and groups mean that gym's members, so a tab left open on an old gym must not send.
+  expectedGymId?: string | null;
 }): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, input.expectedGymId);
+  if (stale) return stale;
   const { data, error } = await supabase.rpc('create_communication', {
     p_message: input.message,
     p_target: input.target,

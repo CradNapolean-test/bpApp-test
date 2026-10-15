@@ -15,3 +15,12 @@ export function fail(error: { message?: string } | null, fallback = 'Request fai
   const message = error?.message?.trim();
   return { ok: false, error: message && message.length > 0 ? friendlyMessage(message) : fallback };
 }
+
+// For a batch of writes that each come back as a result (several records created at once): the first refusal, if any.
+// A client component can hand the batch to useAction().run(), which only looks at one result.
+export function firstFailure(results: unknown[]): ActionResult | null {
+  for (const r of results) {
+    if (r && typeof r === 'object' && (r as { ok?: unknown }).ok === false) return r as ActionResult;
+  }
+  return null;
+}

@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type {
   ProgrammeRolloutRow,
@@ -47,8 +48,11 @@ export async function getProgramTemplateWithDays(templateId: string): Promise<Pr
   return data as unknown as ProgramTemplateWithDays | null;
 }
 
-export async function createProgramTemplate(name: string): Promise<void> {
+// expectedGymId (on every write here): the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+export async function createProgramTemplate(name: string, expectedGymId?: string | null): Promise<void | ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -69,8 +73,10 @@ export async function updateProgramTemplate(
 }
 
 // Creates a template and returns its id so the editor can open straight onto it.
-export async function createProgramTemplateAndGetId(name: string): Promise<string> {
+export async function createProgramTemplateAndGetId(name: string, expectedGymId?: string | null): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale as { ok: false; error: string };
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -82,7 +88,7 @@ export async function createProgramTemplateAndGetId(name: string): Promise<strin
     .select('id')
     .single();
   if (error) raise(error);
-  return data.id;
+  return { ok: true, id: data.id };
 }
 
 // Removes every day (and its exercises) in one week of a template.
@@ -269,8 +275,10 @@ export async function applyFieldsToTemplateDay(
 
 // Copies a template (name, days, exercises) into a brand new template for the same coach --
 // not a client, so an edit afterward never touches anything already assigned to clients.
-export async function duplicateProgramTemplate(templateId: string, newName: string): Promise<ActionResult> {
+export async function duplicateProgramTemplate(templateId: string, newName: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
   const { data, error } = await supabase.rpc('duplicate_program_template', {
     p_template_id: templateId,
     p_new_name: newName,
@@ -290,7 +298,9 @@ export async function duplicateProgramTemplate(templateId: string, newName: stri
 // half-built template, and the database checks the shape and limits (20 weeks, 14 days a week, 60 exercises a day) itself. Each
 // exercise is linked to the library entry with the same name (ignoring case and spacing) when there is one; a file from another gym
 // carries no ids that would mean anything here.
-export async function importProgramTemplate(rawData: unknown): Promise<ActionResult> {
+export async function importProgramTemplate(rawData: unknown, expectedGymId?: string | null): Promise<ActionResult> {
+  const stale = await checkActiveGym(await createClient(), expectedGymId);
+  if (stale) return stale;
   if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
     return fail(null, 'That file isn\u2019t a recognized programme template export');
   }
@@ -359,8 +369,12 @@ export async function scheduleProgrammeRollout(input: {
   audience: 'all' | 'selected';
   clientIds: string[];
   startsNow: boolean;
+  // The gym the page was drawn for (R28): "everyone" means this gym's members, so it must still be the active one.
+  expectedGymId?: string | null;
 }): Promise<ScheduleRolloutResult> {
   const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, input.expectedGymId);
+  if (stale) return stale as ScheduleRolloutResult;
   const { data, error } = await supabase.rpc('schedule_programme_rollout', {
     p_template_id: input.templateId,
     p_program_name: input.programName,
