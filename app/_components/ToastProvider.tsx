@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { CheckCircle2, X, XCircle } from 'lucide-react';
+import { toastDuration, toastRole } from '@/lib/toastTiming';
 
 type ToastKind = 'success' | 'error';
 
@@ -28,7 +29,7 @@ export function useToast(): ToastApi {
   return ctx;
 }
 
-const AUTO_DISMISS_MS = 4000;
+// A confirmation goes after 4 seconds; an error stays for 10 (lib/toastTiming.ts) and can always be dismissed.
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -41,7 +42,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (kind: ToastKind, message: string) => {
       const id = Date.now() + Math.random();
       setToasts((prev) => [...prev, { id, kind, message }]);
-      setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+      setTimeout(() => dismiss(id), toastDuration(kind));
     },
     [dismiss]
   );
@@ -55,11 +56,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-[70] flex flex-col gap-2 sm:bottom-4 sm:left-auto sm:right-4">
+      {/* The live region stays announced while a dialog is open (data-dialog-ignore: see useDialog), so an error is heard even then. */}
+      <div
+        data-dialog-ignore
+        aria-live="polite"
+        className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-[70] flex flex-col gap-2 sm:bottom-4 sm:left-auto sm:right-4"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
-            role="status"
+            role={toastRole(t.kind)}
             className={`pointer-events-auto flex max-w-sm items-start gap-2 rounded-lg border p-3 text-sm shadow-lg ${
               t.kind === 'success'
                 ? 'border-emerald-600/30 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-200'
@@ -72,7 +78,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
             )}
             <span className="flex-1">{t.message}</span>
-            <button onClick={() => dismiss(t.id)} aria-label="Dismiss" className="shrink-0 opacity-60 hover:opacity-100">
+            <button type="button" onClick={() => dismiss(t.id)} aria-label="Dismiss" className="-m-2 shrink-0 p-2 opacity-60 hover:opacity-100">
               <X className="h-4 w-4" />
             </button>
           </div>
