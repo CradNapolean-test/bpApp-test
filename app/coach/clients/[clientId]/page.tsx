@@ -88,10 +88,8 @@ export default async function CoachClientPage({
       gymBlackout={bundle.gymBlackout}
       messages={bundle.messages}
       bookings={bundle.bookings}
-      occurrences={bundle.occurrences}
       creditsBalance={bundle.creditsBalance}
       creditsBuckets={bundle.creditsBuckets}
-      creditsLedger={bundle.creditsLedger}
       programs={bundle.programs}
       workoutLogs={bundle.workoutLogs}
       clientExerciseMaxes={bundle.clientExerciseMaxes}
@@ -104,15 +102,12 @@ export default async function CoachClientPage({
       bodyScans={bundle.bodyScans}
       nutritionFeedback={bundle.nutritionFeedback}
       measurementLogs={bundle.measurementLogs}
-      habits={bundle.habits}
       notifications={bundle.notifications}
       formTemplates={bundle.formTemplates}
       formAssignments={bundle.formAssignments}
       exerciseLibrary={bundle.exerciseLibrary}
       programTemplates={bundle.programTemplates}
       recipes={bundle.recipes}
-      educationCourses={bundle.educationCourses}
-      educationAssignments={bundle.educationAssignments}
       unreadMessageCount={bundle.unreadMessageCount}
       gymTimezone={bundle.gymTimezone}
       latestWeighIn={latestWeighIn}

@@ -69,17 +69,13 @@ import type {
   ClientProfileRow,
   CreditBucketBalances,
   CreditPackRow,
-  CreditsLedgerRow,
   DailyLogRow,
-  EducationCourseAssignmentWithDetails,
-  EducationCourseWithModules,
   ExerciseLibraryRow,
   FoodDiaryEntryRow,
   FoodPhotoEntry,
   ManualMacroEntryRow,
   FormAssignmentWithDetails,
   FormTemplateRow,
-  HabitWithLogs,
   MealPlanEntryRow,
   MealSectionRow,
   MeasurementLogRow,
@@ -88,7 +84,6 @@ import type {
   ProgramTemplateRow,
   ProgressPhoto,
   RecipeWithIngredients,
-  ScheduleOccurrence,
   WorkoutBlockChoiceRow,
   WorkoutDayFeedbackRow,
   WorkoutLogRow,
@@ -119,7 +114,6 @@ export function DashboardShell({
   programWeek,
   messages,
   bookings,
-  occurrences,
   creditsBalance,
   creditsBuckets,
   programs,
@@ -140,8 +134,6 @@ export function DashboardShell({
   exerciseLibrary,
   programTemplates,
   recipes,
-  educationCourses,
-  educationAssignments,
   disabledScreens = [],
   disabledMetrics = [],
   journalEntries = [],
@@ -179,10 +171,8 @@ export function DashboardShell({
   programWeek: number;
   messages: ChatMessage[];
   bookings: BookingRow[];
-  occurrences: ScheduleOccurrence[];
   creditsBalance: number;
   creditsBuckets: CreditBucketBalances;
-  creditsLedger: CreditsLedgerRow[];
   programs: WorkoutProgramRow[];
   workoutLogs: WorkoutLogRow[];
   clientExerciseMaxes: ClientExerciseMaxRow[];
@@ -195,15 +185,12 @@ export function DashboardShell({
   bodyScans: BodyScan[];
   nutritionFeedback?: NutritionFeedbackRow[];
   measurementLogs: MeasurementLogRow[];
-  habits: HabitWithLogs[];
   notifications: NotificationRow[];
   formTemplates: FormTemplateRow[];
   formAssignments: FormAssignmentWithDetails[];
   exerciseLibrary: ExerciseLibraryRow[];
   programTemplates: ProgramTemplateRow[];
   recipes: RecipeWithIngredients[];
-  educationCourses: EducationCourseWithModules[];
-  educationAssignments: EducationCourseAssignmentWithDetails[];
   disabledScreens?: string[];
   disabledMetrics?: string[];
   journalEntries?: ClientJournalEntryRow[];
@@ -901,8 +888,6 @@ export function DashboardShell({
             <EducationTab
               clientId={clientId}
               isCoachView={isCoachView}
-              courses={educationCourses}
-              assignments={educationAssignments}
               readOnly={isCoachView && !isOwnClient}
               profile={profile}
             />
@@ -1046,8 +1031,8 @@ export function DashboardShell({
 
       {!isCoachView && area === 'Classes' && (
         <ClassesArea
+          clientId={clientId}
           bookings={bookings}
-          occurrences={occurrences}
           creditsBalance={creditsBalance}
           membership={membership}
           programs={programs}

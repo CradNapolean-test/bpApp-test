@@ -4,7 +4,11 @@ import { raise } from './errors';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { getClientGymId } from './memberships';
+import { getClientProfile } from './clientProfile';
 import { createClient } from '@/lib/supabase/server';
+import { redactLockedLessons } from '@/lib/utils/educationProgress';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import type { CourseRollupRow, EducationCourseAssignmentWithDetails, EducationCourseWithModules } from './types';
 
 // Fetches every course already nested with its modules/lessons in one round trip (mirrors
@@ -162,6 +166,24 @@ export async function getClientCourseAssignments(clientId: string): Promise<Educ
   return ((assignmentsResult.data ?? []) as unknown as Omit<EducationCourseAssignmentWithDetails, 'completions'>[])
     .filter((a) => a.course != null)
     .map((a) => ({ ...a, completions }));
+}
+
+// The Education screen's data, read when the screen opens (R13/M1: the courses and a member's assignments, with every lesson, were part of
+// every dashboard page). A coach also gets the gym's courses for the "Assign a course" list; a member gets only their own assignments, with
+// lessons that have not unlocked yet stripped of their text and link (ED1).
+export async function getEducationForClient(
+  clientId: string,
+  forCoach: boolean
+): Promise<{ courses: EducationCourseWithModules[]; assignments: EducationCourseAssignmentWithDetails[] }> {
+  const gymId = forCoach ? await getClientGymId(clientId) : null;
+  const [courses, assignments, profile] = await Promise.all([
+    forCoach ? getCourses(gymId) : Promise.resolve([] as EducationCourseWithModules[]),
+    getClientCourseAssignments(clientId),
+    forCoach ? Promise.resolve(null) : getClientProfile(clientId),
+  ]);
+  if (forCoach) return { courses, assignments };
+  const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+  return { courses, assignments: redactLockedLessons(assignments, todayIso) };
 }
 
 // Returns rather than throws -- assign_education_course raises user-facing domain errors that

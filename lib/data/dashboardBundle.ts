@@ -11,13 +11,7 @@ import { getMealPlanEntries } from './mealPlan';
 import { getMealSections, getOrCreateMealSections } from './mealSections';
 import { getActivities } from './foods';
 import { getClientUnreadCount, getMessages } from './chat';
-import {
-  getCreditsBalance,
-  getCreditsBucketBalances,
-  getCreditsLedger,
-  getScheduleOccurrences,
-  getRecentAndUpcomingBookings,
-} from './classes';
+import { getCreditsBalance, getCreditsBucketBalances, getRecentAndUpcomingBookings } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getClientExerciseMaxes } from './clientExerciseMaxes';
 import { getBigDogResults } from './bigDog';
@@ -30,22 +24,27 @@ import { getClientGymId, getCreditPacks, getCreditPacksForGym, getMyMembership, 
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
 import { getNutritionFeedback } from './nutritionFeedback';
-import { getHabitsWithLogs } from './habits';
 import { getNotifications } from './notifications';
 import { getFormTemplates, getClientFormAssignments } from './forms';
-import { getExerciseLibrary } from './exerciseLibrary';
+import { getExerciseLibrary, getExerciseLibraryByIds } from './exerciseLibrary';
 import { getProgramTemplates } from './programTemplates';
 import { getRecipesWithIngredients } from './recipes';
-import { getCourses, getClientCourseAssignments } from './education';
 import { getDisabledMetrics, getDisabledScreens } from './clientScreenSettings';
 import { toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 import { bookingWindowStart, workoutWindowStart } from '@/lib/trainingWindow';
+import { libraryIdsOf } from '@/lib/programLibrary';
+import type { CreditPackRow, ExerciseLibraryRow, MembershipPackageRow, ProgramTemplateRow, FormTemplateRow } from './types';
 
 const HISTORY_DAYS = 84;
 
 // canWrite is false for a coach viewing a client read-only: RLS only allows a client to
 // insert their own daily_logs rows, so a coach's session can't (and shouldn't) create
 // today's blank row as a side effect of just looking at the page.
+//
+// It also decides what the page carries (R13/M1: the member's page was 347 KB, 300 KB of it data). A member's own page leaves out what only
+// a coach uses (plans, credit packs, form and programme templates, the whole exercise library: only the entries their programmes use come
+// with it). Both pages leave out what a screen can fetch when it opens: the timetable, the Education courses and assignments, the credit
+// history and the habits, which nothing on the page showed.
 export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
   // Profile is fetched first (not inside the big Promise.all below) specifically so its
   // timezone is available before "today" is resolved -- this is the fix for a client's
@@ -67,10 +66,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     todayLog,
     messages,
     bookings,
-    occurrences,
     creditsBalance,
     creditsBuckets,
-    creditsLedger,
     programs,
     workoutLogs,
     clientExerciseMaxes,
@@ -83,15 +80,12 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bodyScans,
     nutritionFeedback,
     measurementLogs,
-    habits,
     notifications,
     formTemplates,
     formAssignments,
-    exerciseLibrary,
+    fullExerciseLibrary,
     programTemplates,
     recipes,
-    educationCourses,
-    educationAssignments,
     unreadMessageCount,
     mealSections,
     disabledScreens,
@@ -110,31 +104,26 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     canWrite ? getOrCreateDailyLog(clientId, todayIso) : getDailyLog(clientId, todayIso),
     getMessages(clientId),
     getRecentAndUpcomingBookings(clientId, bookingWindowStart(todayIso)),
-    getScheduleOccurrences(3, 0, false, gymId),
     getCreditsBalance(clientId),
     getCreditsBucketBalances(clientId),
-    getCreditsLedger(clientId),
     getPrograms(clientId),
     getWorkoutLogs(clientId, workoutWindowStart(todayIso)),
     getClientExerciseMaxes(clientId),
     getWorkoutDayFeedback(clientId),
     getBlockChoices(clientId),
     getMyMembership(clientId),
-    gymId ? getPackagesForGym(gymId) : getPackages(),
-    gymId ? getCreditPacksForGym(gymId) : getCreditPacks(),
+    canWrite ? Promise.resolve([] as MembershipPackageRow[]) : gymId ? getPackagesForGym(gymId) : getPackages(),
+    canWrite ? Promise.resolve([] as CreditPackRow[]) : gymId ? getCreditPacksForGym(gymId) : getCreditPacks(),
     getPhotos(clientId),
     getBodyScans(clientId),
     getNutritionFeedback(clientId),
     getMeasurementLogs(clientId),
-    getHabitsWithLogs(clientId, profile?.timezone ?? DEFAULT_TIMEZONE),
     getNotifications(clientId),
-    getFormTemplates(gymId),
+    canWrite ? Promise.resolve([] as FormTemplateRow[]) : getFormTemplates(gymId),
     getClientFormAssignments(clientId),
-    getExerciseLibrary(),
-    getProgramTemplates(gymId),
+    canWrite ? Promise.resolve([] as ExerciseLibraryRow[]) : getExerciseLibrary(),
+    canWrite ? Promise.resolve([] as ProgramTemplateRow[]) : getProgramTemplates(gymId),
     getRecipesWithIngredients(clientId),
-    getCourses(gymId),
-    getClientCourseAssignments(clientId),
     getClientUnreadCount(clientId),
     canWrite ? getOrCreateMealSections(clientId) : getMealSections(clientId),
     getDisabledScreens(clientId),
@@ -147,6 +136,9 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getLoggedDates(clientId, toIsoDate(addDays(today, -400))),
     getFirstLoggedDate(clientId),
   ]);
+
+  // A member's page carries the library entries their programmes use; the coach's view of a member carries the whole library.
+  const exerciseLibrary = canWrite ? await getExerciseLibraryByIds(libraryIdsOf(programs)) : fullExerciseLibrary;
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
   const foodPhotos = todayLog ? await getFoodPhotos(todayLog.id) : [];
@@ -171,10 +163,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     programWeek,
     messages,
     bookings,
-    occurrences,
     creditsBalance,
     creditsBuckets,
-    creditsLedger,
     programs,
     workoutLogs,
     clientExerciseMaxes,
@@ -187,15 +177,12 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bodyScans,
     nutritionFeedback,
     measurementLogs,
-    habits,
     notifications,
     formTemplates,
     formAssignments,
     exerciseLibrary,
     programTemplates,
     recipes,
-    educationCourses,
-    educationAssignments,
     unreadMessageCount,
     mealSections,
     disabledScreens,

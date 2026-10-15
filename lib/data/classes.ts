@@ -4,6 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
+import { getClientGymId } from './memberships';
 import { createClient } from '@/lib/supabase/server';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type {
@@ -261,6 +262,13 @@ export async function grantCredits(
 // sessions that have already happened); members only ever see upcoming ones.
 // `includeCancelled` (coach screens) keeps dates that were cancelled, flagged, instead of dropping them.
 // forGymId: a member's page shows the timetable of the MEMBER'S gym; everywhere else it is the gym being worked in (R38).
+// The next three weeks of sessions at the member's own gym, read when the Book screen opens (R13/M1: the timetable was 32 KB of every
+// dashboard page, for a screen most visits never open).
+export async function getMemberTimetable(clientId: string): Promise<ScheduleOccurrence[]> {
+  const gymId = await getClientGymId(clientId);
+  return getScheduleOccurrences(3, 0, false, gymId);
+}
+
 export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, includeCancelled = false, forGymId?: string | null): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
   const gymId = forGymId ?? (await resolveScopingGymId(supabase));

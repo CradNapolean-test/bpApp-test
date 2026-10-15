@@ -3,10 +3,11 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, Check, Clock, Info, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { useOnDemand } from '@/app/_components/useOnDemand';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Badge, Card, Segmented } from '@/app/_components/ui';
 import { BottomSheet } from '@/app/_components/BottomSheet';
-import { bookClass, cancelBooking } from '@/lib/data/classes';
+import { bookClass, cancelBooking, getMemberTimetable } from '@/lib/data/classes';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, startOfWeek, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { cancelDeadline, cancelNote, nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { cancellationPolicyText } from '@/lib/bookingRules';
@@ -52,8 +53,8 @@ function SummaryRow({ label, value, tone }: { label: string; value: string; tone
 }
 
 export function ClassesArea({
+  clientId,
   bookings,
-  occurrences,
   creditsBalance,
   membership,
   programs,
@@ -62,8 +63,8 @@ export function ClassesArea({
   timezone,
   gymBlackout = null,
 }: {
+  clientId: string;
   bookings: BookingRow[];
-  occurrences: ScheduleOccurrence[];
   creditsBalance: number;
   membership: ClientMembershipRow | null;
   programs: WorkoutProgramRow[];
@@ -74,6 +75,9 @@ export function ClassesArea({
   // timetable is empty (L5).
   gymBlackout?: { start: string | null; end: string | null } | null;
 }) {
+  // The timetable is read when this screen opens (R13/M1: it was 32 KB of every dashboard page), and again after a booking or a cancel.
+  const timetable = useOnDemand(() => getMemberTimetable(clientId), clientId);
+  const occurrences = useMemo(() => timetable.data ?? [], [timetable.data]);
   const { run, busy } = useAction();
   const [view, setView] = useState<View>('book');
   const [pickedDate, setPickedDate] = useState<string | null>(null);
@@ -307,8 +311,8 @@ export function ClassesArea({
           {dayOccurrences.length === 0 ? (
             <EmptyState
               icon={CalendarDays}
-              title={occurrences.length === 0 ? 'No sessions scheduled' : 'Nothing on this day'}
-              hint={occurrences.length === 0 ? 'Check back once your coach adds sessions.' : 'Pick another day above — days with sessions are brighter.'}
+              title={timetable.data == null ? (timetable.error ? 'Could not load the sessions' : 'Loading sessions…') : occurrences.length === 0 ? 'No sessions scheduled' : 'Nothing on this day'}
+              hint={timetable.data == null ? (timetable.error ? 'Check your connection and open this screen again.' : undefined) : occurrences.length === 0 ? 'Check back once your coach adds sessions.' : 'Pick another day above — days with sessions are brighter.'}
               compact
             />
           ) : (

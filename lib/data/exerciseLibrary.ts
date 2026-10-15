@@ -12,6 +12,25 @@ export async function getExerciseLibrary(): Promise<ExerciseLibraryRow[]> {
   return data ?? [];
 }
 
+// Only the library entries a member's programmes use (R13/M1): the whole library was 190 KB of every member page, for a few dozen entries
+// the member could actually see. The coach's view of a member still carries the whole library for building programmes.
+export async function getExerciseLibraryByIds(ids: string[]): Promise<ExerciseLibraryRow[]> {
+  const unique = [...new Set(ids)].filter(Boolean);
+  if (unique.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('exercise_library').select('*').in('id', unique).order('name');
+  if (error) raise(error);
+  return data ?? [];
+}
+
+// Just the id and name of every entry: the list in "Record a tested max", fetched when that form opens instead of riding on every page.
+export async function getExerciseOptions(): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('exercise_library').select('id, name').order('name');
+  if (error) raise(error);
+  return (data ?? []) as { id: string; name: string }[];
+}
+
 // How many programme templates use each library exercise (by exercise id). Counts distinct templates, not
 // rows: a 12-week template that repeats an exercise every week still counts once. Empty if it can't be read.
 export async function getExerciseUsage(): Promise<Record<string, number>> {

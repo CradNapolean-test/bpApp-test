@@ -5,17 +5,13 @@ import { Check, ChevronDown, GraduationCap, Lock, PlayCircle } from 'lucide-reac
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
+import { useOnDemand } from '@/app/_components/useOnDemand';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
-import { assignCourse, markLessonComplete, markLessonIncomplete } from '@/lib/data/education';
+import { assignCourse, getEducationForClient, markLessonComplete, markLessonIncomplete } from '@/lib/data/education';
 import { courseCompletionPercent, isLessonUnlocked } from '@/lib/utils/educationProgress';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { parseVideoEmbedUrl } from '@/lib/utils/videoEmbed';
-import type {
-  ClientProfileRow,
-  EducationCourseAssignmentWithDetails,
-  EducationCourseWithModules,
-  EducationLessonRow,
-} from '@/lib/data/types';
+import type { ClientProfileRow, EducationCourseAssignmentWithDetails, EducationLessonRow } from '@/lib/data/types';
 
 function LessonItem({
   lesson,
@@ -199,20 +195,20 @@ function CourseOverlay({
 export function EducationTab({
   clientId,
   isCoachView,
-  courses,
-  assignments,
   readOnly = false,
   profile,
 }: {
   clientId: string;
   isCoachView: boolean;
-  courses: EducationCourseWithModules[];
-  assignments: EducationCourseAssignmentWithDetails[];
   // Narrower than isCoachView -- see FormsTab's identical prop for why this can't just be
   // isCoachView=false for a read-only cross-coach view.
   readOnly?: boolean;
   profile?: ClientProfileRow | null;
 }) {
+  // The courses and assignments are read when this screen opens (R13/M1), and again after a save on it.
+  const education = useOnDemand(() => getEducationForClient(clientId, isCoachView), `${clientId}:${isCoachView}`);
+  const courses = education.data?.courses ?? [];
+  const assignments = education.data?.assignments ?? [];
   const { run, busy: assigning } = useAction();
   const [selectedCourse, setSelectedCourse] = useState('');
   const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
@@ -257,7 +253,16 @@ export function EducationTab({
         </div>
       )}
 
-      {assignments.length === 0 ? (
+      {education.data == null ? (
+        <p className="text-sm text-zinc-500" role="status">
+          {education.error ? 'Could not load the courses.' : 'Loading…'}{' '}
+          {education.error && (
+            <button type="button" onClick={education.reload} className="font-semibold text-accent underline">
+              Try again
+            </button>
+          )}
+        </p>
+      ) : assignments.length === 0 ? (
         <EmptyState
           icon={GraduationCap}
           title="Nothing assigned yet"

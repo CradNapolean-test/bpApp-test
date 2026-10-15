@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
+import { useOnDemand } from '@/app/_components/useOnDemand';
+import { getExerciseOptions } from '@/lib/data/exerciseLibrary';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
@@ -136,7 +138,10 @@ function StartProgrammeSheet({
 
 // Either party can record a tested/estimated max (RLS: owns_client) -- this is what makes
 // %1RM prescriptions resolve to an actual target load for a given client.
-function RecordMaxForm({ clientId, library, bare = false }: { clientId: string; library: ExerciseLibraryRow[]; bare?: boolean }) {
+function RecordMaxForm({ clientId, bare = false }: { clientId: string; bare?: boolean }) {
+  // The exercise list is read when the form opens (R13/M1): the whole library rode on every member page just for this one list.
+  const options = useOnDemand(() => getExerciseOptions(), 'exercise-options');
+  const library = options.data ?? [];
   const { run, busy } = useAction();
   const [libraryId, setLibraryId] = useState('');
   const [max, setMax] = useState<number | ''>('');
@@ -157,7 +162,7 @@ function RecordMaxForm({ clientId, library, bare = false }: { clientId: string; 
     });
   }
 
-  if (library.length === 0) return null;
+  if (options.data != null && library.length === 0) return null;
 
   const inputBase = 'h-11 w-full min-w-0 rounded-xl border border-black/10 bg-transparent px-3 text-base dark:border-white/10';
 
@@ -168,9 +173,9 @@ function RecordMaxForm({ clientId, library, bare = false }: { clientId: string; 
     >
       <div className="space-y-1">
         {!bare && <label className="text-xs font-medium text-zinc-500">Record a tested max</label>}
-        <select required className={inputBase} value={libraryId} onChange={(e) => setLibraryId(e.target.value)}>
+        <select required className={inputBase} value={libraryId} disabled={options.data == null} onChange={(e) => setLibraryId(e.target.value)}>
           <option value="" disabled>
-            Exercise…
+            {options.data == null ? (options.error ? 'Could not load exercises' : 'Loading exercises…') : 'Exercise…'}
           </option>
           {library.map((entry) => (
             <option key={entry.id} value={entry.id}>
@@ -1065,7 +1070,7 @@ export function WorkoutTab({
       )}
       {isCoachView && sheet?.kind === 'max' && (
         <BottomSheet title="Record a tested max" onClose={() => setSheet(null)}>
-          <RecordMaxForm clientId={clientId} library={exerciseLibrary} bare />
+          <RecordMaxForm clientId={clientId} bare />
         </BottomSheet>
       )}
       {isCoachView && sheet?.kind === 'rename' && (
@@ -1106,7 +1111,7 @@ export function WorkoutTab({
             <span className="text-xs font-semibold text-accent group-open:hidden">Add</span>
           </summary>
           <div className="px-4 pb-4">
-            <RecordMaxForm clientId={clientId} library={exerciseLibrary} bare />
+            <RecordMaxForm clientId={clientId} bare />
           </div>
         </details>
       )}
