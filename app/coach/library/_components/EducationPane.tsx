@@ -6,6 +6,8 @@ import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useToast } from '@/app/_components/ToastProvider';
+import { normaliseLessonLink } from '@/lib/lessonLink';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import {
@@ -107,6 +109,7 @@ function LessonSheet({
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
+  const toast = useToast();
   const [title, setTitle] = useState(lesson?.title ?? '');
   const [body, setBody] = useState(lesson?.body ?? '');
   const [linkUrl, setLinkUrl] = useState(lesson?.link_url ?? '');
@@ -114,10 +117,16 @@ function LessonSheet({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Members open this link from the app, so it has to be a secure web address (https://).
+    const link = normaliseLessonLink(linkUrl);
+    if (!link.ok) {
+      toast.error(link.error);
+      return;
+    }
     const fields = {
       title: title.trim(),
       body: body.trim() || null,
-      link_url: linkUrl.trim() || null,
+      link_url: link.url,
       unlock_at: unlockAt || null,
     };
     await run(() => (lesson ? updateLesson(lesson.id, fields) : addLesson(moduleId, fields)), {
@@ -133,7 +142,7 @@ function LessonSheet({
           <input required autoFocus={!lesson} className={field} value={title} onChange={(e) => setTitle(e.target.value)} />
         </Labeled>
         <Labeled label="Video or link (optional)">
-          <input className={field} value={linkUrl} placeholder="https://" onChange={(e) => setLinkUrl(e.target.value)} />
+          <input type="url" inputMode="url" className={field} value={linkUrl} placeholder="https://" onChange={(e) => setLinkUrl(e.target.value)} />
         </Labeled>
         <Labeled label="Lesson text (optional)">
           <textarea rows={9} className={field} value={body} onChange={(e) => setBody(e.target.value)} />
@@ -168,7 +177,7 @@ function ModuleSection({
   async function handleDeleteModule() {
     const ok = await confirm({
       title: `Delete "${module.title}"?`,
-      body: 'This removes the module and every lesson in it.',
+      body: "This removes the module and every lesson in it, and the progress members have made on those lessons. This cannot be undone.",
       destructive: true,
     });
     if (!ok) return;
@@ -176,7 +185,11 @@ function ModuleSection({
   }
 
   async function handleDeleteLesson(lesson: EducationLessonRow) {
-    const ok = await confirm({ title: `Delete "${lesson.title}"?`, body: 'This cannot be undone.', destructive: true });
+    const ok = await confirm({
+      title: `Delete "${lesson.title}"?`,
+      body: "Members' progress on this lesson is removed too. This cannot be undone.",
+      destructive: true,
+    });
     if (!ok) return;
     await run(() => deleteLesson(lesson.id), { success: 'Lesson deleted' });
   }
@@ -562,7 +575,7 @@ export function EducationPane({
   async function handleDelete(id: string, courseTitle: string) {
     const ok = await confirm({
       title: `Delete "${courseTitle}"?`,
-      body: 'Every module, lesson and assignment of this course is removed too. This cannot be undone.',
+      body: "Every module, lesson and assignment of this course is removed too, along with the progress members have made. This cannot be undone.",
       destructive: true,
     });
     if (!ok) return;

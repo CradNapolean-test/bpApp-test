@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { normaliseLessonLink } from '@/lib/lessonLink';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
@@ -86,10 +87,17 @@ export async function reorderModules(orderedIds: string[]): Promise<void> {
   if (failed?.error) raise(failed.error);
 }
 
+// Backstop for the form's own check: a lesson link must be an https:// address (the screen shows the reason before it gets here).
+function assertLessonLink(link: string | null | undefined): void {
+  const result = normaliseLessonLink(link);
+  if (!result.ok) throw new Error(result.error);
+}
+
 export async function addLesson(
   moduleId: string,
   fields: { title: string; body: string | null; link_url: string | null; unlock_at: string | null }
 ): Promise<void> {
+  assertLessonLink(fields.link_url);
   const supabase = await createClient();
   const { data: existing, error: existingError } = await supabase
     .from('education_lessons')
@@ -110,6 +118,7 @@ export async function updateLesson(
   id: string,
   fields: Partial<{ title: string; body: string | null; link_url: string | null; unlock_at: string | null }>
 ): Promise<void> {
+  assertLessonLink(fields.link_url);
   const supabase = await createClient();
   const { error } = await supabase.from('education_lessons').update(fields).eq('id', id);
   if (error) raise(error);
