@@ -66,6 +66,9 @@ export interface DailyLogRow {
   carbs: number | null;
   fat: number | null;
   fibre: number | null;
+  // The day's total kcal including Quick Adds with no macros (migration 0136). Null on older rows and on days with no food: read it
+  // with dayCaloriesOf() (lib/utils/dailyLog.ts), which falls back to the macros.
+  calories: number | null;
   water: number | null;
   bodyweight: number | null;
   steps: number | null;

@@ -69,3 +69,57 @@ export function totalRecipeMacros(ingredients: RecipeIngredientRow[]) {
     { protein: 0, carbs: 0, fat: 0, fibre: 0, calories: 0 }
   );
 }
+
+// ---- what a day's diary writes onto its daily_logs row ----
+// Protein, carbs, fat and fibre as before, plus the day's calories INCLUDING Quick Adds that have no macros (R11: "300 kcal, no
+// split" showed 300 on the Food screen and 0 on every other screen, because everything else worked calories out from the macros).
+// A day with no entries at all writes NULLS, not zeros: 0/0/0 reads as "logged", which made a deleted food count as a logged day and
+// halved the week's average (M2).
+export interface DayFoodFields {
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  fibre: number | null;
+  calories: number | null;
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10;
+export const NO_FOOD_FIELDS: DayFoodFields = { protein: null, carbs: null, fat: null, fibre: null, calories: null };
+
+export function dayFieldsFromDiary(entries: Parameters<typeof entryMacros>[0][]): DayFoodFields {
+  if (entries.length === 0) return NO_FOOD_FIELDS;
+  const total = entries.reduce<{ protein: number; carbs: number; fat: number; fibre: number; calories: number }>(
+    (acc, entry) => {
+      const m = entryMacros(entry);
+      return { protein: acc.protein + m.protein, carbs: acc.carbs + m.carbs, fat: acc.fat + m.fat, fibre: acc.fibre + m.fibre, calories: acc.calories + m.calories };
+    },
+    { protein: 0, carbs: 0, fat: 0, fibre: 0, calories: 0 }
+  );
+  return { protein: round1(total.protein), carbs: round1(total.carbs), fat: round1(total.fat), fibre: round1(total.fibre), calories: round1(total.calories) };
+}
+
+// Typed-totals mode: an entry may be "400 kcal" with no macros at all; its calories still count. Fibre is not collected in this mode.
+export function dayFieldsFromManual(entries: { calories: number | null; protein: number | null; carbs: number | null; fat: number | null }[]): Omit<DayFoodFields, 'fibre'> {
+  if (entries.length === 0) return { protein: null, carbs: null, fat: null, calories: null };
+  const total = entries.reduce<{ protein: number; carbs: number; fat: number; calories: number }>(
+    (acc, e) => ({
+      protein: acc.protein + (e.protein ?? 0),
+      carbs: acc.carbs + (e.carbs ?? 0),
+      fat: acc.fat + (e.fat ?? 0),
+      calories: acc.calories + (e.calories ?? dayCalories(e.protein ?? 0, e.carbs ?? 0, e.fat ?? 0)),
+    }),
+    { protein: 0, carbs: 0, fat: 0, calories: 0 }
+  );
+  return { protein: round1(total.protein), carbs: round1(total.carbs), fat: round1(total.fat), calories: round1(total.calories) };
+}
+
+// Photo diary: the estimates for the day's photos. No photos writes nulls. The calories column is left empty (null) so everything
+// reads them from the estimated macros as before.
+export function dayFieldsFromPhotos(entries: { estimated_protein: number | null; estimated_carbs: number | null; estimated_fat: number | null }[]): Omit<DayFoodFields, 'fibre' | 'calories'> & { calories: null } {
+  if (entries.length === 0) return { protein: null, carbs: null, fat: null, calories: null };
+  const total = entries.reduce<{ protein: number; carbs: number; fat: number }>(
+    (acc, e) => ({ protein: acc.protein + (e.estimated_protein ?? 0), carbs: acc.carbs + (e.estimated_carbs ?? 0), fat: acc.fat + (e.estimated_fat ?? 0) }),
+    { protein: 0, carbs: 0, fat: 0 }
+  );
+  return { protein: round1(total.protein), carbs: round1(total.carbs), fat: round1(total.fat), calories: null };
+}

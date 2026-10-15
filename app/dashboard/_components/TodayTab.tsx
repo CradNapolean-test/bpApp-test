@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { CalendarDays, Camera, CheckSquare, ChevronRight, Flame, Heart } from 'lucide-react';
-import { dayCalories, weeklyTarget } from '@/lib/calculations';
+import { weeklyTarget } from '@/lib/calculations';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
-import { hasLoggedData } from '@/lib/utils/dailyLog';
+import { dayCaloriesOf, hasLoggedData } from '@/lib/utils/dailyLog';
 import { toIsoDate, addDays, formatClassTime, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import type {
@@ -104,7 +104,8 @@ export function TodayTab({
   // which disagrees with the client's local "today" for roughly half of every day outside UTC.
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
-  const todayCalories = todayLog ? dayCalories(todayLog.protein ?? 0, todayLog.carbs ?? 0, todayLog.fat ?? 0) : 0;
+  // Includes Quick Adds with no macros (R11): the ring used to show 0 for a 300 kcal Quick Add.
+  const todayCalories = todayLog ? dayCaloriesOf(todayLog) : 0;
 
   const dayTarget = useMemo(() => {
     const engineProfile = toEngineProfile(profile);

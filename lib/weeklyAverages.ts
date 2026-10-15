@@ -1,6 +1,5 @@
 import { isoWeekKey } from './utils/dates';
-import { hasLoggedData } from './utils/dailyLog';
-import { dayCalories } from './calculations';
+import { dayCaloriesOf, hasFoodLogged, hasLoggedData } from './utils/dailyLog';
 import type { DailyLogRow } from './data/types';
 
 // Weekly averages for the Overview tabs. A week is Monday to Sunday; only days with something logged count,
@@ -44,7 +43,7 @@ function valueOf(log: DailyLogRow, metric: WeeklyMetric): number | null {
     case 'water': return log.water;
     case 'protein': return log.protein;
     case 'calories':
-      return log.protein != null || log.carbs != null || log.fat != null ? dayCalories(log.protein ?? 0, log.carbs ?? 0, log.fat ?? 0) : null;
+      return hasFoodLogged(log) ? dayCaloriesOf(log) : null;
   }
 }
 

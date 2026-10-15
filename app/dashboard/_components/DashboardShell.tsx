@@ -44,7 +44,7 @@ import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/Note
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
-import { dayCalories } from '@/lib/calculations';
+import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
 import { CreditsTab } from './CreditsTab';
@@ -272,8 +272,7 @@ export function DashboardShell({
   const recentFoodDays = Array.from({ length: 7 }, (_, i) => {
     const date = toIsoDate(addDays(new Date(memberToday + 'T00:00:00Z'), i - 6));
     const log = historyLogs.find((l) => l.log_date === date);
-    const logged = !!log && (log.protein != null || log.carbs != null || log.fat != null);
-    return { date, calories: logged ? dayCalories(log!.protein ?? 0, log!.carbs ?? 0, log!.fat ?? 0) : null };
+    return { date, calories: log && hasFoodLogged(log) ? dayCaloriesOf(log) : null };
   });
   const todayBodyweight =
     historyLogs.filter((l) => l.bodyweight != null).at(-1)?.bodyweight ?? profile?.start_weight ?? null;

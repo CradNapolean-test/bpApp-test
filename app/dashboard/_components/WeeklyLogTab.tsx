@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Checkbox } from '@/app/_components/Checkbox';
 import { Check, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
-import { useAction } from '@/app/_components/useAction';
 import { useToast } from '@/app/_components/ToastProvider';
-import { dayCalories, cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
+import { cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
-import { upsertDailyLog } from '@/lib/data/dailyLogs';
+import { getDailyLogs, upsertDailyLog } from '@/lib/data/dailyLogs';
+import { LOCKED_DAY_MESSAGE, canBrowseWeek, canEditDay, changedFields } from '@/lib/dayPatch';
+import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { BODYWEIGHT_KG, bodyweightMessage, isValidBodyweight } from '@/lib/limits';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
@@ -22,7 +24,7 @@ import { addDays, toIsoDate } from '@/lib/utils/dates';
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
 
 const BLANK_DAY: DayForm = {
-  protein: null, carbs: null, fat: null, fibre: null, water: null,
+  protein: null, carbs: null, fat: null, fibre: null, calories: null, water: null,
   bodyweight: null, steps: null, sleep: null,
   gym_session: false, day_type: 'flat',
   hunger: null, energy: null, motivation: null, stress: null,
@@ -32,6 +34,31 @@ const BLANK_DAY: DayForm = {
 function numOrNull(v: string): number | null {
   return v === '' ? null : Number(v);
 }
+
+// The form for each day of a week, from whatever was stored (nothing stored = a blank day).
+function buildDays(weekDates: string[], logs: DailyLogRow[]): Record<string, DayForm> {
+  const map: Record<string, DayForm> = {};
+  for (const date of weekDates) {
+    const existing = logs.find((l) => l.log_date === date);
+    map[date] = existing
+      ? {
+          protein: existing.protein, carbs: existing.carbs, fat: existing.fat, fibre: existing.fibre, calories: existing.calories,
+          water: existing.water, bodyweight: existing.bodyweight, steps: existing.steps, sleep: existing.sleep,
+          gym_session: existing.gym_session, day_type: existing.day_type,
+          hunger: existing.hunger, energy: existing.energy, motivation: existing.motivation, stress: existing.stress,
+          period_started: existing.period_started, notes: existing.notes,
+        }
+      : { ...BLANK_DAY };
+  }
+  return map;
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : 'Could not save that. Please try again.';
+}
+
+// How long to wait after the last keystroke before saving typed text.
+const SAVE_DELAY_MS = 1000;
 
 const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label: string }[] = [
   { key: 'hunger', label: 'Hunger' },
@@ -81,6 +108,7 @@ function WeekLog({
   onOpenFoodDiary,
   attendedSessions,
   disabledMetrics = [],
+  onSaved,
 }: {
   clientId: string;
   weekDates: string[];
@@ -97,25 +125,18 @@ function WeekLog({
   attendedSessions: { date: string; label: string }[];
   // Check-in measures the coach has switched off for this member (sleep, steps, water, hunger, energy, ...).
   disabledMetrics?: string[];
+  // Called after a day was saved, so the dashboard can refresh once when the member leaves this screen instead of after every save.
+  onSaved?: () => void;
 }) {
-  const { run } = useAction();
   const toast = useToast();
-  const [days, setDays] = useState<Record<string, DayForm>>(() => {
-    const map: Record<string, DayForm> = {};
-    for (const date of weekDates) {
-      const existing = initialLogs.find((l) => l.log_date === date);
-      map[date] = existing
-        ? {
-            protein: existing.protein, carbs: existing.carbs, fat: existing.fat, fibre: existing.fibre,
-            water: existing.water, bodyweight: existing.bodyweight, steps: existing.steps, sleep: existing.sleep,
-            gym_session: existing.gym_session, day_type: existing.day_type,
-            hunger: existing.hunger, energy: existing.energy, motivation: existing.motivation, stress: existing.stress,
-            period_started: existing.period_started, notes: existing.notes,
-          }
-        : { ...BLANK_DAY };
-    }
-    return map;
-  });
+  const [initialDays] = useState(() => buildDays(weekDates, initialLogs));
+  const [days, setDays] = useState<Record<string, DayForm>>(initialDays);
+  // The latest form (set the moment the member edits, before React re-renders) and what is stored. A save sends only the difference,
+  // so a field the member did not touch is never overwritten with whatever this screen happened to be holding (R14).
+  const daysRef = useRef<Record<string, DayForm>>(initialDays);
+  const baselineRef = useRef<Record<string, DayForm>>(initialDays);
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [savingDate, setSavingDate] = useState<string | null>(null);
   const [savedDates, setSavedDates] = useState<Record<string, boolean>>({});
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
@@ -141,37 +162,64 @@ function WeekLog({
     return weekTarget.dailyFlat ?? null;
   }
 
-  // `patch` lets slider/button commits save the value they just set -- React state from the
-  // updateDay() call immediately before hasn't landed yet, so days[date] would still be stale.
-  async function saveDay(date: string, patch: Partial<DayForm> = {}) {
+  // Saves what changed on a day since it was loaded or last saved, and nothing else. `from` says what asked: a field name (a slider, a
+  // toggle, the weight box) or 'flush' (leaving the form). Saves run one after another, so a slow one can never land after a newer one.
+  function saveDay(date: string, from: keyof DayForm | 'flush' = 'flush') {
+    clearTimeout(timers.current[date]);
+    delete timers.current[date];
+    saveChain.current = saveChain.current.then(() => persist(date, from));
+  }
+
+  async function persist(date: string, from: keyof DayForm | 'flush') {
+    let patch = changedFields(baselineRef.current[date], daysRef.current[date]);
+    // The database refuses a bodyweight outside 20-400 kg. Checked here too, so a typo in that one box can't stop the rest of the day
+    // (sleep, steps, water) from saving: it is reported when the member just edited it or leaves the form, and left out of the save.
+    if (patch.bodyweight != null && !isValidBodyweight(Number(patch.bodyweight))) {
+      if (from === 'bodyweight' || from === 'flush') toast.error(bodyweightMessage);
+      const { bodyweight: _dropped, ...rest } = patch; // eslint-disable-line @typescript-eslint/no-unused-vars
+      patch = rest;
+    }
+    if (Object.keys(patch).length === 0) return;
     setSavingDate(date);
     try {
-      // Macros are the food diary's to write; sending this form's older copy of them would
-      // overwrite what the diary just recorded.
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { protein, carbs, fat, fibre, ...merged } = { ...days[date], ...patch };
-      // The database refuses a bodyweight outside 20-400 kg. Checked here too, so a typo in that one box
-      // can't stop the rest of the day (sleep, steps, water) from saving: it is reported on an explicit
-      // "Save day" or when the member just edited it, and left out of the save when another tracker commits.
-      const badWeight = merged.bodyweight != null && !isValidBodyweight(merged.bodyweight);
-      if (badWeight && (Object.keys(patch).length === 0 || 'bodyweight' in patch)) {
-        toast.error(bodyweightMessage);
-        return;
-      }
-      const { bodyweight, ...withoutWeight } = merged;
-      const fields = badWeight ? withoutWeight : { ...withoutWeight, bodyweight };
-      await run(() => upsertDailyLog(clientId, date, fields), {
-        onDone: () => setSavedDates((s) => ({ ...s, [date]: true })),
-      });
+      await upsertDailyLog(clientId, date, patch as Partial<DayForm>);
+      baselineRef.current = { ...baselineRef.current, [date]: { ...baselineRef.current[date], ...patch } as DayForm };
+      setSavedDates((s) => ({ ...s, [date]: true }));
+      onSaved?.();
+    } catch (err) {
+      toast.error(errorText(err));
     } finally {
       setSavingDate(null);
     }
   }
 
+  // Typed text (notes, the weight box) is saved a moment after the last keystroke, and straight away when the member leaves the box.
+  function scheduleSave(date: string, from: keyof DayForm) {
+    clearTimeout(timers.current[date]);
+    timers.current[date] = setTimeout(() => saveDay(date, from), SAVE_DELAY_MS);
+  }
+
   function updateDay(date: string, patch: Partial<DayForm>) {
-    setDays((prev) => ({ ...prev, [date]: { ...prev[date], ...patch } }));
+    daysRef.current = { ...daysRef.current, [date]: { ...daysRef.current[date], ...patch } };
+    setDays(daysRef.current);
     setSavedDates((s) => ({ ...s, [date]: false }));
   }
+
+  // Leaving the screen, or putting the phone down, saves anything still waiting on the typing delay.
+  useEffect(() => {
+    const flushAll = () => {
+      for (const date of Object.keys(timers.current)) saveDay(date);
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushAll();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      flushAll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const weekValues = weekDates.map((d) => days[d]);
   // Each average only counts the days that actually have that figure -- a day with food but no steps
@@ -180,8 +228,9 @@ function WeekLog({
     const present = vals.filter((v): v is number => v != null);
     return present.length ? present.reduce((a, v) => a + v, 0) / present.length : null;
   };
-  const foodDays = weekValues.filter((d) => d.protein != null || d.carbs != null || d.fat != null);
-  const avgCalories = avg(foodDays.map((d) => dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0)));
+  // Calories include Quick Adds with no macros (R11), and a day whose food was all deleted is not a food day (M2).
+  const foodDays = weekValues.filter(hasFoodLogged);
+  const avgCalories = avg(foodDays.map(dayCaloriesOf));
   const avgProtein = avg(foodDays.map((d) => d.protein));
   const avgCarbs = avg(foodDays.map((d) => d.carbs));
   const avgFat = avg(foodDays.map((d) => d.fat));
@@ -201,7 +250,10 @@ function WeekLog({
   const stats = isCoachView
     ? weekStats(weekDates.map((date) => ({ date, values: days[date] as Partial<Record<CheckinMetric, number | null>> })), off)
     : [];
-  const calories = dayCalories(d.protein ?? 0, d.carbs ?? 0, d.fat ?? 0);
+  const calories = dayCaloriesOf(d);
+  // Members change the last two weeks; older days are read-only (D20). A coach is read-only here anyway.
+  const dayLocked = !isCoachView && !canEditDay(focusedDate, todayIso);
+  const locked = readOnly || dayLocked;
   const cycleDay = gender === 'Female' ? cycleDayFor(periodStartDates, focusedDate) : null;
   const dayTarget = targetForDayType(d.day_type);
   const attendedToday = attendedSessions.find((a) => a.date === focusedDate) ?? null;
@@ -280,7 +332,7 @@ function WeekLog({
       <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {weekDates.map((date) => {
           const dayData = days[date];
-          const logged = dayData.protein != null || dayData.carbs != null || dayData.fat != null;
+          const logged = hasFoodLogged(dayData);
           const light = dayTrafficLight(dayData);
           const dateObj = new Date(date + 'T00:00:00Z');
           const isFocused = date === focusedDate;
@@ -324,6 +376,8 @@ function WeekLog({
           </span>
         </div>
 
+        {dayLocked && <p className="mt-2 rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{LOCKED_DAY_MESSAGE}</p>}
+
         {!isPhoto && calories > 0 && calories < CALORIE_FLOOR && focusedDate < todayIso && (
           <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
             Below {CALORIE_FLOOR} kcal — worth a coach review.
@@ -343,10 +397,12 @@ function WeekLog({
               key={metric}
               metric={metric}
               value={d[metric]}
-              disabled={readOnly}
+              disabled={locked}
               onChange={(v) => updateDay(focusedDate, { [metric]: v } as Partial<DayForm>)}
               onCommit={(v) => {
-                if (!readOnly) saveDay(focusedDate, { [metric]: v } as Partial<DayForm>);
+                if (locked) return;
+                updateDay(focusedDate, { [metric]: v } as Partial<DayForm>);
+                saveDay(focusedDate, metric);
               }}
             />
           ))}
@@ -419,9 +475,9 @@ function WeekLog({
           </dl>
         ) : (
         <fieldset
-          disabled={readOnly}
+          disabled={locked}
           onBlur={() => {
-            if (!readOnly) saveDay(focusedDate);
+            if (!locked) saveDay(focusedDate);
           }}
           className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
@@ -438,7 +494,10 @@ function WeekLog({
                 aria-label="Bodyweight in kilograms"
                 className="w-28 bg-transparent text-right text-3xl font-black text-black outline-none placeholder:text-zinc-400 dark:text-zinc-50"
                 value={d.bodyweight ?? ''}
-                onChange={(e) => updateDay(focusedDate, { bodyweight: numOrNull(e.target.value) })}
+                onChange={(e) => {
+                  updateDay(focusedDate, { bodyweight: numOrNull(e.target.value) });
+                  scheduleSave(focusedDate, 'bodyweight');
+                }}
               />
               <span className="text-base font-bold text-zinc-500">kg</span>
             </span>
@@ -455,10 +514,10 @@ function WeekLog({
               key={key}
               label={label}
               value={d[key]}
-              disabled={readOnly}
+              disabled={locked}
               onChange={(n) => {
                 updateDay(focusedDate, { [key]: n } as Partial<DayForm>);
-                if (!readOnly) saveDay(focusedDate, { [key]: n } as Partial<DayForm>);
+                if (!locked) saveDay(focusedDate, key);
               }}
             />
           ))}
@@ -472,7 +531,7 @@ function WeekLog({
             onClick={() => {
               const next = !d.gym_session;
               updateDay(focusedDate, { gym_session: next });
-              if (!readOnly) saveDay(focusedDate, { gym_session: next });
+              if (!locked) saveDay(focusedDate, 'gym_session');
             }}
             className={`col-span-2 flex h-16 w-full items-center justify-between gap-3 rounded-full px-6 text-left transition-colors disabled:cursor-default sm:col-span-4 ${
               gymOn ? 'bg-accent text-accent-foreground' : 'border border-black/10 bg-card text-black hover:bg-black/[.03] dark:border-white/10 dark:text-zinc-50 dark:hover:bg-white/[.04]'
@@ -492,7 +551,10 @@ function WeekLog({
           {gender === 'Female' && (
             <label className="flex items-center gap-2 pt-5 text-sm">
               <Checkbox checked={d.period_started}
-                onChange={(e) => updateDay(focusedDate, { period_started: e.target.checked })} />
+                onChange={(e) => {
+                  updateDay(focusedDate, { period_started: e.target.checked });
+                  saveDay(focusedDate, 'period_started');
+                }} />
               Period started
             </label>
           )}
@@ -500,12 +562,15 @@ function WeekLog({
           <div className="col-span-2 space-y-1 sm:col-span-4">
             <label className={labelCls}>Notes</label>
             <textarea className={inputCls} rows={2} maxLength={1000} value={d.notes ?? ''}
-              onChange={(e) => updateDay(focusedDate, { notes: e.target.value })} />
+              onChange={(e) => {
+                updateDay(focusedDate, { notes: e.target.value });
+                scheduleSave(focusedDate, 'notes');
+              }} />
           </div>
         </fieldset>
         )}
 
-        {!readOnly && (savingDate === focusedDate || savedDates[focusedDate]) && (
+        {!locked && (savingDate === focusedDate || savedDates[focusedDate]) && (
           <p className="mt-3 text-xs text-zinc-500">
             {savingDate === focusedDate ? 'Saving…' : 'Saved ✓'}
           </p>
@@ -516,7 +581,7 @@ function WeekLog({
 }
 
 
-type WeekLogProps = Parameters<typeof WeekLog>[0];
+type WeekLogProps = Omit<Parameters<typeof WeekLog>[0], 'onSaved'>;
 
 const weekLabel = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -533,7 +598,11 @@ export function WeeklyLogTab(
     startWeek?: string | null;
   }
 ) {
-  const { historyLogs, canReview = false, startWeek = null, ...rest } = props;
+  // historyLogs is no longer read: an older week is fetched when the member opens it (R14). It used to be built from the 84 days the
+  // page happened to have loaded, so anything older opened as a blank form, and saving it replaced the real day with blanks.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { historyLogs: _unused, canReview = false, startWeek = null, ...rest } = props;
+  const router = useRouter();
   const currentStart = rest.weekDates[0];
   const [offset, setOffset] = useState(() =>
     startWeek ? Math.round((new Date(startWeek).getTime() - new Date(currentStart).getTime()) / (7 * 86400000)) : 0
@@ -543,7 +612,40 @@ export function WeeklyLogTab(
 
   const weekStart = toIsoDate(addDays(new Date(currentStart + 'T00:00:00Z'), offset * 7));
   const dates = Array.from({ length: 7 }, (_, i) => toIsoDate(addDays(new Date(weekStart + 'T00:00:00Z'), i)));
-  const logs = offset === 0 ? rest.initialLogs : historyLogs.filter((l) => dates.includes(l.log_date));
+  const todayIso = todayIsoInTz(rest.profile?.timezone ?? DEFAULT_TIMEZONE);
+  const previousWeekStart = toIsoDate(addDays(new Date(weekStart + 'T00:00:00Z'), -7));
+  // A member can look back 30 days; a coach is not limited. Older weeks are still in the coach's records.
+  const canGoBack = rest.isCoachView || canBrowseWeek(previousWeekStart, todayIso);
+
+  // This week arrives with the page; any other week is read from the database when it is opened.
+  const [fetched, setFetched] = useState<{ weekStart: string; logs: DailyLogRow[] | null } | null>(null);
+  const [tryAgain, setTryAgain] = useState(0);
+  useEffect(() => {
+    if (offset === 0) return;
+    let live = true;
+    getDailyLogs(rest.clientId, dates[0], dates[6])
+      .then((rows) => {
+        if (live) setFetched({ weekStart, logs: rows });
+      })
+      .catch(() => {
+        if (live) setFetched({ weekStart, logs: null });
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offset, weekStart, rest.clientId, tryAgain]);
+  const logs: DailyLogRow[] | null | 'loading' = offset === 0 ? rest.initialLogs : fetched?.weekStart === weekStart ? fetched.logs : 'loading';
+
+  // Saving no longer reloads the whole dashboard after every change; it does so once, when the member leaves this screen, so the other
+  // screens (Home, Insights) catch up.
+  const savedSomething = useRef(false);
+  useEffect(
+    () => () => {
+      if (savedSomething.current) router.refresh();
+    },
+    [router]
+  );
 
   useEffect(() => {
     if (!rest.isCoachView) return;
@@ -571,8 +673,9 @@ export function WeeklyLogTab(
         <button
           type="button"
           aria-label="Previous week"
+          disabled={!canGoBack}
           onClick={() => setOffset(offset - 1)}
-          className="rounded-full p-2 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
+          className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -611,7 +714,26 @@ export function WeeklyLogTab(
         </button>
       )}
 
-      <WeekLog key={weekStart} {...rest} weekDates={dates} initialLogs={logs} />
+      {logs === 'loading' ? (
+        <p className="py-8 text-center text-sm text-zinc-500">Loading this week…</p>
+      ) : logs === null ? (
+        <div className="py-8 text-center text-sm text-zinc-500">
+          <p>We could not load this week.</p>
+          <button type="button" onClick={() => { setFetched(null); setTryAgain((n) => n + 1); }} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-accent-foreground">
+            Try again
+          </button>
+        </div>
+      ) : (
+        <WeekLog
+          key={weekStart}
+          {...rest}
+          weekDates={dates}
+          initialLogs={logs}
+          onSaved={() => {
+            savedSomething.current = true;
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   daily_logs_water_range: 'Water must be between 0 and 15 litres.',
   daily_logs_bodyweight_range: bodyweightMessage,
   daily_logs_notes_length: 'Notes can be 1,000 characters at most.',
+  daily_logs_calories_range: 'Calories must be between 0 and 100,000.',
   client_profiles_name_length: 'Name can be 100 characters at most.',
   client_profiles_phone_length: 'Phone number can be 30 characters at most.',
   client_profiles_address_length: 'Address can be 300 characters at most.',

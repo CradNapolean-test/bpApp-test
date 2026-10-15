@@ -4,6 +4,7 @@ import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
 import { dayCalories } from '@/lib/calculations';
+import { dayFieldsFromManual } from '@/lib/utils/foodTotals';
 import type { ManualMacroEntryRow } from './types';
 
 type MacroFields = { calories: number | null; protein: number | null; carbs: number | null; fat: number | null };
@@ -92,30 +93,13 @@ export async function removeManualMacroEntry(id: string, dailyLogId: string): Pr
   await syncManualMacrosToLog(dailyLogId);
 }
 
-// Same pattern as syncFoodDiaryToLog/syncFoodPhotosToLog: daily_logs has no calories column
-// (it's always derived downstream via dayCalories(protein,carbs,fat)), so only protein/carbs/fat
-// get summed and written here -- each entry's own `calories` field is for the client's
-// convenience display per row only.
+// Same pattern as syncFoodDiaryToLog/syncFoodPhotosToLog: the day's protein, carbs, fat AND calories are summed and written, so an entry
+// of "400 kcal" with no macros still counts (R11, migration 0136); a day with no entries is written as nulls, not zeros (M2).
 export async function syncManualMacrosToLog(dailyLogId: string): Promise<void> {
   const entries = await getManualMacroEntries(dailyLogId);
-  const totals = entries.reduce(
-    (acc, entry) => {
-      acc.protein += entry.protein ?? 0;
-      acc.carbs += entry.carbs ?? 0;
-      acc.fat += entry.fat ?? 0;
-      return acc;
-    },
-    { protein: 0, carbs: 0, fat: 0 }
-  );
+  const fields = dayFieldsFromManual(entries);
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('daily_logs')
-    .update({
-      protein: Math.round(totals.protein * 10) / 10,
-      carbs: Math.round(totals.carbs * 10) / 10,
-      fat: Math.round(totals.fat * 10) / 10,
-    })
-    .eq('id', dailyLogId);
+  const { error } = await supabase.from('daily_logs').update(fields).eq('id', dailyLogId);
   if (error) raise(error);
 }

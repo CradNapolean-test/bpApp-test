@@ -22,13 +22,13 @@ import {
 } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
-import { dayCalories, weeklyTarget } from '@/lib/calculations';
+import { weeklyTarget } from '@/lib/calculations';
 import { getReviews } from '@/lib/data/coachReviews';
 import { clearReviewFlag } from '@/lib/data/onboarding';
 import { trafficLight, TRACKER_THRESHOLDS, type TrafficLight } from '@/lib/utils/accountability';
 import { useAction } from '@/app/_components/useAction';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
-import { hasLoggedData } from '@/lib/utils/dailyLog';
+import { dayCaloriesOf, hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
 import { lastActiveLabel } from '@/lib/healthStatus';
 import { olderUnreviewed, olderUnreviewedLine } from '@/lib/memberReview';
@@ -169,8 +169,9 @@ export function CoachMemberOverview({
   const weekDays = weekLogs.filter(hasLoggedData);
   const stepsAvg = avg(weekDays.map((l) => l.steps));
   const sleepAvg = avg(weekDays.map((l) => l.sleep));
-  const foodDays = weekDays.filter((l) => l.protein != null || l.carbs != null || l.fat != null);
-  const kcalAvg = avg(foodDays.map((l) => dayCalories(l.protein ?? 0, l.carbs ?? 0, l.fat ?? 0)));
+  // Calories include Quick Adds with no macros (R11), and a day whose food was all deleted is not a food day (M2).
+  const foodDays = weekDays.filter(hasFoodLogged);
+  const kcalAvg = avg(foodDays.map(dayCaloriesOf));
   const dayTarget = useMemo(() => {
     const engine = toEngineProfile(profile);
     return engine ? weeklyTarget(engine, programWeek)?.dailyFlat ?? null : null;

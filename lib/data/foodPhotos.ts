@@ -4,6 +4,7 @@ import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { FoodPhotoEntry, FoodPhotoEntryRow } from './types';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
+import { dayFieldsFromPhotos } from '@/lib/utils/foodTotals';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
 
@@ -108,23 +109,8 @@ export async function syncFoodPhotosToLog(dailyLogId: string): Promise<void> {
     .eq('daily_log_id', dailyLogId);
   if (error) raise(error);
 
-  const totals = (data ?? []).reduce(
-    (acc, entry) => {
-      acc.protein += entry.estimated_protein ?? 0;
-      acc.carbs += entry.estimated_carbs ?? 0;
-      acc.fat += entry.estimated_fat ?? 0;
-      return acc;
-    },
-    { protein: 0, carbs: 0, fat: 0 }
-  );
-
-  const { error: updateError } = await supabase
-    .from('daily_logs')
-    .update({
-      protein: Math.round(totals.protein * 10) / 10,
-      carbs: Math.round(totals.carbs * 10) / 10,
-      fat: Math.round(totals.fat * 10) / 10,
-    })
-    .eq('id', dailyLogId);
+  // No photos writes nulls, not zeros (M2); the calories column stays empty so they are read from the estimated macros as before.
+  const fields = dayFieldsFromPhotos(data ?? []);
+  const { error: updateError } = await supabase.from('daily_logs').update(fields).eq('id', dailyLogId);
   if (updateError) raise(updateError);
 }

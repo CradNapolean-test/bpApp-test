@@ -3,7 +3,7 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
-import { entryMacros } from '@/lib/utils/foodTotals';
+import { dayFieldsFromDiary, type DayFoodFields } from '@/lib/utils/foodTotals';
 import type { FoodDiaryEntryRow } from './types';
 
 // Resolves a given date's diary, for the date-nav in FoodTrackingTab (Phase 3: past-day
@@ -142,31 +142,15 @@ export async function copyDiaryEntries(
   return copies.length;
 }
 
-// Writes the food diary's running totals into today's Weekly Log row, so downstream
-// Totals/Averages and floor-checks reflect what was actually logged (PROJECT_SPEC.md #5).
-export async function syncFoodDiaryToLog(dailyLogId: string): Promise<void> {
+// Writes the food diary's running totals into the day's Weekly Log row, so downstream Totals/Averages and floor-checks reflect what was
+// actually logged (PROJECT_SPEC.md #5). The day's calories are stored too, INCLUDING Quick Adds with no macros (R11, migration 0136), and a
+// day with no entries at all is written as nulls, not zeros (M2). Returns what it wrote, so the screen can show it without another trip.
+export async function syncFoodDiaryToLog(dailyLogId: string): Promise<DayFoodFields> {
   const entries = await getFoodDiaryEntries(dailyLogId);
-  const totals = entries.reduce(
-    (acc, entry) => {
-      const m = entryMacros(entry);
-      acc.protein += m.protein;
-      acc.carbs += m.carbs;
-      acc.fat += m.fat;
-      acc.fibre += m.fibre;
-      return acc;
-    },
-    { protein: 0, carbs: 0, fat: 0, fibre: 0 }
-  );
+  const fields = dayFieldsFromDiary(entries);
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('daily_logs')
-    .update({
-      protein: Math.round(totals.protein * 10) / 10,
-      carbs: Math.round(totals.carbs * 10) / 10,
-      fat: Math.round(totals.fat * 10) / 10,
-      fibre: Math.round(totals.fibre * 10) / 10,
-    })
-    .eq('id', dailyLogId);
+  const { error } = await supabase.from('daily_logs').update(fields).eq('id', dailyLogId);
   if (error) raise(error);
+  return fields;
 }
