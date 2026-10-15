@@ -92,4 +92,4 @@ export function exerciseHistory(logs: SetLike[], timeZone: string, priorBest = 0
     });
 }
 
-export const formatKg = (kg: number): string => (kg >= 10_000 ? `${(kg / 1000).toFixed(1)}t` : `${Math.round(kg).toLocaleString('en-NZ')}kg`);
+export const formatKg = (kg: number): string => (kg >= 10_000 ? `${(kg / 1000).toFixed(1)}t` : `${Math.round(kg).toLocaleString('en-GB')}kg`);

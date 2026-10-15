@@ -1,6 +1,9 @@
 // education_lessons.link_url is untyped text -- coaches can paste any URL, most commonly a
 // YouTube or Vimeo link. Returns an embeddable iframe src when recognized, null otherwise (the
 // caller falls back to a plain "Open link" anchor for non-video URLs like PDFs/articles).
+// YouTube plays from youtube-nocookie.com, which does not set tracking cookies until the member presses play (ED1).
+const YOUTUBE_EMBED = 'https://www.youtube-nocookie.com/embed/';
+
 export function parseVideoEmbedUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -8,17 +11,20 @@ export function parseVideoEmbedUrl(url: string): string | null {
 
     if (host === 'youtu.be') {
       const id = parsed.pathname.slice(1);
-      return id ? `https://www.youtube.com/embed/${id}` : null;
+      return id ? `${YOUTUBE_EMBED}${id}` : null;
     }
     if (host === 'youtube.com' || host === 'm.youtube.com') {
       if (parsed.pathname === '/watch') {
         const id = parsed.searchParams.get('v');
-        return id ? `https://www.youtube.com/embed/${id}` : null;
+        return id ? `${YOUTUBE_EMBED}${id}` : null;
       }
-      if (parsed.pathname.startsWith('/embed/')) return url;
+      if (parsed.pathname.startsWith('/embed/')) {
+        const id = parsed.pathname.split('/')[2];
+        return id ? `${YOUTUBE_EMBED}${id}` : null;
+      }
       if (parsed.pathname.startsWith('/shorts/')) {
         const id = parsed.pathname.split('/')[2];
-        return id ? `https://www.youtube.com/embed/${id}` : null;
+        return id ? `${YOUTUBE_EMBED}${id}` : null;
       }
       return null;
     }

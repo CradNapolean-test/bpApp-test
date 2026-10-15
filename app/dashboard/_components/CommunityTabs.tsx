@@ -118,6 +118,7 @@ export function FeedbackTab({ readOnly }: { readOnly: boolean }) {
       <div>
         <p className="text-sm font-extrabold text-black dark:text-zinc-50">How are we doing?</p>
         <p className="text-xs text-zinc-500">Rate your experience at Ballistic Performance and tell us what we can do better.</p>
+        <p className="mt-1 text-xs text-zinc-500">Your name is sent with your feedback, so the gym knows who it is from.</p>
       </div>
       <div className="flex gap-1.5" role="radiogroup" aria-label="Rating">
         {[1, 2, 3, 4, 5].map((n) => (

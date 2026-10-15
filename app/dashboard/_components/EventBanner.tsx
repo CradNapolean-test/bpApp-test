@@ -25,7 +25,7 @@ export function EventBanner({ event, onOpen }: { event: EventWithSignup; onOpen:
   if (hidden) return null;
 
   const start = new Date(event.starts_at);
-  const when = start.toLocaleString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  const when = start.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent-soft p-3.5">
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">

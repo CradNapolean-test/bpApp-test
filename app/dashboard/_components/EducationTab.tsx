@@ -11,6 +11,7 @@ import { assignCourse, getEducationForClient, markLessonComplete, markLessonInco
 import { courseCompletionPercent, isLessonUnlocked } from '@/lib/utils/educationProgress';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { parseVideoEmbedUrl } from '@/lib/utils/videoEmbed';
+import { isHttpsLink } from '@/lib/imageHosts';
 import type { ClientProfileRow, EducationCourseAssignmentWithDetails, EducationLessonRow } from '@/lib/data/types';
 
 function LessonItem({
@@ -85,7 +86,8 @@ function LessonItem({
               />
             </div>
           ) : (
-            lesson.link_url && (
+            lesson.link_url &&
+            isHttpsLink(lesson.link_url) && (
               <a href={lesson.link_url} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-semibold text-accent hover:underline">
                 Open link ↗
               </a>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { detectDevice } from '@/lib/utils/device';
 
 export interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -22,8 +23,10 @@ export function useInstall() {
       setStandalone(
         window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true
       );
-      setIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
-      setMobile(/iphone|ipad|ipod|android/i.test(navigator.userAgent));
+      // iPadOS 13+ reports a Macintosh user agent; a touch screen tells it apart from a Mac (UI2).
+      const device = detectDevice(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+      setIos(device.ios);
+      setMobile(device.mobile);
     });
     const onPrompt = (e: Event) => {
       e.preventDefault();

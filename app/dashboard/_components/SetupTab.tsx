@@ -206,7 +206,7 @@ export function SetupTab({
               />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Gender</label>
+              <label className={labelCls}>Sex (used for calorie calculations)</label>
               <select
                 className={inputCls}
                 value={form.gender ?? 'Female'}

@@ -24,8 +24,13 @@ import { useAction } from '@/app/_components/useAction';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu, type DropdownMenuItem } from '@/app/_components/DropdownMenu';
 import { DefaultMuscleGroupIcon, MUSCLE_GROUP_ICONS } from './muscleGroups';
+import { allowedImageHosts, isAllowedImage } from '@/lib/imageHosts';
 import type { BlockType, ClientExerciseMaxRow, ExerciseLibraryRow, PrescriptionType } from '@/lib/data/types';
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
+
+// An exercise's picture is a link a coach pasted. It loads only from the gym's own storage and the hosts named in NEXT_PUBLIC_IMAGE_HOSTS
+// (comma separated), never sends a referrer, and otherwise the muscle-group icon shows instead (R23).
+const IMAGE_HOSTS = allowedImageHosts(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_IMAGE_HOSTS);
 import {
   BLOCK_FORMATS,
   SECTIONS,
@@ -593,9 +598,9 @@ function BuilderRow<T extends EditableExercise>({
           {index + 1}
         </span>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/5 dark:bg-white/10">
-          {libraryEntry?.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
-            <img src={libraryEntry.image_url} alt="" className="h-full w-full object-cover" />
+          {isAllowedImage(libraryEntry?.image_url, IMAGE_HOSTS) ? (
+            // eslint-disable-next-line @next/next/no-img-element -- coach-entered URLs from an allow-listed host; no remote-image config configured
+            <img src={libraryEntry?.image_url ?? undefined} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" />
           ) : (
             <Icon className="h-4 w-4 text-zinc-500" />
           )}
@@ -677,9 +682,9 @@ function MemberExerciseRow<T extends EditableExercise>({
           )}
         </div>
         <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-white/10">
-          {libraryEntry?.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- coach-entered arbitrary URLs, no remote-image config configured
-            <img src={libraryEntry.image_url} alt="" className="h-full w-full object-cover" />
+          {isAllowedImage(libraryEntry?.image_url, IMAGE_HOSTS) ? (
+            // eslint-disable-next-line @next/next/no-img-element -- coach-entered URLs from an allow-listed host; no remote-image config configured
+            <img src={libraryEntry?.image_url ?? undefined} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" />
           ) : (
             <Icon className="h-5 w-5 text-zinc-500" />
           )}
