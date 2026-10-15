@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab style comparison</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0b0b;color:#f4f4f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px}
+  h2{font-size:15px;font-weight:600;margin:32px 0 2px;color:#2abfbf;text-transform:uppercase;letter-spacing:.06em}
+  .sub{color:#8a8a8f;font-size:14px;margin:0 0 16px;max-width:700px;line-height:1.5}
+  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:22px;max-width:1000px;margin-top:12px}
+  .cap{margin:0 0 3px;font-size:14px;font-weight:600}
+  .use{margin:0 0 8px;font-size:12px;color:#8a8a8f;line-height:1.4}
+  .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#2abfbf;color:#06302f;margin-left:6px;vertical-align:middle}
+  .m{color:#8a8a8f}.teal{color:#2abfbf}
+
+  .ph{background:#111;border:1px solid #232323;border-radius:22px;height:340px;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
+  .body{flex:1;padding:14px 12px;overflow:hidden}
+  .t1{font-size:17px;font-weight:600;margin:0 0 10px}
+  .card{background:#1e1e1e;border-radius:12px;padding:10px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+  .card small{display:block;color:#8a8a8f;font-size:11px}
+  .bar{display:flex;border-top:1px solid #232323;background:#0e0e0e;padding:8px 4px 10px}
+  .bar span{flex:1;text-align:center;font-size:10px;color:#8a8a8f}
+  .bar span.on{color:#2abfbf;font-weight:600}
+
+  .pill{display:inline-block;padding:6px 12px;border-radius:999px;font-size:12px;border:1px solid #333;color:#d4d4d8;margin:0 6px 6px 0}
+  .pill.on{background:#2abfbf;color:#06302f;border-color:#2abfbf;font-weight:600}
+  .tabs{display:flex;gap:18px;border-bottom:1px solid #2a2a2a;font-size:13px;margin-bottom:6px;overflow:hidden;white-space:nowrap}
+  .tabs span{padding-bottom:8px;color:#8a8a8f}
+  .tabs span.on{color:#f4f4f5;border-bottom:2px solid #2abfbf;font-weight:600}
+  .seg{display:flex;background:#1e1e1e;border-radius:10px;padding:3px;font-size:12px}
+  .seg span{flex:1;text-align:center;padding:7px 0;color:#8a8a8f;border-radius:8px;white-space:nowrap}
+  .seg span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  .warn{font-size:11px;color:#d9a441;margin:6px 0 0}
+
+  .sum{width:100%;max-width:1000px;border-collapse:collapse;font-size:13px;margin-top:12px}
+  .sum th,.sum td{text-align:left;padding:9px 10px;border-bottom:1px solid #232323;vertical-align:top;line-height:1.45}
+  .sum th{color:#8a8a8f;font-weight:600;font-size:12px}
+  .sum td:first-child{color:#c9c9ce;font-weight:600;white-space:nowrap}
+  .notes{max-width:720px;margin-top:28px;font-size:14px;line-height:1.6;color:#c9c9ce}
+  .notes li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<h1>Tab style comparison</h1>
+<p class="sub">Saved 8 Oct 2026. The same three screens shown in three styles: <b>pills</b>, <b>underline tabs</b> and <b>segmented control</b>. The bottom bar stays as it is. Static mockups, not wired into any page. Nothing in the app has changed.</p>
+
+<table class="sum">
+  <tr><th></th><th>Pills <span class="tag">current</span></th><th>Underline tabs</th><th>Segmented control</th></tr>
+  <tr><td>Looks like</td><td>Rounded buttons, the selected one filled</td><td>Text in a row with a line under the selected one</td><td>One rounded bar, the selected part filled</td></tr>
+  <tr><td>Best for</td><td>Filters, short labels</td><td>Switching sections, 3–7 items</td><td>Exactly 2–3 views of the same thing</td></tr>
+  <tr><td>Many items</td><td>Wraps to a second row</td><td>Scrolls sideways</td><td>Doesn't fit past 3</td></tr>
+  <tr><td>Main weakness</td><td>Looks the same as a filter, so it's unclear what it does</td><td>Items off-screen can be missed</td><td>Short labels only</td></tr>
+</table>
+
+<h2>Book: 3 views</h2>
+<p class="sub">Classes, My bookings, Credits.</p>
+<div class="g">
+  <div class="c"><p class="cap">Pills <span class="tag">current</span></p><p class="use">&nbsp;</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <span class="pill on">Classes</span><span class="pill">My bookings</span><span class="pill">Credits</span>
+      <div class="card"><span>HIIT<small>Sat 9:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Strength<small>Sat 10:30 · Full</small></span><span class="m">Waitlist</span></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div></div>
+  <div class="c"><p class="cap">Underline tabs</p><p class="use">&nbsp;</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <div class="tabs"><span class="on">Classes</span><span>My bookings</span><span>Credits</span></div>
+      <div class="card"><span>HIIT<small>Sat 9:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Strength<small>Sat 10:30 · Full</small></span><span class="m">Waitlist</span></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div></div>
+  <div class="c"><p class="cap">Segmented control</p><p class="use">&nbsp;</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <div class="seg"><span class="on">Classes</span><span>My bookings</span><span>Credits</span></div>
+      <div class="card"><span>HIIT<small>Sat 9:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Strength<small>Sat 10:30 · Full</small></span><span class="m">Waitlist</span></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div></div>
+</div>
+
+<h2>Coach: 6 sections</h2>
+<p class="sub">Message, Nutrition, Training, Check-in, Progress, Learn. This is the hard case.</p>
+<div class="g">
+  <div class="c"><p class="cap">Pills <span class="tag">current</span></p><p class="use">Wraps onto two rows and pushes content down.</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <span class="pill on">Message</span><span class="pill">Nutrition</span><span class="pill">Training</span><span class="pill">Check-in</span><span class="pill">Progress</span><span class="pill">Learn</span>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div></div>
+  <div class="c"><p class="cap">Underline tabs</p><p class="use">One row; swipe to reach the rest.</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <div class="tabs"><span class="on">Message</span><span>Nutrition</span><span>Training</span><span>Check-in</span><span>Progress</span><span>Learn</span></div>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div></div>
+  <div class="c"><p class="cap">Segmented control</p><p class="use">Six don't fit; only works if the sections are regrouped into three.</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <div class="seg"><span class="on">Message</span><span>Plan</span><span>Results</span></div>
+      <p class="warn">Would need Plan = Nutrition + Training, Results = Check-in + Progress + Learn, with a second menu inside each.</p>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div></div>
+</div>
+
+<h2>Profile: 3 sections</h2>
+<p class="sub">Details, Goals, Settings.</p>
+<div class="g">
+  <div class="c"><p class="cap">Pills <span class="tag">current</span></p><p class="use">&nbsp;</p>
+    <div class="ph"><div class="body"><p class="t1">Profile</p>
+      <span class="pill on">Details</span><span class="pill">Goals</span><span class="pill">Settings</span>
+      <div class="card"><span>Sam Taylor<small>sam@email.com</small></span><span class="m">Edit</span></div>
+      <div class="card"><span>Photo</span><span class="m">Change</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span>Coach</span><span class="on">Profile</span></div></div></div>
+  <div class="c"><p class="cap">Underline tabs</p><p class="use">&nbsp;</p>
+    <div class="ph"><div class="body"><p class="t1">Profile</p>
+      <div class="tabs"><span class="on">Details</span><span>Goals</span><span>Settings</span></div>
+      <div class="card"><span>Sam Taylor<small>sam@email.com</small></span><span class="m">Edit</span></div>
+      <div class="card"><span>Photo</span><span class="m">Change</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span>Coach</span><span class="on">Profile</span></div></div></div>
+  <div class="c"><p class="cap">Segmented control</p><p class="use">&nbsp;</p>
+    <div class="ph"><div class="body"><p class="t1">Profile</p>
+      <div class="seg"><span class="on">Details</span><span>Goals</span><span>Settings</span></div>
+      <div class="card"><span>Sam Taylor<small>sam@email.com</small></span><span class="m">Edit</span></div>
+      <div class="card"><span>Photo</span><span class="m">Change</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span>Coach</span><span class="on">Profile</span></div></div></div>
+</div>
+
+<ul class="notes">
+  <li>Segmented control reads best with two or three short labels. It only works for Coach if the six sections are regrouped.</li>
+  <li>Underline tabs handle any count from three upward and scale as sections are added.</li>
+  <li>Pills work, but they are also used for filters and days, so they look the same as things that do something different.</li>
+  <li>Not decided yet. Nothing in the app has changed.</li>
+</ul>
+</body>
+</html>

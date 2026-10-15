@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Menu options inside each screen</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0b0b;color:#f4f4f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px}
+  h2{font-size:15px;font-weight:600;margin:36px 0 4px;color:#2abfbf;text-transform:uppercase;letter-spacing:.06em}
+  .sub{color:#8a8a8f;font-size:14px;margin:0 0 16px;max-width:700px;line-height:1.5}
+  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:22px;max-width:1100px;margin-top:14px}
+  .cap{margin:0 0 3px;font-size:14px;font-weight:600}
+  .use{margin:0 0 3px;font-size:12px;color:#8a8a8f;line-height:1.4}
+  .pc{margin:0 0 8px;font-size:11px;color:#6d6d72;line-height:1.4}
+  .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#2abfbf;color:#06302f;margin-left:6px;vertical-align:middle}
+  .m{color:#8a8a8f}.teal{color:#2abfbf}
+
+  .ph{position:relative;background:#111;border:1px solid #232323;border-radius:22px;height:430px;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
+  .body{flex:1;padding:14px 12px;overflow:hidden}
+  .t1{font-size:17px;font-weight:600;margin:0 0 10px}
+  .card{background:#1e1e1e;border-radius:12px;padding:10px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+  .card small{display:block;color:#8a8a8f;font-size:11px}
+  .card b{font-weight:600}
+  .bar{display:flex;border-top:1px solid #232323;background:#0e0e0e;padding:8px 4px 10px}
+  .bar span{flex:1;text-align:center;font-size:10px;color:#8a8a8f}
+  .bar span.on{color:#2abfbf;font-weight:600}
+
+  .pill{display:inline-block;padding:6px 12px;border-radius:999px;font-size:12px;border:1px solid #333;color:#d4d4d8;margin:0 6px 6px 0}
+  .pill.on{background:#2abfbf;color:#06302f;border-color:#2abfbf;font-weight:600}
+  .tabs{display:flex;gap:18px;border-bottom:1px solid #2a2a2a;font-size:13px;margin-bottom:6px;overflow:hidden;white-space:nowrap}
+  .tabs span{padding-bottom:8px;color:#8a8a8f}
+  .tabs span.on{color:#f4f4f5;border-bottom:2px solid #2abfbf;font-weight:600}
+  .seg{display:flex;background:#1e1e1e;border-radius:10px;padding:3px;font-size:12px}
+  .seg span{flex:1;text-align:center;padding:7px 0;color:#8a8a8f;border-radius:8px}
+  .seg span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  .tile{background:#1e1e1e;border-radius:14px;padding:12px 10px;font-size:12px;font-weight:600;min-height:78px;display:flex;flex-direction:column;justify-content:space-between}
+  .tile small{font-weight:400;color:#8a8a8f;font-size:10px}
+  .tile .ic{font-size:20px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .acc{background:#1e1e1e;border-radius:12px;margin-top:8px;overflow:hidden}
+  .acc .h{display:flex;justify-content:space-between;padding:11px 12px;font-weight:600}
+  .acc .d{padding:0 12px 12px;color:#a1a1a6;font-size:12px;line-height:1.6}
+  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#181818;border-top:1px solid #2a2a2a;border-radius:18px 18px 0 0;padding:8px 12px 14px}
+  .sheet .i{padding:10px;border-radius:10px;color:#c9c9ce}
+  .sheet .i.on{background:#262626;color:#2abfbf;font-weight:600}
+  .grab{width:36px;height:4px;border-radius:2px;background:#444;margin:0 auto 8px}
+  .notes{max-width:720px;margin-top:36px;font-size:14px;line-height:1.6;color:#c9c9ce}
+  .notes li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<h1>Menu options inside each screen</h1>
+<p class="sub">Saved 8 Oct 2026. The bottom bar stays as it is. This page is about the second level: how someone moves between the parts of one main screen. Today everything is a pill, whether it switches a view, picks a day or filters a list. The mockups below show the alternatives on the real main screens (Coach, Book and Profile). Static mockups, not wired into any page. Nothing in the app has changed.</p>
+
+<h2>A. Switching between sections of a screen</h2>
+<p class="sub">Shown on <b>Coach</b>, which has six sections (Message, Nutrition, Training, Check-in, Progress, Learn). This is where pills struggle most.</p>
+
+<div class="g">
+
+  <div class="c">
+    <p class="cap">1. Pills <span class="tag">current</span></p>
+    <p class="use">Works for a few short labels</p>
+    <p class="pc">+ Friendly, easy to tap &nbsp; − Six labels wrap to two rows or scroll off-screen; looks the same as filters</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <span class="pill on">Message</span><span class="pill">Nutrition</span><span class="pill">Training</span><span class="pill">Check-in</span><span class="pill">Progress</span><span class="pill">Learn</span>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">2. Underline tabs (scrolling)</p>
+    <p class="use">Several sections on one screen; swipe sideways to move</p>
+    <p class="pc">+ Takes one row, scales to 5–7, familiar &nbsp; − Labels off-screen can be missed unless the next one peeks in</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <div class="tabs"><span class="on">Message</span><span>Nutrition</span><span>Training</span><span>Check-in</span><span>Progress</span></div>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">3. Segmented control</p>
+    <p class="use">Exactly two or three views of the same thing</p>
+    <p class="pc">+ Clearly "pick one", looks like a switch &nbsp; − Doesn't fit four or more</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <div class="seg"><span class="on">Classes</span><span>My bookings</span><span>Credits</span></div>
+      <div class="card"><span>HIIT<small>Sat 9:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Strength<small>Sat 10:30 · Full</small></span><span class="m">Waitlist</span></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">4. Tile menu (screen is a list of areas)</p>
+    <p class="use">The Coach screen opens to big tiles; tap one to go in, back to return</p>
+    <p class="pc">+ No tab row at all, room for a live detail on each tile (e.g. "1 new message") &nbsp; − One more tap to switch between areas</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <div class="grid2">
+        <div class="tile"><span class="ic">💬</span>Message<small>1 new</small></div>
+        <div class="tile"><span class="ic">🍎</span>Nutrition<small>1,420 kcal left</small></div>
+        <div class="tile"><span class="ic">🏋</span>Training<small>Upper Body A</small></div>
+        <div class="tile"><span class="ic">✓</span>Check-in<small>Due Friday</small></div>
+        <div class="tile"><span class="ic">📈</span>Progress<small>-1.2 kg</small></div>
+        <div class="tile"><span class="ic">📖</span>Learn<small>3 new</small></div></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">5. Title dropdown</p>
+    <p class="use">Many sections, only one on screen at a time</p>
+    <p class="pc">+ Clean screen, names the current section as the title &nbsp; − Options are hidden until tapped</p>
+    <div class="ph"><div class="body"><p class="t1">Coach <span class="teal" style="font-size:13px">▾</span></p>
+      <div style="background:#1e1e1e;border:1px solid #333;border-radius:12px;padding:4px;font-size:13px">
+        <div style="padding:8px 10px;border-radius:8px;background:#262626" class="teal"><b>Message</b></div>
+        <div style="padding:8px 10px" class="m">Nutrition</div><div style="padding:8px 10px" class="m">Training</div><div style="padding:8px 10px" class="m">Check-in</div><div style="padding:8px 10px" class="m">Progress</div><div style="padding:8px 10px" class="m">Learn</div></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">6. Icon strip with labels</p>
+    <p class="use">Sections that have an obvious icon (food, training, check-in)</p>
+    <p class="pc">+ Quick to recognise, compact &nbsp; − Needs good icons; icon-only is unclear</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <div style="display:flex;gap:6px;justify-content:space-between;margin-bottom:6px">
+        <div style="flex:1;text-align:center;padding:8px 0;border-radius:12px;background:#2abfbf;color:#06302f;font-size:10px;font-weight:600"><div style="font-size:17px">💬</div>Message</div>
+        <div style="flex:1;text-align:center;padding:8px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m"><div style="font-size:17px">🍎</div>Food</div>
+        <div style="flex:1;text-align:center;padding:8px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m"><div style="font-size:17px">🏋</div>Training</div>
+        <div style="flex:1;text-align:center;padding:8px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m"><div style="font-size:17px">✓</div>Check-in</div></div>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">7. Everything on one scrolling page</p>
+    <p class="use">Short sections the member should see together (like a profile)</p>
+    <p class="pc">+ No menu to learn, nothing hidden &nbsp; − Gets long; hard to jump to a section unless it has a jump bar</p>
+    <div class="ph"><div class="body"><p class="t1">Profile</p>
+      <p style="margin:4px 0 0;font-size:11px;color:#8a8a8f;letter-spacing:.06em">DETAILS</p>
+      <div class="card"><span>Sam Taylor<small>sam@email.com</small></span><span class="m">Edit</span></div>
+      <p style="margin:12px 0 0;font-size:11px;color:#8a8a8f;letter-spacing:.06em">GOALS</p>
+      <div class="card"><span>Lose 6 kg<small>By 20 Dec</small></span><span class="m">Edit</span></div>
+      <p style="margin:12px 0 0;font-size:11px;color:#8a8a8f;letter-spacing:.06em">SETTINGS</p>
+      <div class="card"><span>Notifications</span><span class="m">On</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span>Coach</span><span class="on">Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">8. Settings-style list</p>
+    <p class="use">Many sections, each opens its own page (Profile, Settings)</p>
+    <p class="pc">+ Unlimited items, familiar from phone settings, room for a hint under each &nbsp; − Always a full-page jump</p>
+    <div class="ph"><div class="body"><p class="t1">Profile</p>
+      <div class="card"><span>Personal details<small>Name, email, photo</small></span><span class="m">›</span></div>
+      <div class="card"><span>Goals &amp; measurements<small>Weight, targets</small></span><span class="m">›</span></div>
+      <div class="card"><span>Credits &amp; membership<small>6 credits</small></span><span class="m">›</span></div>
+      <div class="card"><span>Notifications</span><span class="m">›</span></div>
+      <div class="card"><span>Help &amp; feedback</span><span class="m">›</span></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span>Coach</span><span class="on">Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">9. Expand and collapse sections (accordion)</p>
+    <p class="use">Text-heavy sections (Learn, FAQs, plan details)</p>
+    <p class="pc">+ Overview and detail on one page &nbsp; − Long pages if many are open; not for switching views</p>
+    <div class="ph"><div class="body"><p class="t1">Learn</p>
+      <div class="acc"><div class="h"><span>Eating on a deficit</span><span class="teal">▴</span></div><div class="d">Protein first, then fill with vegetables. Aim for around 0.5 kg a week.</div></div>
+      <div class="acc"><div class="h"><span>How to log food</span><span class="m">▾</span></div></div>
+      <div class="acc"><div class="h"><span>Sleep and recovery</span><span class="m">▾</span></div></div>
+      <div class="acc"><div class="h"><span>Reading your progress</span><span class="m">▾</span></div></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">10. "More" bottom sheet for the section list</p>
+    <p class="use">Top few sections visible, the rest in a pull-up list</p>
+    <p class="pc">+ Keeps the common ones one tap away &nbsp; − Items in the sheet are used less</p>
+    <div class="ph"><div class="body"><p class="t1">Coach</p>
+      <div class="tabs"><span class="on">Message</span><span>Nutrition</span><span>Training</span><span>More ▾</span></div>
+      <div class="card"><span>Coach Ben<small>"Great week, keep it up"</small></span><span class="m">2m</span></div></div>
+      <div class="scrim"></div>
+      <div class="sheet"><div class="grab"></div><div class="i">Check-in</div><div class="i">Progress &amp; results</div><div class="i">Learn</div></div></div>
+  </div>
+
+</div>
+
+<h2>B. Choosing a day, week or date</h2>
+<p class="sub">Shown on <b>Book</b>, <b>Home</b> and a week view.</p>
+
+<div class="g">
+
+  <div class="c">
+    <p class="cap">11. Pills for days <span class="tag">current</span></p>
+    <p class="use">Picking one day out of the week</p>
+    <p class="pc">+ Simple &nbsp; − Looks identical to the section pills; no sense of today or a full date</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <span class="pill">Mon</span><span class="pill">Tue</span><span class="pill on">Wed</span><span class="pill">Thu</span><span class="pill">Fri</span><span class="pill">Sat</span>
+      <div class="card"><span>HIIT<small>6:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Strength<small>17:30 · 5 spots</small></span><b class="teal">Book</b></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">12. Date strip</p>
+    <p class="use">Booking and logging by day</p>
+    <p class="pc">+ Shows day, date and today at a glance; dots can show "something booked" &nbsp; − Takes a little more height</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <div style="display:flex;gap:6px;margin-bottom:4px">
+        <div style="flex:1;text-align:center;padding:7px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m">Mon<div style="font-size:14px;color:#f4f4f5;font-weight:600">5</div></div>
+        <div style="flex:1;text-align:center;padding:7px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m">Tue<div style="font-size:14px;color:#f4f4f5;font-weight:600">6</div></div>
+        <div style="flex:1;text-align:center;padding:7px 0;border-radius:12px;background:#2abfbf;color:#06302f;font-size:10px;font-weight:600">Wed<div style="font-size:14px;font-weight:700">7</div></div>
+        <div style="flex:1;text-align:center;padding:7px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m">Thu<div style="font-size:14px;color:#f4f4f5;font-weight:600">8</div><div style="width:4px;height:4px;border-radius:50%;background:#2abfbf;margin:1px auto 0"></div></div>
+        <div style="flex:1;text-align:center;padding:7px 0;border-radius:12px;background:#1e1e1e;font-size:10px" class="m">Fri<div style="font-size:14px;color:#f4f4f5;font-weight:600">9</div></div></div>
+      <div class="card"><span>HIIT<small>6:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Strength<small>17:30 · 5 spots</small></span><b class="teal">Book</b></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">13. Week stepper</p>
+    <p class="use">Moving between weeks of a block or a log</p>
+    <p class="pc">+ Shows position ("Week 2 of 3") and a "current week" cue &nbsp; − Slower for jumping far</p>
+    <div class="ph"><div class="body"><p class="t1">Check-in</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#1e1e1e;border-radius:12px;padding:8px 10px">
+        <span style="width:28px;height:28px;border-radius:50%;background:#262626;display:flex;align-items:center;justify-content:center">‹</span>
+        <span style="text-align:center">Week 2 of 3<small style="display:block;color:#2abfbf;font-size:11px">Current week</small></span>
+        <span style="width:28px;height:28px;border-radius:50%;background:#262626;display:flex;align-items:center;justify-content:center">›</span></div>
+      <div class="card"><span>Weight<small>Mon</small></span><b>82.4 kg</b></div>
+      <div class="card"><span>Steps<small>Avg</small></span><b>8,900</b></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">14. Month calendar</p>
+    <p class="use">Looking further ahead, or seeing the whole month</p>
+    <p class="pc">+ Best overview &nbsp; − Takes a lot of space; slow for "what's today"</p>
+    <div class="ph"><div class="body"><p class="t1">Book <span class="m" style="font-size:12px;font-weight:400">October ▾</span></p>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:11px;color:#8a8a8f">
+        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+        <span style="padding:6px 0">28</span><span style="padding:6px 0">29</span><span style="padding:6px 0">30</span><span style="padding:6px 0;color:#f4f4f5">1</span><span style="padding:6px 0;color:#f4f4f5">2</span><span style="padding:6px 0;color:#f4f4f5">3</span><span style="padding:6px 0;color:#f4f4f5">4</span>
+        <span style="padding:6px 0;color:#f4f4f5">5</span><span style="padding:6px 0;color:#f4f4f5">6</span><span style="padding:6px 0;color:#f4f4f5">7</span><span style="padding:6px 0;background:#2abfbf;color:#06302f;border-radius:50%;font-weight:700">8</span><span style="padding:6px 0;color:#f4f4f5">9</span><span style="padding:6px 0;color:#f4f4f5">10</span><span style="padding:6px 0;color:#f4f4f5">11</span>
+        <span style="padding:6px 0;color:#f4f4f5">12</span><span style="padding:6px 0;color:#f4f4f5">13</span><span style="padding:6px 0;color:#f4f4f5">14</span><span style="padding:6px 0;color:#f4f4f5">15</span><span style="padding:6px 0;color:#f4f4f5">16</span><span style="padding:6px 0;color:#2abfbf">17</span><span style="padding:6px 0;color:#f4f4f5">18</span></div>
+      <div class="card"><span>Thu 8 Oct<small>Nothing booked</small></span><b class="teal">Book</b></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div>
+  </div>
+
+</div>
+
+<h2>C. Filtering a list</h2>
+<p class="sub">Shown on <b>Nutrition</b> and <b>Book</b>. Filters narrow a list; they don't take you to a different screen.</p>
+
+<div class="g">
+
+  <div class="c">
+    <p class="cap">15. Filter chips <span class="tag">pills today</span></p>
+    <p class="use">A handful of categories (meal type, activity type)</p>
+    <p class="pc">+ Tap to narrow, multiple can be on &nbsp; − Should look different from section tabs so they don't get confused</p>
+    <div class="ph"><div class="body"><p class="t1">Food</p>
+      <div style="display:flex;gap:6px;overflow:hidden"><span class="pill on">All</span><span class="pill">Breakfast</span><span class="pill">Lunch</span><span class="pill">Dinner</span></div>
+      <div class="card"><span>Oats &amp; berries<small>Breakfast</small></span><b class="teal">320</b></div>
+      <div class="card"><span>Chicken wrap<small>Lunch</small></span><b class="teal">540</b></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">16. Filter button + sheet</p>
+    <p class="use">Several filters at once (type, time, trainer)</p>
+    <p class="pc">+ Compact, unlimited filters &nbsp; − Hidden until tapped; need a count badge so people know it's on</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <div style="display:flex;gap:8px"><div style="flex:1;background:#1e1e1e;border-radius:10px;padding:8px 10px" class="m">Search classes</div><div style="background:#1e1e1e;border-radius:10px;padding:8px 12px" class="teal">⚙ <span style="background:#2abfbf;color:#06302f;border-radius:99px;font-size:10px;padding:0 5px;font-weight:700">2</span></div></div>
+      <div class="card"><span>HIIT<small>Sat 9:00</small></span><b class="teal">Book</b></div></div>
+      <div class="scrim"></div>
+      <div class="sheet"><div class="grab"></div><p style="margin:0 0 8px;font-weight:600">Filters</p>
+        <p class="m" style="margin:0 0 4px;font-size:11px">CLASS TYPE</p><span class="pill on">HIIT</span><span class="pill">Strength</span><span class="pill on">Yoga</span>
+        <p class="m" style="margin:8px 0 4px;font-size:11px">TIME OF DAY</p><span class="pill">Morning</span><span class="pill">Evening</span>
+        <div style="background:#2abfbf;color:#06302f;text-align:center;border-radius:10px;padding:9px;font-weight:700;margin-top:6px">Show 6 classes</div></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">17. Search first</p>
+    <p class="use">Very long lists (484 foods, 44 activities)</p>
+    <p class="pc">+ Fastest for a large list &nbsp; − Needs a typed word; browsing isn't possible</p>
+    <div class="ph"><div class="body"><p class="t1">Add food</p>
+      <div style="background:#1e1e1e;border-radius:10px;padding:9px 11px;border:1px solid #2abfbf">🔍 &nbsp;chick<span class="teal">|</span></div>
+      <p class="m" style="font-size:11px;margin:10px 0 0">RECENT &amp; MATCHES</p>
+      <div class="card"><span>Chicken breast<small>100 g</small></span><b class="teal">165</b></div>
+      <div class="card"><span>Chicken wrap<small>1 wrap</small></span><b class="teal">540</b></div>
+      <div class="card"><span>Chickpeas<small>100 g</small></span><b class="teal">139</b></div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">18. On / off switch</p>
+    <p class="use">A single yes/no view ("only classes with spots", "hide completed")</p>
+    <p class="pc">+ Clear for one setting &nbsp; − Only one thing; not for categories</p>
+    <div class="ph"><div class="body"><p class="t1">Book</p>
+      <div class="card"><span>Only classes with spots</span><span style="width:38px;height:22px;border-radius:99px;background:#2abfbf;display:inline-block;position:relative"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#06302f"></span></span></div>
+      <div class="card"><span>HIIT<small>Sat 9:00 · 3 spots</small></span><b class="teal">Book</b></div>
+      <div class="card"><span>Yoga<small>Sun 8:00 · 6 spots</small></span><b class="teal">Book</b></div></div>
+      <div class="bar"><span>Home</span><span class="on">Book</span><span>Coach</span><span>Profile</span></div></div>
+  </div>
+
+</div>
+
+<h2>D. Stepping through a process</h2>
+<p class="sub">Shown on <b>Check-in</b> and the first-time setup.</p>
+
+<div class="g">
+
+  <div class="c">
+    <p class="cap">19. Step progress bar</p>
+    <p class="use">A form with an order (check-in, onboarding)</p>
+    <p class="pc">+ Shows how far along they are and what's left &nbsp; − Only for one-way flows, not browsing</p>
+    <div class="ph"><div class="body"><p class="t1">Weekly check-in</p>
+      <div style="display:flex;gap:4px;margin-bottom:4px"><span style="flex:1;height:4px;border-radius:2px;background:#2abfbf"></span><span style="flex:1;height:4px;border-radius:2px;background:#2abfbf"></span><span style="flex:1;height:4px;border-radius:2px;background:#333"></span><span style="flex:1;height:4px;border-radius:2px;background:#333"></span></div>
+      <p class="m" style="font-size:11px;margin:0 0 12px">Step 2 of 4 · Sleep &amp; stress</p>
+      <div class="card"><span>How did you sleep?</span><span class="m">7 hrs</span></div>
+      <div class="card"><span>Stress level</span><span class="m">Low</span></div>
+      <div style="background:#2abfbf;color:#06302f;text-align:center;border-radius:10px;padding:10px;font-weight:700;margin-top:14px">Next</div></div>
+      <div class="bar"><span>Home</span><span>Book</span><span class="on">Coach</span><span>Profile</span></div></div>
+  </div>
+
+  <div class="c">
+    <p class="cap">20. Checklist with progress</p>
+    <p class="use">Things to complete in any order (setup, weekly to-dos)</p>
+    <p class="pc">+ Motivating, people can skip around &nbsp; − Takes space on the Home screen</p>
+    <div class="ph"><div class="body"><p class="t1">This week</p>
+      <p class="m" style="font-size:11px;margin:0 0 6px">2 of 4 done</p>
+      <div class="card"><span><span class="teal">✓</span> &nbsp;Log weight</span><span class="m">Done</span></div>
+      <div class="card"><span><span class="teal">✓</span> &nbsp;Train 3 times</span><span class="m">Done</span></div>
+      <div class="card"><span><span class="m">○</span> &nbsp;Log food 5 days</span><span class="teal">›</span></div>
+      <div class="card"><span><span class="m">○</span> &nbsp;Submit check-in</span><span class="teal">›</span></div></div>
+      <div class="bar"><span class="on">Home</span><span>Book</span><span>Coach</span><span>Profile</span></div></div>
+  </div>
+
+</div>
+
+<ul class="notes">
+  <li>Suggested rule: <b>tabs move you to a different section, chips filter a list, a stepper or strip picks a day or week.</b> Using pills for all three is why some screens feel inconsistent.</li>
+  <li>Section switching on Coach is the clearest problem: six sections do not fit as pills. Options 2 (underline tabs) or 4 (tile menu) fit best.</li>
+  <li>For Book, option 3 (segmented) fits the three views and option 12 (date strip) fits the days. Profile reads best as option 8 (settings list).</li>
+  <li>Not decided yet. Nothing in the app has changed.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segmented control audit</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0b0b;color:#f4f4f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px}
+  h2{font-size:15px;font-weight:600;margin:34px 0 2px;color:#2abfbf;text-transform:uppercase;letter-spacing:.06em}
+  .sub{color:#8a8a8f;font-size:14px;margin:0 0 14px;max-width:700px;line-height:1.5}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:760px;margin-top:18px}
+  .rowt{max-width:760px;margin:22px 0 0;font-size:14px;font-weight:600}
+  .rowt small{display:block;font-weight:400;color:#8a8a8f;font-size:12px;margin-top:2px}
+  .lab{font-size:11px;color:#6d6d72;margin:0 0 5px;text-transform:uppercase;letter-spacing:.06em}
+  .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#2abfbf;color:#06302f;margin-left:6px;vertical-align:middle}
+  .m{color:#8a8a8f}.teal{color:#2abfbf}
+
+  .ph{background:#111;border:1px solid #232323;border-radius:18px;padding:12px;font-size:13px;min-height:190px}
+  .t1{font-size:16px;font-weight:600;margin:0 0 10px}
+  .card{background:#1e1e1e;border-radius:12px;padding:9px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+  .card small{display:block;color:#8a8a8f;font-size:11px}
+  .pill{display:inline-block;padding:6px 11px;border-radius:999px;font-size:12px;border:1px solid #333;color:#d4d4d8;margin:0 5px 6px 0;white-space:nowrap}
+  .pill.on{background:#2abfbf;color:#06302f;border-color:#2abfbf;font-weight:600}
+  .seg{display:flex;background:#1e1e1e;border-radius:10px;padding:3px;font-size:12px}
+  .seg span{flex:1;text-align:center;padding:7px 2px;color:#8a8a8f;border-radius:8px;white-space:nowrap}
+  .seg span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  .tabs{display:flex;gap:16px;border-bottom:1px solid #2a2a2a;font-size:13px;margin-bottom:6px;overflow:hidden;white-space:nowrap}
+  .tabs span{padding-bottom:8px;color:#8a8a8f}
+  .tabs span.on{color:#f4f4f5;border-bottom:2px solid #2abfbf;font-weight:600}
+
+  table{width:100%;max-width:900px;border-collapse:collapse;font-size:13px;margin-top:12px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #232323;vertical-align:top;line-height:1.45}
+  th{color:#8a8a8f;font-weight:600;font-size:12px}
+  td:first-child{color:#c9c9ce;font-weight:600}
+  .notes{max-width:720px;margin-top:28px;font-size:14px;line-height:1.6;color:#c9c9ce}
+  .notes li{margin-bottom:6px}
+  @media(max-width:560px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>Segmented control audit</h1>
+<p class="sub">Saved 8 Oct 2026. We searched the whole app for pills. This page shows every place where the options are 2 or 3 and the pills switch a view or set a value. Each is shown as it is now (pills) beside the same screen with a segmented control. Static mockups with the real labels. Nothing in the app has changed.</p>
+
+<table>
+  <tr><th>Finding</th><th>Detail</th></tr>
+  <tr><td>Screen switchers are almost all 2–3</td><td>Member Nutrition, Training, Accountability, Progress and the Book switch all have 2–3 options.</td></tr>
+  <tr><td>Already underline tabs</td><td>The coach hubs: Classes (3), Messages (2), Library (4), Business (5–6), plus the tab row when a coach opens a client (up to 5). The segmented control would not fit Library, Business or the client tabs, so they stay as they are.</td></tr>
+  <tr><td>Already segmented</td><td>Member Book (Book a session / My bookings) and three pickers in Coach Broadcasts.</td></tr>
+  <tr><td>Hand-built look-alikes</td><td>At least 8 places rebuild the segmented look by hand (Reports, Timetable kind, Clients scope, water unit, kg/cm toggles), so they would share one component.</td></tr>
+  <tr><td>Not suitable</td><td>Filters with 5–9 options and day, week and weekday pickers (listed at the bottom). They stay chips or strips.</td></tr>
+</table>
+
+<h2>1. Switching between screens: pills become segmented</h2>
+
+<p class="rowt">Member &gt; Nutrition <small>3 options. Today the pill row sits at the top of the screen on a phone.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Nutrition</p>
+    <span class="pill on">Food Tracking</span><span class="pill">Meal Planner</span><span class="pill">Recipes</span>
+    <div class="card"><span>Breakfast<small>Oats &amp; berries</small></span><b class="teal">320</b></div><div class="card"><span>Lunch<small>Chicken wrap</small></span><b class="teal">540</b></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Nutrition</p>
+    <div class="seg"><span class="on">Food Tracking</span><span>Meal Planner</span><span>Recipes</span></div>
+    <div class="card"><span>Breakfast<small>Oats &amp; berries</small></span><b class="teal">320</b></div><div class="card"><span>Lunch<small>Chicken wrap</small></span><b class="teal">540</b></div></div></div>
+</div>
+
+<p class="rowt">Member &gt; Progress <small>3 options. "Progress &amp; Photos" is the longest label in the app, so it is the tightest fit on a small phone.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Progress</p>
+    <span class="pill on">Overview</span><span class="pill">Progress &amp; Photos</span><span class="pill">Body Scans</span>
+    <div class="card"><span>Weight<small>Last 4 weeks</small></span><b class="teal">-1.2 kg</b></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Progress</p>
+    <div class="seg"><span class="on">Overview</span><span>Progress &amp; Photos</span><span>Body Scans</span></div>
+    <div class="card"><span>Weight<small>Last 4 weeks</small></span><b class="teal">-1.2 kg</b></div></div></div>
+</div>
+
+<p class="rowt">Member &gt; Training <small>2 options.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Training</p>
+    <span class="pill on">Workout</span><span class="pill">Activity</span>
+    <div class="card"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div><div class="card"><span>Tuesday<small>Bench Press</small></span><span class="m">›</span></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Training</p>
+    <div class="seg"><span class="on">Workout</span><span>Activity</span></div>
+    <div class="card"><span>Monday<small>BB Back Squat</small></span><span class="m">›</span></div><div class="card"><span>Tuesday<small>Bench Press</small></span><span class="m">›</span></div></div></div>
+</div>
+
+<p class="rowt">Member &gt; Accountability <small>2 options.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Accountability</p>
+    <span class="pill on">Weekly Log</span><span class="pill">Forms</span>
+    <div class="card"><span>Check-in<small>Due Friday</small></span><span class="teal">Open</span></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Accountability</p>
+    <div class="seg"><span class="on">Weekly Log</span><span>Forms</span></div>
+    <div class="card"><span>Check-in<small>Due Friday</small></span><span class="teal">Open</span></div></div></div>
+</div>
+
+<p class="rowt">Member &gt; Progress &gt; Body Scans chart <small>3 options: which measurement the chart shows.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Body Scans</p>
+    <span class="pill on">Weight</span><span class="pill">Muscle</span><span class="pill">Body fat</span>
+    <div style="height:90px;border-radius:12px;background:#1e1e1e;margin-top:8px"></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Body Scans</p>
+    <div class="seg"><span class="on">Weight</span><span>Muscle</span><span>Body fat</span></div>
+    <div style="height:90px;border-radius:12px;background:#1e1e1e;margin-top:8px"></div></div></div>
+</div>
+
+<p class="rowt">Coach &gt; Home dashboard (admins) <small>3 options: whose numbers to show.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Dashboard</p>
+    <span class="pill on">My members</span><span class="pill">Whole gym</span><span class="pill">By coach</span>
+    <div class="card"><span>Active members<small>This month</small></span><b class="teal">24</b></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Dashboard</p>
+    <div class="seg"><span class="on">My members</span><span>Whole gym</span><span>By coach</span></div>
+    <div class="card"><span>Active members<small>This month</small></span><b class="teal">24</b></div></div></div>
+</div>
+
+<p class="rowt">Coach &gt; Messages &gt; Conversations list <small>3 options: active / unread / all.</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">Conversations</p>
+    <span class="pill on">Active</span><span class="pill">Unread</span><span class="pill">All</span>
+    <div class="card"><span>Sam T.<small>Great week!</small></span><span class="m">2m</span></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">Conversations</p>
+    <div class="seg"><span class="on">Active</span><span>Unread</span><span>All</span></div>
+    <div class="card"><span>Sam T.<small>Great week!</small></span><span class="m">2m</span></div></div></div>
+</div>
+
+<p class="rowt">Coach &gt; Clients <small>2 options, shown only when the coach has gym-wide clients. Already a hand-built segmented look; it would move to the shared component.</small></p>
+<div class="row">
+  <div><p class="lab">Now: hand-built</p><div class="ph"><p class="t1">Clients</p>
+    <div class="seg"><span class="on">My clients</span><span>Whole gym</span></div>
+    <div class="card"><span>Sam T.<small>Check-in due</small></span><span class="m">›</span></div></div></div>
+  <div><p class="lab">Shared segmented</p><div class="ph"><p class="t1">Clients</p>
+    <div class="seg"><span class="on">My clients</span><span>Whole gym</span></div>
+    <div class="card"><span>Sam T.<small>Check-in due</small></span><span class="m">›</span></div></div></div>
+</div>
+
+<h2>2. Picking a value in a form: pills become segmented</h2>
+<p class="sub">These are choices inside a form or sheet, not navigation. The same change would keep every option looking alike.</p>
+
+<table>
+  <tr><th>Where</th><th>Options</th><th>Now</th></tr>
+  <tr><td>Onboarding &gt; About</td><td>Female / Male</td><td>Pill</td></tr>
+  <tr><td>Onboarding &gt; Body</td><td>I don't know / Yes (body fat known?)</td><td>Pill</td></tr>
+  <tr><td>Onboarding &gt; weight and height units</td><td>kg / st &amp; lb, cm / ft</td><td>Small hand-built segmented</td></tr>
+  <tr><td>Check-in &gt; Water unit</td><td>L / mL</td><td>Small hand-built segmented</td></tr>
+  <tr><td>Training &gt; Start a programme</td><td>From a template / Build from scratch</td><td>Pill</td></tr>
+  <tr><td>Exercise editor &gt; load type</td><td>Fixed weight / % of 1RM</td><td>Pill</td></tr>
+  <tr><td>Exercise editor &gt; section layout</td><td>One list / Upper / Lower, and 2 x 10 min / 1 x 20 min</td><td>Small pill</td></tr>
+  <tr><td>Program templates &gt; Who gets it</td><td>Everyone at the gym / Choose members</td><td>Pill</td></tr>
+  <tr><td>Education &gt; Assign course</td><td>Everyone I coach / A group / Choose members</td><td>Pill</td></tr>
+  <tr><td>Credits &gt; Starts</td><td>Saturday / Today / Pick a date</td><td>Pill</td></tr>
+  <tr><td>Timetable &gt; session type</td><td>Repeats weekly / One-off</td><td>Hand-built segmented</td></tr>
+  <tr><td>Broadcasts &gt; To, Send as, When</td><td>3 + 3 + 2 options</td><td>Already segmented</td></tr>
+  <tr><td>Account / Settings &gt; Theme</td><td>Light / Dark / System</td><td>Segmented, a slightly different shape</td></tr>
+</table>
+
+<p class="rowt">Example: Exercise editor <small>Fixed weight / % of 1RM</small></p>
+<div class="row">
+  <div><p class="lab">Now: pills</p><div class="ph"><p class="t1">BB Back Squat</p>
+    <p class="m" style="font-size:11px;margin:0 0 6px">LOAD</p><span class="pill on">Fixed weight</span><span class="pill">% of 1RM</span>
+    <div class="card"><span>Sets x reps</span><b>3 x 8</b></div></div></div>
+  <div><p class="lab">Segmented</p><div class="ph"><p class="t1">BB Back Squat</p>
+    <p class="m" style="font-size:11px;margin:0 0 6px">LOAD</p><div class="seg"><span class="on">Fixed weight</span><span>% of 1RM</span></div>
+    <div class="card"><span>Sets x reps</span><b>3 x 8</b></div></div></div>
+</div>
+
+<h2>3. Not suitable: these stay as they are</h2>
+<table>
+  <tr><th>Where</th><th>Options</th><th>Why not segmented</th></tr>
+  <tr><td>Coach &gt; Library hub</td><td>Exercises, Program templates, Education, Forms</td><td>4 long labels; already underline tabs</td></tr>
+  <tr><td>Coach &gt; Business hub</td><td>Overview, Plans, Credit packs, Events, Rewards, Feedback</td><td>5–6 items; already underline tabs</td></tr>
+  <tr><td>Coach viewing a client</td><td>Up to 5 per section (Summary, Insights, Photos, Body scans, Big Dog)</td><td>Up to 5; already underline tabs</td></tr>
+  <tr><td>Coach &gt; Classes and Messages hubs</td><td>3 and 2 options</td><td>Could be segmented, but they are page-level tabs like the other hubs, so they match Library and Business as underline tabs</td></tr>
+  <tr><td>Member &gt; Training &gt; Activity filter</td><td>All, Walking, Running, Cycling, Swimming, Gym</td><td>6 filter options</td></tr>
+  <tr><td>Coach &gt; Clients filter</td><td>All, New to review, Gone quiet, Low credits, No plan</td><td>5 filter options with counts</td></tr>
+  <tr><td>Exercise filters (3 places)</td><td>All + 7–8 muscle groups</td><td>8–9 filter options</td></tr>
+  <tr><td>Booking and check-in day strips</td><td>About 14 dates, or 7 days</td><td>Dates are a scroll strip, not a switch</td></tr>
+  <tr><td>Week picker</td><td>Week 1 to N</td><td>Up to 12 weeks, scrolls</td></tr>
+  <tr><td>Weekday chips</td><td>Mon–Sat or Mon–Sun, several can be picked</td><td>Multi-select, 6–7 options</td></tr>
+  <tr><td>Ratings and cards</td><td>1–10 effort, 5 stars, mood dots, onboarding option cards, form answers</td><td>Different controls with their own jobs</td></tr>
+</table>
+
+<ul class="notes">
+  <li>The rule that falls out of the audit: <b>2–3 options that switch a view or set a value use a segmented control. 4 or more options for a page use underline tabs. Filters with many options use chips. Dates, weeks and weekdays use strips.</b></li>
+  <li>The Progress mockup uses the longest label. On a 360px phone, "Progress &amp; Photos" may wrap or shrink, so it needs checking on a real phone if segmented is chosen.</li>
+  <li>The audit searched by pattern rather than reading every line of every file, so a stray pill group could still exist.</li>
+  <li>Not decided yet. Nothing in the app has changed.</li>
+</ul>
+</body>
+</html>

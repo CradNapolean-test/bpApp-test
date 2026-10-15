@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Main menu options</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0b0b;color:#f4f4f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px}
+  h2{font-size:15px;font-weight:600;margin:36px 0 4px;color:#2abfbf;text-transform:uppercase;letter-spacing:.06em}
+  .sub{color:#8a8a8f;font-size:14px;margin:0 0 16px;max-width:680px;line-height:1.5}
+  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:22px;max-width:1100px;margin-top:14px}
+  .g.wide{grid-template-columns:repeat(auto-fit,minmax(480px,1fr))}
+  .cap{margin:0 0 3px;font-size:14px;font-weight:600}
+  .use{margin:0 0 3px;font-size:12px;color:#8a8a8f;line-height:1.4}
+  .pc{margin:0 0 8px;font-size:11px;color:#6d6d72;line-height:1.4}
+  .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#2abfbf;color:#06302f;margin-left:6px;vertical-align:middle}
+  .m{color:#8a8a8f}
+  .teal{color:#2abfbf}
+
+  /* phone frame */
+  .ph{position:relative;background:#111;border:1px solid #232323;border-radius:22px;height:440px;overflow:hidden;display:flex;flex-direction:column;font-size:13px}
+  .ph.desk{border-radius:12px;height:340px;flex-direction:row}
+  .body{flex:1;padding:14px 12px;overflow:hidden;min-width:0}
+  .hi{font-size:17px;font-weight:600;margin:0 0 2px}
+  .hs{font-size:12px;color:#8a8a8f;margin:0 0 10px}
+  .card{background:#1e1e1e;border-radius:12px;padding:10px 12px;margin-top:8px}
+  .card small{display:block;color:#8a8a8f;font-size:11px}
+  .card b{font-weight:600}
+  .stat{display:flex;gap:8px;margin-top:8px}
+  .stat div{flex:1;background:#1e1e1e;border-radius:12px;padding:8px 10px;font-size:11px;color:#8a8a8f}
+  .stat b{display:block;font-size:16px;color:#f4f4f5}
+
+  /* icons = simple glyph boxes */
+  .ic{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;font-size:15px;line-height:1}
+
+  /* bottom bars */
+  .bar{display:flex;border-top:1px solid #232323;background:#0e0e0e;padding:6px 4px 10px}
+  .bar .t{flex:1;text-align:center;font-size:10px;color:#8a8a8f}
+  .bar .t .ic{display:flex;margin:0 auto 1px}
+  .bar .t.on{color:#2abfbf;font-weight:600}
+  .badge{position:absolute;margin:-3px 0 0 8px;background:#e5484d;color:#fff;border-radius:99px;font-size:9px;padding:0 5px;line-height:14px}
+
+  /* top bars */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #1d1d1d}
+  .top .logo{font-weight:700;letter-spacing:.04em;font-size:13px}
+  .av{width:26px;height:26px;border-radius:50%;background:#2abfbf;color:#06302f;font-weight:700;font-size:11px;display:inline-flex;align-items:center;justify-content:center}
+  .tabs{display:flex;gap:18px;padding:0 12px;border-bottom:1px solid #232323;font-size:13px;overflow:hidden;white-space:nowrap}
+  .tabs span{padding:10px 0;color:#8a8a8f}
+  .tabs span.on{color:#f4f4f5;font-weight:600;border-bottom:2px solid #2abfbf}
+
+  /* sidebars */
+  .side{width:170px;background:#0e0e0e;border-right:1px solid #232323;padding:12px 8px;flex-shrink:0}
+  .side .logo{font-weight:700;font-size:13px;letter-spacing:.04em;padding:0 8px 12px}
+  .side .i{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;color:#a1a1a6;font-size:12px;margin-bottom:2px}
+  .side .i.on{background:#2abfbf;color:#06302f;font-weight:600}
+  .side .sub2{margin:2px 0 6px 18px;border-left:2px solid #2abfbf55;padding-left:10px;font-size:11px;color:#8a8a8f;line-height:2}
+  .rail{width:52px;background:#0e0e0e;border-right:1px solid #232323;padding:12px 0;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .rail .i{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#a1a1a6;font-size:16px}
+  .rail .i.on{background:#2abfbf;color:#06302f}
+
+  /* overlays */
+  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+  .drawer{position:absolute;top:0;bottom:0;left:0;width:72%;background:#161616;border-right:1px solid #2a2a2a;padding:16px 10px}
+  .drawer .i,.sheet .i{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;color:#c9c9ce;font-size:13px}
+  .drawer .i.on,.sheet .i.on{background:#262626;color:#2abfbf;font-weight:600}
+  .sheet{position:absolute;left:0;right:0;bottom:0;background:#181818;border-top:1px solid #2a2a2a;border-radius:18px 18px 0 0;padding:8px 12px 14px}
+  .grab{width:36px;height:4px;border-radius:2px;background:#444;margin:0 auto 8px}
+
+  /* floating dock / fab */
+  .dock{position:absolute;left:14px;right:14px;bottom:14px;display:flex;justify-content:space-around;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:99px;padding:8px 6px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .dock .t{padding:6px 12px;border-radius:99px;font-size:11px;color:#8a8a8f;display:flex;align-items:center;gap:5px}
+  .dock .t.on{background:#2abfbf;color:#06302f;font-weight:600}
+  .fab{position:absolute;right:14px;bottom:14px;width:46px;height:46px;border-radius:50%;background:#2abfbf;color:#06302f;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  .mid{width:42px;height:42px;border-radius:50%;background:#2abfbf;color:#06302f;font-size:22px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:-18px auto 0;border:4px solid #111}
+
+  /* tiles */
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .tile{background:#1e1e1e;border-radius:14px;padding:14px 10px;font-size:12px;font-weight:600;min-height:84px;display:flex;flex-direction:column;justify-content:space-between}
+  .tile .ic{font-size:22px;width:auto;justify-content:flex-start}
+  .tile small{font-weight:400;color:#8a8a8f;font-size:10px}
+  .tile.hot{background:#2abfbf;color:#06302f}
+  .tile.hot small{color:#06302fcc}
+
+  .notes{max-width:700px;margin-top:36px;font-size:14px;line-height:1.6;color:#c9c9ce}
+  .notes li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<h1>Main menu options</h1>
+<p class="sub">Saved 8 Oct 2026. Static mockups of the ways the app's <b>main navigation</b> could work, shown on the Home screen. The same options apply to the coach side, which has six destinations (Dashboard, Clients, Classes, Messages, Library, Business) instead of the member's four (Home, Book, Coach, Profile). Not wired into any page. Nothing in the app has changed.</p>
+
+<!-- ============ PHONE ============ -->
+<h2>On a phone</h2>
+<p class="sub">Where the member taps to move between the main areas.</p>
+
+<div class="g">
+
+  <div class="c">
+    <p class="cap">1. Bottom tab bar <span class="tag">current</span></p>
+    <p class="use">Four to five always-visible destinations</p>
+    <p class="pc">+ Fastest, familiar from other apps, thumb-reachable &nbsp; − Hard limit of about 5 items</p>
+    <div class="ph">
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div>
+        <div class="stat"><div><b>6</b>credits</div><div><b>3</b>day streak</div></div></div>
+      <div class="bar">
+        <div class="t on"><span class="ic">⌂</span>Home</div><div class="t"><span class="ic">▦</span>Book</div><div class="t"><span class="ic">💬</span>Coach</div><div class="t"><span class="ic">◉</span>Profile</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">2. Bottom bar with centre action button</p>
+    <p class="use">One action is used far more than the rest (log, book, check in)</p>
+    <p class="pc">+ Puts the key action under the thumb &nbsp; − Needs an obvious "main action"; four other items only</p>
+    <div class="ph">
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div>
+        <div class="stat"><div><b>6</b>credits</div><div><b>3</b>day streak</div></div></div>
+      <div class="bar">
+        <div class="t on"><span class="ic">⌂</span>Home</div><div class="t"><span class="ic">▦</span>Book</div>
+        <div class="t"><div class="mid">+</div></div>
+        <div class="t"><span class="ic">💬</span>Coach</div><div class="t"><span class="ic">◉</span>Profile</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">3. Bottom bar with "More" <span class="tag">coach side today</span></p>
+    <p class="use">More than five destinations</p>
+    <p class="pc">+ Scales to any number of items &nbsp; − Items under More get used less and are harder to find</p>
+    <div class="ph">
+      <div class="body"><p class="hi">Dashboard</p><p class="hs">Thursday 8 Oct</p>
+        <div class="stat"><div><b>24</b>clients</div><div><b>3</b>unread</div></div>
+        <div class="card"><small>Today</small><b>3 classes · 14 booked</b></div>
+        <div class="card"><small>Needs attention</small><b>2 missed check-ins</b></div></div>
+      <div class="bar">
+        <div class="t on"><span class="ic">⌂</span>Dashboard</div><div class="t"><span class="ic">👥</span>Clients</div><div class="t"><span class="ic">▦</span>Classes</div><div class="t"><span class="ic">💬</span>Messages<span class="badge">3</span></div><div class="t"><span class="ic">⋯</span>More</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">4. Floating pill dock</p>
+    <p class="use">Modern look; content scrolls behind it</p>
+    <p class="pc">+ Feels premium, keeps more screen visible &nbsp; − Covers content, less room for labels</p>
+    <div class="ph">
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div>
+        <div class="card"><small>Latest from your coach</small><b>Great week, keep it up</b></div></div>
+      <div class="dock"><div class="t on">⌂ Home</div><div class="t">▦</div><div class="t">💬</div><div class="t">◉</div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">5. Hamburger drawer</p>
+    <p class="use">Many destinations, or rarely-used ones</p>
+    <p class="pc">+ Unlimited items, clean screen &nbsp; − Hidden behind a tap, so people forget features exist</p>
+    <div class="ph">
+      <div class="top"><span class="ic">☰</span><span class="logo">BALLISTIC</span><span class="av">S</span></div>
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div></div>
+      <div class="scrim"></div>
+      <div class="drawer">
+        <p style="font-weight:700;letter-spacing:.04em;margin:0 0 12px 10px">BALLISTIC</p>
+        <div class="i on"><span class="ic">⌂</span>Home</div><div class="i"><span class="ic">▦</span>Book</div><div class="i"><span class="ic">💬</span>Coach</div><div class="i"><span class="ic">◉</span>Profile</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">6. Top tabs (scrollable)</p>
+    <p class="use">Sections of one area, or lots of areas</p>
+    <p class="pc">+ Many items, easy swipe between them &nbsp; − Reached with the thumb stretched; clashes with page-level tabs</p>
+    <div class="ph">
+      <div class="top"><span class="logo">BALLISTIC</span><span class="av">S</span></div>
+      <div class="tabs"><span class="on">Home</span><span>Book</span><span>Coach</span><span>Profile</span><span>Messages</span></div>
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div>
+        <div class="stat"><div><b>6</b>credits</div><div><b>3</b>day streak</div></div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">7. Avatar menu (profile dropdown)</p>
+    <p class="use">Account things: Settings, Profile, Log out, Help</p>
+    <p class="pc">+ Keeps rarely-used items off the bar &nbsp; − Not a primary menu on its own; pair with another option</p>
+    <div class="ph">
+      <div class="top"><span class="logo">BALLISTIC</span><span class="av">S</span></div>
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div></div>
+      <div style="position:absolute;top:44px;right:10px;width:160px;background:#1e1e1e;border:1px solid #333;border-radius:12px;padding:5px;font-size:12px;box-shadow:0 10px 24px rgba(0,0,0,.6)">
+        <div style="padding:8px 10px">Profile</div><div style="padding:8px 10px">Notifications</div><div style="padding:8px 10px">Settings</div><div style="padding:8px 10px;border-top:1px solid #2e2e2e;color:#e5484d">Log out</div>
+      </div>
+      <div class="bar"><div class="t on"><span class="ic">⌂</span>Home</div><div class="t"><span class="ic">▦</span>Book</div><div class="t"><span class="ic">💬</span>Coach</div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">8. Bottom sheet menu</p>
+    <p class="use">A "More" tap that slides a list up from the bottom</p>
+    <p class="pc">+ Thumb-friendly, room for descriptions &nbsp; − One extra tap; covers the screen</p>
+    <div class="ph">
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div></div>
+      <div class="scrim"></div>
+      <div class="sheet"><div class="grab"></div>
+        <div class="i on"><span class="ic">⌂</span>Home</div><div class="i"><span class="ic">▦</span>Book a class</div><div class="i"><span class="ic">💬</span>Message your coach</div><div class="i"><span class="ic">📈</span>Progress &amp; results</div><div class="i"><span class="ic">◉</span>Profile &amp; settings</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">9. Home screen as the menu (tiles)</p>
+    <p class="use">Few destinations; home doubles as a launcher</p>
+    <p class="pc">+ Big, clear, no bar needed; great for less tech-savvy members &nbsp; − Extra tap to switch areas; needs a back button</p>
+    <div class="ph">
+      <div class="top"><span class="logo">BALLISTIC</span><span class="av">S</span></div>
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">What do you want to do?</p>
+        <div class="tiles">
+          <div class="tile hot"><span class="ic">▦</span>Book a class<small>Next: Sat 9:00</small></div>
+          <div class="tile"><span class="ic">🏋</span>Training<small>Upper Body A</small></div>
+          <div class="tile"><span class="ic">🍎</span>Nutrition<small>1,420 kcal left</small></div>
+          <div class="tile"><span class="ic">💬</span>Coach<small>1 new message</small></div>
+          <div class="tile"><span class="ic">📈</span>Progress<small>-1.2 kg this month</small></div>
+          <div class="tile"><span class="ic">◉</span>Profile<small>Settings</small></div>
+        </div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">10. Floating action button</p>
+    <p class="use">Add-on to any option: one key action always available</p>
+    <p class="pc">+ Quick access to the top action (log food, book) &nbsp; − Can cover content; only one action</p>
+    <div class="ph">
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div>
+        <div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div>
+        <div class="stat"><div><b>6</b>credits</div><div><b>3</b>day streak</div></div></div>
+      <div class="fab">+</div>
+      <div class="bar">
+        <div class="t on"><span class="ic">⌂</span>Home</div><div class="t"><span class="ic">▦</span>Book</div><div class="t"><span class="ic">💬</span>Coach</div><div class="t"><span class="ic">◉</span>Profile</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ DESKTOP ============ -->
+<h2>On a computer</h2>
+<p class="sub">Used by the coach and owners at a desk, and by members on a laptop.</p>
+
+<div class="g wide">
+
+  <div class="c">
+    <p class="cap">11. Left sidebar with expanding sub-links <span class="tag">member desktop today</span></p>
+    <p class="use">Member app on desktop; the active area opens to show its sub-pages</p>
+    <p class="pc">+ Always visible, room for sub-menus &nbsp; − Takes about 170px of width</p>
+    <div class="ph desk">
+      <div class="side"><div class="logo">BALLISTIC</div>
+        <div class="i"><span class="ic">⌂</span>Home</div><div class="i"><span class="ic">▦</span>Book</div>
+        <div class="i on"><span class="ic">💬</span>Coach</div>
+        <div class="sub2">Message your coach<br>Nutrition<br>Training<br>Check-in<br>Progress &amp; results</div>
+        <div class="i"><span class="ic">◉</span>Profile</div></div>
+      <div class="body"><p class="hi">Coach</p><p class="hs">Everything your coach has set up</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div><div class="card"><small>Check-in</small><b>Due Friday</b></div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">12. Collapsed icon rail</p>
+    <p class="use">Same sidebar, icons only (expands on hover)</p>
+    <p class="pc">+ Maximum room for content &nbsp; − Icons alone are harder to learn; needs tooltips</p>
+    <div class="ph desk">
+      <div class="rail"><div class="i on">⌂</div><div class="i">▦</div><div class="i">💬</div><div class="i">◉</div></div>
+      <div class="body"><p class="hi">Hey Sam</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>Upper Body A</b></div><div class="card"><small>Next class</small><b>HIIT · Sat 9:00</b></div>
+        <div class="stat"><div><b>6</b>credits</div><div><b>3</b>day streak</div><div><b>82%</b>attendance</div></div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">13. Top navigation bar <span class="tag">coach desktop today</span></p>
+    <p class="use">Up to about seven top-level destinations</p>
+    <p class="pc">+ Full-width pages, nothing eats the side &nbsp; − Doesn't hold sub-menus without a dropdown</p>
+    <div class="ph desk" style="flex-direction:column">
+      <div class="top" style="gap:14px"><span class="logo">BALLISTIC</span>
+        <div style="display:flex;gap:16px;font-size:12px;color:#8a8a8f;flex:1;margin-left:10px"><span style="color:#f4f4f5;font-weight:600;border-bottom:2px solid #2abfbf;padding:2px 0">Dashboard</span><span>Clients</span><span>Classes</span><span>Messages</span><span>Library</span><span>Business</span></div><span class="av">B</span></div>
+      <div class="body"><p class="hi">Dashboard</p><p class="hs">Thursday 8 Oct</p>
+        <div class="stat"><div><b>24</b>clients</div><div><b>3</b>unread</div><div><b>14</b>booked today</div><div><b>2</b>missed check-ins</div></div>
+        <div class="card"><small>Today</small><b>3 classes · 14 booked</b></div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">14. Top bar with dropdown (mega) menus</p>
+    <p class="use">Many destinations grouped under a few headings</p>
+    <p class="pc">+ Holds a lot without clutter &nbsp; − Hover menus are fiddly; two taps to reach anything</p>
+    <div class="ph desk" style="flex-direction:column">
+      <div class="top" style="gap:14px"><span class="logo">BALLISTIC</span>
+        <div style="display:flex;gap:16px;font-size:12px;color:#8a8a8f;flex:1;margin-left:10px"><span>Dashboard</span><span style="color:#f4f4f5;font-weight:600">Clients ▾</span><span>Classes ▾</span><span>Messages</span><span>Business ▾</span></div><span class="av">B</span></div>
+      <div style="position:absolute;top:44px;left:150px;width:200px;background:#1e1e1e;border:1px solid #333;border-radius:12px;padding:5px;font-size:12px;box-shadow:0 10px 24px rgba(0,0,0,.6);z-index:2">
+        <div style="padding:7px 10px;background:#262626;border-radius:8px" class="teal">All clients</div><div style="padding:7px 10px">Check-ins due</div><div style="padding:7px 10px">Programs</div><div style="padding:7px 10px">Add a client</div></div>
+      <div class="body"><p class="hi">Clients</p><p class="hs">24 active</p>
+        <div class="card"><b>Sam T.</b><small>Check-in due</small></div><div class="card"><b>Mia R.</b><small>Up to date</small></div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">15. Sidebar with grouped sections</p>
+    <p class="use">Coach side: headings split daily work from setup</p>
+    <p class="pc">+ Clear structure for 8+ items; labels stay visible &nbsp; − Takes width; more to scan</p>
+    <div class="ph desk">
+      <div class="side"><div class="logo">BALLISTIC</div>
+        <div style="font-size:9px;color:#6d6d72;letter-spacing:.08em;padding:0 8px 4px">DAILY</div>
+        <div class="i on"><span class="ic">⌂</span>Dashboard</div><div class="i"><span class="ic">👥</span>Clients</div><div class="i"><span class="ic">▦</span>Classes</div><div class="i"><span class="ic">💬</span>Messages</div>
+        <div style="font-size:9px;color:#6d6d72;letter-spacing:.08em;padding:8px 8px 4px">SET UP</div>
+        <div class="i"><span class="ic">🏋</span>Library</div><div class="i"><span class="ic">💼</span>Business</div></div>
+      <div class="body"><p class="hi">Dashboard</p><p class="hs">Thursday 8 Oct</p>
+        <div class="stat"><div><b>24</b>clients</div><div><b>3</b>unread</div></div>
+        <div class="card"><small>Today</small><b>3 classes · 14 booked</b></div></div>
+    </div>
+  </div>
+
+  <div class="c">
+    <p class="cap">16. Search / command bar first</p>
+    <p class="use">Add-on for the coach: press <b>/</b> or ⌘K, type a client or page name</p>
+    <p class="pc">+ Fastest for a coach with many clients &nbsp; − Needs to be learned; not for members</p>
+    <div class="ph desk" style="flex-direction:column">
+      <div class="top"><span class="logo">BALLISTIC</span><span class="av">B</span></div>
+      <div class="body"><p class="hi">Dashboard</p><p class="hs">Thursday 8 Oct</p>
+        <div class="card"><small>Today</small><b>3 classes · 14 booked</b></div></div>
+      <div class="scrim"></div>
+      <div style="position:absolute;top:50px;left:50%;transform:translateX(-50%);width:62%;background:#1e1e1e;border:1px solid #3a3a3a;border-radius:14px;padding:6px;box-shadow:0 14px 34px rgba(0,0,0,.7);font-size:12px">
+        <div style="padding:9px 10px;border-bottom:1px solid #2e2e2e">sam<span class="teal">|</span></div>
+        <div style="padding:8px 10px;background:#262626;border-radius:8px;margin-top:4px">👥 &nbsp;Sam T. <span class="m">· Client</span></div>
+        <div style="padding:8px 10px">💬 &nbsp;Message Sam T.</div><div style="padding:8px 10px">▦ &nbsp;Sam's bookings</div></div>
+    </div>
+  </div>
+
+</div>
+
+<ul class="notes">
+  <li>These are not exclusive. A real app usually mixes one main menu (1–4, 11–13, 15) with an add-on (7 avatar menu, 10 action button, 16 search).</li>
+  <li>The app uses option 1 for members on a phone, option 11 for members on desktop, and options 3 and 13 for the coach. Nothing is decided; this is for the owners to react to.</li>
+  <li>Questions to put to the owners: how many main areas will members need in a year? Is there one action members do most (book a class, log food)? Should the coach and member apps feel the same?</li>
+  <li>Suggested starting point: keep 1 for members (it works best at four destinations), and keep 13 for the coach, with 16 added once the client list grows.</li>
+</ul>
+</body>
+</html>

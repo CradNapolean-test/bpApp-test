@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segmented design options</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0b0b;color:#f4f4f5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px}
+  .sub{color:#8a8a8f;font-size:14px;margin:0 0 16px;max-width:700px;line-height:1.5}
+  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;max-width:1000px;margin-top:14px}
+  .cap{margin:0 0 3px;font-size:14px;font-weight:600}
+  .use{margin:0 0 8px;font-size:12px;color:#8a8a8f;line-height:1.4;min-height:32px}
+  .tag{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:99px;background:#2abfbf;color:#06302f;margin-left:6px;vertical-align:middle}
+  .m{color:#8a8a8f}.teal{color:#2abfbf}
+  .ph{background:#111;border:1px solid #232323;border-radius:18px;padding:14px 12px;font-size:13px;height:210px;overflow:hidden}
+  .t1{font-size:16px;font-weight:600;margin:0 0 10px}
+  .card{background:#1e1e1e;border-radius:12px;padding:9px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+  .card small{display:block;color:#8a8a8f;font-size:11px}
+  .two{margin-top:10px}
+
+  /* every control is clickable (see script) */
+  .sg{display:flex;font-size:12px;cursor:pointer;user-select:none}
+  .sg span{flex:1;text-align:center;white-space:nowrap;color:#8a8a8f;transition:all .15s}
+
+  /* 1 filled thumb, rounded */
+  .v1{background:#1e1e1e;border-radius:10px;padding:3px}
+  .v1 span{padding:7px 2px;border-radius:8px}
+  .v1 span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  /* 2 fully round track (today's shared look) */
+  .v2{background:transparent;border:1px solid #333;border-radius:999px;padding:3px}
+  .v2 span{padding:7px 2px;border-radius:999px}
+  .v2 span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  /* 3 raised neutral thumb */
+  .v3{background:#1e1e1e;border-radius:10px;padding:3px}
+  .v3 span{padding:7px 2px;border-radius:8px}
+  .v3 span.on{background:#3a3a3d;color:#f4f4f5;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.6)}
+  /* 4 soft tint */
+  .v4{background:#1e1e1e;border-radius:10px;padding:3px}
+  .v4 span{padding:7px 2px;border-radius:8px}
+  .v4 span.on{background:#2abfbf26;color:#2abfbf;font-weight:600;box-shadow:inset 0 0 0 1px #2abfbf66}
+  /* 5 square, flat */
+  .v5{border:1px solid #333;border-radius:4px;overflow:hidden}
+  .v5 span{padding:9px 2px;border-right:1px solid #333}
+  .v5 span:last-child{border-right:0}
+  .v5 span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  /* 6 joined button group */
+  .v6{gap:0}
+  .v6 span{padding:8px 2px;border:1px solid #333;margin-left:-1px;background:#161616}
+  .v6 span:first-child{border-radius:10px 0 0 10px;margin-left:0}
+  .v6 span:last-child{border-radius:0 10px 10px 0}
+  .v6 span.on{background:#2abfbf22;border-color:#2abfbf;color:#2abfbf;font-weight:600;position:relative;z-index:1}
+  /* 7 underline in equal columns */
+  .v7{border-bottom:1px solid #2a2a2a}
+  .v7 span{padding:8px 2px;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .v7 span.on{color:#f4f4f5;font-weight:600;border-bottom-color:#2abfbf}
+  /* 8 inverted (light) thumb */
+  .v8{background:#1e1e1e;border-radius:10px;padding:3px}
+  .v8 span{padding:7px 2px;border-radius:8px}
+  .v8 span.on{background:#f4f4f5;color:#111;font-weight:600}
+  /* 9 outlined thumb */
+  .v9{background:#1e1e1e;border-radius:10px;padding:3px}
+  .v9 span{padding:7px 2px;border-radius:8px;border:1px solid transparent}
+  .v9 span.on{border-color:#2abfbf;color:#2abfbf;font-weight:600;background:#161616}
+  /* 10 taller, with icons stacked */
+  .v10{background:#1e1e1e;border-radius:14px;padding:4px;gap:2px}
+  .v10 span{padding:8px 2px 7px;border-radius:11px;font-size:11px}
+  .v10 span i{display:block;font-style:normal;font-size:16px;margin-bottom:2px}
+  .v10 span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  /* 11 separate chips with gap, equal width */
+  .v11{gap:6px}
+  .v11 span{padding:8px 2px;border-radius:10px;background:#1e1e1e;border:1px solid transparent}
+  .v11 span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  /* 12 with count badge */
+  .v12{background:#1e1e1e;border-radius:10px;padding:3px}
+  .v12 span{padding:7px 2px;border-radius:8px}
+  .v12 span b{display:inline-block;margin-left:4px;font-size:10px;background:#ffffff1f;border-radius:99px;padding:0 5px;font-weight:600}
+  .v12 span.on{background:#2abfbf;color:#06302f;font-weight:600}
+  .v12 span.on b{background:#06302f33}
+
+  table{width:100%;max-width:900px;border-collapse:collapse;font-size:13px;margin-top:20px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #232323;vertical-align:top;line-height:1.45}
+  th{color:#8a8a8f;font-weight:600;font-size:12px}
+  td:first-child{color:#c9c9ce;font-weight:600;white-space:nowrap}
+  .notes{max-width:720px;margin-top:28px;font-size:14px;line-height:1.6;color:#c9c9ce}
+  .notes li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<h1>Segmented design options</h1>
+<p class="sub">Saved 8 Oct 2026. Twelve ways to style the same control. Each shows the three-option case with the longest label in the app ("Progress &amp; Photos") and a two-option case. Click any control to switch it. Static mockups, not wired into any page. Nothing in the app has changed.</p>
+
+<div class="g" id="grid"></div>
+
+<table>
+  <tr><th>Option</th><th>Fits 3 long labels</th><th>Feels</th></tr>
+  <tr><td>1, 2, 3, 8, 9</td><td>Yes, about the same</td><td>iOS / Android-style switch. Differences are only in the selected look.</td></tr>
+  <tr><td>4 Soft tint</td><td>Yes</td><td>Quieter, less shouty on a screen with a lot of accent colour.</td></tr>
+  <tr><td>5 Square</td><td>Yes, a bit more room</td><td>Sharp, "tool" look. Clashes with the rounded cards.</td></tr>
+  <tr><td>6 Joined buttons</td><td>Yes</td><td>Reads as buttons rather than a switch.</td></tr>
+  <tr><td>7 Underline in columns</td><td>Yes, most room</td><td>Same family as the coach's underline tabs, so one language across the app.</td></tr>
+  <tr><td>10 With icons</td><td>Tighter, labels must be short</td><td>Friendly, easy to scan; needs an icon for every option.</td></tr>
+  <tr><td>11 Separate chips</td><td>Yes</td><td>Closest to pills but equal width, so it still reads as a choice of one.</td></tr>
+  <tr><td>12 With counts</td><td>Tighter</td><td>Useful for "My bookings (2)", "Unread (3)".</td></tr>
+</table>
+
+<ul class="notes">
+  <li>The app's shared segmented control today is closest to option 2 (rounded track with an outline, accent fill). The earlier comparison pages used option 1.</li>
+  <li>Any of these works in light and dark mode; the colours here are dark mode only.</li>
+  <li>Option 7 is the one to look at if the owners want the segmented screens and the coach's underline tabs to look related.</li>
+  <li>Not decided yet. Nothing in the app has changed.</li>
+</ul>
+
+<script>
+  var defs = [
+    {c:'v1', n:'1. Filled thumb', u:'Rounded grey track, accent thumb. The version used in the earlier pages.'},
+    {c:'v2', n:'2. Round outlined track', u:'Fully round, outlined, accent thumb.', t:'closest to current'},
+    {c:'v3', n:'3. Neutral raised thumb', u:'Grey thumb with a small shadow, no accent colour. Like a phone settings switch.'},
+    {c:'v4', n:'4. Soft tint', u:'Teal text on a faint teal fill with a thin outline.'},
+    {c:'v5', n:'5. Square and flat', u:'Almost no rounding, thin dividers.'},
+    {c:'v6', n:'6. Joined buttons', u:'A button group with the selected one outlined and tinted.'},
+    {c:'v7', n:'7. Underline in equal columns', u:'Tabs spread across the full width, teal line under the selected one.'},
+    {c:'v8', n:'8. Inverted thumb', u:'White thumb on dark track. Strongest contrast, no accent colour.'},
+    {c:'v9', n:'9. Outlined thumb', u:'Selected has a teal outline and text, no fill.'},
+    {c:'v10', n:'10. With icons', u:'Icon above each label. Taller.', icons:true},
+    {c:'v11', n:'11. Separate chips, equal width', u:'No shared track; each option is its own block with gaps.'},
+    {c:'v12', n:'12. With count badges', u:'Small number beside a label, for bookings or unread.', counts:true}
+  ];
+  var three = ['Overview','Progress & Photos','Body Scans'], two = ['Workout','Activity'];
+  var icons = ['▤','▣','◍'], icons2 = ['🏋','🏃'], counts = ['','2',''], counts2=['','4'];
+  function seg(cls, labels, o, ic, ct){
+    var h = '<div class="sg '+cls+'">';
+    labels.forEach(function(l,i){
+      h += '<span'+(i===0?' class="on"':'')+'>'+(o.icons?'<i>'+ic[i]+'</i>':'')+l+(o.counts&&ct[i]?'<b>'+ct[i]+'</b>':'')+'</span>';
+    });
+    return h+'</div>';
+  }
+  var out = '';
+  defs.forEach(function(d){
+    out += '<div class="c"><p class="cap">'+d.n+(d.t?'<span class="tag">'+d.t+'</span>':'')+'</p><p class="use">'+d.u+'</p>'+
+      '<div class="ph"><p class="t1">Progress</p>'+seg(d.c,three,d,icons,counts)+
+      '<div class="two">'+seg(d.c,two,d,icons2,counts2)+'</div>'+
+      '<div class="card"><span>Weight<small>Last 4 weeks</small></span><b class="teal">-1.2 kg</b></div></div></div>';
+  });
+  document.getElementById('grid').innerHTML = out;
+  document.addEventListener('click', function(e){
+    var s = e.target.closest('.sg span'); if(!s) return;
+    s.parentNode.querySelectorAll('span').forEach(function(x){x.classList.remove('on')});
+    s.classList.add('on');
+  });
+</script>
+</body>
+</html>
