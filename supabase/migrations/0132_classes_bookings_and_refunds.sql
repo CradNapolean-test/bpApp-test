@@ -936,3 +936,70 @@ begin
   return v_booking;
 end;
 $$;
+
+-- =====================================================================================================================
+-- L6 (DECISION D5, recommended default). Check-in had no time window.
+-- check_in_booking [0071] only required today's date, while the screen allowed 2 minutes before to 15 after the class start, so
+-- the two disagreed. The server now allows check-in from 30 minutes BEFORE the class starts until 60 minutes AFTER, using the
+-- gym's timezone and the class's start time:
+--   CHECK_IN_OPENS_MINUTES_BEFORE = 30    -> 'Check-in opens 30 minutes before the class.'
+--   CHECK_IN_CLOSES_MINUTES_AFTER = 60    -> 'Check-in has closed.'
+-- These two numbers live in this function only; brief 07 (R17) makes the button follow the same numbers (and should export them as
+-- constants in one place in the app). A class with no start time keeps the old rule: any time on the day.
+--
+-- PRE-FLIGHT (read-only; classes with no start time, which keep the day-long window):
+--   select id, name from public.classes where start_time is null;
+-- =====================================================================================================================
+create or replace function public.check_in_booking(p_class_id uuid, p_booking_date date)
+returns bookings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_booking bookings;
+  v_tz text;
+  v_start time;
+  v_start_at timestamptz;
+begin
+  select coalesce(nullif(g.timezone, ''), 'UTC'), c.start_time into v_tz, v_start
+  from classes c
+  join gyms g on g.id = c.gym_id
+  where c.id = p_class_id;
+
+  if v_tz is null then
+    raise exception 'Class not found';
+  end if;
+
+  if p_booking_date <> public.local_date(v_tz) then
+    raise exception 'You can only check in on the day of the session';
+  end if;
+
+  if v_start is not null then
+    v_start_at := (p_booking_date + v_start) at time zone v_tz;
+    if now() < v_start_at - interval '30 minutes' then
+      raise exception 'Check-in opens 30 minutes before the class.';
+    end if;
+    if now() > v_start_at + interval '60 minutes' then
+      raise exception 'Check-in has closed.';
+    end if;
+  end if;
+
+  update public.bookings
+  set
+    attended = true,
+    no_show = false,
+    attended_at = coalesce(attended_at, now())
+  where client_id = auth.uid()
+    and class_id = p_class_id
+    and booking_date = p_booking_date
+    and status = 'booked'
+  returning * into v_booking;
+
+  if v_booking is null then
+    raise exception 'No booking found to check in to';
+  end if;
+
+  return v_booking;
+end;
+$$;
