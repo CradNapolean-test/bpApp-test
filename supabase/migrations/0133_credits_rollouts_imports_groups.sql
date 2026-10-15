@@ -450,3 +450,143 @@ $fn$;
 
 revoke execute on function public.import_program_template(jsonb) from public, anon;
 grant execute on function public.import_program_template(jsonb) to authenticated;
+
+-- =====================================================================================================================
+-- R33. A group used in any broadcast could never be deleted.
+-- scheduled_communications.target_group_id is ON DELETE SET NULL (0031), but the check 0097 added requires a group broadcast to
+-- have a group, so the SET NULL broke the check and the delete of the group failed. Now:
+--   * the check allows a group broadcast whose group has gone (other audiences must still have no group);
+--   * target_group_name keeps the group's name for the history ("Sent to: Morning crew"); it is filled in when a broadcast is created
+--     (by a trigger, so every way of creating one is covered) and backfilled below from the group's current name;
+--   * cancelled_at: deleting a group cancels its pending and repeating broadcasts straight away (they would otherwise go to nobody);
+--     send_due_communications also skips and cancels any group broadcast whose group is gone, and ignores cancelled ones. A null group
+--     never means "everyone": communication_recipients returns nobody for a group target with no group (checked: 0130). Sent rows are
+--     untouched. Email goes out only for rows that were sent (sent_at set), so a cancelled row is never emailed.
+--   * a NEW group broadcast must still name a group.
+-- The "pending" lists in the app should hide rows with cancelled_at set (briefs 05 and 09).
+--
+-- PRE-FLIGHT (read-only; group broadcasts, and the ones that would be cancelled if their group were deleted today):
+--   select target_type, count(*) as rows, count(*) filter (where sent_at is null) as pending from public.scheduled_communications
+--   where target_type = 'group' group by 1;
+-- =====================================================================================================================
+alter table public.scheduled_communications add column if not exists target_group_name text;
+alter table public.scheduled_communications add column if not exists cancelled_at timestamptz;
+
+update public.scheduled_communications s
+set target_group_name = g.name
+from public.client_groups g
+where s.target_group_id = g.id and s.target_group_name is null;
+
+alter table public.scheduled_communications drop constraint if exists scheduled_communications_target_group_check;
+alter table public.scheduled_communications
+  add constraint scheduled_communications_target_group_check
+    check (target_type = 'group' or target_group_id is null);
+
+create or replace function public.scheduled_communications_prepare()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.target_type = 'group' then
+    if new.target_group_id is null then
+      raise exception 'Choose a group for this message';
+    end if;
+    if new.target_group_name is null then
+      select name into new.target_group_name from client_groups where id = new.target_group_id;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.scheduled_communications_prepare() from public, anon, authenticated;
+
+drop trigger if exists scheduled_communications_prepare on public.scheduled_communications;
+create trigger scheduled_communications_prepare
+  before insert on public.scheduled_communications
+  for each row execute function public.scheduled_communications_prepare();
+
+create or replace function public.client_groups_cancel_broadcasts()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update scheduled_communications
+  set cancelled_at = now()
+  where target_group_id = old.id and sent_at is null and cancelled_at is null;
+  return old;
+end;
+$$;
+
+revoke execute on function public.client_groups_cancel_broadcasts() from public, anon, authenticated;
+
+drop trigger if exists client_groups_cancel_broadcasts on public.client_groups;
+create trigger client_groups_cancel_broadcasts
+  before delete on public.client_groups
+  for each row execute function public.client_groups_cancel_broadcasts();
+
+-- The scheduled sender [0097], with two additions: cancelled rows are ignored, and a group broadcast whose group is gone is
+-- cancelled instead of being sent to nobody (or failing when the weekly copy is written).
+create or replace function public.send_due_communications()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_comm record;
+  v_client uuid;
+  v_count integer := 0;
+  v_tz text;
+  v_next timestamptz;
+begin
+  for v_comm in
+    select * from scheduled_communications
+    where sent_at is null and cancelled_at is null and send_at <= now()
+    for update skip locked
+  loop
+    if v_comm.target_type = 'group'
+       and (v_comm.target_group_id is null or not exists (select 1 from client_groups g where g.id = v_comm.target_group_id)) then
+      update scheduled_communications set cancelled_at = now() where id = v_comm.id;
+      continue;
+    end if;
+
+    if v_comm.channel in ('message', 'both') then
+      for v_client in
+        select * from public.communication_recipients(v_comm.gym_id, v_comm.coach_id, v_comm.target_type, v_comm.target_group_id)
+      loop
+        insert into chat_messages (client_id, sender_id, text)
+        values (v_client, v_comm.coach_id, public.personalise_message(v_comm.message, v_client));
+        v_count := v_count + 1;
+      end loop;
+    end if;
+
+    if v_comm.repeat = 'weekly' then
+      -- One normal "sent" row for this occurrence (so history, and the email pass, treat it like any other)...
+      insert into scheduled_communications
+        (coach_id, gym_id, message, target_type, target_group_id, send_at, sent_at, channel, repeat, series_id)
+      values
+        (v_comm.coach_id, v_comm.gym_id, v_comm.message, v_comm.target_type, v_comm.target_group_id,
+         v_comm.send_at, now(), v_comm.channel, 'none', v_comm.id);
+
+      -- ...and the series moves on a week at a time, keeping the same wall-clock time at the gym.
+      select coalesce(timezone, 'UTC') into v_tz from gyms where id = v_comm.gym_id;
+      v_next := v_comm.send_at;
+      loop
+        v_next := ((v_next at time zone v_tz) + interval '7 days') at time zone v_tz;
+        exit when v_next > now();
+      end loop;
+      update scheduled_communications set send_at = v_next, last_sent_at = now() where id = v_comm.id;
+    else
+      update scheduled_communications set sent_at = now() where id = v_comm.id;
+    end if;
+  end loop;
+  return v_count;
+end;
+$$;
+
+revoke execute on function public.send_due_communications() from public, anon, authenticated;
