@@ -93,3 +93,125 @@
 
 - Three migration files; pre-flight and clean-up queries written as comments or separate `.sql` files; sandbox check scripts added for R36, R38, CM3, GA1, CH1 and R37; all `security definer` functions revoked from `anon`.
 - `## Status` lists each ID, the functions added (name and arguments) so briefs 05 and 08 can call them, and the live clean-up queries the owner must review.
+
+## Status
+
+Branch `fix/02-gym-scoping` (cut from `fix/01-database-security`, so it builds on 0127 and 0128), 9 commits plus this status commit, nothing pushed. Three migrations: `0129_red_flags_and_reports.sql`, `0130_gym_scoping_and_permission_checks.sql`, `0131_owner_and_admin_functions.sql`, and one reviewed script that is **not** a migration: `supabase/cleanup/0129_red_flag_entries_wrong_gym.sql`.
+
+**Not run anywhere yet.** There is no sandbox project and no Postgres on this machine, so none of the SQL has been executed and `gym-scoping-check.cjs` has never been run. What did run: `npm test` (226 pass; 32 new static tests in `supabase/tests/migration-scoping.test.ts` that replay the SQL and fail without these migrations), `npx tsc --noEmit` (clean), `npm run lint` (0 errors, the same 9 warnings as before). The first real test is applying the three files to the sandbox and running `gym-scoping-check.cjs` (needs `--ref=<sandbox ref>` in `AUDIT_ALLOWED_REFS`).
+
+### Findings
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| R36 | done | `ae6669a` | Members selected by `client_gym_id`. Clean-up script `53df6fc` (not run). |
+| RF1 | done | `ae6669a` | `red_flag_report` only reads; new `red_flag_week_runs` table; `generate_latest_red_flag_week`. |
+| CL4 | done | `ae6669a` | Trigger on `red_flag_entries` (coach must work at the gym) and on `membership_holds` (no overlap; a trigger, not an exclusion constraint, so existing overlaps do not block the migration). |
+| CM6 | done (SQL) | `ae6669a` | `owner_gym_stats` and `owner_activity_report` use the gym's calendar. Test: `local_date` near midnight UTC for Auckland and London in the sandbox script. |
+| R38 | done (database half) | `460dda1` | Beyond the brief: `communication_recipients` and `my_scoping_gym_id` had the same bug and are fixed. |
+| CM3 | done | `8f60114` | `apply_programme_rollout` also picks members by their own gym (brief 03 R5 can skip that part). |
+| CM4 | done (D4 default) | `5ac3c46` | Replaces brief 01's single coach-only rule; brief 01's static test updated. |
+| GA1 | done | `a496721` | |
+| CH1 | done (database half) | `d2cf31b` | |
+| R37 | done (database half, D2 default) | `cd5a94f` | |
+| Checks | added, not run | `634c6b6` | |
+
+### Functions for briefs 05 and 08 (name and arguments)
+
+All signed-in only, `security definer`, `set search_path = public`; names starting with an underscore are internal and cannot be called by anyone.
+
+| Function | Who | Returns |
+|---|---|---|
+| `red_flag_report(p_week_start date, p_gym uuid default null)` | coach at the gym, or the gym's owner | jsonb: `gym_id`, `week_start`, **`generated`**, `generated_at`, `latest_completed_week`, `thresholds`, `stats`, `entries`, `master`. For a week that was never generated `generated` is false and `stats` and `entries` are empty. **The old one-argument version is dropped**; `{p_week_start}` alone still works |
+| `generate_latest_red_flag_week(p_gym uuid default null)` | gym admin or owner | jsonb `{gym_id, week_start, created}`; refuses a second call within 10 minutes ("This list was generated a moment ago...") |
+| `reassign_clients(p_gym, p_from, p_to)` | gym admin of `p_gym`, or the owner | integer: members moved |
+| `remove_coach_from_gym(p_gym, p_coach)` | same | jsonb `{removed, deactivated, remaining_gyms}`; `deactivated` true means the coach has no gym left and `profiles.deactivated_at` is set, so brief 08 should now disable the login |
+| `owner_gym_roster(p_gym, p_filter default null, p_search default null, p_limit default 100, p_offset default 0)` | owner of `p_gym` | jsonb `{gymId, total, limit, offset, filter, members: [{clientId, name, email, coachId, coachName, plan, planEndsOn, status, lastActive, onboarded, flagged, joinedOn}]}`; filters `on_plan`, `no_plan`, `ending_soon`, `flagged`, `new_this_month`, `left_last_30` (same definitions as `owner_gym_stats`); limit capped at 500; no health fields |
+| `owner_set_gym_admin(p_gym, p_coach, p_is_admin)`, `owner_add_coach_to_gym(p_gym, p_coach, p_is_admin)`, `owner_remove_coach_from_gym(p_gym, p_coach)`, `owner_reassign_clients(p_gym, p_from, p_to)`, `owner_rename_gym(p_gym, p_name)`, `owner_set_gym_booking_settings(p_gym, p_timezone, p_blackout_start, p_blackout_end)` | owner of `p_gym` | same results as the admin versions |
+| `set_gym_admin(p_coach_id, p_is_admin)`, `add_coach_to_gym(p_coach_id, p_is_admin)`, `set_gym_name(p_name)`, `set_gym_booking_settings(...)` | unchanged signatures | now share the internals above |
+| `local_date(p_tz text, p_at timestamptz default now())`, `latest_completed_week(p_tz text)` | any signed-in user | date |
+| `is_coach_in_gym(p_gym)` | any signed-in user (used by policies) | boolean |
+
+New column: `profiles.deactivated_at`; `exercise_library.is_active` (default true). Error text brief 05 and 08 should show as it is: "That belongs to a different gym.", "A gym needs at least one admin. Make someone else an admin first.", "This coach still has N member(s) at this gym. Move them to another coach first.", "That coach does not work at this gym.", "This member already has a hold that overlaps those dates.", "You can't cancel a session that has already happened."
+
+### Before applying: what the owner must do
+
+1. Back up. Apply `0129`, `0130`, `0131` to the sandbox in order (after `0127` and `0128`), then run `gym-scoping-check.cjs`.
+2. Run these **read-only** queries on live. The first three decide whether the clean-up is needed:
+
+```sql
+-- R36: red flag entries filed under a gym the member does not belong to
+select e.gym_id, g.name, count(*) as wrong_gym_entries
+from public.red_flag_entries e join public.gyms g on g.id = e.gym_id
+where e.gym_id is distinct from public.client_gym_id(e.client_id) group by 1, 2;
+
+-- CL4: holds that already overlap (left alone), and entries naming a coach from another gym
+select a.client_id, a.id as hold_a, b.id as hold_b from public.membership_holds a
+join public.membership_holds b on b.client_id = a.client_id and b.id > a.id
+ and a.started_on <= coalesce(b.ended_on, 'infinity'::date) and b.started_on <= coalesce(a.ended_on, 'infinity'::date);
+select e.id, e.gym_id, e.coach_id from public.red_flag_entries e
+where e.coach_id is not null
+  and not exists (select 1 from public.coach_gym_memberships m where m.coach_id = e.coach_id and m.gym_id = e.gym_id);
+
+-- CM6: the timezones the owner statistics will use
+select name, timezone from public.gyms where organisation_id is not null;
+
+-- R38: objects already given to a member from another gym (they keep working; new ones are refused)
+select 'plan' as kind, count(*) from public.client_memberships m join public.membership_packages p on p.id = m.package_id
+  where p.gym_id is distinct from public.client_gym_id(m.client_id)
+union all select 'form', count(*) from public.form_assignments a join public.form_templates t on t.id = a.template_id
+  where t.gym_id is distinct from public.client_gym_id(a.client_id)
+union all select 'course', count(*) from public.education_course_assignments a join public.education_courses c on c.id = a.course_id
+  where c.gym_id is distinct from public.client_gym_id(a.client_id)
+union all select 'booking', count(*) from public.bookings b join public.classes c on c.id = b.class_id
+  where c.gym_id is distinct from public.client_gym_id(b.client_id);
+
+-- CM3: existing values the new bounds would not have allowed (nothing is changed in them)
+select id, name from public.gyms where btrim(name) = '' or char_length(name) > 80;
+select id, default_checkin_reminder_days from public.profiles where default_checkin_reminder_days > 60;
+select id, logo_path from public.profiles where logo_path is not null and logo_path !~ ('^' || id::text || '/[A-Za-z0-9._-]{1,100}$');
+
+-- CM4 and GA1: who owns the library, and gyms with no admin
+select (created_by is null) as seeded, count(*) from public.exercise_library group by 1;
+select g.id, g.name from public.gyms g
+where not exists (select 1 from public.coach_gym_memberships m where m.gym_id = g.id and m.is_gym_admin);
+
+-- CH1: members per coach per gym, and members whose coach does not work at their gym
+select g.name as gym, coalesce(c.display_name, c.email) as coach, count(m.id) as members
+from public.coach_gym_memberships cgm join public.gyms g on g.id = cgm.gym_id join public.profiles c on c.id = cgm.coach_id
+left join public.profiles m on m.coach_id = c.id and m.role = 'client' and m.gym_id = g.id group by 1, 2 order by 1, 3 desc;
+select m.id, m.gym_id, m.coach_id from public.profiles m
+where m.role = 'client' and m.coach_id is not null
+  and not exists (select 1 from public.coach_gym_memberships c where c.coach_id = m.coach_id and c.gym_id = m.gym_id);
+
+-- R37: the policies an owner could read through before 0131 (compare with the sandbox check afterwards)
+select polname, polrelid::regclass from pg_policy where pg_get_expr(polqual, polrelid) ilike '%is_same_gym_as_client%' order by 2, 1;
+```
+
+3. Apply to live one file at a time, in order. **Then run the red flag clean-up** (`supabase/cleanup/0129_red_flag_entries_wrong_gym.sql`): step 1 counts, step 2 lists, and only after you have read the list, step 3 (commented out) inside a transaction. Until it is run, the owner Overview still counts the 38 Worsley entries, because `owner_gym_stats` reads the stored entries by gym. Group C (entries where the team recorded something) is never touched by the script.
+4. After applying, ask the coaches who work in both gyms (Brad) to open the Red Flags tab once: with 0129 it no longer writes anything, so the latest week will say "not generated" until the 06:00 UTC job runs or a gym admin generates it.
+
+### Decisions used (recommended defaults)
+
+- **D2 (owner):** the owner works through functions only. `is_same_gym_as_client` is coach-only again; the owner keeps `SELECT` on `profiles` and `coach_gym_memberships`. The existing owner screens only call `owner_gyms_overview`, `owner_gym_stats` and `owner_activity_report` (checked in `lib/data/owner.ts` and `app/owner`), so they are unaffected.
+- **D3 (journal):** every coach at the member's gym can read journal entries (notes, goals, injuries); only the author can edit or delete; the assigned coach can add. The assigned coach used to be able to edit anyone's entry, so after a reassign the new coach can read but not edit the old coach's entries. Brief 05 should hide those edit and delete buttons.
+- **D4 (library):** authors edit their own entries, gym admins (`profiles.is_gym_admin`, the active-gym flag, as the brief says) edit the seeded ones, nobody can change an author, `is_active` retires an entry. Entries created by coach A can be edited by coach A only, as before.
+
+### Things to know
+
+- **Red flag tables follow gym memberships, not the active gym.** `red_flag_entries`, `red_flag_settings` and `membership_holds` were readable and writable only while the coach's active gym matched; they now follow `coach_gym_memberships`. Without this a coach looking at their other gym through `p_gym` could read the list but not save a note. Any coach at the member's gym can manage that member's holds, as before.
+- **Weeks generated before 0129 with nobody flagged** have no record and will show "not generated". Weeks that have entries are backfilled as generated.
+- **`generate_red_flag_week` is stricter:** a signed-in caller can only generate the latest completed week of a gym they may see. The daily job (no signed-in user) is unrestricted.
+- **`red_flag_week_stats` still uses `current_date` for its "unmarked sessions" column** (UTC). It is outside CM6 (owner statistics); left as it was.
+- **`owner_activity_report`** uses the gym's timezone when one gym is asked for; for "all gyms" it still uses the `p_tz` the caller passes.
+- **Not changed:** class and attendance functions (`mark_attendance`, `cancel_class_occurrence`, `restore_class_occurrence`, `coach_cancel_booking`) still compare the class's gym with the coach's active gym. That matches the app showing one gym's timetable at a time; brief 05 decides whether a coach should act on another gym's classes. `gym_events` has no member-linked coach view, so it got no extra read policy.
+- **`remove_coach_from_gym` does not cancel the coach's scheduled broadcasts** at that gym (`scheduled_communications`); a repeating message from a removed coach would keep sending under their name. Brief 09 (or 05) should cancel or reassign them.
+- **Members are not notified** when their coach changes; whether to tell them is for the screen (brief 08).
+- **Per-table choice for `reassign_clients`:** `profiles.coach_id` and open red flag follow-ups move with the member; journal entries, past red flag entries with a recorded follow-up, chat history, and everything a coach authors for the gym (classes, plans, forms, templates, groups, scheduled broadcasts, join links) stay where they are.
+
+### Hand-offs
+
+- **Brief 03:** it starts from my definitions of `book_class_for_client`, `cancel_class_occurrence` and `apply_programme_rollout`. The audience selection fix for `apply_programme_rollout` is already done; keep the null-safe check and the past-date check when rewriting.
+- **Brief 04:** `ExerciseLibraryManager` can use `is_active`; its delete message should say a used exercise cannot be deleted.
+- **Brief 05:** `lib/data/redFlags.ts` calls `red_flag_report(p_week_start, p_gym)` and must handle `generated: false` and offer `generate_latest_red_flag_week` to gym admins; `lastCompletedWeek()` can use `latest_completed_week` from the answer.
+- **Brief 08:** the function names above; use `deactivated` from `remove_coach_from_gym` to call the deactivate route; show the last-admin message as it is.
