@@ -1,16 +1,21 @@
-// Minimal RFC4180-ish CSV support -- just enough for the import/export flows (client roster,
-// exercise library). Fields containing a comma, quote, or newline get quoted; quotes inside a
-// quoted field are escaped by doubling, same as Excel/Sheets both read and write.
+// Minimal RFC4180-ish CSV support -- just enough for the import/export flows (client roster, exercise library, reports).
+// Quotes inside a quoted field are escaped by doubling, same as Excel/Sheets both read and write.
 
-export function toCsv(headers: string[], rows: (string | number | null)[][]): string {
-  const escapeField = (value: string | number | null): string => {
-    const str = value === null || value === undefined ? '' : String(value);
-    if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
-    return str;
-  };
-  const lines = [headers.map(escapeField).join(',')];
-  for (const row of rows) lines.push(row.map(escapeField).join(','));
-  return lines.join('\r\n');
+// A table as CSV text (the one implementation for every export). Values that contain a comma, quote or newline are quoted and
+// quotes are doubled. A STRING cell that starts with = + - @ , a tab or a carriage return is prefixed with a quote, so a spreadsheet
+// never treats text typed by a member (a name, a note) as a formula: =IMAGE("https://...") in a name would otherwise send other
+// cells off-site when a coach opens the file in Google Sheets. Numbers are written as they are (a negative number stays negative).
+export function toCsv(headers: string[], rows: (string | number | null | undefined)[][]): string {
+  return [headers, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+export function csvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  let s = String(value);
+  if (typeof value === 'string' && FORMULA_START.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 // Parses into rows of raw string cells -- callers map header -> value themselves, since each
@@ -82,8 +87,14 @@ export function headerIndex(headerRow: string[]): (name: string) => number {
   return (name: string) => normalized.indexOf(name.trim().toLowerCase());
 }
 
+// Excel only reads accented UTF-8 text correctly when a CSV starts with a byte-order mark. JSON and other files must NOT have one
+// (JSON.parse rejects it), so it is added for text/csv only.
+export function withByteOrderMark(content: string, mimeType: string): string {
+  return mimeType.toLowerCase().startsWith('text/csv') && !content.startsWith('\uFEFF') ? '\uFEFF' + content : content;
+}
+
 export function downloadTextFile(filename: string, content: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
+  const blob = new Blob([withByteOrderMark(content, mimeType)], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

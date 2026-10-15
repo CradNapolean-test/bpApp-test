@@ -5,23 +5,11 @@ import Link from 'next/link';
 import { getCoachReports } from '@/lib/data/reports';
 import type { CoachReport } from '@/lib/data/types';
 import { RedFlagsView } from './RedFlagsView';
-
-// Quotes any field containing a comma/quote/newline, doubling internal quotes -- minimal
-// correct CSV escaping, not a full RFC 4180 library for two simple flat tables.
-function csvCell(value: string | number): string {
-  const s = String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
+import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  const [headers, ...body] = rows;
+  downloadTextFile(filename, toCsv(headers as string[], body), 'text/csv;charset=utf-8;');
 }
 
 type Section = 'Red flags' | 'Overview' | 'No-shows' | 'Busiest';
