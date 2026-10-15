@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { handleTabListKeys } from '@/app/_components/tabKeys';
 
 // Underline-style sub-tab bar shared by the coach hub shells (Classes, Library, Business, Messages) --
 // in-page state, not routes, same as WorkspaceTabBar one level down at the per-client workspace.
@@ -41,6 +42,8 @@ export function HubTabBar<T extends string>({
   return (
     <div
       ref={rowRef}
+      role="tablist"
+      onKeyDown={handleTabListKeys}
       onScroll={measure}
       style={moreRight ? { maskImage: 'linear-gradient(to right, black calc(100% - 36px), transparent)' } : undefined}
       className="mb-4 flex w-full gap-4 overflow-x-auto border-b border-black/[.06] sm:gap-5 [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden"
@@ -51,6 +54,9 @@ export function HubTabBar<T extends string>({
           <button
             key={tab}
             type="button"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
             data-active={isActive}
             onClick={() => onSelect(tab)}
             className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors ${

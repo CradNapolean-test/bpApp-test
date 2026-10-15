@@ -21,6 +21,7 @@ export function AppShell({
   isCoachView,
   mobileHeader,
   signOutOnMobile,
+  pageTitle,
   children,
 }: {
   title: ReactNode;
@@ -48,6 +49,9 @@ export function AppShell({
   mobileHeader?: ReactNode;
   // Keeps the header Sign out button on narrow screens too, for pages (the owner's) with a mobileHeader but no Account screen.
   signOutOnMobile?: boolean;
+  // The page's name for screen readers, as a visually hidden <h1>. The brand wordmark in the header is not a heading (SH4), so a screen with
+  // no visible <h1> of its own passes this. A screen that draws its own <h1> must not.
+  pageTitle?: string;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -57,6 +61,13 @@ export function AppShell({
       data-view={isCoachView ? 'coach' : undefined}
       className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${bottomBar ? 'pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-10 md:pb-10' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:py-10'}`}
     >
+      {/* First stop for a keyboard or screen-reader user: jump past the header and the navigation to the page (SH4). */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[80] focus:rounded-full focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-accent-foreground"
+      >
+        Skip to content
+      </a>
       <div className={`flex flex-col ${topBar ? 'gap-4' : ''}`}>
         <div className={`flex items-center justify-between gap-3 ${mobileHeader ? 'order-2 md:order-1' : ''}`}>
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -73,7 +84,7 @@ export function AppShell({
             <div className={`min-w-0 items-center gap-2 ${mobileHeader ? 'hidden md:flex' : 'flex'}`}>
               <Logo size={28} className="hidden shrink-0 sm:block" />
               <div className="min-w-0">
-                <h1 className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</h1>
+                <p className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</p>
                 {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
               </div>
             </div>
@@ -96,11 +107,14 @@ export function AppShell({
 
       <div className="mt-6 flex gap-6">
         {sidebar && (
-          <aside className="hidden w-52 shrink-0 space-y-1 rounded-2xl bg-black/[.02] p-3 md:block dark:bg-white/[.03]">
+          <aside aria-label="Section menu" className="hidden w-52 shrink-0 space-y-1 rounded-2xl bg-black/[.02] p-3 md:block dark:bg-white/[.03]">
             {sidebar}
           </aside>
         )}
-        <div className="min-w-0 flex-1">{children}</div>
+        <main id="main" tabIndex={-1} className="min-w-0 flex-1 outline-none">
+          {pageTitle && <h1 className="sr-only">{pageTitle}</h1>}
+          {children}
+        </main>
       </div>
 
       {sidebar && !bottomBar && drawerOpen && (

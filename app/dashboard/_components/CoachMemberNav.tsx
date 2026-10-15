@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Apple, CheckSquare, Dumbbell, House, TrendingUp, UserCog } from 'lucide-react';
+import { handleTabListKeys } from '@/app/_components/tabKeys';
 import { screensForCategory } from './categories';
 import type { Category, NutritionTrackingMode, Screen } from './categories';
 
@@ -156,7 +157,7 @@ export function CoachMemberSideNav({
 // Phone bottom bar: the first five sections (Profile is reached from the Overview's Manage list).
 export function CoachMemberBottomNav({ groups, active, onSelect }: { groups: CoachGroup[]; active: string | undefined; onSelect: Select }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
+    <nav aria-label="Member sections" className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
       {groups
         .filter((g) => g.key !== 'profile')
         .map((g) => {
@@ -167,6 +168,7 @@ export function CoachMemberBottomNav({ groups, active, onSelect }: { groups: Coa
               key={g.key}
               type="button"
               onClick={() => onSelect(g.tabs[0])}
+              aria-current={isActive ? 'page' : undefined}
               className={`flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors ${isActive ? 'text-accent' : 'text-zinc-500'}`}
             >
               <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${isActive ? 'bg-accent-soft' : ''}`}>
@@ -212,6 +214,9 @@ export function CoachMemberTabs({
   return (
     <div
       ref={rowRef}
+      role="tablist"
+      aria-label="Pages in this section"
+      onKeyDown={handleTabListKeys}
       onScroll={measure}
       style={moreRight ? { maskImage: 'linear-gradient(to right, black calc(100% - 36px), transparent)' } : undefined}
       className="mb-4 flex w-full gap-5 overflow-x-auto border-b border-black/[.06] [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden"
@@ -222,6 +227,9 @@ export function CoachMemberTabs({
           <button
             key={`${t.category}:${t.screen}`}
             type="button"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
             data-active={isActive}
             onClick={() => onSelect(t)}
             className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors ${

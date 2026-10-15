@@ -23,12 +23,14 @@ export function ThemeToggle({ initial }: { initial: ThemePreference }) {
   }
 
   return (
-    <div className="flex gap-1 rounded-xl border border-black/[.08] bg-[var(--background)] p-1 dark:border-white/[.12]">
+    <div role="group" aria-label="Colour theme" className="flex gap-1 rounded-xl border border-black/[.08] bg-[var(--background)] p-1 dark:border-white/[.12]">
       {OPTIONS.map((o) => (
         <button
           key={o.value}
+          type="button"
+          aria-pressed={preference === o.value}
           onClick={() => handleSelect(o.value)}
-          className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`min-h-10 flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             preference === o.value
               ? 'bg-accent text-accent-foreground'
               : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'

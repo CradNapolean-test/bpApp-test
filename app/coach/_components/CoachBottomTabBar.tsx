@@ -4,12 +4,47 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Ellipsis } from 'lucide-react';
+import { useDialog } from '@/app/_components/useDialog';
 import { COACH_NAV, MOBILE_PRIMARY_COUNT, isCoachNavActive } from './coachNavItems';
 
 // Messages is the chat icon in every page header on a phone, so it does not take a place on the bar.
 const PHONE_NAV = COACH_NAV.filter((n) => n.href !== '/coach/messages');
 // All of them fit on the bar when there are five or fewer; otherwise the rest go under "More".
 const PHONE_PRIMARY_COUNT = PHONE_NAV.length <= 5 ? PHONE_NAV.length : MOBILE_PRIMARY_COUNT;
+
+// The pages under "More", as a small dialog above the bar: Escape closes it, Tab stays inside, focus returns to the More button.
+function MoreSheet({ overflow, pathname, onClose }: { overflow: ReadonlyArray<(typeof COACH_NAV)[number]>; pathname: string; onClose: () => void }) {
+  const ref = useDialog<HTMLDivElement>({ onClose });
+  return (
+    <div className="fixed inset-0 z-40 md:hidden" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" aria-hidden />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label="More pages"
+        className="absolute inset-x-3 bottom-[4.5rem] rounded-2xl border border-black/10 bg-card p-2 shadow-xl dark:border-white/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {overflow.map(({ href, label, Icon }) => {
+          const active = isCoachNavActive(pathname, href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={onClose}
+              aria-current={active ? 'page' : undefined}
+              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${active ? 'bg-accent-soft text-accent' : 'text-black dark:text-zinc-50'}`}
+            >
+              <Icon className="h-5 w-5" aria-hidden />
+              {label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // Coach-side mobile nav -- replaces the hamburger drawer on small screens (see AppShell's
 // bottomBar prop). Real routes (Link + usePathname), not in-page state. The first few
@@ -30,48 +65,23 @@ export function CoachBottomTabBar() {
 
   return (
     <>
-      {moreOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="absolute inset-x-3 bottom-[4.5rem] rounded-2xl border border-black/10 bg-card p-2 shadow-xl dark:border-white/10"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {overflow.map(({ href, label, Icon }) => {
-              const active = isCoachNavActive(pathname, href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMoreOpen(false)}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${
-                    active ? 'bg-accent-soft text-accent' : 'text-black dark:text-zinc-50'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
+      {moreOpen && <MoreSheet overflow={overflow} pathname={pathname} onClose={() => setMoreOpen(false)} />}
+      <nav aria-label="Coach" className="fixed inset-x-0 bottom-0 z-50 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
         {primary.map(({ href, label, Icon }) => {
           const active = isCoachNavActive(pathname, href);
           return (
-            <Link key={href} href={href} onClick={() => setMoreOpen(false)} className={tabCls(active)}>
+            <Link key={href} href={href} onClick={() => setMoreOpen(false)} aria-current={active ? 'page' : undefined} className={tabCls(active)}>
               <span className={chipCls(active)}>
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5" aria-hidden />
               </span>
               {label}
             </Link>
           );
         })}
         {overflow.length > 0 && (
-          <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className={tabCls(moreOpen || overflowActive)}>
+          <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} aria-haspopup="dialog" className={tabCls(moreOpen || overflowActive)}>
             <span className={chipCls(moreOpen || overflowActive)}>
-              <Ellipsis className="h-5 w-5" />
+              <Ellipsis className="h-5 w-5" aria-hidden />
             </span>
             More
           </button>

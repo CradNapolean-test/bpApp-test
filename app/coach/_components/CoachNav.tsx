@@ -17,16 +17,16 @@ export function CoachNav() {
     }`;
 
   return (
-    <div className="hidden w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 md:flex dark:bg-white/[.03]">
+    <nav aria-label="Coach" className="hidden w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 md:flex dark:bg-white/[.03]">
       {COACH_NAV.map(({ href, label, Icon }) => {
         const active = isCoachNavActive(pathname, href);
         return (
-          <Link key={href} href={href} className={linkCls(Boolean(active))}>
-            <Icon className="h-4 w-4" />
+          <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={linkCls(Boolean(active))}>
+            <Icon className="h-4 w-4" aria-hidden />
             {label}
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }
