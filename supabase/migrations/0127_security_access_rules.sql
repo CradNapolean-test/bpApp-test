@@ -143,3 +143,16 @@ drop trigger if exists protect_coach_owned_profile_fields on public.client_profi
 create trigger protect_coach_owned_profile_fields
   before insert or update on public.client_profiles
   for each row execute function public.protect_coach_owned_profile_fields();
+
+-- =====================================================================================================================
+-- M9. Timezone defaults.
+-- client_profiles.timezone (0044) and gyms.timezone (0064) defaulted to Pacific/Auckland; the app's DEFAULT_TIMEZONE is
+-- Europe/London. Only the DEFAULT changes. Existing rows are NOT touched: the live gyms are already on Europe/London and the
+-- seeded test members (Auckland) are to be deleted.
+--
+-- PRE-FLIGHT (informational; check what is there now):
+--   select name, timezone from public.gyms;
+--   select timezone, count(*) from public.client_profiles group by 1;
+-- =====================================================================================================================
+alter table public.client_profiles alter column timezone set default 'Europe/London';
+alter table public.gyms alter column timezone set default 'Europe/London';
