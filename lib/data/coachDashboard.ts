@@ -10,6 +10,7 @@ import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
 import { getRedFlagReport } from './redFlags';
+import { fetchAllPages } from '@/lib/paging';
 import type { ActivityEventRow, DailyLogRow, ScheduleOccurrence } from './types';
 
 export type DashboardScope = 'mine' | 'gym' | 'coach';
@@ -65,10 +66,6 @@ export interface ChallengeDue {
   daysLeft: number | null;
   mine: boolean;
 }
-export interface DeletionRequestItem {
-  clientId: string;
-  name: string;
-}
 export interface UnreadThread {
   clientId: string;
   name: string;
@@ -97,7 +94,6 @@ export interface CoachDashboardData {
   redFlags: { weekStart: string; flagged: number; toContact: number } | null;
   occurrences: ScheduleOccurrence[];
   unreadThreads: UnreadThread[];
-  deletionRequests: DeletionRequestItem[];
   newMembers: NewMember[];
   checkins: WeekCheckin[];
   challengeDue: ChallengeDue[];
@@ -133,7 +129,6 @@ interface MemberRow {
     onboarding_completed_at: string | null;
     needs_coach_review: boolean | null;
     review_reasons: string[] | null;
-    deletion_requested_at: string | null;
     checkin_reminder_days: number | null;
   }>;
   credits_balance: ProfileRel<{ balance: number }>;
@@ -154,7 +149,7 @@ interface MemberRow {
 
 const SELECT = `
   id, email, coach_id, created_at,
-  client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, deletion_requested_at, checkin_reminder_days),
+  client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, checkin_reminder_days),
   credits_balance(balance),
   client_memberships!client_id(id, started_at, scheduled_end, ended_at, membership_packages(credits_per_week, duration_weeks, name)),
   daily_logs(id, log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(id, created_at)),
@@ -214,14 +209,20 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     if (scope === 'mine') q = q.eq('coach_id', user.id);
     else if (scope === 'coach' && selectedCoachId) q = q.eq('coach_id', selectedCoachId);
     else if (me?.gym_id) q = q.eq('gym_id', me.gym_id);
-    return q.limit(1000);
+    return q;
   };
   // Without migration 0087 (reviewed markers) the dashboard still loads, just with nothing
   // marked reviewed.
+  // Page by page: the database stops at 1,000 rows without saying so, and a gym with more members than that lost the rest from every
+  // number on this page (CM6).
   const fetchMembers = async () => {
-    const first = await buildQuery(SELECT);
+    const read = async (select: string) => {
+      const { rows, error } = await fetchAllPages((from, to) => buildQuery(select).order('id').range(from, to));
+      return { data: rows, error };
+    };
+    const first = await read(SELECT);
     if (!first.error) return first;
-    return buildQuery(SELECT.replace('coach_reviews!client_id(kind, ref),', ''));
+    return read(SELECT.replace('coach_reviews!client_id(kind, ref),', ''));
   };
 
   const [{ data: rows, error }, occurrences, chatOverview, activity, flagResult] = await Promise.all([
@@ -241,7 +242,6 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const mine = (m: MemberRow) => m.coach_id === user.id;
 
   const newMembers: NewMember[] = [];
-  const deletionRequests: DeletionRequestItem[] = [];
   const checkins: WeekCheckin[] = [];
   const challengeDue: ChallengeDue[] = [];
   const photoReviews: PhotoReview[] = [];
@@ -261,7 +261,6 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     const reviewed = new Set((m.coach_reviews ?? []).map((r) => `${r.kind}|${r.ref}`));
     const onboarded = !!cp && cp.onboarding_completed_at !== null;
 
-    if (cp?.deletion_requested_at) deletionRequests.push({ clientId: m.id, name });
     if (cp?.needs_coach_review) newMembers.push({ clientId: m.id, name, reasons: cp.review_reasons ?? [], mine: mine(m) });
     if (m.created_at.slice(0, 10) >= thisWeek) newThisWeek += 1;
 
@@ -389,7 +388,6 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       : null,
     occurrences,
     unreadThreads,
-    deletionRequests,
     newMembers,
     checkins,
     challengeDue,
@@ -455,22 +453,26 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
   const in14 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), 14));
   const ago30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
 
-  const [{ data: coachRows }, { data: rows, error }] = await Promise.all([
-    supabase.from('profiles').select('id, email, display_name').eq('role', 'coach').eq('gym_id', me.gym_id),
-    supabase
-      .from('profiles')
-      .select(
-        `id, email, coach_id, created_at,
+  const gymId = me.gym_id;
+  const [{ data: coachRows }, { rows, error }] = await Promise.all([
+    supabase.from('profiles').select('id, email, display_name').eq('role', 'coach').eq('gym_id', gymId),
+    fetchAllPages((from, to) =>
+      supabase
+        .from('profiles')
+        .select(
+          `id, email, coach_id, created_at,
          client_profiles(name, onboarding_completed_at, needs_coach_review),
          client_memberships!client_id(ended_at, scheduled_end, membership_packages(name)),
          daily_logs(log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes),
          bookings!client_id(booking_date, attended)`
-      )
-      .eq('role', 'client')
-      .eq('gym_id', me.gym_id)
-      .gte('daily_logs.log_date', since14)
-      .gte('bookings.booking_date', prevMonthStart)
-      .limit(1000),
+        )
+        .eq('role', 'client')
+        .eq('gym_id', gymId)
+        .gte('daily_logs.log_date', since14)
+        .gte('bookings.booking_date', prevMonthStart)
+        .order('id')
+        .range(from, to)
+    ),
   ]);
   if (error) throw new Error(error.message);
 

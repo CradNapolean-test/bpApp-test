@@ -1,6 +1,8 @@
 import { raise } from './errors';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { addDays, daysBetween, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { addDays, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { computeHealth, type ClientHealthBucket } from '@/lib/healthStatus';
+import { fetchAllPages } from '@/lib/paging';
 
 // The "coach-global" tables (classes, membership_packages, form_templates) are scoped to a
 // specific coach, but the caller could be that coach themself or one of their clients --
@@ -42,7 +44,6 @@ export interface CoachClientRow {
   start_weight: number | null;
   goal_weight: number | null;
   balance: number;
-  deletion_requested_at: string | null;
   // New member whose starting plan hasn't been checked yet (onboarding).
   needsReview: boolean;
   // Name of their current membership plan, null when none is set up.
@@ -68,6 +69,10 @@ export interface GymClientRow extends CoachClientRow {
   isOwnClient: boolean;
 }
 
+// Every row of the client list queries below, in pages: the database stops at 1,000 rows without saying so (CM6).
+const CLIENT_ROW_SELECT =
+  'id, email, client_profiles(name, start_weight, goal_weight, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, membership_packages(name))';
+
 // Every client at the gym, regardless of which coach they're assigned to -- read-only
 // cross-coach search (see is_same_gym_as_client RLS, 0052/0053). Filters on the client's own
 // fixed gym_id (0056), not their coach's currently-active gym -- a dual-gym coach's clients
@@ -79,18 +84,19 @@ export async function searchGymClients(
   gymId: string,
   myCoachId: string
 ): Promise<GymClientRow[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, membership_packages(name)), coach:coach_id(id, email, display_name)'
-    )
-    .eq('role', 'client')
-    .eq('gym_id', gymId)
-    .order('created_at', { ascending: false });
-
+  const { rows, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from('profiles')
+      .select(`${CLIENT_ROW_SELECT}, coach:coach_id(id, email, display_name)`)
+      .eq('role', 'client')
+      .eq('gym_id', gymId)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
   if (error) raise(error);
 
-  return (data ?? []).map((row) => {
+  return rows.map((row) => {
     const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
     const balanceRow = Array.isArray(row.credits_balance) ? row.credits_balance[0] : row.credits_balance;
     const coach = Array.isArray(row.coach) ? row.coach[0] : row.coach;
@@ -101,7 +107,6 @@ export async function searchGymClients(
       start_weight: profile?.start_weight ?? null,
       goal_weight: profile?.goal_weight ?? null,
       balance: balanceRow?.balance ?? 0,
-      deletion_requested_at: profile?.deletion_requested_at ?? null,
       needsReview: profile?.needs_coach_review ?? false,
       planName: planNameOf(row.client_memberships),
       coachId: coach?.id ?? '',
@@ -111,22 +116,24 @@ export async function searchGymClients(
   });
 }
 
+// The coach's own members, whichever gym they belong to (the page says so when that is not the gym being viewed).
 export async function getMyClients(
   supabase: SupabaseClient,
   coachId: string
 ): Promise<CoachClientRow[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, email, client_profiles(name, start_weight, goal_weight, deletion_requested_at, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, membership_packages(name))'
-    )
-    .eq('coach_id', coachId)
-    .eq('role', 'client')
-    .order('created_at', { ascending: false });
-
+  const { rows, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from('profiles')
+      .select(CLIENT_ROW_SELECT)
+      .eq('coach_id', coachId)
+      .eq('role', 'client')
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
   if (error) raise(error);
 
-  return (data ?? []).map((row) => {
+  return rows.map((row) => {
     const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
     const balanceRow = Array.isArray(row.credits_balance) ? row.credits_balance[0] : row.credits_balance;
     return {
@@ -136,14 +143,13 @@ export async function getMyClients(
       start_weight: profile?.start_weight ?? null,
       goal_weight: profile?.goal_weight ?? null,
       balance: balanceRow?.balance ?? 0,
-      deletion_requested_at: profile?.deletion_requested_at ?? null,
       needsReview: profile?.needs_coach_review ?? false,
       planName: planNameOf(row.client_memberships),
     };
   });
 }
 
-export type ClientHealthBucket = 'green' | 'amber' | 'red' | 'unmonitored';
+export type { ClientHealthBucket };
 
 export interface ClientHealthStatus {
   clientId: string;
@@ -153,54 +159,127 @@ export interface ClientHealthStatus {
   lastActiveDate: string | null;
 }
 
+// What the status of one member is made from: a row of profiles with their client_profiles.
+type HealthProfile = { name: string | null; checkin_reminder_days: number | null; timezone: string | null };
+interface HealthRow {
+  id: string;
+  email: string;
+  created_at: string;
+  client_profiles: HealthProfile | HealthProfile[] | null;
+}
+
+function statusOfRow(row: HealthRow, lastActive: string | null): ClientHealthStatus {
+  const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
+  // Each client's own local "today", not one shared UTC value for the whole roster -- same root-cause fix as loadDashboardBundle
+  // (see migration 0044).
+  const health = computeHealth({
+    reminderDays: profile?.checkin_reminder_days,
+    lastActive,
+    createdAt: row.created_at,
+    todayIso: todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE),
+  });
+  return { clientId: row.id, name: profile?.name ?? row.email, daysSinceActive: health.daysSinceActive, status: health.status, lastActiveDate: lastActive };
+}
+
+// The same thing for a member whose rows the page already has (the member's own page): no extra query for the profile.
+export function memberHealthStatus(input: {
+  clientId: string;
+  name: string;
+  createdAt: string;
+  reminderDays: number | null | undefined;
+  timezone: string | null | undefined;
+  lastActive: string | null;
+}): ClientHealthStatus {
+  return statusOfRow(
+    {
+      id: input.clientId,
+      email: input.name,
+      created_at: input.createdAt,
+      client_profiles: { name: input.name, checkin_reminder_days: input.reminderDays ?? null, timezone: input.timezone ?? null },
+    },
+    input.lastActive
+  );
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Program Health widget: how many days since each client's last *real* logged day
 // (get_client_last_active, 0010_client_last_active.sql -- excludes the auto-created blank
 // "today" row), relative to that client's own coach-configured checkin_reminder_days
 // threshold (already surfaced in CreditsTab.tsx). Reuses the same inactivity signal the
 // check-in reminder automation computes, rather than a second definition of "at risk".
+//
+// scope: a coach id (that coach's own members, the old behaviour), or { coachId, gymId }: the coach's own members AND everyone at that
+// gym, so a colleague's member in "Whole gym" gets a real status instead of "Unmonitored" (R32). One query for the members, one for the
+// last-active dates of everyone the caller can see; nothing is fetched per member.
 export async function getClientHealthStatuses(
   supabase: SupabaseClient,
-  coachId: string
+  scope: string | { coachId?: string; gymId?: string }
 ): Promise<ClientHealthStatus[]> {
-  const { data: clients, error: clientsError } = await supabase
-    .from('profiles')
-    .select('id, email, created_at, client_profiles(name, checkin_reminder_days, timezone)')
-    .eq('coach_id', coachId)
-    .eq('role', 'client');
-  if (clientsError) raise(clientsError);
-  if (!clients || clients.length === 0) return [];
+  const { coachId, gymId } = typeof scope === 'string' ? { coachId: scope, gymId: undefined } : scope;
+  const filters = [coachId && UUID.test(coachId) ? `coach_id.eq.${coachId}` : null, gymId && UUID.test(gymId) ? `gym_id.eq.${gymId}` : null].filter(Boolean);
+  if (filters.length === 0) return [];
 
-  const { data: lastActiveRows, error: lastActiveError } = await supabase.rpc('get_client_last_active');
-  if (lastActiveError) raise(lastActiveError);
-  const lastActiveMap = new Map(
-    ((lastActiveRows ?? []) as { client_id: string; last_active: string }[]).map((r) => [r.client_id, r.last_active])
+  const { rows: clients, error: clientsError } = await fetchAllPages((from, to) =>
+    supabase
+      .from('profiles')
+      .select('id, email, created_at, client_profiles(name, checkin_reminder_days, timezone)')
+      .eq('role', 'client')
+      .or(filters.join(','))
+      .order('id')
+      .range(from, to)
   );
+  if (clientsError) raise(clientsError);
+  if (clients.length === 0) return [];
 
-  return clients.map((row) => {
-    const profile = Array.isArray(row.client_profiles) ? row.client_profiles[0] : row.client_profiles;
-    const threshold = profile?.checkin_reminder_days ?? 3;
-    const lastActive = lastActiveMap.get(row.id) ?? null;
-    // Each client's own local "today", not one shared UTC value for the whole roster --
-    // same root-cause fix as loadDashboardBundle (see migration 0044).
-    const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
-    // Clamped at 0 as defense-in-depth -- shouldn't go negative anymore now "today" is
-    // computed per-client, but a display value should never read as nonsensical regardless.
-    const daysSinceActive = Math.max(0, daysBetween(lastActive ?? (row.created_at as string).slice(0, 10), todayIso));
+  const { rows: lastActiveRows, error: lastActiveError } = await fetchAllPages((from, to) =>
+    supabase.rpc('get_client_last_active').order('client_id').range(from, to)
+  );
+  if (lastActiveError) raise(lastActiveError);
+  const lastActiveMap = new Map((lastActiveRows as { client_id: string; last_active: string }[]).map((r) => [r.client_id, r.last_active]));
 
-    let status: ClientHealthBucket;
-    if (threshold === 0) status = 'unmonitored';
-    else if (daysSinceActive <= threshold) status = 'green';
-    else if (daysSinceActive <= threshold * 2) status = 'amber';
-    else status = 'red';
+  return (clients as unknown as HealthRow[]).map((row) => statusOfRow(row, lastActiveMap.get(row.id) ?? null));
+}
 
-    return {
-      clientId: row.id,
-      name: profile?.name ?? row.email,
-      daysSinceActive,
-      status,
-      lastActiveDate: lastActive,
-    };
-  });
+// The last day a member logged anything (the same rule as get_client_last_active), for their own page: one narrow query for one member
+// instead of the roster's.
+export async function getClientLastActive(supabase: SupabaseClient, clientId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .select('log_date')
+    .eq('client_id', clientId)
+    .or(
+      'protein.not.is.null,carbs.not.is.null,fat.not.is.null,bodyweight.not.is.null,steps.not.is.null,sleep.not.is.null,fibre.not.is.null,water.not.is.null,gym_session.eq.true,hunger.not.is.null,energy.not.is.null,motivation.not.is.null,stress.not.is.null,period_started.eq.true,notes.not.is.null'
+    )
+    .order('log_date', { ascending: false })
+    .limit(1);
+  if (error) raise(error);
+  return (data?.[0]?.log_date as string | undefined) ?? null;
+}
+
+// ---- unread messages, for the header badge ----
+
+// The coach's total unread messages: one count (coach_unread_total, migration 0141) instead of building the whole inbox overview to add
+// it up. Falls back to the overview when 0141 is not applied yet, so the pages still load.
+export async function getCoachUnreadTotal(supabase: SupabaseClient): Promise<number> {
+  const { data, error } = await supabase.rpc('coach_unread_total');
+  if (!error) return Number(data ?? 0);
+  const { data: rows, error: overviewError } = await supabase.rpc('get_coach_chat_overview');
+  if (overviewError) return 0;
+  return ((rows ?? []) as { unread_count: number | string }[]).reduce((sum, r) => sum + Number(r.unread_count), 0);
+}
+
+// Unread messages from one member to the coach: the thread's read marker, then one count.
+export async function getCoachUnreadForClient(supabase: SupabaseClient, clientId: string): Promise<number> {
+  const { data: thread } = await supabase.from('chat_threads').select('coach_last_read_at').eq('client_id', clientId).maybeSingle();
+  const since = (thread?.coach_last_read_at as string | null | undefined) ?? '1970-01-01T00:00:00Z';
+  const { count } = await supabase
+    .from('chat_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .eq('sender_id', clientId)
+    .gt('created_at', since);
+  return count ?? 0;
 }
 
 export interface ClientHabitAdherence {

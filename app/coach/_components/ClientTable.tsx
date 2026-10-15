@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpDown, MessageSquare, Search, Users } from 'lucide-react';
+import { ArrowUpDown, MessageSquare, Search, Users } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Avatar } from '@/app/_components/Avatar';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
+import { LIST_STEP, remainingAfter, showMore, visibleCount } from '@/lib/paging';
 import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow, GymClientRow } from '@/lib/data/coach';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 
@@ -30,6 +31,7 @@ const STATUS_TEXT: Record<ClientHealthBucket, { label: string; cls: string }> = 
 export function ClientTable({
   clients,
   gymClients,
+  gymName,
   statuses,
   groups,
   holdIds = [],
@@ -59,7 +61,6 @@ export function ClientTable({
   const [query, setQuery] = useState('');
   const [groupId, setGroupId] = useState('');
   const [managingGroups, setManagingGroups] = useState(false);
-  const [pendingDeletionOnly, setPendingDeletionOnly] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>('all');
   const [legend, setLegend] = useState(false);
   const onHold = useMemo(() => new Set(holdIds), [holdIds]);
@@ -67,10 +68,6 @@ export function ClientTable({
   const activeClients: (CoachClientRow | GymClientRow)[] = scope === 'gym' && gymClients ? gymClients : clients;
 
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.clientId, s])), [statuses]);
-  const pendingDeletionCount = useMemo(
-    () => activeClients.filter((c) => c.deletion_requested_at != null).length,
-    [activeClients]
-  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,7 +75,6 @@ export function ClientTable({
     const filteredClients = activeClients
       .filter((c) => (q ? (c.name ?? '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) : true))
       .filter((c) => (activeGroup ? activeGroup.memberIds.includes(c.id) : true))
-      .filter((c) => (pendingDeletionOnly ? c.deletion_requested_at != null : true))
       .filter((c) => (planFilter ? (planFilter === '__none' ? c.planName == null : c.planName === planFilter) : true));
     const merged = filteredClients
       .map((c) => ({ client: c, health: statusById.get(c.id) ?? null }))
@@ -110,7 +106,7 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, pendingDeletionOnly, quick, onHold, planFilter]);
+  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, quick, onHold, planFilter]);
 
   const quickCounts = useMemo(
     () => ({
@@ -126,12 +122,18 @@ export function ClientTable({
   );
 
   const planNames = useMemo(() => [...new Set(activeClients.map((c) => c.planName).filter((n): n is string => !!n))].sort(), [activeClients]);
-  const filtersOn = query.trim() !== '' || groupId !== '' || quick !== 'all' || pendingDeletionOnly || planFilter !== '';
+  const filtersOn = query.trim() !== '' || groupId !== '' || quick !== 'all' || planFilter !== '';
+  // Long lists draw the first few and a "Show more" button (90 members were ~2,900 elements). The count starts over whenever the
+  // list, the filters or the sort change, so a new search never opens halfway down.
+  const listKey = `${scope}|${query}|${groupId}|${quick}|${planFilter}|${sortKey}|${asc}`;
+  const [paging, setPaging] = useState({ key: '', count: LIST_STEP });
+  const shownCount = visibleCount(rows.length, paging.key === listKey ? paging.count : LIST_STEP);
+  const shownRows = rows.slice(0, shownCount);
+  const moreRows = remainingAfter(rows.length, shownCount);
   function clearFilters() {
     setQuery('');
     setGroupId('');
     setQuick('all');
-    setPendingDeletionOnly(false);
     setPlanFilter('');
   }
   const emptyText = filtersOn ? 'Nobody matches these filters.' : 'No clients here yet.';
@@ -201,7 +203,7 @@ const scopeBtnCls = (active: boolean) =>
       {scope === 'gym' && activeClients.length === 0 ? (
         <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
           <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
-          <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients at this gym yet</p>
+          <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients at {gymName ?? 'this gym'} yet</p>
         </div>
       ) : (
       <>
@@ -305,25 +307,12 @@ const scopeBtnCls = (active: boolean) =>
           </button>
         </div>
       </div>
-      {pendingDeletionCount > 0 && (
-        <button
-          onClick={() => setPendingDeletionOnly((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
-            pendingDeletionOnly
-              ? 'border-danger/30 bg-danger/10 text-danger'
-              : 'border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
-          }`}
-        >
-          <AlertTriangle className="h-3.5 w-3.5" />
-          Pending deletion ({pendingDeletionCount})
-        </button>
-      )}
       {managingGroups && (
         <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
       )}
       {/* Phone: one card per client (the table needs ~34rem of width). */}
       <ul className="space-y-2 md:hidden">
-        {rows.map(({ client, health }) => {
+        {shownRows.map(({ client, health }) => {
           const status = statusFor(client.id, health);
           const unread = unreadByClient[client.id] ?? 0;
           const last = health?.lastActiveDate
@@ -342,7 +331,6 @@ const scopeBtnCls = (active: boolean) =>
                     <span className="truncate">{client.name ?? client.email}</span>
                     {client.needsReview && <span className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-extrabold text-warning">NEW</span>}
                     {onHold.has(client.id) && <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-sky-600 dark:text-sky-400">HOLD</span>}
-                    {client.deletion_requested_at && <span className="shrink-0 rounded-full bg-danger/15 px-1.5 py-0.5 text-[10px] font-extrabold text-danger">DELETE</span>}
                   </p>
                   <p className="truncate text-xs text-zinc-500">
                     <span className={`font-semibold ${status.cls}`}>{status.label}</span> · {last}
@@ -396,7 +384,7 @@ const scopeBtnCls = (active: boolean) =>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ client, health }) => {
+          {shownRows.map(({ client, health }) => {
             return (
               <tr
                 key={client.id}
@@ -423,15 +411,6 @@ const scopeBtnCls = (active: boolean) =>
                           <Link href={`/coach/clients/${client.id}?open=messages`} aria-label="Unread messages" className="inline-flex items-center gap-1 text-xs font-bold text-accent">
                             <MessageSquare className="h-3 w-3" /> {unreadByClient[client.id]}
                           </Link>
-                        )}
-                        {client.deletion_requested_at && (
-                          <span
-                            title="Deletion requested"
-                            className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-danger"
-                          >
-                            <AlertTriangle className="h-2.5 w-2.5" />
-                            Deletion requested
-                          </span>
                         )}
                       </div>
                       <p className="truncate text-xs text-zinc-500">{client.planName ?? 'No plan'} · {client.email}</p>
@@ -469,6 +448,15 @@ const scopeBtnCls = (active: boolean) =>
         </tbody>
       </table>
       </div>
+      {moreRows > 0 && (
+        <button
+          type="button"
+          onClick={() => setPaging({ key: listKey, count: showMore(shownCount, rows.length) })}
+          className="w-full rounded-full border border-black/10 py-2.5 text-sm font-bold text-zinc-700 hover:bg-black/5 dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/5"
+        >
+          Show more ({moreRows} left)
+        </button>
+      )}
       </>
       )}
       {legend && (

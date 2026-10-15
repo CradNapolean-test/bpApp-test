@@ -13,7 +13,6 @@ import {
   Flag,
   MessageSquare,
   Plus,
-  Trash2,
   Trophy,
   Utensils,
   Users,
@@ -141,24 +140,6 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
 
   // ---- To do ----
   const groups: TodoGroup[] = [];
-
-  if (data.deletionRequests.length > 0) {
-    groups.push({
-      key: 'delete',
-      icon: Trash2,
-      tone: 'urgent',
-      title: data.deletionRequests.length === 1 ? 'Account deletion request' : 'Account deletion requests',
-      summary: data.deletionRequests.length === 1 ? `${data.deletionRequests[0].name}: their data needs removing` : 'Members asked for their data to be removed',
-      direct: true,
-      items: data.deletionRequests.map((d) => ({
-        key: d.clientId,
-        clientId: d.clientId,
-        title: d.name,
-        hint: 'Asked to delete their account',
-        href: `/coach/clients/${d.clientId}`,
-      })),
-    });
-  }
 
   if (data.unreadThreads.length > 0) {
     const names = data.unreadThreads.map((t) => t.name);

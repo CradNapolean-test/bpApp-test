@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getCoachChatOverview } from '@/lib/data/chat';
+import { getCoachUnreadTotal } from '@/lib/data/coach';
 import { getGymRoster, getMyGyms } from '@/lib/data/gym';
 import { CoachSettingsShell } from './_components/CoachSettingsShell';
 
@@ -19,12 +19,11 @@ export default async function CoachSettingsPage() {
   if (profile?.role !== 'coach') redirect('/dashboard');
   const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
-  const [chatOverview, gymRoster, myGyms] = await Promise.all([
-    getCoachChatOverview(),
+  const [unreadCount, gymRoster, myGyms] = await Promise.all([
+    getCoachUnreadTotal(supabase),
     profile.is_gym_admin ? getGymRoster() : Promise.resolve([]),
     getMyGyms(),
   ]);
-  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <CoachSettingsShell

@@ -36,7 +36,7 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
   const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue, holdIds] = await Promise.all([
     getMyClients(supabase, user.id),
     searchGymClients(supabase, profile.gym_id, user.id),
-    getClientHealthStatuses(supabase, user.id),
+    getClientHealthStatuses(supabase, { coachId: user.id, gymId: profile.gym_id }),
     getCoachChatOverview(),
     getGroups(),
     getClientsNeedingReview(),

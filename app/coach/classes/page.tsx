@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getClasses, getScheduleOccurrences } from '@/lib/data/classes';
-import { getCoachChatOverview } from '@/lib/data/chat';
+import { getCoachUnreadTotal } from '@/lib/data/coach';
 import { getCoachReport } from '@/lib/data/reports';
 import { getMyClients } from '@/lib/data/coach';
 import { ClassesHubShell } from './_components/ClassesHubShell';
@@ -25,14 +25,13 @@ export default async function CoachClassesPage({ searchParams }: { searchParams:
   if (profile?.role !== 'coach') redirect('/dashboard');
   const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
-  const [classes, occurrences, chatOverview, report, clients] = await Promise.all([
+  const [classes, occurrences, unreadCount, report, clients] = await Promise.all([
     getClasses(),
     getScheduleOccurrences(3, 5, true),
-    getCoachChatOverview(),
+    getCoachUnreadTotal(supabase),
     getCoachReport(),
     getMyClients(supabase, user.id),
   ]);
-  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <ClassesHubShell

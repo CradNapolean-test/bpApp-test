@@ -4,7 +4,7 @@ import { getExerciseLibrary, getExerciseUsage } from '@/lib/data/exerciseLibrary
 import { getPendingRollouts, getProgramTemplatesWithDays } from '@/lib/data/programTemplates';
 import { getFormTemplates } from '@/lib/data/forms';
 import { getCourseRollup, getCourses } from '@/lib/data/education';
-import { getCoachChatOverview } from '@/lib/data/chat';
+import { getCoachUnreadTotal } from '@/lib/data/coach';
 import { getGroups } from '@/lib/data/clientGroups';
 import { getMyGyms } from '@/lib/data/gym';
 import { getMyClients } from '@/lib/data/coach';
@@ -24,12 +24,12 @@ export default async function CoachLibraryPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [exercises, templates, formTemplates, courses, chatOverview, groups, myClients, rollouts, exerciseUsage, courseRollup, myGyms] = await Promise.all([
+  const [exercises, templates, formTemplates, courses, unreadCount, groups, myClients, rollouts, exerciseUsage, courseRollup, myGyms] = await Promise.all([
     getExerciseLibrary(),
     getProgramTemplatesWithDays(),
     getFormTemplates(),
     getCourses(),
-    getCoachChatOverview(),
+    getCoachUnreadTotal(supabase),
     getGroups(),
     getMyClients(supabase, user.id),
     getPendingRollouts(),
@@ -37,7 +37,6 @@ export default async function CoachLibraryPage() {
     getCourseRollup(),
     getMyGyms().catch(() => []),
   ]);
-  const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
 
   return (
     <LibraryHubShell

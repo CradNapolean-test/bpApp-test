@@ -30,6 +30,7 @@ import { useAction } from '@/app/_components/useAction';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
+import { lastActiveLabel } from '@/lib/healthStatus';
 import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
@@ -285,11 +286,7 @@ export function CoachMemberOverview({
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-extrabold text-black dark:text-zinc-50">{profile?.name ?? 'Member'}</p>
             <p className="text-xs text-zinc-500">
-              {healthStatus && healthStatus.status !== 'unmonitored'
-                ? healthStatus.daysSinceActive === 0
-                  ? 'Active today'
-                  : `Last active ${healthStatus.daysSinceActive} day${healthStatus.daysSinceActive === 1 ? '' : 's'} ago`
-                : 'Not monitored'}
+              {lastActiveLabel(healthStatus)}
               {memberSince ? ` · member since ${shortDate(memberSince)}` : ''}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">

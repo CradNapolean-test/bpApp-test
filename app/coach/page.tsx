@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCoachDashboard } from '@/lib/data/coachDashboard';
-import { getCoachChatOverview } from '@/lib/data/chat';
+import { getCoachUnreadTotal } from '@/lib/data/coach';
 import type { DashboardScope } from '@/lib/data/coachDashboard';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -42,7 +42,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     for (const p of extra ?? []) if (p.name) names[p.client_id] = p.name;
   }
   // The header's message badge is always the coach's own unread, whichever view is showing.
-  const unreadCount = (await getCoachChatOverview().catch(() => [])).reduce((sum, c) => sum + c.unread_count, 0);
+  const unreadCount = await getCoachUnreadTotal(supabase).catch(() => 0);
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>

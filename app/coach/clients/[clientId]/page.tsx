@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
-import { getClientHealthStatuses } from '@/lib/data/coach';
-import { getCoachChatOverview } from '@/lib/data/chat';
+import { getClientLastActive, getCoachUnreadForClient, getCoachUnreadTotal, memberHealthStatus } from '@/lib/data/coach';
 import { getJournalEntries } from '@/lib/data/clientJournal';
 import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
 
@@ -31,24 +30,31 @@ export default async function CoachClientPage({
   // isOwnClient narrows the few coach-action affordances that aren't already covered by that.
   const { data: targetProfile } = await supabase
     .from('profiles')
-    .select('email, coach_id')
+    .select('email, coach_id, created_at')
     .eq('id', clientId)
     .eq('role', 'client')
     .maybeSingle();
   if (!targetProfile) redirect('/coach/clients');
   const isOwnClient = targetProfile.coach_id === user.id;
 
-  const [bundle, healthStatuses, chatOverview, journalEntries] = await Promise.all([
+  const [bundle, lastActive, coachUnreadCount, perClientUnreadCount, journalEntries] = await Promise.all([
     loadDashboardBundle(clientId, false),
-    getClientHealthStatuses(supabase, user.id),
-    getCoachChatOverview(),
+    getClientLastActive(supabase, clientId),
+    // The sum across every client, for the global inbox link...
+    getCoachUnreadTotal(supabase),
+    // ...and just the thread with the client being viewed, for the header Messages icon.
+    getCoachUnreadForClient(supabase, clientId),
     getJournalEntries(clientId),
   ]);
-  const healthStatus = healthStatuses.find((s) => s.clientId === clientId) ?? null;
-  const coachUnreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
-  // Distinct from coachUnreadCount (the sum across every client, for the global inbox link) --
-  // this scopes to just the thread with the client being viewed, for the header Messages icon.
-  const perClientUnreadCount = chatOverview.find((c) => c.client_id === clientId)?.unread_count ?? 0;
+  // Built from what this page already has plus one narrow query for the last log, not the roster's statuses.
+  const healthStatus = memberHealthStatus({
+    clientId,
+    name: bundle.profile?.name ?? targetProfile.email,
+    createdAt: targetProfile.created_at as string,
+    reminderDays: bundle.profile?.checkin_reminder_days,
+    timezone: bundle.profile?.timezone,
+    lastActive,
+  });
 
   return (
     <DashboardShell
