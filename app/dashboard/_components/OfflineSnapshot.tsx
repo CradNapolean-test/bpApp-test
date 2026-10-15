@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { dayCaloriesOf } from '@/lib/utils/dailyLog';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
 import type { ClientProfileRow, DailyLogRow, WorkoutProgramRow } from '@/lib/data/types';
@@ -46,9 +47,8 @@ export function OfflineSnapshot({
         : null;
 
       const todayLog = weekLogs.find((l) => l.log_date === todayIso);
-      const eaten = todayLog
-        ? Math.round((todayLog.protein ?? 0) * 4 + (todayLog.carbs ?? 0) * 4 + (todayLog.fat ?? 0) * 9)
-        : 0;
+      // Includes Quick Adds with no macros (R11).
+      const eaten = todayLog ? Math.round(dayCaloriesOf(todayLog)) : 0;
 
       localStorage.setItem(
         OFFLINE_SNAPSHOT_KEY,

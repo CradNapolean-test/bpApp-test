@@ -10,6 +10,8 @@ import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { targetsHeldBack } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/dates';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
+import { pickCurrentProgram } from '@/lib/utils/currentProgram';
+import { dayCaloriesOf } from '@/lib/utils/dailyLog';
 import { trafficLight } from '@/lib/utils/accountability';
 import type { TrafficLight } from '@/lib/utils/accountability';
 import { bigDogCount, TIER_TITLE, tierForCount } from '@/lib/bigDog';
@@ -75,9 +77,12 @@ export function CoachingHub({
   const protein = todayLog?.protein ?? 0;
   const carbs = todayLog?.carbs ?? 0;
   const fat = todayLog?.fat ?? 0;
-  const calories = protein * 4 + carbs * 4 + fat * 9;
+  // The day's calories include Quick Adds with no macros; the ring used to show 0 for a 300 kcal Quick Add (R11, LT1).
+  const calories = todayLog ? dayCaloriesOf(todayLog) : 0;
 
-  const program = programs[0] ?? null;
+  // The programme being followed now, not the oldest one in the list (CH1): the list is oldest first, so a member on their third block
+  // was told their first had finished.
+  const program = pickCurrentProgram(programs, todayIso).current;
   // Today's workout: the active programme's day for today's weekday (if there is one).
   const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
   const activeBlock = resolveActiveProgram(programs, todayIso);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
@@ -35,6 +36,7 @@ import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
+import { finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, workoutSummary, type BlockChoice, type LocalBlockChoice } from '@/lib/workoutSets';
 import { chosenBlockKeys, describeChoices, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
@@ -259,6 +261,7 @@ function LogSetForm({
   priorBest: number | null;
 }) {
   const { run, busy } = useAction();
+  const toast = useToast();
   // Reps and load carry over between sets (they're usually the same), so after logging only the
   // RPE is cleared. First set starts from what was done last time, if anything.
   const [reps, setReps] = useState<number | ''>(initialReps ?? '');
@@ -268,6 +271,11 @@ function LogSetForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // A set with no reps, no load and no RPE says nothing, and used to be saved and counted as a set done (L4).
+    if (isEmptySet({ reps, load, rpe })) {
+      toast.error('Enter the reps, the load or both before logging the set.');
+      return;
+    }
     await run(
       () =>
         logSet(clientId, exerciseId, {
@@ -646,7 +654,10 @@ export function WorkoutTab({
   const confirm = useConfirm();
   const { run: runMutate, busy: mutating } = useAction();
   const [sheet, setSheet] = useState<Sheet | null>(null);
-  const [localChoices, setLocalChoices] = useState<Record<string, { slot1: string | null; slot2: string | null }>>({});
+  const router = useRouter();
+  // Taps show at once from here while the save happens; each remembers what the server held when it was made, so the server wins once it
+  // has moved on (a change from another device, or the coach) instead of this copy beating it forever (L4).
+  const [localChoices, setLocalChoices] = useState<Record<string, LocalBlockChoice>>({});
   // One week shown at a time via a Wk 1/2/3... pill selector (see ProgramDayList), defaulted
   // per-program to its current week (by start_date) so the day list (icon chips, exercise
   // counts, phase badges) opens on the relevant week instead of always Week 1. Days are no
@@ -817,26 +828,27 @@ export function WorkoutTab({
 
   // The member's picks per workout, and so which Strong / Conditioning blocks count as part of what they
   // are doing. The coach always sees every block.
-  const choicesByDay = new Map<string, { slot1: string | null; slot2: string | null }>();
+  const serverChoicesByDay = new Map<string, BlockChoice>();
   for (const c of blockChoices) {
-    const cur = choicesByDay.get(c.program_day_id) ?? { slot1: null, slot2: null };
+    const cur = serverChoicesByDay.get(c.program_day_id) ?? { slot1: null, slot2: null };
     if (c.slot === 1) cur.slot1 = c.block_key;
     else cur.slot2 = c.block_key;
-    choicesByDay.set(c.program_day_id, cur);
+    serverChoicesByDay.set(c.program_day_id, cur);
   }
-  // Taps show at once from local state; the save happens in the background and the page's own data
-  // catches up next time it reloads.
-  for (const [dayId, c] of Object.entries(localChoices)) choicesByDay.set(dayId, c);
+  // What the server holds, with the taps whose save has not landed yet laid over it.
+  const choicesByDay = new Map<string, BlockChoice>(serverChoicesByDay);
+  for (const [dayId, choice] of reconcileLocalChoices(localChoices, serverChoicesByDay)) choicesByDay.set(dayId, choice);
   function handleChoose(dayId: string, slot: 1 | 2, key: string) {
     const prev = choicesByDay.get(dayId) ?? { slot1: null, slot2: null };
+    const base = serverChoicesByDay.get(dayId) ?? { slot1: null, slot2: null };
     const next = { ...prev, [slot === 1 ? 'slot1' : 'slot2']: key };
     // One long conditioning block covers both slots.
     if (slot === 1 && key === 'conditioning:0') next.slot2 = null;
-    setLocalChoices((st) => ({ ...st, [dayId]: next }));
+    setLocalChoices((st) => ({ ...st, [dayId]: { choice: next, base } }));
     void chooseBlock(dayId, slot, key).then((result) => {
       if (!result.ok) {
         toast.error(result.error);
-        setLocalChoices((st) => ({ ...st, [dayId]: prev }));
+        setLocalChoices((st) => ({ ...st, [dayId]: { choice: prev, base } }));
       }
     });
   }
@@ -1245,12 +1257,12 @@ export function WorkoutTab({
                       <LogSetForm
                         clientId={clientId}
                         exerciseId={ex.id}
-                        nextSetNumber={logs.length + 1}
+                        nextSetNumber={nextSetNumber(logs)}
                         totalSets={Number(ex.sets) > 0 ? Number(ex.sets) : null}
                         restSeconds={ex.rest_seconds}
                         initialReps={seed?.actual_reps ?? null}
                         initialLoad={seed?.actual_load ?? null}
-                        lastSet={last ? lastFor(logs.length + 1) : null}
+                        lastSet={last ? lastFor(nextSetNumber(logs)) : null}
                         priorBest={priorBest}
                       />
                     </>
@@ -1267,9 +1279,23 @@ export function WorkoutTab({
           {!isCoachView && (
             <button
               type="button"
-              onClick={() => {
-                toast.success('Workout complete — nice work 💪');
+              onClick={async () => {
+                // Says what was actually done instead of always congratulating, and asks first if nothing was logged. The dashboard is
+                // refreshed so Home and the streak count the session (L4).
+                const summary = workoutSummary(
+                  openDay.workout_exercises.filter((e) => e.block_type === 'exercise').map((e) => logsByExercise[e.id]?.length ?? 0)
+                );
+                if (summary.empty) {
+                  const finish = await confirm({
+                    title: 'Nothing logged yet',
+                    body: 'You have not logged any sets for this workout. Close it anyway?',
+                    confirmLabel: 'Close it',
+                  });
+                  if (!finish) return;
+                }
+                toast.success(finishMessage(summary));
                 setOpenDayId(null);
+                router.refresh();
               }}
               className="mt-4 h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground"
             >
