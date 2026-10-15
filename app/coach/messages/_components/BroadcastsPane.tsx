@@ -10,6 +10,9 @@ import { Segmented } from '@/app/_components/ui';
 import { composeCommunication, deleteCommunication } from '@/lib/data/communications';
 import { deleteMessageTemplate, saveMessageTemplate } from '@/lib/data/messageTemplates';
 import { FIRST_NAME_TOKEN, STARTER_MESSAGES } from '@/lib/broadcastMessages';
+import { broadcastConfirmation, formatInZone, isPastSchedule, nowAsWallTime, wallTimeToIso, weekdayInZone } from '@/lib/broadcastSend';
+import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { useToast } from '@/app/_components/ToastProvider';
 import type { ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
 
 type Target = 'my_clients' | 'gym' | 'group';
@@ -17,8 +20,9 @@ type Channel = 'message' | 'email' | 'both';
 
 const field = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+// Dates and times are shown in the gym's timezone, not the browser's. (TODO(brief 05): use the gym's own timezone once it is passed in.)
+const GYM_TZ = DEFAULT_TIMEZONE;
+const when = (iso: string) => formatInZone(iso, GYM_TZ);
 
 function TemplatesSheet({
   templates,
@@ -119,6 +123,7 @@ export function BroadcastsPane({
 }) {
   const { run, busy } = useAction();
   const confirm = useConfirm();
+  const toast = useToast();
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   const [message, setMessage] = useState('');
@@ -131,7 +136,8 @@ export function BroadcastsPane({
   const [showTemplates, setShowTemplates] = useState(false);
 
   const audienceCount = target === 'my_clients' ? counts.mine : target === 'gym' ? counts.gym : (groups.find((g) => g.id === groupId)?.memberIds.length ?? 0);
-  const weekday = scheduleAt ? new Date(scheduleAt).toLocaleDateString('en-GB', { weekday: 'long' }) : null;
+  const scheduleIso = scheduleAt ? wallTimeToIso(scheduleAt, GYM_TZ) : null;
+  const weekday = scheduleIso ? weekdayInZone(scheduleIso, GYM_TZ) : null;
 
   const canSubmit =
     message.trim().length > 0 && (target !== 'group' || groupId) && (timing === 'now' || scheduleAt) && !busy;
@@ -156,14 +162,18 @@ export function BroadcastsPane({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    if (timing === 'now' && target === 'gym') {
-      const ok = await confirm({
-        title: `Send to the whole gym?`,
-        body: `This goes to all ${counts.gym} client${counts.gym === 1 ? '' : 's'} at the gym, including other coaches' clients.`,
-      });
+    if (timing === 'later' && isPastSchedule(scheduleAt, GYM_TZ)) {
+      toast.error('Choose a time in the future.');
+      return;
+    }
+    // A send-now cannot be recalled, so it always asks: how many people, and by which channel (R25).
+    if (timing === 'now') {
+      const ok = await confirm(
+        broadcastConfirmation({ count: audienceCount, channel, target, groupName: groups.find((g) => g.id === groupId)?.name })
+      );
       if (!ok) return;
     }
-    const sendAt = timing === 'now' ? new Date().toISOString() : new Date(scheduleAt).toISOString();
+    const sendAt = timing === 'now' ? new Date().toISOString() : (scheduleIso as string);
     const isRepeat = timing === 'later' && repeat;
     await run(
       () => composeCommunication({ message: message.trim(), target, groupId, sendAt, channel, repeat: isRepeat ? 'weekly' : 'none' }),
@@ -284,9 +294,23 @@ export function BroadcastsPane({
               ]}
             />
             {timing === 'later' && (
-              <input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} className={`${field} w-auto`} />
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                min={nowAsWallTime(GYM_TZ)}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className={`${field} w-auto`}
+              />
             )}
           </div>
+          {timing === 'later' && scheduleIso && (
+            <p className="text-xs text-zinc-500">That is {formatInZone(scheduleIso, GYM_TZ)} at the gym.</p>
+          )}
+          {timing === 'later' && (
+            <p className="text-xs text-zinc-500">
+              Scheduled messages go out at the next daily run after that time, so they can arrive up to a day late.
+            </p>
+          )}
           {timing === 'later' && (
             <label className="flex items-center gap-2.5 pt-1 text-sm text-zinc-700 dark:text-zinc-300">
               <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} />
