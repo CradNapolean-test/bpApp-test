@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOGIN_OFF, mayDisableLogin, mayEnableLogin, mayManageGym } from './gymAccess';
+import { LOGIN_OFF, mayDisableLogin, mayEnableLogin, mayMakeResetLink, mayManageGym } from './gymAccess';
 
 describe('mayManageGym', () => {
   it('lets the owner of the gym\'s organisation manage it', () => {
@@ -50,6 +50,27 @@ describe('mayEnableLogin', () => {
     expect(mayEnableLogin({ role: 'coach', deactivatedAt: '2026-10-15T10:00:00Z', gymCount: 0 })).toEqual({ ok: true });
     expect(mayEnableLogin({ role: 'coach', deactivatedAt: null, gymCount: 1 })).toMatchObject({ ok: false });
     expect(mayEnableLogin({ role: 'client', deactivatedAt: '2026-10-15T10:00:00Z', gymCount: 0 })).toMatchObject({ ok: false });
+  });
+});
+
+describe('mayMakeResetLink', () => {
+  const member = { role: 'client', coachId: 'coach1' };
+
+  it('lets a member\'s own coach make the link', () => {
+    expect(mayMakeResetLink({ callerId: 'coach1', callerIsAdminOfMemberGym: false, member })).toBe(true);
+  });
+
+  it('lets an admin of the member\'s gym make it', () => {
+    expect(mayMakeResetLink({ callerId: 'admin1', callerIsAdminOfMemberGym: true, member })).toBe(true);
+  });
+
+  it('refuses another coach at the gym', () => {
+    expect(mayMakeResetLink({ callerId: 'coach2', callerIsAdminOfMemberGym: false, member })).toBe(false);
+  });
+
+  it('refuses a link for anyone who is not a member, whoever asks', () => {
+    expect(mayMakeResetLink({ callerId: 'coach1', callerIsAdminOfMemberGym: true, member: { role: 'coach', coachId: 'coach1' } })).toBe(false);
+    expect(mayMakeResetLink({ callerId: 'coach1', callerIsAdminOfMemberGym: true, member: { role: 'owner', coachId: null } })).toBe(false);
   });
 });
 

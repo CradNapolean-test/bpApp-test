@@ -10,6 +10,7 @@ import { updateNutritionTrackingMode, upsertClientProfile, type ProfileEditableF
 import { COACH_SETUP_FIELDS, MEMBER_SETUP_FIELDS, mergeIncoming, profilePatch } from '@/lib/profilePatch';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { MemberMetricToggles, MemberScreenToggles } from './MemberScreenToggles';
+import { MemberResetLink } from '@/app/coach/_components/MemberResetLink';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
 
@@ -327,7 +328,7 @@ export function SetupTab({
 
         {isCoachView && !readOnly && (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <p className="text-xs text-zinc-500">Ask this member to confirm their details (a one-minute check next time they open the app).</p>
+            <p className="text-xs text-zinc-500">Ask this member to confirm their details. They see a banner on Home they can finish now or put off; the app keeps working either way.</p>
             <button
               type="button"
               disabled={savingMode}
@@ -338,6 +339,8 @@ export function SetupTab({
             </button>
           </div>
         )}
+
+        {isCoachView && !readOnly && <MemberResetLink clientId={clientId} />}
 
         {isCoachView && (initialProfile?.health_notes || initialProfile?.height_cm) && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-sm dark:bg-amber-500/10">

@@ -44,6 +44,20 @@ export function mayEnableLogin(coach: CoachFacts): LoginChange {
   return { ok: true };
 }
 
+export interface ResetLinkFacts {
+  callerId: string;
+  // The caller is a gym admin of the member's gym.
+  callerIsAdminOfMemberGym: boolean;
+  member: { role: string | null; coachId: string | null };
+}
+
+// Who may make a password link for a member (CL6): their own coach, or an admin of their gym. The link lets whoever holds it sign in as that
+// member, so it is not offered to every coach at the gym.
+export function mayMakeResetLink(facts: ResetLinkFacts): boolean {
+  if (facts.member.role !== 'client') return false;
+  return facts.member.coachId === facts.callerId || facts.callerIsAdminOfMemberGym === true;
+}
+
 // About 100 years: Supabase has no "forever", and 'none' lifts the ban.
 export const LOGIN_OFF = '876000h';
 export const LOGIN_ON = 'none';
