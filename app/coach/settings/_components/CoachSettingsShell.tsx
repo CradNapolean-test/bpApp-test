@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
+import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { Avatar } from '@/app/_components/Avatar';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
@@ -82,7 +83,7 @@ export function CoachSettingsShell({
     'flex w-full items-center justify-between px-4 py-3.5 text-left';
 
   return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
+    <ClientOnly fallback={<PageSkeleton />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}

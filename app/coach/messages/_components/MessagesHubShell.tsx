@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
+import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { Avatar } from '@/app/_components/Avatar';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
@@ -90,7 +91,7 @@ export function MessagesHubShell({
   );
 
   return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
+    <ClientOnly fallback={<PageSkeleton />}>
       <AppShell
         title={<CoachBrand />}
         topBar={<CoachNav />}

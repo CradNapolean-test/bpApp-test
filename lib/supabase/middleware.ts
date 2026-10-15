@@ -31,9 +31,13 @@ export async function updateSession(request: NextRequest) {
 
   // Refreshes the auth token if expired — required for Server Components,
   // which can't write cookies themselves.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  //
+  // getClaims() checks the token's signature and expiry here, without the network round trip getUser() makes on every request and every
+  // Server Action (60 to 390 ms each, R13). This gate only decides "signed in or not" for routing; what a person may read and write is
+  // decided by the database from the same token (row level security), and every page and action that needs to know exactly who is
+  // asking still calls getUser(). The one difference: a session ended elsewhere keeps passing this gate until its token expires (an hour).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ? { id: claimsData.claims.sub } : null;
 
   // /api/cron/* authenticates via CRON_SECRET (checked inside the route itself), not a
   // Supabase session cookie — Vercel Cron calls it server-to-server with no browser

@@ -5,6 +5,7 @@ import { getCoachUnreadTotal } from '@/lib/data/coach';
 import type { DashboardScope } from '@/lib/data/coachDashboard';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
+import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from './_components/CoachNav';
 import { CoachBottomTabBar } from './_components/CoachBottomTabBar';
 import { CoachBrand } from './_components/CoachBrand';
@@ -45,7 +46,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const unreadCount = await getCoachUnreadTotal(supabase).catch(() => 0);
 
   return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
+    <ClientOnly fallback={<PageSkeleton />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}

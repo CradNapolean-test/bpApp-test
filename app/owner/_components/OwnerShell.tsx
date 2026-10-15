@@ -5,6 +5,7 @@ import { Building2, Users } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
 import { ClientOnly } from '@/app/_components/ClientOnly';
+import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Logo } from '@/app/_components/Logo';
 import { Segmented } from '@/app/_components/ui';
@@ -188,7 +189,7 @@ export function OwnerShell({ gyms, stats, email }: { gyms: OwnerGym[] | null; st
   const waiting = sum(shownStats, (s) => s.redFlags?.waiting ?? 0);
 
   return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
+    <ClientOnly fallback={<PageSkeleton />}>
       <AppShell
         title={
           <>

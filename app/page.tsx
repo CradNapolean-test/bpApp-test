@@ -1,12 +1,10 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser, getMyProfileRow } from '@/lib/supabase/currentUser';
 import { SignOutButton } from '@/app/_components/SignOutButton';
 
 export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Both reads are shared with the root layout (one sign-in check and one profile read per request).
+  const user = await getCurrentUser();
 
   if (!user) {
     redirect('/login');
@@ -19,7 +17,7 @@ export default async function Home() {
   // -- with no explicit "no profile" terminal state anywhere, that produced an actual infinite
   // redirect loop between /dashboard and /coach. This is the one place that guess gets made,
   // so it's the one place that needs to stop and say so instead of guessing.
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  const profile = await getMyProfileRow();
 
   if (!profile) {
     return (

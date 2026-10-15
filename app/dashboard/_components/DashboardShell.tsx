@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Bell, MessageSquare, User } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
+import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { Avatar } from '@/app/_components/Avatar';
 import { createClient } from '@/lib/supabase/client';
 import { getClientUnreadCount } from '@/lib/data/chat';
@@ -644,7 +645,7 @@ export function DashboardShell({
   }, [isCoachView]);
 
   return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
+    <ClientOnly fallback={<PageSkeleton />}>
     <AppShell
       title={clientLabel}
       isCoachView={isCoachView}

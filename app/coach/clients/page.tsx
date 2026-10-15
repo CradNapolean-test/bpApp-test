@@ -6,6 +6,7 @@ import { getGroups } from '@/lib/data/clientGroups';
 import { getActiveHoldClientIds } from '@/lib/data/redFlags';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
+import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from '../_components/CoachNav';
 import { CoachBottomTabBar } from '../_components/CoachBottomTabBar';
 import { CoachMobileBrand } from '../_components/CoachMobileBrand';
@@ -47,7 +48,7 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
   for (const c of chatOverview) if (c.unread_count > 0) unreadByClient[c.client_id] = c.unread_count;
 
   return (
-    <ClientOnly fallback={<div className="min-h-screen" />}>
+    <ClientOnly fallback={<PageSkeleton />}>
     <AppShell
       title={<CoachBrand />}
       topBar={<CoachNav />}

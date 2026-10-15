@@ -8,7 +8,7 @@ import { ThemeSync } from "./_components/ThemeSync";
 import { ServiceWorkerRegister } from "./_components/ServiceWorkerRegister";
 import { SplashScreen } from "./_components/SplashScreen";
 import { OfflineBanner } from "./_components/OfflineBanner";
-import { createClient } from "@/lib/supabase/server";
+import { getMyProfileRow } from "@/lib/supabase/currentUser";
 import type { ThemePreference } from "./_components/theme";
 
 // Runs before hydration, before any stylesheet paint -- reads the locally-cached preference
@@ -86,18 +86,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let themePreference: ThemePreference = 'dark';
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('theme_preference')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (profile?.theme_preference) themePreference = profile.theme_preference as ThemePreference;
-  }
+  // Shared with the page (one sign-in check and one profile read per request, not one each).
+  const myProfile = await getMyProfileRow();
+  if (myProfile?.theme_preference) themePreference = myProfile.theme_preference as ThemePreference;
 
   return (
     <html

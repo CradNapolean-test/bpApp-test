@@ -1,24 +1,19 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser, getMyProfileRow } from '@/lib/supabase/currentUser';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
 import { DashboardShell } from './_components/DashboardShell';
 import { OnboardingFlow } from './_components/OnboardingFlow';
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The sign-in check and the profile row are shared with the root layout (one of each per request).
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   // maybeSingle, not single -- and redirect to '/' (which explicitly handles a missing
   // profile), not straight to '/coach' -- redirecting directly between the two role pages is
   // what turned "no profile exists yet" into an actual infinite loop. See app/page.tsx.
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, email, theme_preference')
-    .eq('id', user.id)
-    .maybeSingle();
+  const profile = await getMyProfileRow();
   if (!profile || profile.role !== 'client') redirect('/');
 
   const bundle = await loadDashboardBundle(user.id, true);
@@ -26,6 +21,7 @@ export default async function DashboardPage() {
   // New members (no profile row yet, or onboarding not finished) get the onboarding flow first.
   // Strict null, not falsy: undefined means the onboarding migration isn't applied yet.
   if (!bundle.profile || bundle.profile.onboarding_completed_at === null) {
+    const supabase = await createClient();
     const { data: me } = await supabase.from('profiles').select('coach:coach_id(display_name)').eq('id', user.id).maybeSingle();
     const coach = Array.isArray(me?.coach) ? me.coach[0] : me?.coach;
     return (
