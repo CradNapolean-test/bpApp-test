@@ -24,6 +24,7 @@ import {
   isPushSupported,
 } from '@/app/_components/pushNotifications';
 import { BigDogCard } from './BigDogTab';
+import { DownloadMyData } from './DownloadMyData';
 import type { BigDogResultRow, ClientProfileRow } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
 
@@ -218,6 +219,8 @@ export function AccountTab({
       </div>
 
       <SignOutButton variant="danger-soft" className="w-full py-3 md:hidden" />
+
+      <DownloadMyData />
 
       <Card>
         <p className="text-sm font-semibold text-black dark:text-zinc-50">Delete my account</p>

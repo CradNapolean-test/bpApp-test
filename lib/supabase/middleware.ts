@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { isPublicPath } from '@/lib/publicPaths';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -39,30 +40,10 @@ export async function updateSession(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims();
   const user = claimsData?.claims ? { id: claimsData.claims.sub } : null;
 
-  // /api/cron/* authenticates via CRON_SECRET (checked inside the route itself), not a
-  // Supabase session cookie — Vercel Cron calls it server-to-server with no browser
-  // session, so it must be exempt from the cookie-based redirect below.
-  //
-  // /reset-password must be exempt from the "not logged in -> /login" redirect for the same
-  // reason: Supabase's recovery link puts the token in the URL *fragment* (after #), which
-  // never reaches the server -- only client-side code can see and process it, after the page
-  // has actually loaded. The very first request here has no session cookie yet (the person is,
-  // by definition, logged out -- that's why they're resetting), so without this exemption the
-  // middleware redirected to /login before the page's client-side JS ever got a chance to run.
-  //
-  // /auth/confirm is the same story but starker: it's the server route that actually
-  // establishes the session (via verifyOtp), so by definition every request to it arrives
-  // with no session cookie yet -- that's the whole point of the route.
-  const exemptFromLoginRedirect =
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/api/cron') ||
-    request.nextUrl.pathname.startsWith('/reset-password') ||
-    request.nextUrl.pathname.startsWith('/auth/confirm') ||
-    // Public sign-up link a coach shares (see app/join and app/api/join).
-    request.nextUrl.pathname.startsWith('/join') ||
-    request.nextUrl.pathname.startsWith('/api/join') ||
-    // Which deployment is serving: the app asks (R8), including from the sign-in page. Not sensitive.
-    request.nextUrl.pathname.startsWith('/api/version');
+  // The pages and routes a signed-out visitor may open, each with the reason it is public, are listed in lib/publicPaths.ts (H3). The
+  // /api/cron/* routes authenticate with CRON_SECRET inside the route; /reset-password and /auth/confirm are reached with no session by
+  // definition (the recovery token is in the URL fragment, and /auth/confirm is what creates the session).
+  const exemptFromLoginRedirect = isPublicPath(request.nextUrl.pathname);
 
   // Deliberately NOT the same set as above: /reset-password must stay reachable even after a
   // user becomes authenticated mid-page. The recovery flow's whole point is to establish a
