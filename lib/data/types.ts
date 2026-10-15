@@ -199,6 +199,8 @@ export interface ClassRow {
   coach_note: string | null;
   cutoff_hours: number;
   credit_cost: number;
+  // Set when the session was retired instead of deleted (migration 0132): it keeps its history but cannot be booked.
+  retired_at?: string | null;
 }
 
 export type BookingStatus = 'booked' | 'waitlist' | 'cancelled';

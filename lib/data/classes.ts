@@ -22,6 +22,7 @@ export async function getClasses(): Promise<ClassRow[]> {
     .from('classes')
     .select('*')
     .eq('gym_id', gymId)
+    .is('retired_at', null) // retired sessions keep their history but are not part of the timetable (migration 0132)
     .order('day_of_week')
     .order('start_time');
   if (error) raise(error);
@@ -60,21 +61,69 @@ export async function createClasses(
   if (error) raise(error);
 }
 
-export async function deleteClass(classId: string): Promise<void> {
+// Really deletes a session. The database refuses when ANY booking exists (migration 0132): use retireClass for a session with history.
+// Returns rather than throws so that reason reaches the screen.
+export async function deleteClass(classId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').delete().eq('id', classId);
-  if (error) raise(error);
+  return error ? fail(error, 'Could not delete that session') : ok();
 }
 
+// Retires a session instead of deleting it (D15): members booked on upcoming dates are refunded and told, past bookings and attendance
+// stay on file, and the session no longer appears for booking. See retire_class (migration 0132).
+export type RetireClassResult = { ok: true; cancelled: number; refundedCredits: number } | { ok: false; error: string };
+
+export async function retireClass(classId: string): Promise<RetireClassResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('retire_class', { p_class_id: classId });
+  if (error) return fail(error, 'Could not retire that session') as RetireClassResult;
+  const result = (data ?? {}) as { cancelled?: number; refunded_credits?: number };
+  return { ok: true, cancelled: result.cancelled ?? 0, refundedCredits: result.refunded_credits ?? 0 };
+}
+
+// What a session has booked, for the words in the "retire" and "edit" confirmations: members on upcoming dates, the most booked on any one
+// of them, and every booking ever made (0 means it can simply be deleted).
+export interface ClassBookingSummary {
+  upcomingMembers: number;
+  mostBookedOnOneDate: number;
+  totalBookings: number;
+}
+
+export async function getClassBookingSummary(classId: string, todayIso: string): Promise<ClassBookingSummary> {
+  const supabase = await createClient();
+  const { count: total } = await supabase
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .eq('class_id', classId);
+  const { data: upcoming } = await supabase
+    .from('bookings')
+    .select('client_id, booking_date, status')
+    .eq('class_id', classId)
+    .in('status', ['booked', 'waitlist'])
+    .gte('booking_date', todayIso);
+  const members = new Set<string>();
+  const bookedByDate = new Map<string, number>();
+  for (const row of upcoming ?? []) {
+    members.add(row.client_id as string);
+    if (row.status === 'booked') bookedByDate.set(row.booking_date as string, (bookedByDate.get(row.booking_date as string) ?? 0) + 1);
+  }
+  return {
+    upcomingMembers: members.size,
+    mostBookedOnOneDate: Math.max(0, ...bookedByDate.values()),
+    totalBookings: total ?? 0,
+  };
+}
+
+// Saves changes to a session. Returns rather than throws: the database refuses a capacity below the number booked and a changed day
+// while members are booked, and says why (migration 0132).
 export async function updateClass(
   classId: string,
   fields: Partial<Pick<ClassRow, 'name' | 'day_of_week' | 'specific_date' | 'start_time' | 'capacity' | 'credit_cost' | 'cutoff_hours' | 'coach_note'>>
-): Promise<void> {
+): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('classes').update(fields).eq('id', classId);
-  if (error) raise(error);
+  return error ? fail(error, 'Could not save that session') : ok();
 }
-
 export async function getUpcomingBookings(clientId: string): Promise<BookingRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -208,7 +257,7 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
   const blackoutStart: string | null = gym?.blackout_start ?? null;
   const blackoutEnd: string | null = gym?.blackout_end ?? null;
 
-  const occurrences: Omit<ScheduleOccurrence, 'bookedCount' | 'unmarkedCount'>[] = [];
+  let occurrences: Omit<ScheduleOccurrence, 'bookedCount' | 'unmarkedCount'>[] = [];
   for (const c of classes ?? []) {
     if (c.specific_date) {
       // One-off: a single occurrence, kept only if it falls inside the requested window.
@@ -243,6 +292,13 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
         blackoutEnd,
       });
     }
+  }
+  // A retired session (migration 0132) is never offered for booking; the coach's attendance view (weeksBack > 0) keeps its past dates so
+  // sessions that already happened can still be marked.
+  const retiredIds = new Set((classes ?? []).filter((c) => c.retired_at).map((c) => c.id as string));
+  if (retiredIds.size > 0) {
+    const today = toIsoDate(new Date());
+    occurrences = occurrences.filter((o) => !retiredIds.has(o.classId) || (weeksBack > 0 && o.date < today));
   }
   if (occurrences.length === 0) return [];
 

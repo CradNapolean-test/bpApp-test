@@ -8,7 +8,9 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
-import { createClass, deleteClass, updateClass } from '@/lib/data/classes';
+import { createClass, deleteClass, getClassBookingSummary, retireClass, updateClass, type ClassBookingSummary } from '@/lib/data/classes';
+import { checkSessionEdit, isPastSessionDate, retireWording } from '@/lib/sessionEdit';
+import { useToast } from '@/app/_components/ToastProvider';
 import { formatClock } from '@/lib/utils/cancelDeadline';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { ClassRow, ScheduleOccurrence } from '@/lib/data/types';
@@ -114,7 +116,26 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
   }, [tz]);
   const { run, busy } = useAction();
   const confirm = useConfirm();
+  const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
+  // What the open session has booked, for the retire / edit confirmations (R26, CH2). Null until it has loaded.
+  const [summary, setSummary] = useState<ClassBookingSummary | null>(null);
+  const openSessionId = draft?.id ?? null;
+  useEffect(() => {
+    if (!openSessionId) return;
+    let cancelled = false;
+    getClassBookingSummary(openSessionId, todayIsoInTz(tz))
+      .then((value) => {
+        if (!cancelled) setSummary(value);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      });
+    return () => {
+      cancelled = true;
+      setSummary(null);
+    };
+  }, [openSessionId, tz]);
   const [day, setDay] = useState<number>(1);
   const [copying, setCopying] = useState(false);
   const [copyTo, setCopyTo] = useState<Set<number>>(new Set());
@@ -203,6 +224,26 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
     };
     const repeat = [...new Set(draft.repeatDays)].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
     if (!draft.id && !once && repeat.length === 0) return;
+    if (!draft.id && once && isPastSessionDate(draft.date, todayIso)) {
+      toast.error('A one-off session can\u2019t be in the past.');
+      return;
+    }
+    if (draft.id) {
+      const before = classes.find((c) => c.id === draft.id);
+      if (before) {
+        const booked = summary ?? (await getClassBookingSummary(draft.id, todayIso));
+        const check = checkSessionEdit(
+          { dayOfWeek: before.day_of_week, specificDate: before.specific_date, startTime: before.start_time, capacity: before.capacity },
+          { dayOfWeek: fields.day_of_week, specificDate: fields.specific_date, startTime: fields.start_time, capacity: fields.capacity },
+          booked
+        );
+        if (check.kind === 'blocked') {
+          toast.error(check.message);
+          return;
+        }
+        if (check.kind === 'notify' && !(await confirm({ title: 'Tell booked members?', body: check.message, confirmLabel: 'Save and notify' }))) return;
+      }
+    }
     // Skip anything already in the timetable at this time with this name, so saving twice never doubles up.
     const sameSlot = (c: ClassRow) => c.start_time?.slice(0, 5) === draft.startTime && c.name === fields.name;
     const toCreate: (number | null)[] = once
@@ -232,16 +273,43 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
     );
   }
 
+  // A session with bookings is RETIRED, never deleted (D15): members booked on upcoming dates are refunded and told, and all history
+  // stays. One nobody ever booked can simply be deleted.
   async function remove() {
     if (!draft?.id) return;
-    const ok = await confirm({
-      title: 'Delete this session?',
-      body: draft.kind === 'once' ? 'Every booking for this session is removed too. This cannot be undone.' : 'Every booking for this weekly slot is removed too. This cannot be undone.',
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
+    const id = draft.id;
+    let booked: ClassBookingSummary;
+    try {
+      booked = summary ?? (await getClassBookingSummary(id, todayIso));
+    } catch {
+      toast.error('Could not check the bookings for that session. Try again.');
+      return;
+    }
+    const wording = retireWording(draft.name, booked);
+    const ok = await confirm({ title: wording.title, body: wording.body, confirmLabel: wording.confirmLabel, destructive: true });
     if (!ok) return;
-    await run(() => deleteClass(draft.id!), { success: 'Session deleted', onDone: () => setDraft(null) });
+    if (wording.action === 'delete') {
+      await run(() => deleteClass(id), { success: 'Session deleted', onDone: () => setDraft(null) });
+      return;
+    }
+    let refunded = 0;
+    let cancelled = 0;
+    await run(
+      async () => {
+        const result = await retireClass(id);
+        if (result.ok) {
+          refunded = result.refundedCredits;
+          cancelled = result.cancelled;
+        }
+        return result;
+      },
+      {
+        onDone: () => {
+          toast.success(cancelled === 0 ? 'Session retired' : `Session retired. ${cancelled} booking${cancelled === 1 ? '' : 's'} cancelled, ${refunded} credit${refunded === 1 ? '' : 's'} refunded.`);
+          setDraft(null);
+        },
+      }
+    );
   }
 
   async function copyDay() {
@@ -511,7 +579,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                 </Field>
                 {draft.kind === 'once' ? (
                   <Field label="Date">
-                    <input type="date" required className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
+                    <input type="date" required min={todayIso} className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
                   </Field>
                 ) : (
                 <Field label="Repeats every week on">
@@ -584,7 +652,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
             </button>
             {draft.id && (
               <button type="button" onClick={remove} className="block w-full py-1 text-sm font-semibold text-danger">
-                Delete this session
+                {summary == null ? 'Remove this session' : summary.totalBookings === 0 ? 'Delete this session' : 'Retire this session'}
               </button>
             )}
           </form>

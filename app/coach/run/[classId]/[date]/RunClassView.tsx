@@ -8,7 +8,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
 import { markAttendanceStatus } from '@/lib/data/classes';
 import { exerciseIsVisible, SECTION_TITLE, usesSections } from '@/lib/workoutSections';
-import { formatClassTime } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz } from '@/lib/utils/dates';
 import type { HistorySession, RunClassData, RunClassMember } from '@/lib/data/runClass';
 import type { AttendanceStatus, WorkoutExerciseRow } from '@/lib/data/types';
 
@@ -94,6 +94,9 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
   const waitlist = members.filter((m) => m.status === 'waitlist');
   const here = booked.filter((m) => m.attended).length;
   const unmarked = booked.filter((m) => statusOf(m) === 'unmarked');
+  // Attendance can't be marked for a session that hasn't happened yet: it would count toward sessions done, the clubs and rewards (SV1).
+  // The database refuses too; this just says so first. (The gym's own timezone is used when the page passes it in.)
+  const notYetHappened = initial.date > todayIsoInTz(DEFAULT_TIMEZONE);
   const heading = new Date(`${initial.date}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   const tvHref = `/coach/run/${classId}/${initial.date}/tv`;
 
@@ -135,13 +138,20 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
         {unmarked.length > 1 && (
           <button
             type="button"
+            disabled={notYetHappened}
             onClick={() => unmarked.forEach((m) => void setStatus(m, 'attended'))}
-            className="rounded-full border border-success/40 bg-success/10 px-3.5 py-2 text-xs font-bold text-success"
+            className="rounded-full border border-success/40 bg-success/10 px-3.5 py-2 text-xs font-bold text-success disabled:opacity-40"
           >
             Mark everyone attended
           </button>
         )}
       </div>
+
+      {notYetHappened && (
+        <p className="px-1 text-xs font-semibold text-zinc-500">
+          This session hasn&apos;t happened yet, so attendance can&apos;t be marked. It opens on the day.
+        </p>
+      )}
 
       {members.length === 0 && <EmptyState icon={Check} title="Nobody booked in" compact />}
 
@@ -167,6 +177,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                       type="button"
                       aria-label={`${m.clientName} attended`}
                       aria-pressed={st === 'attended'}
+                      disabled={notYetHappened}
                       onClick={() => setStatus(m, 'attended')}
                       className={`flex h-11 w-11 items-center justify-center rounded-full ${st === 'attended' ? 'bg-success text-white' : 'bg-black/5 text-zinc-500 dark:bg-white/10'}`}
                     >
@@ -176,6 +187,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                       type="button"
                       aria-label={`${m.clientName} no-show`}
                       aria-pressed={st === 'no_show'}
+                      disabled={notYetHappened}
                       onClick={() => setStatus(m, 'no_show')}
                       className={`flex h-11 w-11 items-center justify-center rounded-full ${st === 'no_show' ? 'bg-danger text-white' : 'bg-black/5 text-zinc-500 dark:bg-white/10'}`}
                     >
