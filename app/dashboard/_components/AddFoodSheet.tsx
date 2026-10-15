@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { FoodSearchPicker } from './FoodSearchPicker';
+import { useBackHandler } from '@/app/_components/useBackHandler';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
 // Bottom-sheet "Add food" modal -- shared by the Nutrition header's "Search foods" button and
@@ -33,6 +34,7 @@ export function AddFoodSheet({
   onToggleFavorite?: (food: FoodRow, isFavorite: boolean) => void;
   onClose: () => void;
 }) {
+  useBackHandler(true, onClose);
   const [busy, setBusy] = useState(false);
   // Runs the add, shows that it is working (no second tap), and closes only if it did not fail.
   async function finish(add: () => unknown) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
+import { useBackHandler } from '@/app/_components/useBackHandler';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -183,6 +184,7 @@ function EditEntrySheet({
   onDelete: () => void;
   onRefile?: (sectionId: string) => void;
 }) {
+  useBackHandler(true, onClose);
   const [portions, setPortions] = useState(entry.portions);
   // The box can be emptied while typing (counts as 0) and shows the real number again on blur.
   const [draft, setDraft] = useState<string | null>(null);

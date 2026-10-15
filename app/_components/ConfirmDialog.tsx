@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from './Button';
+import { useBackHandler } from './useBackHandler';
 
 interface ConfirmOptions {
   title: string;
@@ -40,6 +41,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     resolverRef.current = null;
     setOptions(null);
   }
+  // The phone's back gesture means "cancel" (R21); without this it left the screen with the question still open.
+  useBackHandler(options != null, () => settle(false));
 
   return (
     <ConfirmContext.Provider value={confirm}>

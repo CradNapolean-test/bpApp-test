@@ -5,6 +5,7 @@ import { Flashlight, FlashlightOff, Keyboard, X } from 'lucide-react';
 import { useZxing } from 'react-zxing';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
 import { Button } from '@/app/_components/Button';
+import { useBackHandler } from '@/app/_components/useBackHandler';
 
 // Only the product barcodes on food (EAN/UPC). Without this the scanner also reads the other codes
 // printed on a pack -- a store's internal label, a batch code -- and returns text that is not a
@@ -18,6 +19,7 @@ export function BarcodeScanner({
   onDetected: (barcode: string) => void;
   onClose: () => void;
 }) {
+  useBackHandler(true, onClose);
   const [paused, setPaused] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualEntry, setManualEntry] = useState(false);
