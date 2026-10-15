@@ -468,3 +468,248 @@ create policy "coach reads classes booked by own clients"
   on public.classes for select
   to authenticated
   using (public.coach_has_client_in_class(id));
+
+-- =====================================================================================================================
+-- CM3. Coach functions that skipped checks.
+--  * apply_programme_rollout [0094]: "v_r.gym_id <> my_gym_id()" is NULL for anyone who is not a coach, so the check let a
+--    member through (they would need a rollout's id). Now null-safe, and "everyone at the gym" picks members by their OWN gym
+--    (it used to be "members whose coach has this gym active", the R38 pattern; brief 03 R5 can skip that part).
+--  * cancel_class_occurrence [0105]: refuses a date before today at the gym (it would refund and cancel sessions people attended).
+--    It still only writes an in-app notification; the push is brief 09.
+--  * set_gym_name [0052]: 1 to 80 characters after trimming.
+--  * set_default_checkin_reminder_days [0042]: 0 to 60.
+--  * set_logo_path [0047]: only a path in the caller's own folder, shaped like the app's uploads ({id}/{file name}), or null to clear.
+--  * set_gym_booking_settings [0069]: unchanged rules, now sharing one internal function with the owner version (0131).
+-- The two gym-setting functions now call internal functions (_rename_gym, _set_gym_booking_settings) so that the owner's
+-- versions in 0131 do exactly the same thing. Internal functions are not callable by anyone but other functions.
+--
+-- PRE-FLIGHT (read-only; existing values the new bounds would not have allowed. Nothing is changed in them):
+--   select id, name from public.gyms where btrim(name) = '' or char_length(name) > 80;
+--   select id, default_checkin_reminder_days from public.profiles where default_checkin_reminder_days > 60;
+--   select id, logo_path from public.profiles
+--   where logo_path is not null and logo_path !~ ('^' || id::text || '/[A-Za-z0-9._-]{1,100}$');
+-- =====================================================================================================================
+create or replace function public.apply_programme_rollout(p_rollout_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_r programme_rollouts;
+  v_client uuid;
+  v_count integer := 0;
+begin
+  select * into v_r from programme_rollouts where id = p_rollout_id;
+  if v_r.id is null then
+    raise exception 'Rollout not found';
+  end if;
+  -- Signed in: must be a coach (my_gym_id() is null for everyone else) at the rollout's gym. No user = the daily job.
+  if auth.uid() is not null and (public.my_gym_id() is null or v_r.gym_id is distinct from public.my_gym_id()) then
+    raise exception 'Not authorized';
+  end if;
+  if v_r.applied_at is not null then
+    return 0;
+  end if;
+
+  for v_client in
+    select c.id
+    from profiles c
+    where c.role = 'client'
+      and public.client_gym_id(c.id) is not distinct from v_r.gym_id
+      and (v_r.audience = 'all' or c.id = any(v_r.client_ids))
+      and not exists (select 1 from workout_programs wp where wp.client_id = c.id and wp.rollout_id = v_r.id)
+  loop
+    perform public.instantiate_template_core(v_r.template_id, v_client, v_r.program_name, v_r.start_date, v_r.id);
+    v_count := v_count + 1;
+  end loop;
+
+  update programme_rollouts set applied_at = now() where id = v_r.id;
+  return v_count;
+end;
+$fn$;
+
+create or replace function public.cancel_class_occurrence(p_class_id uuid, p_date date, p_reason text default null)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_class classes;
+  v_booking record;
+  v_deduction record;
+  v_count integer := 0;
+  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+  v_tz text;
+begin
+  select * into v_class from classes where id = p_class_id;
+  if v_class is null then
+    raise exception 'Class not found';
+  end if;
+  if public.my_gym_id() is null or v_class.gym_id is distinct from public.my_gym_id() then
+    raise exception 'Not authorized';
+  end if;
+  if p_date is null then
+    raise exception 'Choose the date to cancel';
+  end if;
+
+  -- A session that has already happened can't be cancelled: that would refund credits for classes people attended.
+  select coalesce(nullif(timezone, ''), 'UTC') into v_tz from gyms where id = v_class.gym_id;
+  if p_date < public.local_date(v_tz) then
+    raise exception 'You can''t cancel a session that has already happened.';
+  end if;
+
+  insert into class_exceptions (class_id, occurrence_date, cancelled_by, reason)
+  values (p_class_id, p_date, auth.uid(), v_reason)
+  on conflict (class_id, occurrence_date) do update set reason = coalesce(excluded.reason, class_exceptions.reason);
+
+  for v_booking in
+    select id, client_id, status
+    from bookings
+    where class_id = p_class_id
+    and booking_date = p_date
+    and status in ('booked', 'waitlist')
+  loop
+    if v_booking.status = 'booked' then
+      for v_deduction in
+        select bucket, -delta as amount from credits_ledger where booking_id = v_booking.id and delta < 0
+      loop
+        insert into credits_ledger (client_id, delta, reason, bucket, booking_id)
+        values (v_booking.client_id, v_deduction.amount, 'Refunded ' || v_class.name || ' (cancelled)', v_deduction.bucket, v_booking.id);
+      end loop;
+    end if;
+
+    update bookings set status = 'cancelled' where id = v_booking.id;
+
+    insert into notifications (client_id, message)
+    values (
+      v_booking.client_id,
+      'Class cancelled: ' || v_class.name || ' on ' || p_date || '.' || case when v_reason is null then '' else ' ' || v_reason end
+    );
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+-- Internal: rename a gym. Callers (set_gym_name here, owner_rename_gym in 0131) check who may.
+create or replace function public._rename_gym(p_gym uuid, p_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := btrim(coalesce(p_name, ''));
+begin
+  if v_name = '' then
+    raise exception 'Enter a name for the gym';
+  end if;
+  if char_length(v_name) > 80 then
+    raise exception 'The gym name can be at most 80 characters';
+  end if;
+  update gyms set name = v_name where id = p_gym;
+  if not found then
+    raise exception 'Gym not found';
+  end if;
+end;
+$$;
+
+revoke execute on function public._rename_gym(uuid, text) from public, anon, authenticated;
+
+create or replace function public.set_gym_name(p_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.my_gym_id() is null
+     or not exists (select 1 from profiles where id = auth.uid() and is_gym_admin) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._rename_gym(public.my_gym_id(), p_name);
+end;
+$$;
+
+-- Internal: booking rules for a gym (timezone and the overnight blackout window).
+create or replace function public._set_gym_booking_settings(p_gym uuid, p_timezone text, p_blackout_start time, p_blackout_end time)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if nullif(btrim(coalesce(p_timezone, '')), '') is null then
+    raise exception 'Choose a timezone';
+  end if;
+
+  -- Reject anything that isn't a real IANA timezone name (raises invalid_parameter_value).
+  perform now() at time zone p_timezone;
+
+  if (p_blackout_start is null) <> (p_blackout_end is null) then
+    raise exception 'Set both the blackout start and end, or neither';
+  end if;
+
+  update gyms
+  set timezone = p_timezone,
+      blackout_start = p_blackout_start,
+      blackout_end = p_blackout_end
+  where id = p_gym;
+  if not found then
+    raise exception 'Gym not found';
+  end if;
+end;
+$$;
+
+revoke execute on function public._set_gym_booking_settings(uuid, text, time, time) from public, anon, authenticated;
+
+create or replace function public.set_gym_booking_settings(p_timezone text, p_blackout_start time, p_blackout_end time)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.my_gym_id() is null
+     or not exists (select 1 from profiles where id = auth.uid() and is_gym_admin) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._set_gym_booking_settings(public.my_gym_id(), p_timezone, p_blackout_start, p_blackout_end);
+end;
+$$;
+
+create or replace function public.set_default_checkin_reminder_days(p_days integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_days is null or p_days < 0 or p_days > 60 then
+    raise exception 'Days must be between 0 and 60';
+  end if;
+  update profiles set default_checkin_reminder_days = p_days where id = auth.uid();
+end;
+$$;
+
+create or replace function public.set_logo_path(p_path text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Not authorized';
+  end if;
+  -- null clears the logo. Otherwise the path must be one file in the caller's own folder, like the app's uploads.
+  if p_path is not null and p_path !~ ('^' || auth.uid()::text || '/[A-Za-z0-9._-]{1,100}$') then
+    raise exception 'That is not a valid logo path';
+  end if;
+  update profiles set logo_path = p_path where id = auth.uid();
+end;
+$$;
