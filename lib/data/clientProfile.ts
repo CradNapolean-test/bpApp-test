@@ -4,6 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import { messageToHtml, sendBroadcastEmail } from '@/lib/email';
+import { friendlyProfileError } from '@/lib/profilePatch';
 import type { ClientProfileRow } from './types';
 
 export async function getClientProfile(clientId: string): Promise<ClientProfileRow | null> {
@@ -17,74 +18,70 @@ export async function getClientProfile(clientId: string): Promise<ClientProfileR
   return data;
 }
 
-export async function upsertClientProfile(
-  clientId: string,
-  fields: Omit<
-    ClientProfileRow,
-    | 'client_id'
-    | 'checkin_reminder_days'
-    | 'last_checkin_reminder_at'
-    | 'notifications_enabled'
-    | 'email_notifications_enabled'
-    | 'nutrition_tracking_mode'
-    | 'join_date'
-    | 'referral_source'
-    | 'deletion_requested_at'
-    | 'minutes_per_1000_steps'
-    | 'height_cm'
-    | 'body_fat_estimated'
-    | 'health_notes'
-    | 'onboarding_completed_at'
-    | 'needs_coach_review'
-    | 'review_reasons'
-  >
-): Promise<void> {
+// The columns of the Setup form (lib/profilePatch.ts decides which of them a member may send).
+export type ProfileEditableFields = Omit<
+  ClientProfileRow,
+  | 'client_id'
+  | 'checkin_reminder_days'
+  | 'last_checkin_reminder_at'
+  | 'notifications_enabled'
+  | 'email_notifications_enabled'
+  | 'nutrition_tracking_mode'
+  | 'join_date'
+  | 'referral_source'
+  | 'deletion_requested_at'
+  | 'minutes_per_1000_steps'
+  | 'height_cm'
+  | 'body_fat_estimated'
+  | 'health_notes'
+  | 'onboarding_completed_at'
+  | 'needs_coach_review'
+  | 'review_reasons'
+>;
+
+// Saves ONLY the fields it is given (R15). It used to take the whole form and write every column back, so a stale copy overwrote a
+// coach's changes. An existing profile is updated in place; a member's very first save creates the row (seeded with the coach's default
+// reminder days). The database refuses a member's change to a coach-controlled field; that comes back as words, not as a stack trace.
+export async function upsertClientProfile(clientId: string, fields: Partial<ProfileEditableFields>): Promise<ActionResult> {
+  if (Object.keys(fields).length === 0) return ok();
   const supabase = await createClient();
-
-  // Seed checkin_reminder_days from the client's coach's own default (profiles
-  // .default_checkin_reminder_days, 0042) the first time this client's row is created --
-  // but only then. Once a row exists, the coach may have already overridden it per-client
-  // via updateCheckinReminderDays below, and every later call here is just the client's own
-  // Setup-tab edits, which must never clobber that.
-  const { data: existing } = await supabase
-    .from('client_profiles')
-    .select('client_id')
-    .eq('client_id', clientId)
-    .maybeSingle();
-
-  let seed: { checkin_reminder_days?: number } = {};
-  if (!existing) {
-    const { data: withCoach } = await supabase
-      .from('profiles')
-      .select('coach:coach_id(default_checkin_reminder_days)')
-      .eq('id', clientId)
-      .single();
-    const coach = Array.isArray(withCoach?.coach) ? withCoach.coach[0] : withCoach?.coach;
-    if (coach?.default_checkin_reminder_days != null) {
-      seed = { checkin_reminder_days: coach.default_checkin_reminder_days };
-    }
-  }
-
-  // A coach saving a client's form (migration 0081 lets them update, not insert) uses a plain
-  // update; the member's own save keeps the upsert so a first-time profile can be created.
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user && user.id !== clientId) {
+  if (!user) return fail(null, 'Not signed in');
+
+  const { data: existing } = await supabase.from('client_profiles').select('client_id').eq('client_id', clientId).maybeSingle();
+
+  if (existing) {
+    // The member's own save, or their coach's: the same plain update. (A coach cannot create the row, only edit it.)
     const { data: updated, error } = await supabase
       .from('client_profiles')
       .update({ ...fields, updated_at: new Date().toISOString() })
       .eq('client_id', clientId)
       .select('client_id');
-    if (error) raise(error);
-    if (!updated?.length) throw new Error('Could not save — this client has no profile yet or you do not coach them.');
-    return;
+    if (error) return fail({ message: friendlyProfileError(error.message) }, 'Could not save your details');
+    if (!updated?.length) return fail(null, 'Could not save — you do not have access to this profile.');
+    return ok();
   }
+
+  if (user.id !== clientId) return fail(null, 'Could not save — this client has no profile yet.');
+
+  // First save by the member: seed checkin_reminder_days from their coach's own default (profiles.default_checkin_reminder_days, 0042) --
+  // only now. Once a row exists the coach may have set it per client (updateCheckinReminderDays), and nothing here may touch it again.
+  let seed: { checkin_reminder_days?: number } = {};
+  const { data: withCoach } = await supabase
+    .from('profiles')
+    .select('coach:coach_id(default_checkin_reminder_days)')
+    .eq('id', clientId)
+    .single();
+  const coach = Array.isArray(withCoach?.coach) ? withCoach.coach[0] : withCoach?.coach;
+  if (coach?.default_checkin_reminder_days != null) seed = { checkin_reminder_days: coach.default_checkin_reminder_days };
 
   const { error } = await supabase
     .from('client_profiles')
     .upsert({ client_id: clientId, ...fields, ...seed, updated_at: new Date().toISOString() });
-  if (error) raise(error);
+  if (error) return fail({ message: friendlyProfileError(error.message) }, 'Could not save your details');
+  return ok();
 }
 
 // Narrow, coach-only update -- separate from upsertClientProfile (the client's own Setup

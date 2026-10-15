@@ -4,8 +4,10 @@ import { ChevronDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
+import { useToast } from '@/app/_components/ToastProvider';
 import { calcEngine, weeklyTarget, CALORIE_FLOOR, RATE_PCT } from '@/lib/calculations';
-import { updateNutritionTrackingMode, upsertClientProfile } from '@/lib/data/clientProfile';
+import { updateNutritionTrackingMode, upsertClientProfile, type ProfileEditableFields } from '@/lib/data/clientProfile';
+import { COACH_SETUP_FIELDS, MEMBER_SETUP_FIELDS, mergeIncoming, profilePatch } from '@/lib/profilePatch';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { MemberMetricToggles, MemberScreenToggles } from './MemberScreenToggles';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
@@ -17,27 +19,9 @@ const NUTRITION_MODES: { value: ClientProfileRow['nutrition_tracking_mode']; lab
   { value: 'photo_diary', label: 'Photo diary', hint: 'Client photographs meals with a description.' },
 ];
 
-// Excludes the coach-only reminder settings (edited from CreditsTab, not this form) in
-// addition to client_id.
-type SetupFields = Omit<
-  ClientProfileRow,
-  | 'client_id'
-  | 'checkin_reminder_days'
-  | 'last_checkin_reminder_at'
-  | 'notifications_enabled'
-  | 'email_notifications_enabled'
-  | 'nutrition_tracking_mode'
-  | 'join_date'
-  | 'referral_source'
-  | 'deletion_requested_at'
-  | 'minutes_per_1000_steps'
-    | 'height_cm'
-    | 'body_fat_estimated'
-    | 'health_notes'
-    | 'onboarding_completed_at'
-    | 'needs_coach_review'
-    | 'review_reasons'
->;
+// The form's shape (excludes the coach-only reminder settings, edited from CreditsTab, and everything with its own screen). Only the
+// fields in lib/profilePatch.ts are ever SAVED from it, and only the ones that changed.
+type SetupFields = ProfileEditableFields;
 
 const BLANK: SetupFields = {
   name: '',
@@ -115,9 +99,27 @@ export function SetupTab({
 }) {
   const { run, busy: saving } = useAction();
   const { run: runMode, busy: savingMode } = useAction();
+  const toast = useToast();
   const [form, setForm] = useState<SetupFields>(
     initialProfile ?? BLANK
   );
+  // What is stored, as far as this screen knows (null: no profile yet, so the first save creates it whole). A save sends only what differs
+  // from it, so a change the coach made while this screen was open is never put back (R15).
+  const [baseline, setBaseline] = useState<SetupFields | null>(initialProfile);
+  const [seenProfile, setSeenProfile] = useState(initialProfile);
+  const allowedFields = isCoachView ? COACH_SETUP_FIELDS : MEMBER_SETUP_FIELDS;
+  // When fresh data arrives (after a save, or because the coach changed something) take it for every field the person has not touched.
+  if (seenProfile !== initialProfile) {
+    setSeenProfile(initialProfile);
+    if (initialProfile) {
+      const merged = mergeIncoming((baseline ?? BLANK) as never, form as never, initialProfile as never, allowedFields);
+      setForm(merged.form as unknown as SetupFields);
+      setBaseline(merged.baseline as unknown as SetupFields);
+    }
+  }
+  // The starting weight is the baseline for the calorie engine and the progress charts: a member sets it once, their coach changes it
+  // after that (SU2).
+  const startWeightLocked = !isCoachView && baseline != null && baseline.start_weight > 0;
   const [error, setError] = useState<string | null>(null);
   const [nutritionMode, setNutritionMode] = useState(initialProfile?.nutrition_tracking_mode ?? 'full_tracking');
 
@@ -172,8 +174,16 @@ export function SetupTab({
       return;
     }
     setError(null);
-    // The gym is UK-only, so the timezone is fixed rather than a setting.
-    await run(() => upsertClientProfile(clientId, { ...form, timezone: DEFAULT_TIMEZONE }), { success: 'Details saved' });
+    const patch = profilePatch((baseline ?? null) as never, form as never, allowedFields, { startWeightLocked }) as Partial<ProfileEditableFields>;
+    if (Object.keys(patch).length === 0) {
+      toast.success('Nothing has changed, so there is nothing to save.');
+      return;
+    }
+    // Not the whole form, and no timezone (SU3): the timezone is the profile's own, set when it was created.
+    await run(() => upsertClientProfile(clientId, patch), {
+      success: 'Details saved',
+      onDone: () => setBaseline({ ...(baseline ?? BLANK), ...patch } as SetupFields),
+    });
   }
 
   const inputCls =
@@ -290,8 +300,10 @@ export function SetupTab({
                   required
                   className={inputCls}
                   value={form.start_weight || ''}
+                  disabled={startWeightLocked}
                   onChange={(e) => setForm({ ...form, start_weight: Number(e.target.value) })}
                 />
+                {startWeightLocked && <p className="text-xs text-zinc-500">Set when you joined. Ask your coach to change it.</p>}
               </div>
               <div className="space-y-1">
                 <label className={labelCls}>
