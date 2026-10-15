@@ -3,6 +3,8 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
+import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { eventCancelledMessage, eventChangeMessage, startsInThePast } from '@/lib/eventChange';
 import type { EventWithSignup, FeedbackRow } from './types';
 
 const MISSING_TABLE = ['42P01', 'PGRST205', 'PGRST202'];
@@ -87,13 +89,19 @@ export async function leaveEvent(eventId: string): Promise<ActionResult> {
 
 // ---- coach side ----
 
-export async function createEvent(fields: {
-  title: string;
-  description: string | null;
-  location: string | null;
-  starts_at: string;
-  capacity: number | null;
-}): Promise<ActionResult> {
+type EventFields = { title: string; description: string | null; location: string | null; starts_at: string; capacity: number | null };
+
+// Everyone signed up is told (an in-app notification, notify_event_signups, migration 0135) when an event is moved, changes place or is
+// cancelled. Times in the message are the gym's.
+async function tellSignups(eventId: string, message: string | null): Promise<string | null> {
+  if (!message) return null;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('notify_event_signups', { p_event: eventId, p_message: message });
+  return error ? (error.message || 'could not notify') : null;
+}
+
+export async function createEvent(fields: EventFields): Promise<ActionResult> {
+  if (startsInThePast(fields.starts_at)) return fail(null, 'An event can\u2019t start in the past.');
   const supabase = await createClient();
   const { data: gymId, error: gymError } = await supabase.rpc('my_gym_id');
   if (gymError || !gymId) return fail(gymError, 'Could not work out your gym');
@@ -102,22 +110,35 @@ export async function createEvent(fields: {
   return ok();
 }
 
-export async function updateEvent(
-  eventId: string,
-  fields: { title: string; description: string | null; location: string | null; starts_at: string; capacity: number | null }
-): Promise<ActionResult> {
+export async function updateEvent(eventId: string, fields: EventFields): Promise<ActionResult> {
   const supabase = await createClient();
+  const { data: before } = await supabase.from('gym_events').select('title, starts_at, location').eq('id', eventId).maybeSingle();
+  if (!before) return fail(null, 'That event no longer exists.');
+  if (new Date(before.starts_at).getTime() !== new Date(fields.starts_at).getTime() && startsInThePast(fields.starts_at)) {
+    return fail(null, 'An event can\u2019t be moved to a time that has already passed.');
+  }
   if (fields.capacity != null) {
     const { count } = await supabase.from('event_signups').select('*', { count: 'exact', head: true }).eq('event_id', eventId);
     if ((count ?? 0) > fields.capacity) return fail(null, `${count} people have already signed up, so the spots cannot go below that.`);
   }
   const { error } = await supabase.from('gym_events').update(fields).eq('id', eventId);
   if (error) return fail(error, 'Could not save the event');
+
+  // Saved: now tell the people who signed up if the time or the place changed.
+  const problem = await tellSignups(eventId, eventChangeMessage(before, { title: fields.title, starts_at: fields.starts_at, location: fields.location }, DEFAULT_TIMEZONE));
+  if (problem) return fail(null, 'The event was saved, but the people signed up could not be told. Message them yourself.');
   return ok();
 }
 
+// Tells everyone signed up that the event is cancelled, then removes it. If they cannot be told the event is NOT deleted, so nobody is
+// left expecting an event that has silently vanished.
 export async function deleteEvent(eventId: string): Promise<ActionResult> {
   const supabase = await createClient();
+  const { data: event } = await supabase.from('gym_events').select('title, starts_at, location').eq('id', eventId).maybeSingle();
+  if (event) {
+    const problem = await tellSignups(eventId, eventCancelledMessage(event, DEFAULT_TIMEZONE));
+    if (problem) return fail(null, 'The people signed up could not be told, so the event was not deleted. Try again.');
+  }
   const { error } = await supabase.from('gym_events').delete().eq('id', eventId);
   if (error) return fail(error, 'Could not delete the event');
   return ok();

@@ -56,7 +56,15 @@ function EventForm({ event, onDone }: { event?: EventWithSignup; onDone: () => v
       <p className="text-sm font-semibold text-black dark:text-zinc-50">{event ? 'Edit event' : 'New event'}</p>
       <input required autoFocus className={inputCls} placeholder="Title, e.g. Spring walk" value={title} onChange={(e) => setTitle(e.target.value)} />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <input required type="datetime-local" className={inputCls} value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+        <input
+          required
+          type="datetime-local"
+          // A new event can't start in the past (the database function refuses too).
+          min={event ? undefined : toLocalInput(new Date().toISOString())}
+          className={inputCls}
+          value={startsAt}
+          onChange={(e) => setStartsAt(e.target.value)}
+        />
         <input type="number" min={1} className={inputCls} placeholder="Spots (blank = unlimited)" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
       </div>
       <input className={inputCls} placeholder="Location" value={location} onChange={(e) => setLocation(e.target.value)} />
@@ -93,7 +101,7 @@ function EventRow({ event, past = false }: { event: EventWithSignup; past?: bool
     if (
       !(await confirm({
         title: `Delete "${event.title}"?`,
-        body: event.signups > 0 ? `${event.signups} ${event.signups === 1 ? 'person has' : 'people have'} signed up. They will no longer see it.` : 'Members will no longer see it.',
+        body: event.signups > 0 ? `${event.signups} ${event.signups === 1 ? 'person has' : 'people have'} signed up. They will be told it is cancelled.` : 'Members will no longer see it.',
         confirmLabel: 'Delete',
         destructive: true,
       }))
