@@ -43,6 +43,9 @@ export function TrendChart({
   }));
   const points = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
   const last = coords[coords.length - 1];
+  // One sentence for a screen reader: where the line starts, where it ends and the change.
+  const change = values[values.length - 1] - values[0];
+  const summary = `Trend from ${labels[0]} to ${labels[labels.length - 1]}: ${formatter(values[0])} to ${formatter(values[values.length - 1])}, ${change === 0 ? 'no change' : `${change > 0 ? 'up' : 'down'} ${formatter(Math.abs(change))}`}. Lowest ${formatter(min)}, highest ${formatter(max)}.`;
   return (
     <div>
       <div className="flex gap-2">
@@ -50,12 +53,19 @@ export function TrendChart({
           <span>{formatter(max)}</span>
           <span>{formatter(min)}</span>
         </div>
-        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-24 w-full overflow-visible">
+        {/* The line is stretched to the width of the card (preserveAspectRatio none); the dot is drawn on top as an ordinary element so it stays round. */}
+        <div className="relative h-24 w-full">
+        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={summary} className="h-24 w-full overflow-visible">
           <line x1="0" x2={width} y1="8" y2="8" stroke="currentColor" strokeOpacity={0.08} />
           <line x1="0" x2={width} y1={height - 8} y2={height - 8} stroke="currentColor" strokeOpacity={0.08} />
           <polyline points={points} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-          <circle cx={last.x} cy={last.y} r={4} fill={color} vectorEffect="non-scaling-stroke" />
         </svg>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ left: `${(last.x / width) * 100}%`, top: `${(last.y / height) * 100}%`, backgroundColor: color }}
+        />
+        </div>
       </div>
       <div className="mt-1 flex justify-between pl-[52px] text-[10px] text-zinc-400">
         <span>{labels[0]}</span>

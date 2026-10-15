@@ -75,7 +75,7 @@ function MoodDots({ label, value, onChange, disabled }: { label: string; value: 
   return (
     <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
       <p className="w-20 shrink-0 text-sm text-zinc-500">{label}</p>
-      <div className="flex flex-1 gap-1.5">
+      <div role="group" aria-label={label} className="flex flex-1 gap-1.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
@@ -83,12 +83,16 @@ function MoodDots({ label, value, onChange, disabled }: { label: string; value: 
             disabled={disabled}
             onClick={() => onChange(n)}
             aria-label={`${label} ${n} of 5`}
-            className={`h-7 flex-1 rounded-full transition-colors disabled:opacity-60 ${
+            aria-pressed={value === n}
+            className={`h-10 flex-1 rounded-full text-xs font-bold transition-colors disabled:opacity-60 ${
               value != null && n <= value
-                ? 'bg-accent'
-                : 'bg-black/[.04] hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20'
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-black/[.04] text-zinc-500 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20'
             }`}
-          />
+          >
+            {/* the number is the cue that does not depend on colour */}
+            {n}
+          </button>
         ))}
       </div>
     </div>

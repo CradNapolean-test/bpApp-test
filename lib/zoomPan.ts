@@ -33,3 +33,33 @@ export function panBy(t: ZoomPan, dx: number, dy: number, width: number, height:
 export function toggleZoom(t: ZoomPan, cx: number, cy: number, width: number, height: number): ZoomPan {
   return t.scale > 1.05 ? IDENTITY : zoomAt(t, 2.5, cx, cy, width, height);
 }
+
+// What a key does to a photo you are zooming (ZP1), so it can be used without a mouse or a pinch: + zooms in, - zooms out, the arrow keys move
+// it (once it is zoomed in), 0 puts it back. The zoom is about the centre of the picture.
+export type ZoomKeyAction = { type: 'zoom'; factor: number } | { type: 'pan'; dx: number; dy: number } | { type: 'reset' } | null;
+
+export const KEY_ZOOM_STEP = 1.25;
+export const KEY_PAN_STEP = 48;
+
+export function zoomKeyAction(key: string): ZoomKeyAction {
+  switch (key) {
+    case '+':
+    case '=':
+      return { type: 'zoom', factor: KEY_ZOOM_STEP };
+    case '-':
+    case '_':
+      return { type: 'zoom', factor: 1 / KEY_ZOOM_STEP };
+    case '0':
+      return { type: 'reset' };
+    case 'ArrowLeft':
+      return { type: 'pan', dx: KEY_PAN_STEP, dy: 0 };
+    case 'ArrowRight':
+      return { type: 'pan', dx: -KEY_PAN_STEP, dy: 0 };
+    case 'ArrowUp':
+      return { type: 'pan', dx: 0, dy: KEY_PAN_STEP };
+    case 'ArrowDown':
+      return { type: 'pan', dx: 0, dy: -KEY_PAN_STEP };
+    default:
+      return null;
+  }
+}

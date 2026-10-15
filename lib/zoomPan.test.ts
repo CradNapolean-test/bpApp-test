@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampZoomPan, IDENTITY, MAX_SCALE, panBy, toggleZoom, zoomAt } from './zoomPan';
+import { clampZoomPan, IDENTITY, KEY_PAN_STEP, KEY_ZOOM_STEP, MAX_SCALE, panBy, toggleZoom, zoomAt, zoomKeyAction } from './zoomPan';
 
 describe('zoomPan', () => {
   it('cannot pan when not zoomed, and keeps the image covering the box when zoomed', () => {
@@ -20,5 +20,34 @@ describe('zoomPan', () => {
     const zoomed = toggleZoom(IDENTITY, 0, 0, 300, 400);
     expect(zoomed.scale).toBe(2.5);
     expect(toggleZoom(zoomed, 0, 0, 300, 400)).toEqual(IDENTITY);
+  });
+});
+
+describe('zoomKeyAction (zooming a photo with the keyboard)', () => {
+  it('+ and = zoom in, - and _ zoom out', () => {
+    expect(zoomKeyAction('+')).toEqual({ type: 'zoom', factor: KEY_ZOOM_STEP });
+    expect(zoomKeyAction('=')).toEqual({ type: 'zoom', factor: KEY_ZOOM_STEP });
+    expect(zoomKeyAction('-')).toEqual({ type: 'zoom', factor: 1 / KEY_ZOOM_STEP });
+    expect(zoomKeyAction('_')).toEqual({ type: 'zoom', factor: 1 / KEY_ZOOM_STEP });
+  });
+
+  it('in and out undo each other', () => {
+    const inn = zoomKeyAction('+') as { factor: number };
+    const out = zoomKeyAction('-') as { factor: number };
+    expect(inn.factor * out.factor).toBeCloseTo(1);
+  });
+
+  it('the arrow keys move the picture the way the finger would drag it', () => {
+    expect(zoomKeyAction('ArrowLeft')).toEqual({ type: 'pan', dx: KEY_PAN_STEP, dy: 0 });
+    expect(zoomKeyAction('ArrowRight')).toEqual({ type: 'pan', dx: -KEY_PAN_STEP, dy: 0 });
+    expect(zoomKeyAction('ArrowUp')).toEqual({ type: 'pan', dx: 0, dy: KEY_PAN_STEP });
+    expect(zoomKeyAction('ArrowDown')).toEqual({ type: 'pan', dx: 0, dy: -KEY_PAN_STEP });
+  });
+
+  it('0 resets, and other keys are left to the browser', () => {
+    expect(zoomKeyAction('0')).toEqual({ type: 'reset' });
+    expect(zoomKeyAction('a')).toBeNull();
+    expect(zoomKeyAction('Tab')).toBeNull();
+    expect(zoomKeyAction('Enter')).toBeNull();
   });
 });
