@@ -4,9 +4,11 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
+import type { QuestionPayload } from '@/lib/formEdit';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
 
-type QuestionInput = Omit<FormQuestionRow, 'id' | 'template_id'>;
+// What a new form is created with. (Saving an existing form sends QuestionPayload: the same, plus the id of a question that already exists.)
+type QuestionInput = Omit<FormQuestionRow, 'id' | 'template_id' | 'archived_at' | 'answerCount'>;
 type TemplateFields = { name: string; description: string | null; is_default_onboarding: boolean };
 
 export async function getFormTemplates(): Promise<FormTemplateRow[]> {
@@ -16,6 +18,7 @@ export async function getFormTemplates(): Promise<FormTemplateRow[]> {
     .from('form_templates')
     .select('*, form_questions(count)')
     .eq('gym_id', gymId)
+    .is('form_questions.archived_at', null) // questions taken out after they had answers are not counted
     .order('created_at');
   if (error) raise(error);
   return (data ?? []).map((row) => {
@@ -24,6 +27,7 @@ export async function getFormTemplates(): Promise<FormTemplateRow[]> {
   });
 }
 
+// The form with its CURRENT questions (archived ones left out), each with the number of answers it already has, for the editor.
 export async function getFormTemplateWithQuestions(templateId: string): Promise<FormTemplateWithQuestions | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -33,7 +37,14 @@ export async function getFormTemplateWithQuestions(templateId: string): Promise<
     .order('order_index', { foreignTable: 'form_questions', ascending: true })
     .maybeSingle();
   if (error) raise(error);
-  return data as unknown as FormTemplateWithQuestions | null;
+  if (!data) return null;
+  const template = data as unknown as FormTemplateWithQuestions;
+  template.questions = template.questions.filter((q) => !q.archived_at);
+
+  const { data: counts } = await supabase.rpc('form_answer_counts', { p_template_id: templateId });
+  const answersBy = new Map<string, number>((counts ?? []).map((c: { question_id: string; answers: number | string }) => [c.question_id, Number(c.answers)]));
+  for (const q of template.questions) q.answerCount = answersBy.get(q.id) ?? 0;
+  return template;
 }
 
 export async function createFormTemplate(fields: TemplateFields, questions: QuestionInput[]): Promise<void> {
@@ -70,42 +81,21 @@ export async function createFormTemplate(fields: TemplateFields, questions: Ques
   }
 }
 
+// Saves an existing form in ONE request (save_form_template, migration 0135): questions that already exist are updated in place, new
+// ones are added, and a question taken out is deleted if nobody answered it or archived if somebody did, so editing a form never deletes
+// answers (R3). Returns rather than throws so the reason (for example a choice question with no options) reaches the screen.
 export async function updateFormTemplate(
   templateId: string,
   fields: TemplateFields,
-  questions: QuestionInput[]
-): Promise<void> {
+  questions: QuestionPayload[]
+): Promise<ActionResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  const gymId = await resolveScopingGymId(supabase);
-
-  if (fields.is_default_onboarding) {
-    const { error: clearError } = await supabase
-      .from('form_templates')
-      .update({ is_default_onboarding: false })
-      .eq('gym_id', gymId)
-      .eq('is_default_onboarding', true)
-      .neq('id', templateId);
-    if (clearError) raise(clearError);
-  }
-
-  const { error } = await supabase.from('form_templates').update(fields).eq('id', templateId);
-  if (error) raise(error);
-
-  // Questions are replaced wholesale on every edit -- simplest correct approach for a
-  // low-frequency solo-coach admin action, not a concurrency-sensitive path.
-  const { error: deleteError } = await supabase.from('form_questions').delete().eq('template_id', templateId);
-  if (deleteError) raise(deleteError);
-
-  if (questions.length > 0) {
-    const { error: qError } = await supabase
-      .from('form_questions')
-      .insert(questions.map((q) => ({ ...q, template_id: templateId })));
-    if (qError) raise(qError);
-  }
+  const { error } = await supabase.rpc('save_form_template', {
+    p_template_id: templateId,
+    p_fields: fields,
+    p_questions: questions,
+  });
+  return error ? fail(error, 'Could not save that form') : ok();
 }
 
 export async function deleteFormTemplate(templateId: string): Promise<void> {

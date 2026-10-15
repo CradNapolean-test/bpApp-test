@@ -64,7 +64,8 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
     }
   });
   const [missing, setMissing] = useState<Set<string>>(new Set());
-  const questions = assignment.template.questions;
+  // A question the coach took out after it had answers is archived: the member no longer sees it (R3).
+  const questions = assignment.template.questions.filter((q) => !q.archived_at);
   const answeredCount = questions.filter((q) => isAnswered(answers[q.id])).length;
   const firstRender = useRef(true);
 
@@ -216,8 +217,20 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
 // A finished form: one line until it's tapped, then the answers given.
 // When `reviewClientId` is set (the member's own coach), opening it counts as reviewed and drops it
 // off the dashboard's To do.
-function CompletedForm({ assignment, reviewClientId = null }: { assignment: FormAssignmentWithDetails; reviewClientId?: string | null }) {
+function CompletedForm({
+  assignment,
+  reviewClientId = null,
+  isCoachView = false,
+}: {
+  assignment: FormAssignmentWithDetails;
+  reviewClientId?: string | null;
+  isCoachView?: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  // The coach also sees questions that were taken out after they had answers, labelled, so old answers stay readable; the member does not.
+  const questions = assignment.template.questions.filter(
+    (q) => !q.archived_at || (isCoachView && assignment.responses.some((r) => r.question_id === q.id))
+  );
   return (
     <div className="rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <button
@@ -240,11 +253,14 @@ function CompletedForm({ assignment, reviewClientId = null }: { assignment: Form
       </button>
       {open && (
         <dl className="space-y-3 border-t border-black/5 p-4 text-sm dark:border-white/10">
-          {assignment.template.questions.map((q) => {
+          {questions.map((q) => {
             const answer = assignment.responses.find((r) => r.question_id === q.id)?.answer;
             return (
               <div key={q.id}>
-                <dt className="text-xs text-zinc-500">{q.question_text}</dt>
+                <dt className="text-xs text-zinc-500">
+                  {q.question_text}
+                  {q.archived_at && <span className="ml-1.5 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide dark:bg-white/10">Archived question</span>}
+                </dt>
                 <dd className="mt-0.5 font-semibold text-black dark:text-zinc-50">
                   {Array.isArray(answer) ? (answer.length ? answer.join(', ') : '—') : answer == null || answer === '' ? '—' : String(answer)}
                 </dd>
@@ -323,7 +339,7 @@ export function FormsTab({
         <div className="space-y-2.5">
           <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{isCoachView ? 'Pending' : 'To fill out'}</h3>
           {pending.map((a) => {
-            const n = a.template.questions.length;
+            const n = a.template.questions.filter((q) => !q.archived_at).length;
             return isCoachView ? (
               <div
                 key={a.id}
@@ -366,7 +382,7 @@ export function FormsTab({
         <div className="space-y-2.5">
           <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Completed</h3>
           {completed.map((a) => (
-            <CompletedForm key={a.id} assignment={a} reviewClientId={isCoachView && !readOnly ? clientId : null} />
+            <CompletedForm key={a.id} assignment={a} isCoachView={isCoachView} reviewClientId={isCoachView && !readOnly ? clientId : null} />
           ))}
         </div>
       )}

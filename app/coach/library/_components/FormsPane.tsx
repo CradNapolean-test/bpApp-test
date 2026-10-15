@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, ClipboardList } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -15,6 +15,17 @@ import {
   getFormTemplateWithQuestions,
   updateFormTemplate,
 } from '@/lib/data/forms';
+import {
+  buildQuestionPayload,
+  describeChanges,
+  diffQuestions,
+  isChoice,
+  moveQuestion,
+  optionsToText,
+  removalNote,
+  validateDrafts,
+  type QuestionDraft,
+} from '@/lib/formEdit';
 import { STARTER_FORMS } from '@/lib/starterForms';
 import type { FormQuestionType, FormTemplateRow } from '@/lib/data/types';
 import { inputCls } from '@/app/_components/ui';
@@ -27,17 +38,11 @@ const QUESTION_TYPES: { value: FormQuestionType; label: string }[] = [
   { value: 'multi_choice', label: 'Multiple choice' },
 ];
 
-const CHOICE_TYPES: FormQuestionType[] = ['single_choice', 'multi_choice'];
-
-type QuestionDraft = {
-  question_text: string;
-  question_type: FormQuestionType;
-  optionsRaw: string;
-  required: boolean;
-};
-
-const BLANK_QUESTION: QuestionDraft = { question_text: '', question_type: 'short_text', optionsRaw: '', required: true };
-
+let draftCounter = 0;
+function newDraft(): QuestionDraft {
+  draftCounter += 1;
+  return { key: `new-${draftCounter}`, id: null, question_text: '', question_type: 'short_text', optionsText: '', required: true, answerCount: 0 };
+}
 
 // Fullscreen editor for one form template -- name/description/default-onboarding flag, plus
 // its question list. Shared by both "+ New form" (editingId null) and each row's "Edit".
@@ -59,46 +64,72 @@ function FormEditorOverlay({
   onDelete: (id: string) => void;
 }) {
   const { run: runSave, busy: saving } = useAction();
+  const confirm = useConfirm();
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [isDefault, setIsDefault] = useState(initialIsDefault);
   const [questions, setQuestions] = useState<QuestionDraft[]>(initialQuestions);
+  const [error, setError] = useState<string | null>(null);
+  // What was saved when the editor opened: the base for telling the coach what a save will do to answers (R3).
+  const savedQuestions = useRef(initialQuestions.filter((q) => q.id));
 
   function updateQuestion(index: number, patch: Partial<QuestionDraft>) {
+    setError(null);
     setQuestions((qs) => qs.map((q, i) => (i === index ? { ...q, ...patch } : q)));
   }
 
   function addQuestion() {
-    setQuestions((qs) => [...qs, { ...BLANK_QUESTION }]);
+    setQuestions((qs) => [...qs, newDraft()]);
   }
 
-  function removeQuestion(index: number) {
+  async function removeQuestion(index: number) {
+    const q = questions[index];
+    const note = removalNote(q.answerCount);
+    if (note) {
+      const ok = await confirm({
+        title: 'Remove this question?',
+        body: note,
+        confirmLabel: 'Remove question',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    setError(null);
     setQuestions((qs) => qs.filter((_, i) => i !== index));
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    const problem = validateDrafts(questions);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setError(null);
     const fields = { name, description: description || null, is_default_onboarding: isDefault };
-    const preparedQuestions = questions
-      .filter((q) => q.question_text.trim().length > 0)
-      .map((q, i) => ({
-        order_index: i,
-        question_text: q.question_text,
-        question_type: q.question_type,
-        options: CHOICE_TYPES.includes(q.question_type)
-          ? q.optionsRaw
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : null,
-        required: q.required,
-      }));
+    const payload = buildQuestionPayload(questions);
+
+    if (editingId) {
+      const warning = describeChanges(
+        diffQuestions(
+          savedQuestions.current.map((q) => ({ id: q.id as string, question_type: q.question_type, answerCount: q.answerCount })),
+          payload
+        )
+      );
+      if (warning) {
+        const ok = await confirm({ title: 'Save these changes?', body: warning, confirmLabel: 'Save changes' });
+        if (!ok) return;
+      }
+    }
 
     await runSave(
       () =>
         editingId
-          ? updateFormTemplate(editingId, fields, preparedQuestions)
-          : createFormTemplate(fields, preparedQuestions),
+          ? updateFormTemplate(editingId, fields, payload)
+          : createFormTemplate(
+              fields,
+              payload.map(({ id: _id, ...rest }) => rest) // eslint-disable-line @typescript-eslint/no-unused-vars
+            ),
       { success: editingId ? 'Template saved' : 'Template created', onDone: onClose }
     );
   }
@@ -131,7 +162,7 @@ function FormEditorOverlay({
 
         <div className="space-y-3 border-t border-black/10 pt-3 dark:border-white/10">
           {questions.map((q, i) => (
-            <div key={i} className="space-y-2 rounded-md border border-black/10 p-3 dark:border-white/10">
+            <div key={q.key} className="space-y-2 rounded-md border border-black/10 p-3 dark:border-white/10">
               <div className="flex gap-2">
                 <input
                   placeholder="Question text"
@@ -151,15 +182,22 @@ function FormEditorOverlay({
                   ))}
                 </select>
               </div>
-              {CHOICE_TYPES.includes(q.question_type) && (
-                <input
-                  placeholder="Options, comma separated"
+              {isChoice(q.question_type) && (
+                <textarea
+                  rows={Math.min(8, Math.max(3, q.optionsText.split('\n').length + 1))}
+                  placeholder={'One option per line'}
+                  aria-label="Options, one per line"
                   className={inputCls}
-                  value={q.optionsRaw}
-                  onChange={(e) => updateQuestion(i, { optionsRaw: e.target.value })}
+                  value={q.optionsText}
+                  onChange={(e) => updateQuestion(i, { optionsText: e.target.value })}
                 />
               )}
-              <div className="flex items-center justify-between">
+              {q.answerCount > 0 && (
+                <p className="text-xs text-zinc-500">
+                  {q.answerCount} answer{q.answerCount === 1 ? '' : 's'} so far. Changing the wording keeps them.
+                </p>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="flex items-center gap-2 text-xs text-zinc-500">
                   <input
                     type="checkbox"
@@ -168,13 +206,33 @@ function FormEditorOverlay({
                   />
                   Required
                 </label>
-                <button
-                  type="button"
-                  onClick={() => removeQuestion(i)}
-                  className="text-xs text-danger hover:underline"
-                >
-                  Remove question
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Move question up"
+                    disabled={i === 0}
+                    onClick={() => setQuestions((qs) => moveQuestion(qs, i, -1))}
+                    className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move question down"
+                    disabled={i === questions.length - 1}
+                    onClick={() => setQuestions((qs) => moveQuestion(qs, i, 1))}
+                    className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeQuestion(i)}
+                    className="ml-1 text-xs text-danger hover:underline"
+                  >
+                    Remove question
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -182,6 +240,8 @@ function FormEditorOverlay({
             + Add question
           </button>
         </div>
+
+        {error && <p className="text-sm font-semibold text-danger">{error}</p>}
 
         <div className="flex gap-2">
           <Button type="submit" variant="primary" disabled={saving}>
@@ -210,7 +270,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
   } | null>(null);
 
   function openNew() {
-    setEditorState({ editingId: null, name: '', description: '', isDefault: false, questions: [{ ...BLANK_QUESTION }] });
+    setEditorState({ editingId: null, name: '', description: '', isDefault: false, questions: [newDraft()] });
   }
 
   async function openEdit(id: string) {
@@ -233,12 +293,15 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
       questions:
         full.questions.length > 0
           ? full.questions.map((q) => ({
+              key: q.id,
+              id: q.id,
               question_text: q.question_text,
               question_type: q.question_type,
-              optionsRaw: (q.options ?? []).join(', '),
+              optionsText: optionsToText(q.options),
               required: q.required,
+              answerCount: q.answerCount ?? 0,
             }))
-          : [{ ...BLANK_QUESTION }],
+          : [newDraft()],
     });
   }
 

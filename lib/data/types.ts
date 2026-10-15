@@ -640,6 +640,10 @@ export interface FormQuestionRow {
   question_type: FormQuestionType;
   options: string[] | null;
   required: boolean;
+  // Set when the coach took the question out (or changed its type) after it had answers: hidden from members, kept for the coach (0135).
+  archived_at: string | null;
+  // How many answers it has; only filled in for the editor (getFormTemplateWithQuestions).
+  answerCount?: number;
 }
 
 export interface FormTemplateWithQuestions extends FormTemplateRow {
