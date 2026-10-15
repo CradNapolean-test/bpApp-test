@@ -142,3 +142,54 @@ $$;
 
 revoke execute on function public.register_web_push(text, text, text) from public, anon;
 grant execute on function public.register_web_push(text, text, text) to authenticated;
+
+-- =====================================================================================================================
+-- M12. A wrong scanned food could never be corrected.
+-- The first member to scan a barcode writes the shared foods row (0106). There was no update or delete rule, so a wrong entry
+-- stayed wrong for everyone and could only be fixed in SQL. Coaches may now update or delete rows whose source is 'scan'
+-- (never the seed, the UK government tables or the Open Food Facts import). The foods table is shared by every gym, so a
+-- correction by one gym's coach reaches all gyms; that is the point of a shared barcode cache.
+--
+-- The hidden flag and the search that honours it already exist (0074: foods.hidden, search_foods skips hidden rows), so
+-- nothing is added for them. A visible row must still satisfy the same limits as an insert (0106); a row being hidden is not
+-- checked, so a bad legacy row can always be hidden without being repaired first.
+--
+-- Deleting a food that a member has already logged or put in a recipe is refused by the database (it is still referenced):
+-- hide it instead. Note for the coach screen (brief 06): getFoodByBarcode reads the table directly and does not skip hidden
+-- rows, and a hidden row still holds its unique barcode, so for a barcode product "correct the numbers" works better than "hide".
+--
+-- PRE-FLIGHT (read-only; scanned foods that would not pass the insert limits today and so could not be edited without being hidden):
+--   select id, barcode, name, portion, protein, carbs, fat from public.foods
+--   where source = 'scan' and not hidden
+--     and not (portion = '1 gram' and protein between 0 and 1 and carbs between 0 and 1 and fat between 0 and 1
+--              and protein + carbs + fat <= 1.05 and char_length(name) between 1 and 200);
+-- =====================================================================================================================
+drop policy if exists "coaches correct scanned foods" on public.foods;
+create policy "coaches correct scanned foods"
+  on public.foods for update
+  to authenticated
+  using (source = 'scan' and public.my_gym_id() is not null)
+  with check (
+    source = 'scan'
+    and public.my_gym_id() is not null
+    and (
+      hidden
+      or (
+        barcode is not null
+        and barcode ~ '^[0-9]{6,14}$'
+        and portion = '1 gram'
+        and char_length(name) between 1 and 200
+        and protein between 0 and 1
+        and carbs between 0 and 1
+        and fat between 0 and 1
+        and coalesce(fibre, 0) between 0 and 1
+        and protein + carbs + fat <= 1.05
+      )
+    )
+  );
+
+drop policy if exists "coaches delete scanned foods" on public.foods;
+create policy "coaches delete scanned foods"
+  on public.foods for delete
+  to authenticated
+  using (source = 'scan' and public.my_gym_id() is not null);
