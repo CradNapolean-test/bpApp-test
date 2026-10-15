@@ -5,7 +5,10 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { getClientGymId } from './memberships';
+import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { affectedMembers, type AffectedBooking } from '@/lib/classCancelPush';
+import { notifyClassCancelled } from '@/lib/classCancelNotify';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type {
   AttendanceStatus,
@@ -403,12 +406,30 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
 export async function cancelClassOccurrence(classId: string, date: string, reason?: string): Promise<ActionResult & { count?: number }> {
   const supabase = await createClient();
   const note = reason?.trim();
+  // Who is affected is read BEFORE the cancel: afterwards their bookings say 'cancelled' and look like any earlier cancellation. The
+  // database writes the in-app notice and the refunds; the push below is the part that reaches a member who is not looking at the app.
+  const [{ data: affected }, { data: session }] = await Promise.all([
+    supabase.from('bookings').select('client_id, status').eq('class_id', classId).eq('booking_date', date).in('status', ['booked', 'waitlist']),
+    supabase.from('classes').select('name, start_time').eq('id', classId).maybeSingle(),
+  ]);
   const { data, error } = await supabase.rpc('cancel_class_occurrence', {
     p_class_id: classId,
     p_date: date,
     ...(note ? { p_reason: note } : {}),
   });
   if (error) return fail(error, 'Could not cancel that occurrence');
+  if (session && (affected ?? []).length > 0) {
+    // After the response, so a slow push service cannot slow the coach down (R41).
+    after(() =>
+      notifyClassCancelled({
+        members: affectedMembers((affected ?? []) as AffectedBooking[]),
+        className: session.name as string,
+        date,
+        startTime: (session.start_time as string | null) ?? null,
+        reason: note,
+      })
+    );
+  }
   return { ...ok(), count: data as number };
 }
 
