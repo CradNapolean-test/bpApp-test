@@ -815,6 +815,7 @@ export function DashboardShell({
               onNavigateClasses={isCoachView ? undefined : () => setArea('Classes')}
               isCoachView={isCoachView}
               rewards={rewardsData.rewards}
+              sessionsAttended={rewardsData.sessions}
               bigDogResults={bigDogResults}
               events={events}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
@@ -959,7 +960,7 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
           {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
-          {effectiveScreen === 'Strength' && <StrengthTab workoutLogs={workoutLogs} programs={programs} profile={profile} />}
+          {effectiveScreen === 'Strength' && <StrengthTab clientId={clientId} workoutLogs={workoutLogs} programs={programs} profile={profile} />}
           {effectiveScreen === 'Body Scans' && (
             <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} isCoachView={isCoachView} />
           )}

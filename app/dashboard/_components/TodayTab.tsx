@@ -64,6 +64,7 @@ export function TodayTab({
   onNavigateClasses,
   isCoachView = false,
   rewards = [],
+  sessionsAttended,
   bigDogResults = [],
   events = [],
   dailyCheckinHidden = false,
@@ -85,6 +86,8 @@ export function TodayTab({
   onNavigateClasses?: () => void;
   isCoachView?: boolean;
   rewards?: RewardRow[];
+  // Sessions attended, ever: the rewards function's count (the bookings above are the last 90 days and what is ahead).
+  sessionsAttended?: number;
   bigDogResults?: BigDogResultRow[];
   events?: EventWithSignup[];
   dailyCheckinHidden?: boolean;
@@ -364,7 +367,7 @@ export function TodayTab({
 
       {!isCoachView && (
         <div className="space-y-5">
-          <BpHomeProgress bookings={bookings} membership={membership} rewards={rewards} />
+          <BpHomeProgress bookings={bookings} membership={membership} rewards={rewards} sessionsAttended={sessionsAttended} />
           <BpHomeExplore onNavigate={onNavigate} />
         </div>
       )}

@@ -60,4 +60,13 @@ describe('exerciseHistory', () => {
   it('ignores warm-ups', () => {
     expect(exerciseHistory([set('2026-10-01T02:00:00Z', 40, 10, 'warmup')], TZ)).toEqual([]);
   });
+  it('does not call the first session in a 90-day window a personal best when an older set was heavier (H5)', () => {
+    const window = [set('2026-10-01T02:00:00Z', 100, 5), set('2026-10-15T02:00:00Z', 110, 5)];
+    // Without the bests from before the window, the first session in it would read as a PR.
+    expect(exerciseHistory(window, TZ).map((s) => s.isPR)).toEqual([true, true]);
+    // The best set before the window scored 130 (an estimated 1RM): neither session beats it.
+    expect(exerciseHistory(window, TZ, 130).map((s) => s.isPR)).toEqual([false, false]);
+    // A prior best of 120 is beaten by the 110x5 session (estimated 128).
+    expect(exerciseHistory(window, TZ, 120).map((s) => s.isPR)).toEqual([false, true]);
+  });
 });

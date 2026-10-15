@@ -16,7 +16,7 @@ import {
   getCreditsBucketBalances,
   getCreditsLedger,
   getScheduleOccurrences,
-  getUpcomingBookings,
+  getRecentAndUpcomingBookings,
 } from './classes';
 import { getPrograms, getWorkoutLogs } from './workouts';
 import { getClientExerciseMaxes } from './clientExerciseMaxes';
@@ -39,6 +39,7 @@ import { getRecipesWithIngredients } from './recipes';
 import { getCourses, getClientCourseAssignments } from './education';
 import { getDisabledMetrics, getDisabledScreens } from './clientScreenSettings';
 import { toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
+import { bookingWindowStart, workoutWindowStart } from '@/lib/trainingWindow';
 
 const HISTORY_DAYS = 84;
 
@@ -108,13 +109,13 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getActivities(),
     canWrite ? getOrCreateDailyLog(clientId, todayIso) : getDailyLog(clientId, todayIso),
     getMessages(clientId),
-    getUpcomingBookings(clientId),
+    getRecentAndUpcomingBookings(clientId, bookingWindowStart(todayIso)),
     getScheduleOccurrences(3, 0, false, gymId),
     getCreditsBalance(clientId),
     getCreditsBucketBalances(clientId),
     getCreditsLedger(clientId),
     getPrograms(clientId),
-    getWorkoutLogs(clientId),
+    getWorkoutLogs(clientId, workoutWindowStart(todayIso)),
     getClientExerciseMaxes(clientId),
     getWorkoutDayFeedback(clientId),
     getBlockChoices(clientId),

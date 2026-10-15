@@ -60,15 +60,17 @@ export interface ExerciseSession {
   isPR: boolean; // new best estimated 1RM (or heaviest load if no estimate) up to and including this session
 }
 
-// One row per day the exercise was trained, oldest first, with a PR flag on each day that beat everything before it.
-export function exerciseHistory(logs: SetLike[], timeZone: string): ExerciseSession[] {
+// One row per day the exercise was trained, oldest first, with a PR flag on each day that beat everything before it. `priorBest` is the
+// best score from before these logs begin (member_strength_bests with a cut-off): the screens carry only the last 90 days of sets, and
+// without it the first session in the window would always read as a personal best.
+export function exerciseHistory(logs: SetLike[], timeZone: string, priorBest = 0): ExerciseSession[] {
   const byDay = new Map<string, SetLike[]>();
   for (const l of logs) {
     if (!countsAsWorkingSet(l)) continue;
     const d = logDay(l.logged_at, timeZone);
     byDay.set(d, [...(byDay.get(d) ?? []), l]);
   }
-  let bestSoFar = 0;
+  let bestSoFar = priorBest;
   return [...byDay.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, sets]) => {

@@ -318,6 +318,16 @@ export interface WorkoutBlockChoiceRow {
   chosen_at: string;
 }
 
+// A member's best set for one exercise (member_strength_bests, migration 0137). `exercise_key` is the library id, else "n:<name>".
+export interface StrengthBest {
+  exercise_key: string;
+  best_load: number;
+  best_reps: number;
+  // The estimated one-rep max of that set (the load itself above 12 reps).
+  best_score: number;
+  logged_at: string;
+}
+
 export interface WorkoutLogRow {
   id: string;
   client_id: string;

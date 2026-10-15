@@ -140,13 +140,17 @@ export async function updateClass(
   const { error } = await supabase.from('classes').update(fields).eq('id', classId);
   return error ? fail(error, 'Could not save that session') : ok();
 }
-export async function getUpcomingBookings(clientId: string): Promise<BookingRow[]> {
+// A member's bookings from `sinceDate` onwards: the recent past (the attended sessions shown on the check-in weeks) and everything ahead.
+// It was called getUpcomingBookings but returned every non-cancelled booking ever, which reached the database's 1,000-row limit and
+// carried years of history the screens never used (H5). The lifetime attended total is the rewards function's, not a count of these rows.
+export async function getRecentAndUpcomingBookings(clientId: string, sinceDate: string): Promise<BookingRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('bookings')
     .select('*, class:classes(*)')
     .eq('client_id', clientId)
     .neq('status', 'cancelled')
+    .gte('booking_date', sinceDate)
     .order('booking_date');
   if (error) raise(error);
   return (data ?? []) as unknown as BookingRow[];

@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
+import { bumpDataVersion } from '@/lib/refreshSignal';
 
 // Wraps the mutation shape repeated ~37 times across the app: busy flag, run the write,
 // surface success/failure as a toast, refresh. Before this, most handlers had no catch at
@@ -40,7 +41,11 @@ export function useAction() {
         if (opts?.success) toast.success(opts.success);
         opts?.onDone?.();
         // The page is reloaded from the server after a change, unless the caller already has the new state in hand (refresh: false).
-        if (opts?.refresh !== false) router.refresh();
+        if (opts?.refresh !== false) {
+          router.refresh();
+          // Screens that fetched their own data when they opened (useOnDemand) read it again too.
+          bumpDataVersion();
+        }
         return true;
       } catch (err) {
         toast.error(messageFrom(err));

@@ -2,7 +2,7 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import type { SetType, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramDayRow, WorkoutProgramRow } from './types';
+import type { SetType, StrengthBest, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramDayRow, WorkoutProgramRow } from './types';
 
 export async function getPrograms(clientId: string): Promise<WorkoutProgramRow[]> {
   const supabase = await createClient();
@@ -194,15 +194,31 @@ export async function applyFieldsToDay(
   if (error) raise(error);
 }
 
-export async function getWorkoutLogs(clientId: string): Promise<WorkoutLogRow[]> {
+// The sets logged since `sinceIso` (default: all), newest first. Every set is a row, so an unbounded read hit the database's 1,000-row
+// limit within a few months and quietly lost the oldest sets (H5). The screens ask for the last 90 days (lib/trainingWindow.ts); the
+// all-time bests come from getStrengthBests.
+export async function getWorkoutLogs(clientId: string, sinceIso?: string): Promise<WorkoutLogRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('workout_logs')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('logged_at', { ascending: false });
+  let request = supabase.from('workout_logs').select('*').eq('client_id', clientId);
+  if (sinceIso) request = request.gte('logged_at', sinceIso);
+  const { data, error } = await request.order('logged_at', { ascending: false });
   if (error) raise(error);
   return data ?? [];
+}
+
+// One member's best set for each exercise (migration 0137). With `beforeIso` only the sets from before that moment count: the bests the
+// 90-day history has to beat for a personal-best flag in it to be true.
+export async function getStrengthBests(clientId: string, beforeIso?: string): Promise<StrengthBest[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('member_strength_bests', { p_client: clientId, p_before: beforeIso ?? null });
+  if (error) raise(error);
+  return ((data ?? []) as { exercise_key: string; best_load: number | string; best_reps: number; best_score: number | string; logged_at: string }[]).map((r) => ({
+    exercise_key: r.exercise_key,
+    best_load: Number(r.best_load),
+    best_reps: Number(r.best_reps),
+    best_score: Number(r.best_score),
+    logged_at: r.logged_at,
+  }));
 }
 
 export async function logSet(

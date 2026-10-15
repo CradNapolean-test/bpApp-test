@@ -3,6 +3,9 @@
 import { useMemo, useState } from 'react';
 import { Dumbbell, Trophy } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
+import { useOnDemand } from '@/app/_components/useOnDemand';
+import { getStrengthBests } from '@/lib/data/workouts';
+import { workoutWindowStart } from '@/lib/trainingWindow';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { countsAsWorkingSet, exerciseHistory, formatKg, weeklyVolume } from '@/lib/trainingStats';
 import type { ClientProfileRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
@@ -13,16 +16,24 @@ const shortDate = (iso: string) =>
 
 // Load volume (working load x reps) per week, and per-exercise progression with personal bests.
 export function StrengthTab({
+  clientId,
   workoutLogs,
   programs,
   profile,
 }: {
+  clientId: string;
   workoutLogs: WorkoutLogRow[];
   programs: WorkoutProgramRow[];
   profile: ClientProfileRow | null;
 }) {
   const tz = profile?.timezone ?? DEFAULT_TIMEZONE;
   const today = todayIsoInTz(tz);
+
+  // The page carries the last 90 days of sets. The best set per exercise from before that comes from the database (H5), so a personal-best
+  // flag in the window is true and the headline is the all-time best, not the best of whatever happened to be loaded.
+  const windowStart = workoutWindowStart(today);
+  const priorBests = useOnDemand(() => getStrengthBests(clientId, windowStart), `${clientId}:${windowStart}`);
+  const priorScore = useMemo(() => new Map((priorBests.data ?? []).map((b) => [b.exercise_key, b.best_score])), [priorBests.data]);
 
   // A logged set points at a programme row (exercise_id) and, when the exercise came from the library, a
   // library id. Group by library id so the same lift in different blocks is one history.
@@ -54,7 +65,9 @@ export function StrengthTab({
     .sort((a, b) => b.sets - a.sets);
   const [picked, setPicked] = useState<string | null>(null);
   const selected = options.find((o) => o.key === picked) ?? options[0];
-  const history = selected ? exerciseHistory(groups.get(selected.key) ?? [], tz) : [];
+  // Until the earlier bests arrive nothing can be called a PR (they would all look like one); if they cannot be read, fall back to the window.
+  const baseline = selected ? (priorBests.loading ? Number.POSITIVE_INFINITY : (priorScore.get(selected.key) ?? 0)) : 0;
+  const history = selected ? exerciseHistory(groups.get(selected.key) ?? [], tz, baseline) : [];
 
   if (options.length === 0) {
     return <EmptyState icon={Dumbbell} title="No lifts logged yet" hint="Log sets with a weight and reps in your workouts and your volume and progress will show here." />;
@@ -65,6 +78,8 @@ export function StrengthTab({
   const e1rms = history.map((s) => s.best1RM ?? s.topLoad);
   const lo = Math.min(...e1rms);
   const hi = Math.max(...e1rms);
+  // The headline is the best ever, which may be from before the 90 days the chart shows.
+  const bestEver = Math.max(hi, selected ? (priorScore.get(selected.key) ?? 0) : 0);
 
   return (
     <div className="space-y-4">
@@ -122,7 +137,7 @@ export function StrengthTab({
           </svg>
         )}
         <p className="mt-2 text-xs text-zinc-500">
-          {prs} personal best{prs === 1 ? '' : 's'} · best estimated 1RM {Math.round(hi)}kg
+          {prs} personal best{prs === 1 ? '' : 's'} · best estimated 1RM {Math.round(bestEver)}kg
         </p>
 
         <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
