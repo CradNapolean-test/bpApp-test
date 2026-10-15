@@ -84,7 +84,7 @@ export function AppShell({
             <div className={`min-w-0 items-center gap-2 ${mobileHeader ? 'hidden md:flex' : 'flex'}`}>
               <Logo size={28} className="hidden shrink-0 sm:block" />
               <div className="min-w-0">
-                <p className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</p>
+                <div className="truncate text-xl font-semibold text-black sm:text-2xl dark:text-zinc-50">{title}</div>
                 {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
               </div>
             </div>
