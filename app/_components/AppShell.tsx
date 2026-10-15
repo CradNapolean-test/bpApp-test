@@ -20,6 +20,7 @@ export function AppShell({
   coachSummary,
   isCoachView,
   mobileHeader,
+  signOutOnMobile,
   children,
 }: {
   title: ReactNode;
@@ -45,6 +46,8 @@ export function AppShell({
   // plain screen title elsewhere). Also hides SignOutButton on mobile when set, since the
   // screens that pass this put Sign out inside Account instead of a persistent header button.
   mobileHeader?: ReactNode;
+  // Keeps the header Sign out button on narrow screens too, for pages (the owner's) with a mobileHeader but no Account screen.
+  signOutOnMobile?: boolean;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -77,7 +80,7 @@ export function AppShell({
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {headerAction}
-            <span className={mobileHeader ? 'hidden md:inline-flex' : undefined}>
+            <span className={mobileHeader && !signOutOnMobile ? 'hidden md:inline-flex' : undefined}>
               <SignOutButton />
             </span>
           </div>

@@ -197,6 +197,7 @@ export function OwnerShell({ gyms, stats, email }: { gyms: OwnerGym[] | null; st
           </>
         }
         headerAction={<Avatar name={email} size="md" variant="self" />}
+        signOutOnMobile
         mobileHeader={
           <div className="flex items-center gap-2.5">
             <Logo size={32} />
