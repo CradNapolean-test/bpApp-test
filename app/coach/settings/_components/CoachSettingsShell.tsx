@@ -93,6 +93,7 @@ export function CoachSettingsShell({
       bottomBar={<CoachBottomTabBar />}
       headerAction={headerExtras}
       mobileHeader={mobileHeader}
+      pageTitle="Account"
     >
       <div className="space-y-4">
         <div className="flex items-center gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">

@@ -94,7 +94,7 @@ export default async function RootLayout({
 
   return (
     <html
-      lang="en"
+      lang="en-GB"
       suppressHydrationWarning
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >

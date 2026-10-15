@@ -652,6 +652,8 @@ export function DashboardShell({
     <ClientOnly fallback={<PageSkeleton />}>
     <AppShell
       title={clientLabel}
+      // The one <h1> of the screen, for screen readers: the brand in the header is not a heading (SH4).
+      pageTitle={isCoachView ? `${clientLabel}: ${effectiveScreen}` : effectiveScreen}
       isCoachView={isCoachView}
       topBar={topBar}
       mobileHeader={mobileHeader}
