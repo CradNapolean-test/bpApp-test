@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CalendarCheck,
   Check,
@@ -24,17 +24,12 @@ import { useAction } from '@/app/_components/useAction';
 import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { formatClassTime } from '@/lib/utils/dates';
+import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
 import type { CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
 import type { ScheduleOccurrence } from '@/lib/data/types';
 import { ActiveGymTag } from './ActiveGymTag';
 import { AddClientForm } from './AddClientForm';
 import { JoinLinkCard } from './JoinLinkCard';
-
-const SESSION_MIN = 45;
-const toMin = (t: string | null) => {
-  const [h, m] = (t ?? '0:0').split(':').map(Number);
-  return h * 60 + (m || 0);
-};
 
 const sessionHref = (o: ScheduleOccurrence) => `/coach/classes?tab=sessions&date=${o.date}&class=${o.classId}`;
 const dayShort = (iso: string) =>
@@ -135,6 +130,12 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showAllToCheck, setShowAllToCheck] = useState(false);
+  // "Happening now / Up next" follows the gym's clock: it used to be worked out once, when the page loaded, and then sat there (CC3).
+  const [clockMs, setClockMs] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = setInterval(() => setClockMs(Date.now()), 60_000);
+    return () => clearInterval(tick);
+  }, []);
   const { scope, isAdmin, coaches, selectedCoachId, stats } = data;
   const own = (mineFlag: boolean) => scope === 'mine' || mineFlag;
 
@@ -294,12 +295,12 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   }
 
   // ---- Today ----
-  // The gym's clock, to match the gym's date used for which sessions count as today.
-  const clock = new Intl.DateTimeFormat('en-GB', { timeZone: data.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date());
-  const nowMin = Number(clock.find((p) => p.type === 'hour')?.value) * 60 + Number(clock.find((p) => p.type === 'minute')?.value);
-  const today = data.occurrences.filter((o) => o.date === data.todayIso).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
-  const inProgress = today.find((s) => toMin(s.startTime) <= nowMin && nowMin < toMin(s.startTime) + SESSION_MIN);
-  const upNext = inProgress ?? today.find((s) => toMin(s.startTime) > nowMin) ?? null;
+  // The gym's clock and the gym's date, so a page left open past midnight moves on to the new day's sessions.
+  const now = new Date(clockMs);
+  const nowMin = minuteOfDayIn(data.timezone, now);
+  const gymToday = todayAtGym(data.timezone, now);
+  const today = data.occurrences.filter((o) => o.date === gymToday).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
+  const { inProgress, upNext } = currentAndNext(today, nowMin);
   const toMark = data.occurrences.filter((o) => (o.unmarkedCount ?? 0) > 0);
 
   const scopeHref = (s: DashboardScope, coachId?: string) => `/coach?scope=${s}${coachId ? `&coach=${coachId}` : ''}`;
