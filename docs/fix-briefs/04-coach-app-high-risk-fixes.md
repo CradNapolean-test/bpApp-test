@@ -86,3 +86,47 @@
 
 - Every item above implemented or explicitly skipped with a reason in `## Status`; unit tests for `formEdit`, `latestOnly`, the confirmation helper and the CSV guard; migration `0135` plus its sandbox check.
 - No change to files owned by other briefs except the minimal `ChatTab.tsx` edit.
+
+## Status
+
+Branch `fix/04-coach-high-risk` (cut from `fix/03-credits-integrity`, so it builds on migrations 0127 to 0133), 11 commits plus this status commit, nothing pushed. One migration: `0135_forms_save_and_event_notifications.sql`.
+
+**Not tried against a real database or in a browser.** There is no sandbox project, and the ground rules forbid clicking Save, Send, Delete or Assign against live data. What did run: `npm test` (380 pass; the new pure logic is in `lib/` with tests next to it), `npx tsc --noEmit` (clean), `npm run lint` (0 errors, the same 9 warnings as before), and two new static test files for the migration. The sandbox check `supabase/tests/security-audit/forms-save-check.cjs` (the R3 acceptance test) has been written and syntax-checked but never run.
+
+**Deploy order matters.** This code calls database functions that only exist once the migrations are applied: `retire_class`, `schedule_programme_rollout`, `import_program_template` (0132 and 0133, brief 03), and `save_form_template`, `form_answer_counts`, `notify_event_signups` (0135). Apply `0132`, `0133` and `0135` on live **before** deploying this branch, otherwise editing a form, starting or importing a programme, retiring a session, and changing or deleting an event will fail. (`0143`, from brief 03, still goes last, after brief 05.)
+
+### Findings
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| R24 | done | `46c109a` | One guarded `toCsv` in `lib/utils/csv.ts`; `lib/csv.ts` re-exports it; the private copy in the coach `ReportsPane` is gone; CSV downloads get a byte-order mark (JSON does not). Tests extended in `lib/csv.test.ts`. |
+| R4 | done | `ae92ab2` | `lib/latestOnly.ts` (tested with out-of-order answers); chat window keyed on conversation and load; `ChatTab` resets if re-used for another client. |
+| R29 | done | `ae92ab2` | No auto-select on open; refetch on focus and every 60 s, merged by `lib/inboxOverview.ts` (tested); live connections limited to the 40 most recent plus the open one; error states with Try again in the drawer and the thread. |
+| R3 | done | `2c5c6f6` | Migration 0135, `lib/formEdit.ts` (tested), editor with answer counts, reorder, one-option-per-line, no empty choice question, archived questions hidden from members and labelled for the coach. |
+| R5 | done | `5ded5ba` | Defaults to Choose members; real count; confirmation for everyone; "Started for N members"; one RPC. `lib/rolloutPlan.ts` tested. |
+| CL3 | done | `5ded5ba` | `importProgramTemplate` is one RPC call; the TypeScript validator was removed (the database checks shape and limits). |
+| PT3 | done | `5ded5ba` | Deleting a week renumbers the later ones (several requests in one server action, not one transaction). |
+| R25 | partly | `b16d721` | Always confirms with count and channel; gym-timezone dates; past times refused; daily-run note. **Not done:** the delivery report (waits for brief 09). The gym timezone used is the app default (`Europe/London`); `TODO(brief 05)` to pass the gym's own. |
+| R26, CH2, SV1 (UI) | done | `2389748` | Retire instead of delete; edit warnings and refusals before saving; run-class buttons disabled for future dates. `lib/sessionEdit.ts` tested. |
+| R33 (UI) | done | `71ccee1` | Delete message, "(deleted group)" / saved name, Cancelled state, search and Select all in the member picker. |
+| FM2/ED | done | `b2ebe38` | https-only lesson links (tested) and delete confirmations that mention progress. No database check was added for lesson links (0135 was reserved for forms and events only). |
+| EX | done | `c3095cf` | Import skips duplicates, caps at 500, rejects non-https links; used exercises offer Retire; retired exercises are badged and hidden from the programme builder's picker. |
+| EV2 | partly | `2f4d34b` | Notifications on a changed time or place and on cancellation; no past events. **Not done:** a "Cancelled" state (needs a schema change), so a cancelled event is notified and then deleted. |
+| PK1, PK2 | done | `a86049c` | `lib/planForm.ts` tested. |
+| R35 | skipped | n/a | Live data, owner task (brief 12). |
+| GM/CR minor | skipped | n/a | "Extra session" and "Grant pack" belong to brief 05. |
+
+### What the owner must check
+
+1. Apply `0135` on the sandbox after `0133`, run `forms-save-check.cjs` (it creates and removes its own test member, form and event; it needs `--ref=<sandbox ref>` in `AUDIT_ALLOWED_REFS`).
+2. Then, on a sandbox copy of the app (not live), try: two quick clicks between two conversations; editing a word in an answered form; "Start this programme" with Everyone (the confirmation should show the real gym count); retiring a session with bookings; changing an event's time. These are the screens I could only test as logic.
+3. Read-only check on live before applying 0135: how many answers could be lost from forms today is in the migration's pre-flight query.
+
+### Things to know
+
+- **Files outside the usual list I had to touch, kept minimal:** `app/dashboard/_components/ChatTab.tsx` (the allowed R4 safety net), `app/dashboard/_components/FormsTab.tsx` (hide archived questions from members), `lib/data/types.ts` (new optional fields), `lib/data/classes.ts` (besides `updateClass` and `deleteClass`: new `retireClass` and `getClassBookingSummary`, and `retired_at` filters in `getClasses` and `getScheduleOccurrences`; brief 07 edits other functions in this file), `lib/data/exerciseLibrary.ts`, `lib/data/clientGroups.ts`, `lib/data/community.ts`, `lib/data/education.ts`.
+- **Retired sessions** are hidden from the timetable and from every booking list; the coach's attendance view keeps their past dates so they can still be marked. Reports and member booking history still include them.
+- **`getAudienceCounts`** (the broadcast "whole gym" count, `lib/data/communications.ts`) still counts through the coach's active gym; it is brief 05's R38 and I did not change it. The confirmation uses whatever count the screen already shows.
+- **Realtime channel names** now carry a counter (`coach-inbox-<client>-<n>`) because removing a channel is asynchronous and re-adding the same name straight away throws.
+- **Direct deletes of form questions** by a coach through the table are still possible (the policy is unchanged) and would still cascade to answers. The app no longer does it; a trigger to block it was not added.
+- **Hand-offs:** brief 05 passes the gym timezone into `BroadcastsPane` and fixes the audience count; brief 07 edits `ChatTab.tsx` after this; brief 09 returns the send result for R25; brief 11 will touch `FormsPane`, `GroupsManager` and the sheets for accessibility.
