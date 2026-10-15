@@ -103,7 +103,7 @@ export function AccountTab({
   async function handlePushToggle() {
     const next = !pushEnabled;
     setPushEnabled(next);
-    await run(() => (next ? enablePushNotifications(clientId) : disablePushNotifications()), {
+    await run(() => (next ? enablePushNotifications() : disablePushNotifications()), {
       success: next ? 'Push notifications enabled' : 'Push notifications disabled',
     });
     // Re-check actual state rather than trust the optimistic flip, on both the success and

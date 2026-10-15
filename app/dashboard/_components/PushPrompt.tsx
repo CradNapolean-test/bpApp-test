@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BellRing, X } from 'lucide-react';
 import { useToast } from '@/app/_components/ToastProvider';
-import { enablePushNotifications, getExistingPushSubscription, isPushSupported } from '@/app/_components/pushNotifications';
+import { enablePushNotifications, getExistingPushSubscription, isPushSupported, refreshPushRegistration } from '@/app/_components/pushNotifications';
 
 const SNOOZE_KEY = 'push-prompt-snoozed-until';
 const SNOOZE_DAYS = 7;
@@ -32,12 +32,15 @@ export function PushPrompt({ clientId }: { clientId: string }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!(await isPushSupported()) || !isInstalledApp() || Notification.permission === 'denied') return;
+      if (!(await isPushSupported())) return;
+      // A subscription already on this browser goes to whoever is signed in now (R18); it used to stay with the previous person.
+      refreshPushRegistration(clientId).catch(() => {});
+      if (!isInstalledApp() || Notification.permission === 'denied') return;
       const existing = await getExistingPushSubscription();
       if (cancelled || existing) return;
       if (Notification.permission === 'granted') {
         // Already allowed on this device, just not subscribed (fresh install / cleared data).
-        enablePushNotifications(clientId).catch(() => {});
+        enablePushNotifications().catch(() => {});
         return;
       }
       if (!snoozed()) setShow(true);
@@ -52,7 +55,7 @@ export function PushPrompt({ clientId }: { clientId: string }) {
   async function turnOn() {
     setBusy(true);
     try {
-      await enablePushNotifications(clientId);
+      await enablePushNotifications();
       toast.success('Notifications are on');
       setShow(false);
     } catch (err) {

@@ -1,6 +1,7 @@
 'use client';
 
-import { savePushSubscription, deletePushSubscription } from '@/lib/data/pushSubscriptions';
+import { registerPushSubscription, deletePushSubscription } from '@/lib/data/pushSubscriptions';
+import { registrationKey, shouldReregister } from '@/lib/pushRegistration';
 
 // PushManager.subscribe needs the VAPID public key as a raw Uint8Array, not the base64url
 // string it's distributed as everywhere else (env vars, the subscription table).
@@ -24,7 +25,7 @@ export async function getExistingPushSubscription(): Promise<PushSubscription | 
 // Requests OS/browser permission, subscribes via the service worker, and persists the
 // subscription server-side. Throws if permission is denied or the key isn't configured --
 // callers surface that via the existing useAction toast pattern rather than handling it here.
-export async function enablePushNotifications(clientId: string): Promise<void> {
+export async function enablePushNotifications(): Promise<void> {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!publicKey) throw new Error('Push notifications are not configured yet.');
 
@@ -42,11 +43,35 @@ export async function enablePushNotifications(clientId: string): Promise<void> {
     throw new Error('Subscription is missing required keys.');
   }
 
-  await savePushSubscription(clientId, {
+  await registerPushSubscription({
     endpoint: json.endpoint,
     p256dh: json.keys.p256dh,
     auth: json.keys.auth,
   });
+}
+
+// The browser already has a subscription (made by someone who used this phone before, or by this person earlier): register it with the
+// person who is signed in now, so their pushes come to them and not to the previous holder (R18). At most once every 12 hours per person.
+export async function refreshPushRegistration(userId: string): Promise<void> {
+  if (!(await isPushSupported()) || Notification.permission !== 'granted') return;
+  const subscription = await getExistingPushSubscription();
+  if (!subscription) return;
+  let last: number | null = null;
+  try {
+    const stored = localStorage.getItem(registrationKey(userId));
+    last = stored ? Number(stored) : null;
+  } catch {
+    // storage blocked: register anyway
+  }
+  if (!shouldReregister(last, Date.now())) return;
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return;
+  await registerPushSubscription({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth });
+  try {
+    localStorage.setItem(registrationKey(userId), String(Date.now()));
+  } catch {
+    // fine
+  }
 }
 
 export async function disablePushNotifications(): Promise<void> {
