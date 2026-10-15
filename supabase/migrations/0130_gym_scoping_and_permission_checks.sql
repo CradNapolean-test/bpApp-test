@@ -791,3 +791,64 @@ drop trigger if exists exercise_library_protect_author on public.exercise_librar
 create trigger exercise_library_protect_author
   before update on public.exercise_library
   for each row execute function public.exercise_library_protect_author();
+
+-- =====================================================================================================================
+-- GA1. The last admin could be demoted.
+-- set_gym_admin [0056] now refuses a change that would leave the gym with no admin in coach_gym_memberships, takes a lock on
+-- the gym row first (so two admins demoting each other at the same moment cannot both succeed), and says so if the person is
+-- not a coach at the gym (it used to do nothing silently). The work is in _set_gym_admin so the owner version in 0131 behaves
+-- identically. Message for the screen: 'A gym needs at least one admin. Make someone else an admin first.'
+--
+-- PRE-FLIGHT (read-only; gyms with no admin right now, which this migration does not change):
+--   select g.id, g.name from public.gyms g
+--   where not exists (select 1 from public.coach_gym_memberships m where m.gym_id = g.id and m.is_gym_admin);
+-- =====================================================================================================================
+create or replace function public._set_gym_admin(p_gym uuid, p_coach uuid, p_is_admin boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_gym is null or p_coach is null or p_is_admin is null then
+    raise exception 'Choose a coach';
+  end if;
+
+  -- Serialise changes to one gym's admins.
+  perform 1 from gyms where id = p_gym for update;
+  if not found then
+    raise exception 'Gym not found';
+  end if;
+
+  if not exists (select 1 from coach_gym_memberships where coach_id = p_coach and gym_id = p_gym) then
+    raise exception 'That coach does not work at this gym.';
+  end if;
+
+  if not p_is_admin
+     and exists (select 1 from coach_gym_memberships where coach_id = p_coach and gym_id = p_gym and is_gym_admin)
+     and not exists (select 1 from coach_gym_memberships where gym_id = p_gym and coach_id <> p_coach and is_gym_admin) then
+    raise exception 'A gym needs at least one admin. Make someone else an admin first.';
+  end if;
+
+  update coach_gym_memberships set is_gym_admin = p_is_admin where coach_id = p_coach and gym_id = p_gym;
+  -- profiles.is_gym_admin is the cache for the coach's ACTIVE gym; only touch it if this is their active gym.
+  update profiles set is_gym_admin = p_is_admin where id = p_coach and gym_id = p_gym;
+end;
+$$;
+
+revoke execute on function public._set_gym_admin(uuid, uuid, boolean) from public, anon, authenticated;
+
+create or replace function public.set_gym_admin(p_coach_id uuid, p_is_admin boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.my_gym_id() is null
+     or not exists (select 1 from profiles where id = auth.uid() and is_gym_admin) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._set_gym_admin(public.my_gym_id(), p_coach_id, p_is_admin);
+end;
+$$;
