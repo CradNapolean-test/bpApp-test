@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+// Loaded when the form is sent (and fetched in advance while the browser is idle): the client is about 240 KB that the sign-in page does
+// not need to paint or to type into (R43).
+const loadSupabase = () => import('@/lib/supabase/client').then((m) => m.createClient());
 import { Logo } from '@/app/_components/Logo';
 import { Button } from '@/app/_components/Button';
 import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
@@ -16,12 +18,22 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'sign-in' | 'forgot'>('sign-in');
   const [resetSent, setResetSent] = useState(false);
 
+  useEffect(() => {
+    const warm = () => void import('@/lib/supabase/client');
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warm, 1500);
+    return () => window.clearTimeout(id);
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
-    const supabase = createClient();
+    const supabase = await loadSupabase();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
@@ -39,7 +51,7 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
 
-    const supabase = createClient();
+    const supabase = await loadSupabase();
     // This value reaches the email template as {{ .RedirectTo }} -- the "Reset Password"
     // template in the Supabase dashboard must link to {{ .SiteURL }}/auth/confirm with
     // token_hash={{ .TokenHash }}&type=recovery&next={{ .RedirectTo }} (see
