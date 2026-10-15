@@ -15,10 +15,11 @@ export default async function CoachMessagesPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, gym:gym_id(timezone)')
     .eq('id', user.id)
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
+  const gym = Array.isArray(profile.gym) ? profile.gym[0] : profile.gym;
 
   const [overview, groups, communications, templates, counts] = await Promise.all([
     getCoachChatOverview(),
@@ -36,6 +37,7 @@ export default async function CoachMessagesPage() {
       communications={communications}
       templates={templates}
       counts={counts}
+      timezone={gym?.timezone ?? null}
       email={user.email ?? 'Coach'}
     />
   );

@@ -10,6 +10,7 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
 import { CreditPackManager } from '@/app/coach/classes/_components/CreditPackManager';
 import type { ShirtRow } from '@/lib/data/bigDog';
@@ -93,7 +94,10 @@ export function BusinessShell({
         headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={email} />}
         mobileHeader={<CoachMobileBrand />}
       >
-        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">Business</h1>
+        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">
+          Business
+          <ActiveGymTag />
+        </h1>
         <p className="mb-4 text-sm text-zinc-500">{BLURB[tab]}</p>
         <HubTabBar tabs={tabs} active={tab} onSelect={setTab} />
 

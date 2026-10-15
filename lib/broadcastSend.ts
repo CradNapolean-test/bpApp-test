@@ -24,11 +24,13 @@ export function broadcastConfirmation(input: {
   channel: BroadcastChannel;
   target: BroadcastTarget;
   groupName?: string | null;
+  // Which gym "the whole gym" is, for a coach who works in more than one.
+  gymName?: string | null;
 }): BroadcastConfirmation {
-  const { count, channel, target, groupName } = input;
+  const { count, channel, target, groupName, gymName } = input;
   const audience =
     target === 'gym'
-      ? `everyone at the gym, including other coaches' clients`
+      ? `everyone at ${gymName ?? 'the gym'}, including other coaches' clients`
       : target === 'group'
         ? `the group "${groupName ?? 'selected'}"`
         : 'your own clients';

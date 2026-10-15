@@ -67,7 +67,10 @@ export async function composeCommunication(input: {
   return ok();
 }
 
-// How many clients each audience reaches, for the "This will message N" line: the coach's own, and the whole gym.
+// How many clients each audience reaches, for the "This will message N" line: the coach's own, and the whole gym. "Whole gym" is the
+// MEMBERS who belong to the gym being worked in (by their own gym), the same people communication_recipients picks (migration 0130).
+// It used to count the members of the coaches whose active gym was this one, so a coach in two gyms was told "90 clients" at a gym
+// with none (R38).
 export async function getAudienceCounts(): Promise<{ mine: number; gym: number }> {
   const supabase = await createClient();
   const {
@@ -75,14 +78,10 @@ export async function getAudienceCounts(): Promise<{ mine: number; gym: number }
   } = await supabase.auth.getUser();
   if (!user) return { mine: 0, gym: 0 };
   const gymId = await resolveScopingGymId(supabase);
-  const [{ count: mine }, { data: coaches }] = await Promise.all([
+  const [{ count: mine }, { count: gym }] = await Promise.all([
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('coach_id', user.id),
-    supabase.from('profiles').select('id').eq('role', 'coach').eq('gym_id', gymId),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('gym_id', gymId),
   ]);
-  const coachIds = (coaches ?? []).map((c) => c.id);
-  const { count: gym } = coachIds.length
-    ? await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').in('coach_id', coachIds)
-    : { count: 0 };
   return { mine: mine ?? 0, gym: gym ?? 0 };
 }
 

@@ -27,6 +27,7 @@ import { markReviewed } from '@/lib/data/coachReviews';
 import { formatClassTime } from '@/lib/utils/dates';
 import type { CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
 import type { ScheduleOccurrence } from '@/lib/data/types';
+import { ActiveGymTag } from './ActiveGymTag';
 import { AddClientForm } from './AddClientForm';
 import { JoinLinkCard } from './JoinLinkCard';
 
@@ -373,6 +374,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
       <div>
         <SectionLabel>
           {today.length === 0 ? "Today's classes" : `${inProgress ? 'Happening now' : upNext ? 'Up next' : 'Today'} · ${today.length} session${today.length === 1 ? '' : 's'}`}
+          <ActiveGymTag />
         </SectionLabel>
         {today.length === 0 ? (
           <Card className="text-sm text-zinc-500">No classes scheduled today.</Card>
@@ -501,7 +503,10 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
           </Link>
           <Link href="/coach/classes?tab=reports" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.avgFillPct != null ? `${stats.avgFillPct}%` : '—'}</p>
-            <p className="text-xs text-zinc-500">average class fill, all classes</p>
+            <p className="text-xs text-zinc-500">
+              average class fill, all classes
+              <ActiveGymTag />
+            </p>
             <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-accent" style={{ width: `${stats.avgFillPct ?? 0}%` }} />
             </div>

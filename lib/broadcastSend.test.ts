@@ -19,6 +19,12 @@ describe('broadcastConfirmation (R25)', () => {
     expect(broadcastConfirmation({ count: 1, channel: 'both', target: 'group', groupName: 'Morning crew' }).title).toBe('Send to 1 member by message and email?');
     expect(broadcastConfirmation({ count: 1, channel: 'both', target: 'group', groupName: 'Morning crew' }).body).toMatch(/"Morning crew"/);
   });
+
+  it('names the gym for a coach who works in more than one', () => {
+    const c = broadcastConfirmation({ count: 40, channel: 'message', target: 'gym', gymName: 'Northside' });
+    expect(c.body).toMatch(/everyone at Northside/);
+    expect(broadcastConfirmation({ count: 40, channel: 'message', target: 'gym' }).body).toMatch(/everyone at the gym/);
+  });
 });
 
 describe('gym-timezone dates (R25)', () => {

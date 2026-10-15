@@ -10,6 +10,7 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { ExerciseLibraryManager } from './ExerciseLibraryManager';
 import { ProgramTemplateManager } from './ProgramTemplateManager';
 import { EducationPane } from './EducationPane';
@@ -73,7 +74,10 @@ export function LibraryHubShell({
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={email} />}
       mobileHeader={<CoachMobileBrand />}
     >
-      <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">Library</h1>
+      <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">
+        Library
+        <ActiveGymTag />
+      </h1>
       <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
 
       {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} usage={exerciseUsage} />}

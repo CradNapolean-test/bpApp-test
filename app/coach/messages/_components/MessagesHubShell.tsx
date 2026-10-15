@@ -30,6 +30,7 @@ export function MessagesHubShell({
   communications,
   templates,
   counts,
+  timezone,
   email,
 }: {
   overview: ChatOverviewRow[];
@@ -38,6 +39,8 @@ export function MessagesHubShell({
   communications: ScheduledCommunicationRow[];
   templates: MessageTemplateRow[];
   counts: { mine: number; gym: number };
+  // The gym's own timezone, for scheduling and for the dates shown (R25).
+  timezone: string | null;
   email: string;
 }) {
   const searchParams = useSearchParams();
@@ -96,7 +99,7 @@ export function MessagesHubShell({
         }
       >
         {tab === 'broadcasts' ? (
-          <BroadcastsPane groups={groups} communications={communications} templates={templates} counts={counts} />
+          <BroadcastsPane groups={groups} communications={communications} templates={templates} counts={counts} timezone={timezone} />
         ) : (
           <>
             {/* Phone: a conversation list first, then the thread with a back arrow. The sidebar

@@ -5,7 +5,9 @@ import { Repeat, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
-import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
+import { useActiveGymId, useCoachGyms } from '@/app/coach/_components/CoachGymsContext';
+import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
+import { shortGymName } from '@/lib/gymNames';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Segmented } from '@/app/_components/ui';
 import { composeCommunication, deleteCommunication } from '@/lib/data/communications';
@@ -20,10 +22,6 @@ type Target = 'my_clients' | 'gym' | 'group';
 type Channel = 'message' | 'email' | 'both';
 
 const field = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
-
-// Dates and times are shown in the gym's timezone, not the browser's. (TODO(brief 05): use the gym's own timezone once it is passed in.)
-const GYM_TZ = DEFAULT_TIMEZONE;
-const when = (iso: string) => formatInZone(iso, GYM_TZ);
 
 function TemplatesSheet({
   templates,
@@ -116,14 +114,23 @@ export function BroadcastsPane({
   communications,
   templates,
   counts,
+  timezone,
 }: {
   groups: ClientGroupWithMembers[];
   communications: ScheduledCommunicationRow[];
   templates: MessageTemplateRow[];
   counts: { mine: number; gym: number };
+  // The gym's own timezone; dates and times are shown and scheduled in it, not in the browser's.
+  timezone?: string | null;
 }) {
   const { run, busy } = useAction();
   const gymId = useActiveGymId();
+  const GYM_TZ = timezone ?? DEFAULT_TIMEZONE;
+  const when = (iso: string) => formatInZone(iso, GYM_TZ);
+  // Which gym "the whole gym" is, said aloud only to a coach who works in more than one.
+  const gyms = useCoachGyms();
+  const activeGym = gyms.find((g) => g.isActive);
+  const gymLabel = gyms.length > 1 && activeGym ? shortGymName(activeGym.gymName, { siblings: gyms.map((g) => g.gymName) }) : null;
   const confirm = useConfirm();
   const toast = useToast();
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -171,7 +178,7 @@ export function BroadcastsPane({
     // A send-now cannot be recalled, so it always asks: how many people, and by which channel (R25).
     if (timing === 'now') {
       const ok = await confirm(
-        broadcastConfirmation({ count: audienceCount, channel, target, groupName: groups.find((g) => g.id === groupId)?.name })
+        broadcastConfirmation({ count: audienceCount, channel, target, groupName: groups.find((g) => g.id === groupId)?.name, gymName: gymLabel })
       );
       if (!ok) return;
     }
@@ -214,7 +221,10 @@ export function BroadcastsPane({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
-        <h2 className="text-sm font-bold text-black dark:text-zinc-50">New broadcast</h2>
+        <h2 className="text-sm font-bold text-black dark:text-zinc-50">
+          New broadcast
+          <ActiveGymTag />
+        </h2>
 
         <div className="space-y-2">
           <textarea
@@ -326,6 +336,7 @@ export function BroadcastsPane({
           <p className="text-xs text-zinc-500">
             {repeat ? 'Goes to ' : 'This will message '}
             {audienceCount} client{audienceCount === 1 ? '' : 's'}
+            {target === 'gym' && gymLabel ? ` at ${gymLabel}` : ''}
             {repeat ? ' each week.' : '.'}
           </p>
           <button type="submit" disabled={!canSubmit} className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50">
