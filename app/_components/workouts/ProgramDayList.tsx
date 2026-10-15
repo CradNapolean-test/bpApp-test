@@ -89,7 +89,7 @@ export function ProgramDayList({
           aria-label="Previous week"
           disabled={activeIndex <= 0}
           onClick={() => setActiveWeek(weekNums[activeIndex - 1])}
-          className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+          className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -98,6 +98,7 @@ export function ProgramDayList({
             <button
               key={`${ownerId}:${week}`}
               type="button"
+              aria-current={week === currentWeek ? 'date' : undefined}
               onClick={() => setActiveWeek(week)}
               className={`relative shrink-0 rounded-full px-4 py-2 text-sm font-bold transition-colors ${
                 week === activeWeek
@@ -107,10 +108,11 @@ export function ProgramDayList({
             >
               Week {week}
               {week === currentWeek && (
-                <span
-                  aria-label="Current week"
-                  className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${week === activeWeek ? 'bg-accent-foreground' : 'bg-accent'}`}
-                />
+                <>
+                  {/* The text is what is announced; the dot is only the picture of it (a label on a plain span is never read out). */}
+                  <span className="sr-only"> (current week)</span>
+                  <span aria-hidden className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${week === activeWeek ? 'bg-accent-foreground' : 'bg-accent'}`} />
+                </>
               )}
             </button>
           ))}
@@ -120,7 +122,7 @@ export function ProgramDayList({
           aria-label="Next week"
           disabled={activeIndex >= weekNums.length - 1}
           onClick={() => setActiveWeek(weekNums[activeIndex + 1])}
-          className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+          className="shrink-0 flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
