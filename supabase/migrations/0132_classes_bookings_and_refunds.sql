@@ -420,3 +420,324 @@ begin
   return v_count;
 end;
 $$;
+
+-- =====================================================================================================================
+-- CH2 (DECISION D15, recommended default: retire, never delete). Deleting a session destroyed its booking history.
+--
+-- bookings.class_id was ON DELETE CASCADE, so one click deleted the session and every booking ever made for it (upcoming, past,
+-- attended), refunded nothing, told nobody, and lowered "sessions done" and the club progress. Now:
+--   * classes.retired_at: a retired session keeps all its history but cannot be booked or edited into use. Listing screens must
+--     filter on "retired_at is null" (brief 04); history keeps showing retired sessions by name.
+--   * bookings.class_id is ON DELETE RESTRICT, and a readable trigger refuses a delete when ANY booking exists. A session with no
+--     bookings at all (a mistaken new slot) can still be deleted.
+--   * retire_class(p_class_id) cancels every booked or waitlisted booking on a FUTURE date (a date today counts only if the class
+--     has not started yet), refunds the booked ones through refund_booking_credits, tells each member, then sets retired_at. Past
+--     bookings and attendance are untouched. It answers {"cancelled": n, "refunded_credits": n, "already_retired": bool}.
+--   * book_class and book_class_for_client refuse a retired session ('That session is no longer running'). Both now read the class
+--     row FOR SHARE, and retire_class takes it FOR UPDATE, so a booking cannot slip in while a session is being retired.
+--
+-- PRE-FLIGHT (read-only; what retiring would touch, per session, and the foreign keys on bookings that will be replaced):
+--   select c.id, c.name, c.day_of_week, count(*) filter (where b.booking_date >= current_date and b.status in ('booked','waitlist')) as future_bookings,
+--          count(*) as all_bookings
+--   from public.classes c left join public.bookings b on b.class_id = c.id group by 1, 2, 3 order by 4 desc;
+--   select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.bookings'::regclass and contype = 'f';
+-- =====================================================================================================================
+alter table public.classes add column if not exists retired_at timestamptz;
+
+do $$
+declare r record;
+begin
+  for r in
+    select conname from pg_constraint
+    where conrelid = 'public.bookings'::regclass and contype = 'f' and confrelid = 'public.classes'::regclass
+  loop
+    execute format('alter table public.bookings drop constraint %I', r.conname);
+  end loop;
+end $$;
+
+alter table public.bookings
+  add constraint bookings_class_id_fkey foreign key (class_id) references public.classes(id) on delete restrict;
+
+create or replace function public.classes_refuse_delete_with_bookings()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (select 1 from bookings where class_id = old.id) then
+    raise exception 'This session has bookings, so it can''t be deleted. Retire it instead: members booked on it will be refunded and told.';
+  end if;
+  return old;
+end;
+$$;
+
+revoke execute on function public.classes_refuse_delete_with_bookings() from public, anon, authenticated;
+
+drop trigger if exists classes_refuse_delete_with_bookings on public.classes;
+create trigger classes_refuse_delete_with_bookings
+  before delete on public.classes
+  for each row execute function public.classes_refuse_delete_with_bookings();
+
+create or replace function public.retire_class(p_class_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_class classes;
+  v_tz text;
+  v_now_local timestamp;
+  v_booking record;
+  v_cancelled integer := 0;
+  v_refunded integer := 0;
+begin
+  select * into v_class from classes where id = p_class_id for update;
+  if v_class is null then
+    raise exception 'Class not found';
+  end if;
+  if public.my_gym_id() is null or v_class.gym_id is distinct from public.my_gym_id() then
+    raise exception 'Not authorized';
+  end if;
+  if v_class.retired_at is not null then
+    return jsonb_build_object('cancelled', 0, 'refunded_credits', 0, 'already_retired', true);
+  end if;
+
+  select coalesce(nullif(timezone, ''), 'UTC') into v_tz from gyms where id = v_class.gym_id;
+  v_now_local := now() at time zone v_tz;
+
+  for v_booking in
+    select b.id, b.client_id, b.status, b.booking_date
+    from bookings b
+    where b.class_id = p_class_id
+      and b.status in ('booked', 'waitlist')
+      and (b.booking_date + coalesce(v_class.start_time, time '00:00')) > v_now_local
+    order by b.booking_date, b.created_at
+  loop
+    if v_booking.status = 'booked' then
+      v_refunded := v_refunded + public.refund_booking_credits(v_booking.id, 'Refunded ' || v_class.name || ' (session retired)');
+    end if;
+
+    update bookings set status = 'cancelled' where id = v_booking.id;
+
+    insert into notifications (client_id, message)
+    values (
+      v_booking.client_id,
+      'Class cancelled: ' || v_class.name || ' on ' || v_booking.booking_date || '. This session is no longer running.'
+    );
+
+    v_cancelled := v_cancelled + 1;
+  end loop;
+
+  update classes set retired_at = now() where id = p_class_id;
+
+  return jsonb_build_object('cancelled', v_cancelled, 'refunded_credits', v_refunded, 'already_retired', false);
+end;
+$fn$;
+
+revoke execute on function public.retire_class(uuid) from public, anon;
+grant execute on function public.retire_class(uuid) to authenticated;
+
+-- book_class [0107] and book_class_for_client [0130]: refuse a retired session; read the class row FOR SHARE (see above).
+create or replace function public.book_class(p_class_id uuid, p_booking_date date)
+returns bookings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_client_id uuid := auth.uid();
+  v_capacity integer;
+  v_cost integer;
+  v_class_name text;
+  v_class_gym uuid;
+  v_dow integer;
+  v_specific date;
+  v_retired timestamptz;
+  v_tz text;
+  v_booked_count integer;
+  v_membership_balance integer;
+  v_bonus_balance integer;
+  v_from_membership integer;
+  v_from_bonus integer;
+  v_status text;
+  v_booking bookings;
+begin
+  if v_client_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_class_id::text || p_booking_date::text));
+
+  select capacity, credit_cost, name, gym_id, day_of_week, specific_date, retired_at
+  into v_capacity, v_cost, v_class_name, v_class_gym, v_dow, v_specific, v_retired
+  from classes where id = p_class_id for share;
+  if v_capacity is null then
+    raise exception 'Class not found';
+  end if;
+
+  -- 1. The class must be at the member's own gym (this function bypasses RLS, so check it explicitly).
+  if v_class_gym is distinct from public.client_gym_id(v_client_id) then
+    raise exception 'Class not found';
+  end if;
+  if v_retired is not null then
+    raise exception 'That session is no longer running';
+  end if;
+  -- 2. Not in the past (the gym's own calendar day).
+  select coalesce(timezone, 'UTC') into v_tz from gyms where id = v_class_gym;
+  if p_booking_date < (now() at time zone coalesce(v_tz, 'UTC'))::date then
+    raise exception 'You can''t book a session in the past';
+  end if;
+  -- 3. The session must actually run on that date: its one-off date, or its weekday (0 = Sunday).
+  if not (
+    (v_specific is not null and p_booking_date = v_specific)
+    or (v_specific is null and v_dow is not null and extract(dow from p_booking_date)::integer = v_dow)
+  ) then
+    raise exception 'That session doesn''t run on that date';
+  end if;
+  -- 4. And it must not have been cancelled by the coach.
+  if exists (select 1 from class_exceptions where class_id = p_class_id and occurrence_date = p_booking_date) then
+    raise exception 'That session has been cancelled';
+  end if;
+
+  select count(*) into v_booked_count
+  from bookings
+  where class_id = p_class_id and booking_date = p_booking_date and status = 'booked';
+
+  if v_booked_count < v_capacity then
+    select coalesce(sum(delta), 0) into v_membership_balance
+    from credits_ledger where client_id = v_client_id and bucket = 'membership';
+    select coalesce(sum(delta), 0) into v_bonus_balance
+    from credits_ledger where client_id = v_client_id and bucket = 'bonus';
+
+    if v_membership_balance + v_bonus_balance < v_cost then
+      raise exception 'Not enough credits';
+    end if;
+    v_status := 'booked';
+  else
+    v_status := 'waitlist';
+  end if;
+
+  insert into bookings (class_id, client_id, booking_date, status)
+  values (p_class_id, v_client_id, p_booking_date, v_status)
+  returning * into v_booking;
+
+  if v_status = 'booked' then
+    v_from_membership := least(v_cost, greatest(v_membership_balance, 0));
+    v_from_bonus := v_cost - v_from_membership;
+
+    if v_from_membership > 0 then
+      insert into credits_ledger (client_id, delta, reason, bucket, booking_id)
+      values (v_client_id, -v_from_membership, 'Booked ' || v_class_name, 'membership', v_booking.id);
+    end if;
+    if v_from_bonus > 0 then
+      insert into credits_ledger (client_id, delta, reason, bucket, booking_id)
+      values (v_client_id, -v_from_bonus, 'Booked ' || v_class_name, 'bonus', v_booking.id);
+    end if;
+  end if;
+
+  return v_booking;
+end;
+$$;
+
+create or replace function public.book_class_for_client(p_class_id uuid, p_client_id uuid, p_booking_date date)
+returns bookings
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_client_id uuid := p_client_id;
+  v_capacity integer;
+  v_cost integer;
+  v_class_name text;
+  v_class_gym uuid;
+  v_dow integer;
+  v_specific date;
+  v_retired timestamptz;
+  v_tz text;
+  v_booked_count integer;
+  v_membership_balance integer;
+  v_bonus_balance integer;
+  v_from_membership integer;
+  v_from_bonus integer;
+  v_status text;
+  v_booking bookings;
+begin
+  if not public.is_coach_of(p_client_id) then
+    raise exception 'Not authorized';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_class_id::text || p_booking_date::text));
+
+  select capacity, credit_cost, name, gym_id, day_of_week, specific_date, retired_at
+  into v_capacity, v_cost, v_class_name, v_class_gym, v_dow, v_specific, v_retired
+  from classes where id = p_class_id for share;
+  if v_capacity is null then
+    raise exception 'Class not found';
+  end if;
+
+  -- 1. The class must be at the member's gym.
+  if not public.same_gym_as_client(v_class_gym, p_client_id) then
+    raise exception 'That belongs to a different gym.';
+  end if;
+  if v_retired is not null then
+    raise exception 'That session is no longer running';
+  end if;
+  -- 2. Not in the past (the gym's own calendar day).
+  select coalesce(nullif(timezone, ''), 'UTC') into v_tz from gyms where id = v_class_gym;
+  if p_booking_date < public.local_date(v_tz) then
+    raise exception 'You can''t book a session in the past';
+  end if;
+  -- 3. The session must actually run on that date: its one-off date, or its weekday (0 = Sunday).
+  if not (
+    (v_specific is not null and p_booking_date = v_specific)
+    or (v_specific is null and v_dow is not null and extract(dow from p_booking_date)::integer = v_dow)
+  ) then
+    raise exception 'That session doesn''t run on that date';
+  end if;
+  -- 4. And it must not have been cancelled by the coach.
+  if exists (select 1 from class_exceptions where class_id = p_class_id and occurrence_date = p_booking_date) then
+    raise exception 'That session has been cancelled';
+  end if;
+
+  select count(*) into v_booked_count
+  from bookings
+  where class_id = p_class_id and booking_date = p_booking_date and status = 'booked';
+
+  if v_booked_count < v_capacity then
+    select coalesce(sum(delta), 0) into v_membership_balance
+    from credits_ledger where client_id = v_client_id and bucket = 'membership';
+    select coalesce(sum(delta), 0) into v_bonus_balance
+    from credits_ledger where client_id = v_client_id and bucket = 'bonus';
+
+    if v_membership_balance + v_bonus_balance < v_cost then
+      raise exception 'Not enough credits';
+    end if;
+    v_status := 'booked';
+  else
+    v_status := 'waitlist';
+  end if;
+
+  insert into bookings (class_id, client_id, booking_date, status)
+  values (p_class_id, v_client_id, p_booking_date, v_status)
+  returning * into v_booking;
+
+  if v_status = 'booked' then
+    v_from_membership := least(v_cost, greatest(v_membership_balance, 0));
+    v_from_bonus := v_cost - v_from_membership;
+
+    if v_from_membership > 0 then
+      insert into credits_ledger (client_id, delta, reason, bucket, booking_id, granted_by)
+      values (v_client_id, -v_from_membership, 'Booked ' || v_class_name || ' (by coach)', 'membership', v_booking.id, auth.uid());
+    end if;
+    if v_from_bonus > 0 then
+      insert into credits_ledger (client_id, delta, reason, bucket, booking_id, granted_by)
+      values (v_client_id, -v_from_bonus, 'Booked ' || v_class_name || ' (by coach)', 'bonus', v_booking.id, auth.uid());
+    end if;
+  end if;
+
+  return v_booking;
+end;
+$fn$;
