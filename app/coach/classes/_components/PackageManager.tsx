@@ -8,6 +8,7 @@ import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
+import { validatePlan } from '@/lib/planForm';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createPackage, deletePackage, updatePackage } from '@/lib/data/memberships';
 import { DISABLEABLE_SCREENS } from '@/app/dashboard/_components/categories';
@@ -63,8 +64,10 @@ function EditPackageCard({
 }) {
   const { run, busy: saving } = useAction();
   const confirm = useConfirm();
+  const toast = useToast();
   const [name, setName] = useState(pkg.name);
-  const [creditsPerWeek, setCreditsPerWeek] = useState(pkg.credits_per_week);
+  // Kept as text so a blank box is a blank box (it used to turn into 0).
+  const [creditsText, setCreditsText] = useState(String(pkg.credits_per_week));
   const [description, setDescription] = useState(pkg.description ?? '');
   const [advanceDays, setAdvanceDays] = useState<string>(pkg.advance_booking_days?.toString() ?? '');
   const [durationWeeks, setDurationWeeks] = useState<string>(pkg.duration_weeks?.toString() ?? '');
@@ -76,7 +79,7 @@ function EditPackageCard({
     const limit = (n: number | null) => (n == null ? 'no limit' : `${n} days`);
     const length = (n: number | null) => (n == null ? 'ongoing' : `${n} weeks`);
     if (name.trim() !== pkg.name) out.push(`name: ${pkg.name} to ${name.trim()}`);
-    if (creditsPerWeek !== pkg.credits_per_week) out.push(`credits per week: ${pkg.credits_per_week} to ${creditsPerWeek}`);
+    if (Number(creditsText) !== pkg.credits_per_week) out.push(`credits per week: ${pkg.credits_per_week} to ${Number(creditsText)}`);
     const newAdv = advanceDays ? Number(advanceDays) : null;
     if (newAdv !== (pkg.advance_booking_days ?? null)) out.push(`booking window: ${limit(pkg.advance_booking_days ?? null)} to ${limit(newAdv)}`);
     const newLen = durationWeeks ? Number(durationWeeks) : null;
@@ -88,7 +91,12 @@ function EditPackageCard({
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    // Refuse a blank name, a blank credits box and a plan with every screen unticked, instead of saving them as 0 / "no screens".
+    const check = validatePlan({ name, creditsPerWeek: creditsText, screensSelected: screens.size });
+    if (!check.ok) {
+      toast.error(check.error);
+      return;
+    }
     const changes = describeChanges();
     if (inUse > 0 && changes.length > 0) {
       const ok = await confirm({
@@ -101,8 +109,8 @@ function EditPackageCard({
     await run(
       () =>
         updatePackage(pkg.id, {
-          name: name.trim(),
-          credits_per_week: creditsPerWeek,
+          name: check.name,
+          credits_per_week: check.creditsPerWeek,
           description: description || null,
           advance_booking_days: advanceDays ? Number(advanceDays) : null,
           // Only sent when it matters, so this still saves before migration 0088 is applied.
@@ -125,9 +133,10 @@ function EditPackageCard({
           <input
             type="number"
             min={0}
+            required
             className={inputCls}
-            value={creditsPerWeek}
-            onChange={(e) => setCreditsPerWeek(Number(e.target.value))}
+            value={creditsText}
+            onChange={(e) => setCreditsText(e.target.value)}
           />
         </div>
         <div className="space-y-1">
@@ -175,8 +184,9 @@ function EditPackageCard({
 
 function AddPackageCard({ onDone }: { onDone: () => void }) {
   const { run: runCreate, busy: saving } = useAction();
+  const toast = useToast();
   const [name, setName] = useState('');
-  const [creditsPerWeek, setCreditsPerWeek] = useState(4);
+  const [creditsText, setCreditsText] = useState('4');
   const [description, setDescription] = useState('');
   const [advanceDays, setAdvanceDays] = useState('');
   const [durationWeeks, setDurationWeeks] = useState('');
@@ -185,11 +195,16 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    const check = validatePlan({ name, creditsPerWeek: creditsText, screensSelected: screens.size });
+    if (!check.ok) {
+      toast.error(check.error);
+      return;
+    }
     await runCreate(
       () =>
         createPackage({
-          name,
-          credits_per_week: creditsPerWeek,
+          name: check.name,
+          credits_per_week: check.creditsPerWeek,
           description: description || null,
           advance_booking_days: advanceDays ? Number(advanceDays) : null,
           ...(durationWeeks ? { duration_weeks: Number(durationWeeks) } : {}),
@@ -210,9 +225,10 @@ function AddPackageCard({ onDone }: { onDone: () => void }) {
         <input
           type="number"
           min={0}
+          required
           className={inputCls}
-          value={creditsPerWeek}
-          onChange={(e) => setCreditsPerWeek(Number(e.target.value))}
+          value={creditsText}
+          onChange={(e) => setCreditsText(e.target.value)}
         />
       </div>
       <div className="space-y-1">
