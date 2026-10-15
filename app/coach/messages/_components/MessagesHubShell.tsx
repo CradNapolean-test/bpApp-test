@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
@@ -44,22 +44,11 @@ export function MessagesHubShell({
   const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') === 'broadcasts' ? 'broadcasts' : 'inbox'));
   // Phone only: whether a conversation is open (otherwise the list shows).
   const [threadOpen, setThreadOpen] = useState(false);
-  const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, selectedClient } = useCoachMessages(
-    overview,
-    currentUserId
-  );
+  const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =
+    useCoachMessages(overview, currentUserId);
 
-  // Only run once, on mount -- selecting a different client afterwards is user-driven, via the
-  // onClick handlers below, not this effect.
-  const autoSelected = useRef(false);
-  useEffect(() => {
-    if (autoSelected.current) return;
-    if (overview[0] && window.matchMedia('(min-width: 768px)').matches) {
-      autoSelected.current = true;
-      selectClient(overview[0].client_id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overview]);
+  // Nothing is opened on arrival: opening a thread marks it read, so auto-selecting the newest one on a wide screen cleared its unread
+  // badge without the coach ever looking at it (R29). The coach picks a conversation.
 
   // No CoachMessagesButton in the header here on purpose -- being on this page already is
   // the messages experience; opening the MessagesDrawer on top of it double-mounts a
@@ -126,16 +115,27 @@ export function MessagesHubShell({
                 </button>
               )}
               {!selected ? (
-                <EmptyState
-                  icon={MessageSquare}
-                  title="No conversations yet"
-                  hint="Once you have clients, their threads will show up here."
-                />
+                localOverview.length > 0 ? (
+                  <EmptyState icon={MessageSquare} title="Choose a conversation" hint="Pick a member from the list to read and reply." />
+                ) : (
+                  <EmptyState
+                    icon={MessageSquare}
+                    title="No conversations yet"
+                    hint="Once you have clients, their threads will show up here."
+                  />
+                )
+              ) : loadError ? (
+                <div className="text-sm text-zinc-500">
+                  <p>We could not load this conversation.</p>
+                  <button type="button" onClick={retryLoad} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+                    Try again
+                  </button>
+                </div>
               ) : loading ? (
                 <p className="text-sm text-zinc-500">Loading messages…</p>
               ) : (
                 <ChatTab
-                  key={selected}
+                  key={`${selected}:${loadId}`}
                   clientId={selected}
                   initialMessages={messages}
                   currentUserId={currentUserId}

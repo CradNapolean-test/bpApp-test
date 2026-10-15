@@ -19,20 +19,30 @@ const EMPTY_OVERVIEW: ChatOverviewRow[] = [];
 // renders in a narrow slide-over instead of the whole viewport.
 export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: string; onClose: () => void }) {
   const [overview, setOverview] = useState<ChatOverviewRow[] | null>(null);
-  const { localOverview, selected, selectClient, clearSelection, markRead, markUnread, messages, loading, selectedClient } = useCoachMessages(
-    overview ?? EMPTY_OVERVIEW,
-    currentUserId
-  );
+  const [overviewFailed, setOverviewFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const { localOverview, selected, selectClient, clearSelection, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =
+    useCoachMessages(overview ?? EMPTY_OVERVIEW, currentUserId);
 
   useEffect(() => {
     let cancelled = false;
-    getCoachChatOverview().then((data) => {
-      if (!cancelled) setOverview(data);
-    });
+    getCoachChatOverview()
+      .then((data) => {
+        if (!cancelled) setOverview(data);
+      })
+      .catch(() => {
+        // Without this the drawer said "Loading…" for ever when the list could not be fetched (R29).
+        if (!cancelled) setOverviewFailed(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
+
+  function retryOverview() {
+    setOverviewFailed(false);
+    setAttempt((n) => n + 1);
+  }
 
   return (
     <div className="fixed inset-0 z-50">
@@ -60,7 +70,14 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {overview === null ? (
+          {overviewFailed ? (
+            <div className="p-4 text-sm text-zinc-500">
+              <p>We could not load your conversations.</p>
+              <button type="button" onClick={retryOverview} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+                Try again
+              </button>
+            </div>
+          ) : overview === null ? (
             <p className="p-4 text-sm text-zinc-500">Loading…</p>
           ) : !selected ? (
             <div className="p-2">
@@ -73,12 +90,19 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
               </Link>
               <ConversationList overview={localOverview} selected={selected} onSelect={selectClient} onMarkRead={markRead} onMarkUnread={markUnread} />
             </div>
+          ) : loadError ? (
+            <div className="p-4 text-sm text-zinc-500">
+              <p>We could not load this conversation.</p>
+              <button type="button" onClick={retryLoad} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+                Try again
+              </button>
+            </div>
           ) : loading ? (
             <p className="p-4 text-sm text-zinc-500">Loading messages…</p>
           ) : (
             <div className="p-2">
               <ChatTab
-                key={selected}
+                key={`${selected}:${loadId}`}
                 clientId={selected}
                 initialMessages={messages}
                 currentUserId={currentUserId}

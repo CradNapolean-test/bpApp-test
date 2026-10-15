@@ -131,6 +131,13 @@ export function ChatTab({
   onMarkUnread?: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  // Safety net (R4): if this window is ever re-used for another conversation, start again from that conversation's messages
+  // instead of keeping the previous person's thread on screen. (The coach's inbox also keys the window on the conversation.)
+  const [shownClientId, setShownClientId] = useState(clientId);
+  if (shownClientId !== clientId) {
+    setShownClientId(clientId);
+    setMessages(initialMessages);
+  }
   const [text, setText] = useState(() => {
     if (!draftKey || typeof window === 'undefined') return '';
     try {
