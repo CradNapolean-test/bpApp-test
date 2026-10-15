@@ -12,6 +12,7 @@ import { getClientUnreadCount } from '@/lib/data/chat';
 import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
 import { InstallBanner } from './InstallBanner';
+import { DetailsConfirmBanner } from './DetailsConfirmBanner';
 import { BodyScansTab } from './BodyScansTab';
 import { CoachMemberOverview } from './CoachMemberOverview';
 import { OfflineSnapshot } from './OfflineSnapshot';
@@ -760,6 +761,11 @@ export function DashboardShell({
           {!isCoachView && effectiveScreen === 'Today' && (
             <div className="mb-4 empty:hidden">
               <InstallBanner />
+            </div>
+          )}
+          {!isCoachView && effectiveScreen === 'Today' && profile && (
+            <div className="mb-4 empty:hidden">
+              <DetailsConfirmBanner clientId={clientId} email={currentUserEmail} profile={profile} />
             </div>
           )}
           {effectiveScreen === 'Today' && isCoachView && (

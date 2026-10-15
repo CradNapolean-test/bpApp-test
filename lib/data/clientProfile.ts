@@ -35,6 +35,7 @@ export type ProfileEditableFields = Omit<
   | 'body_fat_estimated'
   | 'health_notes'
   | 'onboarding_completed_at'
+  | 'details_confirm_requested_at'
   | 'needs_coach_review'
   | 'review_reasons'
 >;

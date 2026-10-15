@@ -1,6 +1,5 @@
 'use server';
 
-import { randomBytes } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ageFromDob, ageProblem, buildOnboardingPlan, isActivityLevel, isMissingColumnError, TRACKING_OPTIONS } from '@/lib/onboarding';
@@ -15,31 +14,28 @@ function withoutKey<T extends Record<string, unknown>>(row: T, key: string): Par
   return Object.fromEntries(Object.entries(row).filter(([k]) => k !== key)) as Partial<T>;
 }
 
-// The coach's reusable sign-up link token (created the first time it's asked for). The caller
-// builds the full URL from their own origin.
-export async function getMyJoinLinkToken(): Promise<{ token: string; active: boolean } | null> {
+// The coach's reusable sign-up link, if they have made one. This only reads (JL1): showing the Add client popover no longer
+// creates a link. A failed read comes back as an error so the card can offer Retry instead of vanishing.
+export async function getMyJoinLinkToken(): Promise<{ ok: true; link: { token: string; active: boolean } | null } | { ok: false; error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { ok: false, error: 'Not signed in' };
   const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-  if (me?.role !== 'coach') return null;
+  if (me?.role !== 'coach') return { ok: true, link: null };
 
-  const { data: existing } = await supabase
-    .from('onboarding_links')
-    .select('token, active')
-    .eq('coach_id', user.id)
-    .maybeSingle();
-  if (existing) return existing;
+  const { data, error } = await supabase.from('onboarding_links').select('token, active').eq('coach_id', user.id).maybeSingle();
+  if (error) return { ok: false, error: 'Could not load your sign-up link.' };
+  return { ok: true, link: data };
+}
 
-  const token = randomBytes(18).toString('base64url');
-  const { data, error } = await supabase
-    .from('onboarding_links')
-    .insert({ coach_id: user.id, token })
-    .select('token, active')
-    .single();
-  return error ? null : data;
+// Makes the coach's sign-up link on an explicit click ("Create sign-up link"), or replaces it ("Reset link"): the old address stops working.
+export async function createOrResetMyJoinLink(): Promise<{ ok: true; link: { token: string; active: boolean } } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('rotate_my_join_link');
+  if (error || typeof data !== 'string') return { ok: false, error: 'Could not make the link. Please try again.' };
+  return { ok: true, link: { token: data, active: true } };
 }
 
 export async function setJoinLinkActive(active: boolean): Promise<ActionResult> {
@@ -284,6 +280,7 @@ export async function completeShortOnboarding(clientId: string, input: ShortOnbo
     nutrition_tracking_mode: input.nutritionTrackingMode,
     onboarding_completed_at: new Date().toISOString(),
     consented_at: new Date().toISOString(),
+    details_confirm_requested_at: null,
     updated_at: new Date().toISOString(),
     ...bodyFields,
   };
@@ -293,17 +290,21 @@ export async function completeShortOnboarding(clientId: string, input: ShortOnbo
     // The consent column (migration 0138) is not applied yet: save everything else rather than stop the member finishing.
     ({ data, error } = await supabase.from('client_profiles').update(withoutKey(row, 'consented_at')).eq('client_id', clientId).select('client_id'));
   }
+  if (isMissingColumnError(error, 'details_confirm_requested_at')) {
+    // Migration 0142 is not applied yet: there is no request flag to clear.
+    ({ data, error } = await supabase.from('client_profiles').update(withoutKey(withoutKey(row, 'consented_at'), 'details_confirm_requested_at')).eq('client_id', clientId).select('client_id'));
+  }
   if (error || !data?.length) return fail(error, 'Could not save your answers. Please try again.');
   return ok();
 }
 
-// A coach asks one of their clients to confirm their details (the short onboarding shows next time
-// they open the app).
+// A coach asks one of their clients to confirm their details: the member sees a banner on Home they can dismiss (CH3). Their
+// onboarding stays complete, so nobody is locked out of the app.
 export async function requestDetailsUpdate(clientId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('client_profiles')
-    .update({ onboarding_completed_at: null })
+    .update({ details_confirm_requested_at: new Date().toISOString() })
     .eq('client_id', clientId)
     .select('client_id');
   if (error || !data?.length) return fail(error, 'Could not send the request');
@@ -322,9 +323,10 @@ export async function requestDetailsUpdateForAll(): Promise<{ ok: true; count: n
   if (ids.length === 0) return { ok: true, count: 0 };
   const { data, error } = await supabase
     .from('client_profiles')
-    .update({ onboarding_completed_at: null })
+    .update({ details_confirm_requested_at: new Date().toISOString() })
     .in('client_id', ids)
     .not('onboarding_completed_at', 'is', null)
+    .is('details_confirm_requested_at', null)
     .select('client_id');
   if (error) return { ok: false, error: error.message || 'Could not send the request' };
   return { ok: true, count: data?.length ?? 0 };

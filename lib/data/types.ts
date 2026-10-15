@@ -54,6 +54,8 @@ export interface ClientProfileRow {
   body_fat_estimated?: boolean;
   health_notes?: string | null;
   onboarding_completed_at?: string | null;
+  // Set when a coach asks the member to check their details (migration 0142); cleared when they finish the quick check.
+  details_confirm_requested_at?: string | null;
   needs_coach_review?: boolean;
   review_reasons?: string[];
 }

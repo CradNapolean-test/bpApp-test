@@ -14,6 +14,7 @@ import { CoachBrand } from '../_components/CoachBrand';
 import { CoachHeaderExtras } from '../_components/CoachHeaderExtras';
 import { AddClientButton } from '../_components/AddClientButton';
 import { ImportClientsButton } from '../_components/ImportClientsButton';
+import { ClientsPageMenu } from '../_components/ClientsPageMenu';
 import { ClientTable } from '../_components/ClientTable';
 import { ReviewQueue } from '../_components/ReviewQueue';
 import { getClientsNeedingReview } from '@/lib/data/onboarding';
@@ -61,6 +62,7 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
         <div className="flex items-center gap-2">
           <ImportClientsButton />
           <AddClientButton />
+          <ClientsPageMenu />
         </div>
       </div>
       <div className="mt-4">
