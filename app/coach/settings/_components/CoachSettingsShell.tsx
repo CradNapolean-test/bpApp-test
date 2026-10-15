@@ -20,10 +20,11 @@ import { CoachProfileForm } from './CoachProfileForm';
 import { DefaultCheckinReminderForm } from './DefaultCheckinReminderForm';
 import { GymAdminSection } from './GymAdminSection';
 import { GymSwitcher } from './GymSwitcher';
+import { CoachPushToggle } from './CoachPushToggle';
 import type { ThemePreference } from '@/app/_components/theme';
 import type { GymCoachRow, MyGymRow } from '@/lib/data/gym';
 
-type RowKey = 'password' | 'email' | 'profile' | 'gym';
+type RowKey = 'password' | 'email' | 'profile' | 'notifications' | 'gym';
 
 export function CoachSettingsShell({
   email,
@@ -108,6 +109,7 @@ export function CoachSettingsShell({
               { key: 'password', label: 'Change password', show: true, panel: <ChangePasswordForm /> },
               { key: 'email', label: 'Change email', show: true, panel: <ChangeEmailForm currentEmail={email} /> },
               { key: 'profile', label: 'Coach profile', show: true, panel: <CoachProfileForm initialName={displayName} logoUrl={logoUrl} /> },
+              { key: 'notifications', label: 'Message notifications', show: !!currentUserId, panel: <CoachPushToggle userId={currentUserId} /> },
               {
                 key: 'gym',
                 label: 'Gym',

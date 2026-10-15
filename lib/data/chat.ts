@@ -2,25 +2,14 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import { sendPushToClient } from '@/lib/push';
+import { after } from 'next/server';
+import { notifyAfterMessage } from '@/lib/chatNotify';
 import { CHAT_CATCH_UP_MAX, CHAT_PAGE, pageOfNewestFirst } from '@/lib/chatMessages';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from './types';
 
-// A message from the coach pings the member's phone (when they've turned push on) so it can't be
-// missed. A member's own messages never push anyone here. Best-effort: push trouble must never
-// fail the send itself.
-async function pushMemberIfFromCoach(senderId: string, clientId: string, preview: string): Promise<void> {
-  if (senderId === clientId) return;
-  try {
-    await sendPushToClient(clientId, {
-      title: 'New message from your coach',
-      body: preview.length > 120 ? `${preview.slice(0, 117)}...` : preview,
-      url: '/dashboard?open=messages',
-    });
-  } catch {
-    /* ignore */
-  }
-}
+// Who is pinged after a message is stored is decided in lib/chatNotify.ts: a coach's message pings the member's phone, and a member's message
+// pings their coach (quiet hours and one push per burst apply, and the push never carries the text, R40). It runs with after(), once the
+// response has gone, so a slow push service cannot slow the sender (R41), and push trouble never fails the send.
 
 // Photos are inserted straight from the browser, so the browser calls this afterwards. It only
 // pushes if the caller really did just send a photo into this thread (RLS decides what they see).
@@ -29,18 +18,18 @@ export async function notifyPhotoSent(clientId: string): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || user.id === clientId) return;
+  if (!user) return;
   const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
   const { data } = await supabase
     .from('chat_messages')
-    .select('id')
+    .select('id, created_at')
     .eq('client_id', clientId)
     .eq('sender_id', user.id)
     .not('image_path', 'is', null)
     .gt('created_at', since)
     .limit(1);
   if (!data?.length) return;
-  await pushMemberIfFromCoach(user.id, clientId, '📷 Sent you a photo');
+  after(() => notifyAfterMessage({ senderId: user.id, clientId, preview: '📷 Sent you a photo', createdAt: data[0].created_at as string }));
 }
 
 // A message as the screen holds it. The links to photos and voice notes are not made here: signing every attachment of a thread cost
@@ -111,8 +100,9 @@ export async function sendMessage(clientId: string, text: string): Promise<ChatM
     .select('*')
     .single();
   if (error) raise(error);
-  await pushMemberIfFromCoach(user.id, clientId, text);
-  return toMessage(data as ChatMessageRow);
+  const saved = data as ChatMessageRow;
+  after(() => notifyAfterMessage({ senderId: user.id, clientId, preview: text, createdAt: saved.created_at }));
+  return toMessage(saved);
 }
 
 // Voice notes go from the browser straight to storage and into the thread, like photos (the action used to carry the recording, which
@@ -122,18 +112,18 @@ export async function notifyVoiceSent(clientId: string): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || user.id === clientId) return;
+  if (!user) return;
   const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
   const { data } = await supabase
     .from('chat_messages')
-    .select('id')
+    .select('id, created_at')
     .eq('client_id', clientId)
     .eq('sender_id', user.id)
     .not('audio_path', 'is', null)
     .gt('created_at', since)
     .limit(1);
   if (!data?.length) return;
-  await pushMemberIfFromCoach(user.id, clientId, '🎤 Sent you a voice note');
+  after(() => notifyAfterMessage({ senderId: user.id, clientId, preview: '🎤 Sent you a voice note', createdAt: data[0].created_at as string }));
 }
 
 export async function getCoachChatOverview(): Promise<ChatOverviewRow[]> {
