@@ -36,6 +36,7 @@ export function CoachSettingsShell({
   gymTimezone = 'UTC',
   blackoutStart = null,
   blackoutEnd = null,
+  referralUrl = null,
   gymRoster = [],
   myGyms = [],
   currentUserId = '',
@@ -50,6 +51,7 @@ export function CoachSettingsShell({
   gymTimezone?: string;
   blackoutStart?: string | null;
   blackoutEnd?: string | null;
+  referralUrl?: string | null;
   gymRoster?: GymCoachRow[];
   myGyms?: MyGymRow[];
   currentUserId?: string;
@@ -119,6 +121,7 @@ export function CoachSettingsShell({
                         timezone={gymTimezone}
                         blackoutStart={blackoutStart}
                         blackoutEnd={blackoutEnd}
+                        referralUrl={referralUrl}
                         roster={gymRoster}
                         currentUserId={currentUserId}
                       />

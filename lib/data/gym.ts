@@ -6,12 +6,16 @@ import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { gymMismatch, type GymMismatch } from '@/lib/gymMismatch';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { blackoutProblem, normaliseReferralUrl, referralUrlProblem } from '@/lib/gymSettings';
+import type { ReassignResult, RemoveCoachResult } from './owner';
 
 export interface GymCoachRow {
   id: string;
   email: string;
   displayName: string | null;
   isGymAdmin: boolean;
+  // Members assigned to this coach at this gym: what a reassign would move, and why removing the coach is refused while it is not 0.
+  members: number;
 }
 
 // Every coach who belongs to the caller's active gym, via coach_gym_memberships (0056) rather
@@ -37,13 +41,26 @@ export async function getGymRoster(): Promise<GymCoachRow[]> {
     .order('created_at');
   if (error) raise(error);
 
-  return (data ?? []).map((row) => {
+  const counts = await Promise.all(
+    (data ?? []).map(async (row) => {
+      const { count } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .eq('coach_id', row.coach_id)
+        .eq('gym_id', caller.gym_id);
+      return count ?? 0;
+    })
+  );
+
+  return (data ?? []).map((row, i) => {
     const coach = Array.isArray(row.coach) ? row.coach[0] : row.coach;
     return {
       id: row.coach_id,
       email: coach?.email ?? '',
       displayName: coach?.display_name ?? null,
       isGymAdmin: row.is_gym_admin,
+      members: counts[i],
     };
   });
 }
@@ -169,6 +186,8 @@ export async function updateGymBookingSettings(
   const supabase = await createClient();
   const stale = await checkActiveGym(supabase, expectedGymId);
   if (stale) return stale;
+  const problem = blackoutProblem(blackoutStart != null && blackoutEnd != null, blackoutStart ?? '', blackoutEnd ?? '');
+  if (problem) return fail({ message: problem });
   const { error } = await supabase.rpc('set_gym_booking_settings', {
     p_timezone: timezone,
     p_blackout_start: blackoutStart,
@@ -195,4 +214,47 @@ export async function addCoachToGym(coachId: string, isAdmin: boolean, expectedG
   if (stale) return stale;
   const { error } = await supabase.rpc('add_coach_to_gym', { p_coach_id: coachId, p_is_admin: isAdmin });
   return error ? fail(error, 'Could not add that coach to the gym') : ok();
+}
+
+// The page members are sent to when they refer a friend (gyms.referral_url, migrations 0138 and 0144). A blank value clears it.
+export async function setGymReferralUrl(url: string, expectedGymId?: string | null): Promise<ActionResult> {
+  const problem = referralUrlProblem(url);
+  if (problem) return fail({ message: problem });
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
+  const { error } = await supabase.rpc('set_gym_referral_url', { p_url: normaliseReferralUrl(url) });
+  return error ? fail(error, 'Could not save the referral link') : ok();
+}
+
+// CH1: move every member of one coach at the caller's gym to another coach (reassign_clients, migration 0131; a gym admin of that gym).
+export async function reassignClients(fromCoachId: string, toCoachId: string, expectedGymId?: string | null): Promise<ReassignResult> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale && !stale.ok) return stale;
+  const { data: caller } = await supabase.from('profiles').select('gym_id').single();
+  if (!caller?.gym_id) return { ok: false, error: 'You are not set up at a gym yet' };
+  const { data, error } = await supabase.rpc('reassign_clients', { p_gym: caller.gym_id, p_from: fromCoachId, p_to: toCoachId });
+  if (error) {
+    const failed = fail(error, 'Could not move the members');
+    return failed.ok ? { ok: false, error: 'Could not move the members' } : failed;
+  }
+  return { ok: true, moved: typeof data === 'number' ? data : 0 };
+}
+
+// CH1: take a coach out of the caller's gym (remove_coach_from_gym, migration 0131). The database refuses while the coach still has members
+// there and for the last admin; those messages come back as they are. "deactivated" is true when the coach has no gym left: the screen then
+// calls /api/gym/deactivate-coach so the login stops working.
+export async function removeCoachFromGym(coachId: string, expectedGymId?: string | null): Promise<RemoveCoachResult> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale && !stale.ok) return stale;
+  const { data: caller } = await supabase.from('profiles').select('gym_id').single();
+  if (!caller?.gym_id) return { ok: false, error: 'You are not set up at a gym yet' };
+  const { data, error } = await supabase.rpc('remove_coach_from_gym', { p_gym: caller.gym_id, p_coach: coachId });
+  if (error) {
+    const failed = fail(error, 'Could not remove that coach');
+    return failed.ok ? { ok: false, error: 'Could not remove that coach' } : failed;
+  }
+  return { ok: true, deactivated: (data as { deactivated?: boolean } | null)?.deactivated === true };
 }
