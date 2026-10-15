@@ -1,21 +1,28 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, PlusSquare, Share } from 'lucide-react';
 import { Logo } from '@/app/_components/Logo';
 import { useInstall } from '@/app/_components/useInstall';
 import { Button } from '@/app/_components/Button';
+import { SignOutButton } from '@/app/_components/SignOutButton';
 import { completeOnboarding, completeShortOnboarding } from '@/lib/data/onboarding';
-import { ACTIVITY_OPTIONS, ageFromDob, ageProblem, buildOnboardingPlan, PLAN_BEING_SET_UP, TRACKING_OPTIONS } from '@/lib/onboarding';
+import { ACTIVITY_OPTIONS, ageFromDob, ageProblem, buildOnboardingPlan, needsBodyStep, PLAN_BEING_SET_UP, TRACKING_OPTIONS } from '@/lib/onboarding';
+import { CONSENT_LABEL, CONSENT_POINTS, CONSENT_REQUIRED_MESSAGE, CONSENT_TITLE } from '@/lib/consentText';
+import { draftKey, parseDraft, serialiseDraft, worthSaving } from '@/lib/onboardingDraft';
 import type { TrackingMode } from '@/lib/onboarding';
 import type { ClientProfileRow } from '@/lib/data/types';
 
-const FULL_STEPS = ['about', 'goal', 'body', 'food', 'plan'] as const;
-// Existing members: just confirm details, goal and how they track food (no body stats or plan).
-const SHORT_STEPS = ['about', 'goal', 'food'] as const;
+// The privacy step comes first: the questions after it collect health notes and an emergency contact (R22).
+const FULL_STEPS = ['consent', 'about', 'goal', 'body', 'food', 'plan'] as const;
+// Existing members: just confirm details, goal and how they track food (no body stats or plan)...
+const SHORT_STEPS = ['consent', 'about', 'goal', 'food'] as const;
+// ...unless their profile has no height or weight, which they are then asked for (OB3).
+const SHORT_STEPS_WITH_BODY = ['consent', 'about', 'goal', 'body', 'food'] as const;
 type StepKey = (typeof FULL_STEPS)[number];
 const STEP_TITLE: Record<StepKey, string> = {
+  consent: 'Your privacy',
   about: 'About you',
   goal: 'Your goal',
   body: 'Your body',
@@ -202,12 +209,14 @@ export function OnboardingFlow({
 }) {
   const router = useRouter();
   const short = existing != null;
-  const steps: readonly StepKey[] = short ? SHORT_STEPS : FULL_STEPS;
+  const needsBody = short && needsBodyStep(existing);
+  const steps: readonly StepKey[] = short ? (needsBody ? SHORT_STEPS_WITH_BODY : SHORT_STEPS) : FULL_STEPS;
   const doneStep = steps.length;
   const [step, setStep] = useState(-1); // -1 = welcome, 0..n-1 = questions, n = done
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [consent, setConsent] = useState(false);
   const [name, setName] = useState(existing?.name ?? '');
   const [gender, setGender] = useState<'Female' | 'Male' | null>(
     existing?.gender === 'Male' ? 'Male' : existing?.gender === 'Female' ? 'Female' : null
@@ -231,6 +240,64 @@ export function OnboardingFlow({
   const age = dob ? ageFromDob(dob) : null;
   const bfNumber = knowsBf && bf !== '' ? Number(bf) : null;
 
+  // The answers so far are kept on this phone as they change and picked up again if the page is lost part-way (R22): a refresh, the phone
+  // evicting the page or a call used to lose up to five steps of typing. Cleared when onboarding is finished and when signing out.
+  const draftStorageKey = draftKey(clientId);
+  const draftReady = useRef(false);
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      let text: string | null = null;
+      try {
+        text = window.localStorage.getItem(draftStorageKey);
+      } catch {
+        // storage blocked: start fresh
+      }
+      const saved = parseDraft(text, Date.now());
+      if (saved) {
+        setConsent(saved.consent);
+        setName(saved.name);
+        setGender(saved.gender);
+        setDob(saved.dob);
+        setPhone(saved.phone);
+        setEmName(saved.emName);
+        setEmPhone(saved.emPhone);
+        setGoal(saved.goal);
+        setExperience(saved.experience);
+        setHealth(saved.health);
+        setHeightCm(saved.heightCm);
+        setWeightKg(saved.weightKg);
+        setGoalKg(saved.goalKg);
+        setActivity(saved.activity);
+        setKnowsBf(saved.knowsBf);
+        setBf(saved.bf);
+        setMode(saved.mode);
+        setStep(Math.min(saved.step, steps.length - 1));
+      }
+      draftReady.current = true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the page opens
+  }, []);
+  useEffect(() => {
+    if (!draftReady.current || step < 0 || step >= steps.length) return;
+    const draft = { savedAt: Date.now(), step, consent, name, gender, dob, phone, emName, emPhone, goal, experience, health, heightCm, weightKg, goalKg, activity, knowsBf, bf, mode };
+    if (!worthSaving(draft)) return;
+    const timer = setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftStorageKey, serialiseDraft(draft));
+      } catch {
+        // storage blocked or full: the answers still live on screen
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [draftStorageKey, steps.length, step, consent, name, gender, dob, phone, emName, emPhone, goal, experience, health, heightCm, weightKg, goalKg, activity, knowsBf, bf, mode]);
+  function clearDraft() {
+    try {
+      window.localStorage.removeItem(draftStorageKey);
+    } catch {
+      // nothing to clear
+    }
+  }
+
   const plan = useMemo(() => {
     if (!gender || age == null || !weightKg || !goalKg || !heightCm) return null;
     return buildOnboardingPlan({
@@ -247,9 +314,10 @@ export function OnboardingFlow({
 
   function stepError(index: number): string | null {
     const key = steps[index];
+    if (key === 'consent' && !consent) return CONSENT_REQUIRED_MESSAGE;
     if (key === 'about') {
       if (!name.trim()) return 'Please enter your name.';
-      if (!gender) return 'Please choose an option for gender (we use it for your calorie calculation).';
+      if (!gender) return 'Please choose an option for sex (the calorie calculation uses it).';
       if (age == null) return 'Please enter your date of birth.';
       const ageError = ageProblem(age);
       if (ageError) return ageError;
@@ -292,12 +360,15 @@ export function OnboardingFlow({
         experience,
         healthNotes: health,
         nutritionTrackingMode: mode,
+        consented: consent,
+        body: needsBody && heightCm && weightKg && goalKg ? { heightCm, startWeight: weightKg, goalWeight: goalKg, activityLevel: activity, bodyFatPct: bfNumber } : undefined,
       });
       setSaving(false);
       if (!res.ok) {
         setError(res.error ?? 'Something went wrong. Please try again.');
         return;
       }
+      clearDraft();
       setStep(doneStep);
       return;
     }
@@ -320,17 +391,26 @@ export function OnboardingFlow({
       activityLevel: activity,
       bodyFatPct: bfNumber,
       nutritionTrackingMode: mode,
+      consented: consent,
     });
     setSaving(false);
     if (!res.ok) {
       setError(res.error ?? 'Something went wrong. Please try again.');
       return;
     }
+    clearDraft();
     setStep(doneStep);
   }
 
   const shell = (children: React.ReactNode) => (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">{children}</div>
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
+      {children}
+      {/* A way out: someone who opened the wrong account (or a shared phone) was stuck on these screens with no sign-out (R22). */}
+      <div className="mt-8 flex items-center justify-center gap-2 text-xs text-zinc-400">
+        <span className="truncate">Signed in as {email}</span>
+        <SignOutButton variant="outline" />
+      </div>
+    </div>
   );
 
   if (step === -1) {
@@ -356,7 +436,6 @@ export function OnboardingFlow({
         <Button variant="primary" className="w-full !rounded-full py-3 text-base" onClick={() => setStep(0)}>
           {short ? 'Start' : "Let's go"}
         </Button>
-        <p className="text-xs text-zinc-400">Signed in as {email}</p>
       </div>
     );
   }
@@ -444,6 +523,34 @@ export function OnboardingFlow({
       </div>
 
       <div className="mt-6 flex-1 space-y-5">
+        {steps[step] === 'consent' && (
+          <>
+            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">{CONSENT_TITLE}</h2>
+            <ul className="space-y-2 rounded-2xl border border-black/[.06] bg-card p-4 text-sm text-zinc-700 dark:border-white/10 dark:text-zinc-300">
+              {CONSENT_POINTS.map((point) => (
+                <li key={point} className="flex gap-2">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" /> <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-zinc-500">
+              Read the{' '}
+              <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-accent underline">
+                Privacy Policy
+              </a>{' '}
+              and{' '}
+              <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-accent underline">
+                Terms of Service
+              </a>
+              .
+            </p>
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-black/10 p-4 dark:border-white/15">
+              <input type="checkbox" className="themed-checkbox mt-0.5" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              <span className="text-sm font-semibold text-black dark:text-zinc-50">{CONSENT_LABEL}</span>
+            </label>
+          </>
+        )}
+
         {steps[step] === 'about' && (
           <>
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">First, about you</h2>
@@ -452,12 +559,12 @@ export function OnboardingFlow({
               <input className={inputCls} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <label className={labelCls}>Gender</label>
+              <label className={labelCls}>Sex (used for calorie calculations)</label>
               <div className="flex gap-2">
                 <Pill active={gender === 'Female'} onClick={() => setGender('Female')}>Female</Pill>
                 <Pill active={gender === 'Male'} onClick={() => setGender('Male')}>Male</Pill>
               </div>
-              <p className="text-xs text-zinc-500">Used for your calorie calculation and fitness standards.</p>
+              <p className="text-xs text-zinc-500">The calorie formula has one version for each, which is why we ask. It is also used for fitness standards.</p>
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>Date of birth</label>

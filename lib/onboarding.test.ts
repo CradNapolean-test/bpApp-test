@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageFromDob, ageProblem, buildOnboardingPlan, estimateBodyFat, isActivityLevel, targetsHeldBack } from './onboarding';
+import { ageFromDob, ageProblem, buildOnboardingPlan, estimateBodyFat, isActivityLevel, isMissingColumnError, needsBodyStep, targetsHeldBack } from './onboarding';
 
 describe('onboarding', () => {
   it('works out age from date of birth', () => {
@@ -80,5 +80,32 @@ describe('who can sign up, and who sees a target (M8, D18, D6)', () => {
     expect(aggressive!.reasons).not.toContain('Starting BMI is under 18.5');
     const ordinary = buildOnboardingPlan({ ...base, startWeight: 80, goalWeight: 70 });
     expect(ordinary!.reasons.some((r) => r.includes('BMI'))).toBe(false);
+  });
+});
+
+describe('needsBodyStep (OB3)', () => {
+  it('asks a member with no height or weights for them', () => {
+    expect(needsBodyStep({ height_cm: null, start_weight: 80, goal_weight: 75 })).toBe(true);
+    expect(needsBodyStep({ height_cm: 175, start_weight: 0, goal_weight: 75 })).toBe(true);
+    expect(needsBodyStep({ height_cm: 175, start_weight: 80, goal_weight: null })).toBe(true);
+    expect(needsBodyStep({})).toBe(true);
+  });
+  it('leaves a member whose coach already filled them in on the short version', () => {
+    expect(needsBodyStep({ height_cm: 175, start_weight: 80, goal_weight: 75 })).toBe(false);
+  });
+  it('has nothing to ask about when there is no profile row (the full flow asks everything)', () => {
+    expect(needsBodyStep(null)).toBe(false);
+  });
+});
+
+describe('isMissingColumnError', () => {
+  it('recognises a column that is not there yet', () => {
+    expect(isMissingColumnError({ code: '42703', message: 'column "consented_at" of relation "client_profiles" does not exist' }, 'consented_at')).toBe(true);
+    expect(isMissingColumnError({ code: 'PGRST204', message: "Could not find the 'consented_at' column of 'client_profiles' in the schema cache" }, 'consented_at')).toBe(true);
+  });
+  it('does not mistake another failure for it', () => {
+    expect(isMissingColumnError({ code: '23514', message: 'new row violates check constraint' }, 'consented_at')).toBe(false);
+    expect(isMissingColumnError({ code: '42703', message: 'column "other_column" does not exist' }, 'consented_at')).toBe(false);
+    expect(isMissingColumnError(null, 'consented_at')).toBe(false);
   });
 });

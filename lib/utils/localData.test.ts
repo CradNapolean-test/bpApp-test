@@ -15,6 +15,12 @@ function fakeStorage(initial: Record<string, string>) {
 }
 
 describe('clearMemberLocalData (FM1)', () => {
+  it('also removes a half-finished onboarding, which holds health notes (R22)', () => {
+    const storage = fakeStorage({ 'onboarding-draft:user-1': '{}', theme: 'dark' });
+    expect(clearMemberLocalData(storage)).toEqual(['onboarding-draft:user-1']);
+    expect([...storage.data.keys()]).toEqual(['theme']);
+  });
+
   it('removes the offline plan and every form draft, and nothing else', () => {
     const storage = fakeStorage({
       'bp-offline-snapshot': '{}',

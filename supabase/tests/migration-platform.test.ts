@@ -33,3 +33,19 @@ describe('0137: member_strength_bests (H5, ST1)', () => {
     expect(sql).toMatch(/p_before is null or l\.logged_at < p_before/);
   });
 });
+
+describe('0138: referral link and consent (R16, R22)', () => {
+  const sql = read('0138_referral_url_and_consent.sql');
+
+  it('adds a nullable referral link to gyms, https only', () => {
+    expect(sql).toMatch(/alter table public\.gyms add column if not exists referral_url text;/);
+    expect(sql).not.toMatch(/referral_url text not null/i);
+    expect(sql).toMatch(/referral_url is null or \(referral_url ~\* '\^https:\/\/' and char_length\(referral_url\) <= 500\)/);
+    expect(sql).toMatch(/drop constraint if exists gyms_referral_url_https/);
+  });
+
+  it('adds a nullable consent time to member profiles', () => {
+    expect(sql).toMatch(/alter table public\.client_profiles add column if not exists consented_at timestamptz;/);
+    expect(sql).not.toMatch(/consented_at timestamptz not null/i);
+  });
+});

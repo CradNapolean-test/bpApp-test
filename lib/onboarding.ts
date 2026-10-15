@@ -63,6 +63,22 @@ export function targetsHeldBack(profile: { needs_coach_review?: boolean | null }
 
 export const PLAN_BEING_SET_UP = 'Your coach is setting up your plan';
 
+// OB3: the short flow is for existing members confirming details, and never asked for height or weights, so a member whose profile has
+// none finished it with nothing to build a plan from. They are asked for what is missing.
+export function needsBodyStep(existing: { height_cm?: number | null; start_weight?: number | null; goal_weight?: number | null } | null): boolean {
+  if (!existing) return false;
+  const missing = (n: number | null | undefined) => !(typeof n === 'number' && n > 0);
+  return missing(existing.height_cm) || missing(existing.start_weight) || missing(existing.goal_weight);
+}
+
+// True when a database error says a column does not exist (the migration that adds it has not been applied yet). Lets a save that also
+// records something new keep working until then, instead of every new member being unable to finish onboarding.
+export function isMissingColumnError(error: { code?: string; message?: string } | null | undefined, column: string): boolean {
+  if (!error) return false;
+  const message = error.message ?? '';
+  return (error.code === '42703' || error.code === 'PGRST204' || /does not exist|could not find/i.test(message)) && message.includes(column);
+}
+
 export function ageFromDob(dob: string, today: Date = new Date()): number | null {
   const d = new Date(dob + 'T00:00:00Z');
   if (Number.isNaN(d.getTime())) return null;

@@ -4,6 +4,8 @@
 
 export const OFFLINE_SNAPSHOT_KEY = 'bp-offline-snapshot';
 export const FORM_DRAFT_PREFIX = 'form-draft:';
+// A half-finished onboarding (lib/onboardingDraft.ts): health notes and an emergency contact among it.
+export const ONBOARDING_DRAFT_KEY_PREFIX = 'onboarding-draft:';
 
 interface KeyStorage {
   length: number;
@@ -11,7 +13,7 @@ interface KeyStorage {
   removeItem(key: string): void;
 }
 
-// Removes the offline plan copy and every unsent form draft. Never throws (storage can be blocked); returns what it removed.
+// Removes the offline plan copy, every unsent form draft and any half-finished onboarding. Never throws (storage can be blocked); returns what it removed.
 export function clearMemberLocalData(storage: KeyStorage | null): string[] {
   if (!storage) return [];
   const removed: string[] = [];
@@ -19,7 +21,7 @@ export function clearMemberLocalData(storage: KeyStorage | null): string[] {
     const keys: string[] = [];
     for (let i = 0; i < storage.length; i += 1) {
       const key = storage.key(i);
-      if (key && (key === OFFLINE_SNAPSHOT_KEY || key.startsWith(FORM_DRAFT_PREFIX))) keys.push(key);
+      if (key && (key === OFFLINE_SNAPSHOT_KEY || key.startsWith(FORM_DRAFT_PREFIX) || key.startsWith(ONBOARDING_DRAFT_KEY_PREFIX))) keys.push(key);
     }
     for (const key of keys) {
       storage.removeItem(key);

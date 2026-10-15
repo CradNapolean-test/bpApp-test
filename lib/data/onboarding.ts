@@ -3,10 +3,17 @@
 import { randomBytes } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ageFromDob, ageProblem, buildOnboardingPlan, isActivityLevel, TRACKING_OPTIONS } from '@/lib/onboarding';
+import { ageFromDob, ageProblem, buildOnboardingPlan, isActivityLevel, isMissingColumnError, TRACKING_OPTIONS } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
+
+const CONSENT_REQUIRED = 'Please agree to the privacy policy and terms to continue';
+
+// The row without one key (used to retry a save on a database that does not have a newer column yet).
+function withoutKey<T extends Record<string, unknown>>(row: T, key: string): Partial<T> {
+  return Object.fromEntries(Object.entries(row).filter(([k]) => k !== key)) as Partial<T>;
+}
 
 // The coach's reusable sign-up link token (created the first time it's asked for). The caller
 // builds the full URL from their own origin.
@@ -61,6 +68,8 @@ export interface OnboardingSubmission {
   activityLevel: number;
   bodyFatPct: number | null;
   nutritionTrackingMode: string;
+  // Agreed to the privacy policy and terms (R22); recorded with the time.
+  consented: boolean;
 }
 
 // Saves the new member's answers and starting plan. The plan is recalculated here from the answers
@@ -86,6 +95,7 @@ export async function completeOnboarding(clientId: string, input: OnboardingSubm
     return fail(null, 'Please check your body fat %');
   }
   if (!TRACKING_OPTIONS.some((o) => o.value === input.nutritionTrackingMode)) return fail(null, 'Pick how to track food');
+  if (!input.consented) return fail(null, CONSENT_REQUIRED);
 
   const plan = buildOnboardingPlan({
     gender: input.gender,
@@ -129,6 +139,7 @@ export async function completeOnboarding(clientId: string, input: OnboardingSubm
     timezone: DEFAULT_TIMEZONE,
     nutrition_tracking_mode: input.nutritionTrackingMode,
     onboarding_completed_at: new Date().toISOString(),
+    consented_at: new Date().toISOString(),
     needs_coach_review: true,
     review_reasons: plan.reasons,
     updated_at: new Date().toISOString(),
@@ -146,7 +157,11 @@ export async function completeOnboarding(clientId: string, input: OnboardingSubm
     if (coach?.default_checkin_reminder_days != null) seed = { checkin_reminder_days: coach.default_checkin_reminder_days };
   }
 
-  const { error } = await supabase.from('client_profiles').upsert({ client_id: clientId, ...row, ...seed });
+  let { error } = await supabase.from('client_profiles').upsert({ client_id: clientId, ...row, ...seed });
+  if (isMissingColumnError(error, 'consented_at')) {
+    // The consent column (migration 0138) is not applied yet: save everything else rather than stop the member finishing.
+    ({ error } = await supabase.from('client_profiles').upsert({ client_id: clientId, ...withoutKey(row, 'consented_at'), ...seed }));
+  }
   if (error) return fail(error, 'Could not save your answers. Please try again.');
 
   await assignDefaultForm(clientId);
@@ -191,10 +206,13 @@ export interface ShortOnboardingSubmission {
   experience: string;
   healthNotes: string;
   nutritionTrackingMode: string;
+  consented: boolean;
+  // Only for a member whose profile has no height or weights (OB3); see completeShortOnboarding.
+  body?: { heightCm: number; startWeight: number; goalWeight: number; activityLevel: number; bodyFatPct: number | null };
 }
 
 // The short version for existing members: confirms contact details, goal and food-tracking method.
-// It never touches their weights, targets or review flag.
+// It never replaces weights, targets or the review flag a coach has already set; it only fills in a missing height or weight.
 export async function completeShortOnboarding(clientId: string, input: ShortOnboardingSubmission): Promise<ActionResult> {
   const supabase = await createClient();
   const {
@@ -208,26 +226,73 @@ export async function completeShortOnboarding(clientId: string, input: ShortOnbo
   const ageError = ageProblem(age);
   if (ageError || age == null) return fail(null, ageError ?? 'Please check your date of birth');
   if (!TRACKING_OPTIONS.some((o) => o.value === input.nutritionTrackingMode)) return fail(null, 'Pick how to track food');
+  if (!input.consented) return fail(null, CONSENT_REQUIRED);
 
-  const { data, error } = await supabase
-    .from('client_profiles')
-    .update({
-      name,
+  // A member whose profile has no height or weights (OB3) is asked for them, so they do not finish with nothing to build a plan from.
+  // Only what is missing is filled in: a coach's figures are never replaced, and the member is flagged so the coach sets the plan up.
+  const bodyFields: Record<string, unknown> = {};
+  if (input.body) {
+    const body = input.body;
+    if (!isActivityLevel(body.activityLevel)) return fail(null, 'Please pick how active you are');
+    if (!(body.startWeight >= 30 && body.startWeight <= 300)) return fail(null, 'Please check your weight');
+    if (!(body.goalWeight >= 30 && body.goalWeight <= 300)) return fail(null, 'Please check your goal weight');
+    if (!(body.heightCm >= 120 && body.heightCm <= 230)) return fail(null, 'Please check your height');
+    if (body.bodyFatPct != null && !(body.bodyFatPct >= 3 && body.bodyFatPct <= 60)) return fail(null, 'Please check your body fat %');
+    const plan = buildOnboardingPlan({
       gender: input.gender,
-      date_of_birth: input.dateOfBirth,
       age,
-      phone: input.phone.trim() || null,
-      emergency_contact_name: input.emergencyContactName.trim() || null,
-      emergency_contact_phone: input.emergencyContactPhone.trim() || null,
-      goal_description: input.goalDescription.trim() || null,
-      experience: input.experience.trim() || null,
-      health_notes: input.healthNotes.trim() || null,
-      nutrition_tracking_mode: input.nutritionTrackingMode,
-      onboarding_completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('client_id', clientId)
-    .select('client_id');
+      startWeight: body.startWeight,
+      goalWeight: body.goalWeight,
+      heightCm: body.heightCm,
+      activityLevel: body.activityLevel,
+      bodyFatPct: body.bodyFatPct,
+      hasHealthNotes: input.healthNotes.trim().length > 0,
+    });
+    if (!plan) return fail(null, 'We could not work out your plan from those answers');
+    const { data: current } = await supabase
+      .from('client_profiles')
+      .select('height_cm, start_weight, goal_weight, body_fat_pct, review_reasons')
+      .eq('client_id', clientId)
+      .maybeSingle();
+    const has = (n: unknown) => typeof n === 'number' && n > 0;
+    if (!has(current?.height_cm)) bodyFields.height_cm = body.heightCm;
+    if (!has(current?.start_weight)) bodyFields.start_weight = body.startWeight;
+    if (!has(current?.goal_weight)) bodyFields.goal_weight = body.goalWeight;
+    if (Object.keys(bodyFields).length > 0) {
+      bodyFields.activity_level = body.activityLevel;
+      if (!has(current?.body_fat_pct)) {
+        bodyFields.body_fat_pct = plan.bodyFatPct;
+        bodyFields.body_fat_estimated = plan.bodyFatEstimated;
+      }
+      bodyFields.needs_coach_review = true;
+      const earlier = Array.isArray(current?.review_reasons) ? (current.review_reasons as string[]) : [];
+      bodyFields.review_reasons = [...new Set([...earlier, 'Height and weight were added by the member: set up their plan'])];
+    }
+  }
+
+  const row = {
+    name,
+    gender: input.gender,
+    date_of_birth: input.dateOfBirth,
+    age,
+    phone: input.phone.trim() || null,
+    emergency_contact_name: input.emergencyContactName.trim() || null,
+    emergency_contact_phone: input.emergencyContactPhone.trim() || null,
+    goal_description: input.goalDescription.trim() || null,
+    experience: input.experience.trim() || null,
+    health_notes: input.healthNotes.trim() || null,
+    nutrition_tracking_mode: input.nutritionTrackingMode,
+    onboarding_completed_at: new Date().toISOString(),
+    consented_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...bodyFields,
+  };
+
+  let { data, error } = await supabase.from('client_profiles').update(row).eq('client_id', clientId).select('client_id');
+  if (isMissingColumnError(error, 'consented_at')) {
+    // The consent column (migration 0138) is not applied yet: save everything else rather than stop the member finishing.
+    ({ data, error } = await supabase.from('client_profiles').update(withoutKey(row, 'consented_at')).eq('client_id', clientId).select('client_id'));
+  }
   if (error || !data?.length) return fail(error, 'Could not save your answers. Please try again.');
   return ok();
 }
