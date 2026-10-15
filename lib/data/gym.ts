@@ -5,6 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { gymMismatch, type GymMismatch } from '@/lib/gymMismatch';
+import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 
 export interface GymCoachRow {
   id: string;
@@ -50,6 +51,8 @@ export async function getGymRoster(): Promise<GymCoachRow[]> {
 export interface MyGymRow {
   gymId: string;
   gymName: string;
+  // The gym's own timezone (IANA name): its weeks, "today" and class times follow this, not the coach's browser.
+  timezone: string;
   isGymAdmin: boolean;
   isActive: boolean;
 }
@@ -67,7 +70,7 @@ export async function getMyGyms(): Promise<MyGymRow[]> {
 
   const { data, error } = await supabase
     .from('coach_gym_memberships')
-    .select('gym_id, is_gym_admin, gym:gym_id(name)')
+    .select('gym_id, is_gym_admin, gym:gym_id(name, timezone)')
     .eq('coach_id', user.id)
     .order('created_at');
   if (error) raise(error);
@@ -77,6 +80,7 @@ export async function getMyGyms(): Promise<MyGymRow[]> {
     return {
       gymId: row.gym_id,
       gymName: gym?.name ?? 'Unknown gym',
+      timezone: gym?.timezone || DEFAULT_TIMEZONE,
       isGymAdmin: row.is_gym_admin,
       isActive: row.gym_id === caller?.gym_id,
     };

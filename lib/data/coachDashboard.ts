@@ -229,7 +229,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     getScheduleOccurrences(1, 2),
     scope === 'mine' ? getCoachChatOverview().catch(() => []) : Promise.resolve([]),
     getRecentActivity(undefined, 8).catch(() => [] as ActivityEventRow[]),
-    getRedFlagReport(lastWeek).catch(() => ({ report: null, error: 'unavailable' })),
+    // The same gym as the timetable above (the active one), whichever gym the coach's own members are in (R36).
+    getRedFlagReport(lastWeek, me?.gym_id).catch(() => ({ report: null, error: 'unavailable' })),
   ]);
   if (error) throw new Error(error.message);
   const members = (rows ?? []) as unknown as MemberRow[];

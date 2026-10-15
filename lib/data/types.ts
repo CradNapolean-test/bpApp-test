@@ -829,7 +829,13 @@ export interface RedFlagThresholds {
 }
 
 export interface RedFlagReport {
+  gym_id?: string;
   week_start: string;
+  // false for a week whose list was never written: viewing a week no longer writes it (migration 0129). stats and entries are then empty.
+  generated?: boolean;
+  generated_at?: string | null;
+  // Monday of the last finished week at the gym, by the gym's own calendar.
+  latest_completed_week?: string;
   thresholds: RedFlagThresholds;
   stats: RedFlagStat[];
   entries: RedFlagEntry[];

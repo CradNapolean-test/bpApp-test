@@ -7,9 +7,13 @@ import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
+import { useAction } from '@/app/_components/useAction';
+import { useCoachGyms } from '@/app/coach/_components/CoachGymsContext';
 import { getGymRoster, type GymCoachRow } from '@/lib/data/gym';
-import { getRedFlagReport, saveRedFlagThresholds, updateRedFlagEntry } from '@/lib/data/redFlags';
-import { addDays, DEFAULT_TIMEZONE, isoWeekKey, toIsoDate, todayIsoInTz } from '@/lib/utils/dates';
+import { generateLatestRedFlagWeek, getRedFlagReport, saveRedFlagThresholds, updateRedFlagEntry } from '@/lib/data/redFlags';
+import { lastCompletedWeekIn } from '@/lib/redFlagWeek';
+import { shortGymName } from '@/lib/gymNames';
+import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import type { RedFlagEntry, RedFlagReport, RedFlagStat } from '@/lib/data/types';
 
 const field = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
@@ -17,12 +21,6 @@ const shortDay = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const longDay = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-
-// Monday of the last week that has finished.
-function lastCompletedWeek(): string {
-  const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
-  return toIsoDate(addDays(new Date(`${isoWeekKey(todayIso)}T00:00:00Z`), -7));
-}
 
 const TIER_CLS: Record<'red' | 'amber' | 'green', string> = {
   red: 'bg-danger text-white',
@@ -230,7 +228,7 @@ function ContactHelp({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ThresholdsSheet({ initial, onSaved, onClose }: { initial: RedFlagReport['thresholds']; onSaved: () => void; onClose: () => void }) {
+function ThresholdsSheet({ initial, gymId, onSaved, onClose }: { initial: RedFlagReport['thresholds']; gymId: string | null; onSaved: () => void; onClose: () => void }) {
   const toast = useToast();
   const [vals, setVals] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -266,7 +264,7 @@ function ThresholdsSheet({ initial, onSaved, onClose }: { initial: RedFlagReport
           disabled={busy}
           onClick={async () => {
             setBusy(true);
-            const r = await saveRedFlagThresholds(vals);
+            const r = await saveRedFlagThresholds(vals, gymId);
             setBusy(false);
             if (r.ok) {
               toast.success('Saved');
@@ -285,7 +283,14 @@ function ThresholdsSheet({ initial, onSaved, onClose }: { initial: RedFlagReport
 
 export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => void }) {
   const toast = useToast();
-  const latest = lastCompletedWeek();
+  const { run: runGenerate, busy: generating } = useAction();
+  // A coach who works in two gyms can look at either one's list; the week rolls over on Monday at THAT gym.
+  const gyms = useCoachGyms();
+  const [pickedGymId, setPickedGymId] = useState<string | null>(null);
+  const gym = gyms.find((g) => g.gymId === pickedGymId) ?? gyms.find((g) => g.isActive) ?? gyms[0] ?? null;
+  const gymId = gym?.gymId ?? null;
+  const gymTz = gym?.timezone ?? DEFAULT_TIMEZONE;
+  const latest = lastCompletedWeekIn(gymTz);
   const [week, setWeek] = useState(latest);
   const [data, setData] = useState<{ report: RedFlagReport | null; error: string | null } | null>(null);
   const [entries, setEntries] = useState<RedFlagEntry[]>([]);
@@ -295,8 +300,8 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
   const [reload, setReload] = useState(0);
 
   const load = useCallback(
-    (w: string) => {
-      getRedFlagReport(w).then((d) => {
+    (w: string, forGym: string | null) => {
+      getRedFlagReport(w, forGym).then((d) => {
         setData(d);
         setEntries(d.report?.entries ?? []);
       });
@@ -307,9 +312,16 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
   useEffect(() => {
     Promise.resolve().then(() => {
       setData(null);
-      load(week);
+      load(week, gymId);
     });
-  }, [week, reload, load]);
+  }, [week, gymId, reload, load]);
+
+  function pickGym(id: string) {
+    const next = gyms.find((g) => g.gymId === id);
+    setPickedGymId(id);
+    // Back to the newest finished week at THAT gym.
+    setWeek(lastCompletedWeekIn(next?.timezone ?? DEFAULT_TIMEZONE));
+  }
 
   useEffect(() => {
     getGymRoster().then(setCoaches).catch(() => {});
@@ -327,6 +339,8 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
   }
 
   const report = data?.report ?? null;
+  // A week nobody has written a list for (viewing no longer writes it). Different from "written, and nobody was flagged".
+  const notGenerated = report != null && report.generated === false;
   const statById = new Map((report?.stats ?? []).map((s) => [s.client_id, s]));
   const weekEnd = toIsoDate(addDays(new Date(`${week}T00:00:00Z`), 6));
 
@@ -379,6 +393,26 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
         />
       </div>
 
+      {gyms.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="red-flag-gym" className="text-xs font-medium text-zinc-500">
+            Gym
+          </label>
+          <select
+            id="red-flag-gym"
+            value={gymId ?? ''}
+            onChange={(e) => pickGym(e.target.value)}
+            className="rounded-xl border border-black/10 bg-transparent px-3 py-1.5 text-sm font-semibold dark:border-white/10"
+          >
+            {gyms.map((g) => (
+              <option key={g.gymId} value={g.gymId}>
+                {shortGymName(g.gymName, { siblings: gyms.map((x) => x.gymName) })}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {data === null && <p className="text-sm text-zinc-500">Loading…</p>}
 
       {data?.error && (
@@ -388,7 +422,28 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
         </div>
       )}
 
-      {report && (
+      {notGenerated && (
+        <div className="rounded-2xl border border-black/[.06] bg-card p-4 text-sm text-zinc-700 dark:border-white/10 dark:text-zinc-300">
+          <p className="font-bold text-black dark:text-zinc-50">No list has been written for this week yet.</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {week === latest
+              ? 'The list for the last finished week is written automatically early on Monday. Opening this page does not write it.'
+              : 'Nobody wrote a list for this week, and one cannot be made for it now.'}
+          </p>
+          {week === latest && gym?.isGymAdmin && (
+            <button
+              type="button"
+              disabled={generating}
+              onClick={() => runGenerate(() => generateLatestRedFlagWeek(gymId), { success: 'List written', onDone: () => setReload((n) => n + 1) })}
+              className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
+            >
+              {generating ? 'Writing…' : 'Write the list now'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {report && !notGenerated && (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Chip active={filter === 'all'} onClick={() => setFilter('all')}>
@@ -518,7 +573,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
 
       {sheet === 'help' && <ContactHelp onClose={() => setSheet(null)} />}
       {sheet === 'thresholds' && report && (
-        <ThresholdsSheet initial={report.thresholds} onSaved={() => setReload((n) => n + 1)} onClose={() => setSheet(null)} />
+        <ThresholdsSheet initial={report.thresholds} gymId={gymId} onSaved={() => setReload((n) => n + 1)} onClose={() => setSheet(null)} />
       )}
     </div>
   );
