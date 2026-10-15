@@ -838,3 +838,101 @@ create trigger classes_notify_changes
   for each row
   when (old.start_time is distinct from new.start_time)
   execute function public.classes_notify_changes();
+
+-- =====================================================================================================================
+-- SV1. Attendance could be marked for sessions that had not happened yet.
+-- A future "attended" counts toward sessions done, the 100/250/500 clubs and rewards. mark_attendance and mark_attendance_status
+-- [0054] now refuse to mark a booking as attended (or a no-show) when its date is later than today at the gym (the gym's timezone).
+-- Clearing a mark (unmarked / not attended) is still allowed on any date. The run-class screen has no date guard of its own;
+-- brief 04 shows the message: "You can't mark attendance for a session that hasn't happened yet."
+--
+-- PRE-FLIGHT (read-only; attendance already marked for a date that has not happened, which this migration leaves alone):
+--   select count(*) from public.bookings b join public.classes c on c.id = b.class_id join public.gyms g on g.id = c.gym_id
+--   where (b.attended or b.no_show) and b.booking_date > (now() at time zone coalesce(g.timezone, 'UTC'))::date;
+-- =====================================================================================================================
+create or replace function public.mark_attendance(p_booking_id uuid, p_attended boolean)
+returns bookings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_booking bookings;
+  v_tz text;
+begin
+  select * into v_booking from bookings where id = p_booking_id;
+  if v_booking is null then
+    raise exception 'Booking not found';
+  end if;
+
+  if not exists (
+    select 1 from classes
+    where classes.id = v_booking.class_id
+    and classes.gym_id = public.my_gym_id()
+  ) then
+    raise exception 'Not authorized';
+  end if;
+
+  if p_attended then
+    select coalesce(nullif(g.timezone, ''), 'UTC') into v_tz
+    from classes c join gyms g on g.id = c.gym_id where c.id = v_booking.class_id;
+    if v_booking.booking_date > public.local_date(v_tz) then
+      raise exception 'You can''t mark attendance for a session that hasn''t happened yet.';
+    end if;
+  end if;
+
+  update bookings
+  set attended = p_attended, attended_at = case when p_attended then now() else null end
+  where id = p_booking_id
+  returning * into v_booking;
+
+  return v_booking;
+end;
+$$;
+
+create or replace function public.mark_attendance_status(p_booking_id uuid, p_status text)
+returns bookings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_booking bookings;
+  v_tz text;
+begin
+  if p_status not in ('unmarked', 'attended', 'no_show') then
+    raise exception 'Invalid status: %', p_status;
+  end if;
+
+  select * into v_booking from bookings where id = p_booking_id;
+  if v_booking is null then
+    raise exception 'Booking not found';
+  end if;
+
+  if not exists (
+    select 1 from classes
+    where classes.id = v_booking.class_id
+    and classes.gym_id = public.my_gym_id()
+  ) then
+    raise exception 'Not authorized';
+  end if;
+
+  if p_status in ('attended', 'no_show') then
+    select coalesce(nullif(g.timezone, ''), 'UTC') into v_tz
+    from classes c join gyms g on g.id = c.gym_id where c.id = v_booking.class_id;
+    if v_booking.booking_date > public.local_date(v_tz) then
+      raise exception 'You can''t mark attendance for a session that hasn''t happened yet.';
+    end if;
+  end if;
+
+  update bookings
+  set
+    attended = (p_status = 'attended'),
+    no_show = (p_status = 'no_show'),
+    attended_at = case when p_status = 'attended' then now() else null end
+  where id = p_booking_id
+  returning * into v_booking;
+
+  return v_booking;
+end;
+$$;
