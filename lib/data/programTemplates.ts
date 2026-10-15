@@ -4,7 +4,6 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
-import type { TemplateExport, TemplateExportDay, TemplateExportExercise } from './templateTransfer';
 import type {
   ProgrammeRolloutRow,
   ProgramTemplateDayRow,
@@ -87,6 +86,8 @@ export async function createProgramTemplateAndGetId(name: string): Promise<strin
 }
 
 // Removes every day (and its exercises) in one week of a template.
+// Deletes one week of a template and closes the gap: weeks after it move down by one, so deleting week 2 of 4 leaves 1, 2, 3 and not
+// 1, 3, 4 (a gap hands members an empty programme week). The later weeks are renumbered in ascending order in the same call.
 export async function deleteTemplateWeek(templateId: string, weekNum: number): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
@@ -95,8 +96,23 @@ export async function deleteTemplateWeek(templateId: string, weekNum: number): P
     .eq('template_id', templateId)
     .eq('week_num', weekNum);
   if (error) raise(error);
-}
 
+  const { data: later, error: laterError } = await supabase
+    .from('program_template_days')
+    .select('week_num')
+    .eq('template_id', templateId)
+    .gt('week_num', weekNum);
+  if (laterError) raise(laterError);
+  const weeks = Array.from(new Set((later ?? []).map((d) => d.week_num as number))).sort((x, y) => x - y);
+  for (const week of weeks) {
+    const { error: moveError } = await supabase
+      .from('program_template_days')
+      .update({ week_num: week - 1 })
+      .eq('template_id', templateId)
+      .eq('week_num', week);
+    if (moveError) raise(moveError);
+  }
+}
 export async function deleteProgramTemplate(templateId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('program_templates').delete().eq('id', templateId);
@@ -269,118 +285,18 @@ export async function duplicateProgramTemplate(templateId: string, newName: stri
   return ok();
 }
 
-// Structural validation for an uploaded file's parsed JSON -- this crossed a trust boundary
-// (a coach's local file), so it gets checked field-by-field rather than just cast, unlike
-// every other function here which trusts its own UI's typed callers.
-function validateTemplateExport(data: unknown): TemplateExport | null {
-  if (!data || typeof data !== 'object') return null;
-  const d = data as Record<string, unknown>;
-  if (typeof d.name !== 'string' || !d.name.trim() || !Array.isArray(d.days)) return null;
-
-  const days: TemplateExportDay[] = [];
-  for (const rawDay of d.days) {
-    if (!rawDay || typeof rawDay !== 'object') return null;
-    const day = rawDay as Record<string, unknown>;
-    if (typeof day.week_num !== 'number' || typeof day.day_label !== 'string' || !Array.isArray(day.exercises)) {
-      return null;
-    }
-    const exercises: TemplateExportExercise[] = [];
-    for (const rawEx of day.exercises) {
-      if (!rawEx || typeof rawEx !== 'object') return null;
-      const ex = rawEx as Record<string, unknown>;
-      if (typeof ex.name !== 'string' || !ex.name.trim()) return null;
-      exercises.push({
-        name: ex.name,
-        sets: typeof ex.sets === 'number' ? ex.sets : null,
-        reps: typeof ex.reps === 'string' ? ex.reps : null,
-        load: typeof ex.load === 'number' ? ex.load : null,
-        rpe: typeof ex.rpe === 'number' ? ex.rpe : null,
-        notes: typeof ex.notes === 'string' ? ex.notes : null,
-        video_url: typeof ex.video_url === 'string' ? ex.video_url : null,
-        superset_group: typeof ex.superset_group === 'string' ? ex.superset_group : null,
-        rest_seconds: typeof ex.rest_seconds === 'number' ? ex.rest_seconds : null,
-        sort_order: typeof ex.sort_order === 'number' ? ex.sort_order : 0,
-        block_type: ex.block_type === 'circuit' ? 'circuit' : 'exercise',
-        prescription_type: ex.prescription_type === 'percent_1rm' ? 'percent_1rm' : 'absolute',
-        percent_1rm: typeof ex.percent_1rm === 'number' ? ex.percent_1rm : null,
-        progression_load_increment: typeof ex.progression_load_increment === 'number' ? ex.progression_load_increment : null,
-        progression_every_weeks: typeof ex.progression_every_weeks === 'number' ? ex.progression_every_weeks : 1,
-        section:
-          ex.section === 'warmup' || ex.section === 'strong' || ex.section === 'conditioning' ? ex.section : 'lift',
-        block_no: ex.block_no === 1 || ex.block_no === 2 ? ex.block_no : null,
-        block_format: typeof ex.block_format === 'string' ? ex.block_format : null,
-        block_part: ex.block_part === 'upper' || ex.block_part === 'lower' || ex.block_part === 'breath' || ex.block_part === 'burn' ? ex.block_part : null,
-      });
-    }
-    days.push({
-      week_num: day.week_num,
-      day_label: day.day_label,
-      sort_order: typeof day.sort_order === 'number' ? day.sort_order : 0,
-      phase_label: typeof day.phase_label === 'string' ? day.phase_label : null,
-      notes: typeof day.notes === 'string' ? day.notes : null,
-      day_position: typeof day.day_position === 'number' ? day.day_position : null,
-      exercises,
-    });
-  }
-  return { version: 1, name: d.name, days };
-}
-
-// Recreates a template (and every day/exercise) from an exported file -- see toTemplateExport
-// for the mirrored shape. exercise_library_id is re-resolved by case/whitespace-insensitive
-// name match against the *importing* gym's current library rather than trusting any id in the
-// file (which would point at the exporting gym's library, meaningless here); exercises with no
-// match still import fine since name is always stored as free text regardless of the link.
+// Recreates a template (and every day and exercise) from an exported file -- see toTemplateExport for the shape. One database call
+// (import_program_template, migration 0133): the whole template is built in one transaction, so a failure can no longer leave a
+// half-built template, and the database checks the shape and limits (20 weeks, 14 days a week, 60 exercises a day) itself. Each
+// exercise is linked to the library entry with the same name (ignoring case and spacing) when there is one; a file from another gym
+// carries no ids that would mean anything here.
 export async function importProgramTemplate(rawData: unknown): Promise<ActionResult> {
-  const data = validateTemplateExport(rawData);
-  if (!data) return fail(null, 'That file isn’t a recognized programme template export');
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return fail(null, 'Not authenticated');
-  const gymId = await resolveScopingGymId(supabase);
-
-  const { data: library, error: libraryError } = await supabase.from('exercise_library').select('id, name');
-  if (libraryError) return fail(libraryError, 'Could not load the exercise library');
-  const libraryByName = new Map((library ?? []).map((ex) => [ex.name.trim().toLowerCase(), ex.id]));
-
-  const { data: newTemplate, error: templateError } = await supabase
-    .from('program_templates')
-    .insert({ coach_id: user.id, gym_id: gymId, name: data.name })
-    .select('id')
-    .single();
-  if (templateError) return fail(templateError, 'Could not create the template');
-
-  for (const day of data.days) {
-    const { data: newDay, error: dayError } = await supabase
-      .from('program_template_days')
-      .insert({
-        template_id: newTemplate.id,
-        week_num: day.week_num,
-        day_label: day.day_label,
-        sort_order: day.sort_order,
-        phase_label: day.phase_label,
-        notes: day.notes,
-        day_position: day.day_position,
-      })
-      .select('id')
-      .single();
-    if (dayError) return fail(dayError, 'Could not import a day in that template');
-
-    if (day.exercises.length > 0) {
-      const { error: exercisesError } = await supabase.from('program_template_exercises').insert(
-        day.exercises.map((ex) => ({
-          template_day_id: newDay.id,
-          exercise_library_id: libraryByName.get(ex.name.trim().toLowerCase()) ?? null,
-          ...ex,
-        }))
-      );
-      if (exercisesError) return fail(exercisesError, 'Could not import an exercise in that template');
-    }
+  if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) {
+    return fail(null, 'That file isn\u2019t a recognized programme template export');
   }
-
-  return ok();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('import_program_template', { p_json: rawData });
+  return error ? fail(error, 'Could not import that programme template') : ok();
 }
 
 // Copies the template into a real program for this client (snapshot, not a live reference --
@@ -430,8 +346,12 @@ export async function getPendingRollouts(): Promise<ProgrammeRolloutRow[]> {
   });
 }
 
-// Schedules a template for a start date. Everyone it covers gets their own copy on that date (the
-// daily job does it), or straight away when the date is today or earlier (`startsNow`).
+// Schedules a template for a start date. Everyone it covers gets their own copy on that date (the daily job does it), or straight
+// away when the date is today or earlier (`startsNow`). One database call (schedule_programme_rollout, migration 0133): the rollout
+// is saved and, if it starts now, applied in the same transaction, so a failure leaves nothing queued for the overnight job (R5).
+// `count` is how many members it reached (or will reach).
+export type ScheduleRolloutResult = { ok: true; count: number } | { ok: false; error: string };
+
 export async function scheduleProgrammeRollout(input: {
   templateId: string;
   programName: string;
@@ -439,36 +359,27 @@ export async function scheduleProgrammeRollout(input: {
   audience: 'all' | 'selected';
   clientIds: string[];
   startsNow: boolean;
-}): Promise<ActionResult> {
+}): Promise<ScheduleRolloutResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return fail(null, 'Not authenticated');
-  const gymId = await resolveScopingGymId(supabase);
-
-  const { data, error } = await supabase
-    .from('programme_rollouts')
-    .insert({
-      gym_id: gymId,
-      template_id: input.templateId,
-      program_name: input.programName,
-      start_date: input.startDate,
-      audience: input.audience,
-      client_ids: input.audience === 'selected' ? input.clientIds : [],
-      created_by: user.id,
-    })
-    .select('id')
-    .single();
-  if (error) return fail(error, 'Could not schedule that programme');
-
-  if (input.startsNow) {
-    const { error: applyError } = await supabase.rpc('apply_programme_rollout', { p_rollout_id: data.id });
-    if (applyError) return fail(applyError, 'Could not start that programme');
-  }
-  return ok();
+  const { data, error } = await supabase.rpc('schedule_programme_rollout', {
+    p_template_id: input.templateId,
+    p_program_name: input.programName,
+    p_start: input.startDate,
+    p_audience: input.audience,
+    p_client_ids: input.audience === 'selected' ? input.clientIds : [],
+    p_starts_now: input.startsNow,
+  });
+  if (error) return fail(error, 'Could not start that programme') as ScheduleRolloutResult;
+  return { ok: true, count: typeof data === 'number' ? data : 0 };
 }
 
+// How many members "Everyone at the gym" means: the clients who belong to the gym being worked in (their own gym, not their coach's).
+export async function getGymMemberCount(): Promise<number> {
+  const supabase = await createClient();
+  const gymId = await resolveScopingGymId(supabase);
+  const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('gym_id', gymId);
+  return count ?? 0;
+}
 export async function cancelProgrammeRollout(rolloutId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('programme_rollouts').delete().eq('id', rolloutId).is('applied_at', null);

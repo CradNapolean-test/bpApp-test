@@ -27,6 +27,7 @@ import {
   importProgramTemplate,
   cancelProgrammeRollout,
   scheduleProgrammeRollout,
+  getGymMemberCount,
   reorderTemplateExercises,
   updateTemplateDay,
   updateTemplateExercise,
@@ -34,6 +35,7 @@ import {
 } from '@/lib/data/programTemplates';
 import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
+import { DEFAULT_ROLLOUT_AUDIENCE, rolloutButtonLabel, rolloutConfirmation, rolloutSuccessMessage, type RolloutPlan } from '@/lib/rolloutPlan';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgrammeRolloutRow, ProgramTemplateWithDays } from '@/lib/data/types';
 
@@ -179,7 +181,9 @@ export function ProgramTemplateManager({
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignName, setAssignName] = useState('');
   const [assignStart, setAssignStart] = useState('');
-  const [assignAudience, setAssignAudience] = useState<'all' | 'selected'>('all');
+  // Choosing members is the default: "everyone" replaces every member's programme, so it is a deliberate choice (R5).
+  const [assignAudience, setAssignAudience] = useState<'all' | 'selected'>(DEFAULT_ROLLOUT_AUDIENCE);
+  const [gymMemberCount, setGymMemberCount] = useState<number | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [groupId, setGroupId] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
@@ -309,7 +313,11 @@ export function ProgramTemplateManager({
   function openAssign(template: ProgramTemplateWithDays) {
     setAssignName(template.name);
     setAssignStart(todayIsoInTz(DEFAULT_TIMEZONE));
-    setAssignAudience('all');
+    setAssignAudience(DEFAULT_ROLLOUT_AUDIENCE);
+    setGymMemberCount(null);
+    getGymMemberCount()
+      .then(setGymMemberCount)
+      .catch(() => setGymMemberCount(null));
     setPicked([]);
     setGroupId('');
     setMemberSearch('');
@@ -322,21 +330,36 @@ export function ProgramTemplateManager({
   const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
   const startsNow = !assignStart || assignStart <= todayIso;
 
+  const rolloutPlan: RolloutPlan = {
+    audience: assignAudience,
+    memberCount: assignAudience === 'all' ? gymMemberCount : targetIds.length,
+    startsNow,
+    startLabel: assignStart ? longDate(assignStart) : 'today',
+  };
+
   async function handleAssign(template: ProgramTemplateWithDays) {
     if (assignAudience === 'selected' && targetIds.length === 0) return;
+    const confirmation = rolloutConfirmation(rolloutPlan);
+    if (confirmation && !(await confirm({ ...confirmation, destructive: true }))) return;
+    let reached = 0;
     await runAssign(
-      () =>
-        scheduleProgrammeRollout({
+      async () => {
+        const result = await scheduleProgrammeRollout({
           templateId: template.id,
           programName: assignName.trim() || template.name,
           startDate: assignStart || todayIso,
           audience: assignAudience,
           clientIds: targetIds,
           startsNow,
-        }),
+        });
+        if (result.ok) reached = result.count;
+        return result;
+      },
       {
-        success: startsNow ? 'Programme started' : `Scheduled for ${longDate(assignStart)}`,
-        onDone: () => setAssignOpen(false),
+        onDone: () => {
+          toast.success(rolloutSuccessMessage(rolloutPlan, reached));
+          setAssignOpen(false);
+        },
       }
     );
   }
@@ -651,7 +674,7 @@ export function ProgramTemplateManager({
                           assignAudience === a ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
                         }`}
                       >
-                        {a === 'all' ? 'Everyone at the gym' : 'Choose members'}
+                        {a === 'all' ? `Everyone at the gym${gymMemberCount != null ? ` (${gymMemberCount})` : ''}` : 'Choose members'}
                       </button>
                     ))}
                   </div>
@@ -709,17 +732,7 @@ export function ProgramTemplateManager({
                   disabled={assigning || (assignAudience === 'selected' && targetIds.length === 0)}
                   onClick={() => handleAssign(previewTemplate)}
                 >
-                  {assigning
-                    ? 'Saving…'
-                    : assignAudience === 'selected' && targetIds.length === 0
-                      ? 'Choose who gets it'
-                      : startsNow
-                        ? assignAudience === 'all'
-                          ? 'Start for everyone today'
-                          : `Start for ${targetIds.length} member${targetIds.length === 1 ? '' : 's'} today`
-                        : assignAudience === 'all'
-                          ? `Schedule for everyone on ${longDate(assignStart)}`
-                          : `Schedule for ${targetIds.length} member${targetIds.length === 1 ? '' : 's'} on ${longDate(assignStart)}`}
+                  {assigning ? 'Saving…' : rolloutButtonLabel(rolloutPlan)}
                 </Button>
               </div>
             </BottomSheet>
