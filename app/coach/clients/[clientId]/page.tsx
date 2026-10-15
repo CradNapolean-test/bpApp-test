@@ -84,6 +84,7 @@ export default async function CoachClientPage({
       mealSections={bundle.mealSections}
       activities={bundle.activities}
       programWeek={bundle.programWeek}
+      streak={bundle.streak}
       messages={bundle.messages}
       bookings={bundle.bookings}
       occurrences={bundle.occurrences}

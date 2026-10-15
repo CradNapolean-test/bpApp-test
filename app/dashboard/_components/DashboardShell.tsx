@@ -149,6 +149,7 @@ export function DashboardShell({
   rewardsData = { rewards: [], grantedIds: [], sessions: 0, months: 0 },
   unreadMessageCount = 0,
   gymTimezone = null,
+  streak = undefined,
   latestWeighIn = null,
   ownerCoachName = null,
   healthStatus = null,
@@ -210,6 +211,8 @@ export function DashboardShell({
   unreadMessageCount?: number;
   // The member's gym's timezone (coach view): the Credits tab dates follow the gym's calendar.
   gymTimezone?: string | null;
+  // Consecutive days logged, from a year of logs (the 84-day history alone cannot pass 85).
+  streak?: number;
   // Coach view: the member's most recent weigh-in however old, and the name of the coach they belong to (for the read-only note).
   latestWeighIn?: { date: string; weight: number } | null;
   ownerCoachName?: string | null;
@@ -784,6 +787,7 @@ export function DashboardShell({
               bigDogResults={bigDogResults}
               events={events}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
+              streakDays={streak}
               disabledMetrics={disabledMetrics}
             />
           )}

@@ -4,7 +4,7 @@ import { weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { PLAN_BEING_SET_UP, targetsHeldBack } from '@/lib/onboarding';
 import { dayCaloriesOf, hasLoggedData } from '@/lib/utils/dailyLog';
-import { toIsoDate, addDays, formatClassTime, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { formatClassTime, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import type {
   BookingRow,
@@ -22,22 +22,11 @@ import type { Category, Screen } from './categories';
 import { CheckInButton } from './CheckInButton';
 import { bannerEvent } from '@/lib/eventBanner';
 import { EventBanner } from './EventBanner';
-import { showsStreak } from '@/lib/streak';
+import { currentStreak, showsStreak } from '@/lib/streak';
 import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
 import { BpHomeExplore, BpHomeHero, BpHomeProgress, BpMainTiles } from './BpHome';
 import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
-
-function currentStreak(historyLogs: DailyLogRow[], todayIso: string): number {
-  const loggedDates = new Set(historyLogs.filter(hasLoggedData).map((l) => l.log_date));
-  let streak = 0;
-  let cursor = todayIso;
-  while (loggedDates.has(cursor)) {
-    streak += 1;
-    cursor = toIsoDate(addDays(new Date(cursor + 'T00:00:00Z'), -1));
-  }
-  return streak;
-}
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 const clickableCardCls = `${cardCls} w-full text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`;
@@ -78,6 +67,7 @@ export function TodayTab({
   bigDogResults = [],
   events = [],
   dailyCheckinHidden = false,
+  streakDays,
   disabledMetrics = [],
 }: {
   profile: ClientProfileRow | null;
@@ -98,6 +88,8 @@ export function TodayTab({
   bigDogResults?: BigDogResultRow[];
   events?: EventWithSignup[];
   dailyCheckinHidden?: boolean;
+  // Consecutive days logged, worked out on the server from a year of logs (L2).
+  streakDays?: number;
   disabledMetrics?: string[];
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
@@ -115,7 +107,8 @@ export function TodayTab({
   // A member whose plan is waiting for their coach sees a message where the target would be (M8).
   const planHeld = targetsHeldBack(profile, isCoachView);
 
-  const streak = currentStreak(historyLogs, todayIso);
+  // The dashboard sends the streak worked out from a year of logs; without it, from the 84 days this screen has (L2).
+  const streak = streakDays ?? currentStreak(historyLogs.filter(hasLoggedData).map((l) => l.log_date), todayIso);
   const upcomingEvent = useMemo(() => bannerEvent(events, new Date()), [events]);
   const streakVisible = showsStreak(membership);
 

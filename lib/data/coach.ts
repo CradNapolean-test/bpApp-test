@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { addDays, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { computeHealth, type ClientHealthBucket } from '@/lib/healthStatus';
 import { fetchAllPages } from '@/lib/paging';
+import { LOGGED_DATA_FILTER } from '@/lib/utils/dailyLog';
 
 // The "coach-global" tables (classes, membership_packages, form_templates) are scoped to a
 // specific coach, but the caller could be that coach themself or one of their clients --
@@ -248,9 +249,7 @@ export async function getClientLastActive(supabase: SupabaseClient, clientId: st
     .from('daily_logs')
     .select('log_date')
     .eq('client_id', clientId)
-    .or(
-      'protein.not.is.null,carbs.not.is.null,fat.not.is.null,bodyweight.not.is.null,steps.not.is.null,sleep.not.is.null,fibre.not.is.null,water.not.is.null,gym_session.eq.true,hunger.not.is.null,energy.not.is.null,motivation.not.is.null,stress.not.is.null,period_started.eq.true,notes.not.is.null'
-    )
+    .or(LOGGED_DATA_FILTER)
     .order('log_date', { ascending: false })
     .limit(1);
   if (error) raise(error);

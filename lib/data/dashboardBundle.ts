@@ -1,7 +1,9 @@
 'use server';
 
 import { getClientProfile } from './clientProfile';
-import { getDailyLog, getDailyLogs, getOrCreateDailyLog } from './dailyLogs';
+import { getDailyLog, getDailyLogs, getFirstLoggedDate, getLoggedDates, getOrCreateDailyLog } from './dailyLogs';
+import { currentStreak } from '@/lib/streak';
+import { programWeekAt } from '@/lib/programWeek';
 import { getFoodDiaryEntries } from './foodDiary';
 import { getFoodPhotos } from './foodPhotos';
 import { getManualMacroEntries } from './manualMacros';
@@ -97,6 +99,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     events,
     rewardsData,
     gymTimezone,
+    loggedDates,
+    firstLoggedDate,
   ] = await Promise.all([
     getDailyLogs(clientId, dates[0], dates[6]),
     getDailyLogs(clientId, historyStart, todayIso),
@@ -138,16 +142,19 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getUpcomingEvents(clientId),
     getRewardsForMember(clientId),
     getGymTimezone(gymId),
+    // A year of logged days for the streak (the 84 days above cap it at 85), and the first day ever for the programme week.
+    getLoggedDates(clientId, toIsoDate(addDays(today, -400))),
+    getFirstLoggedDate(clientId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
   const foodPhotos = todayLog ? await getFoodPhotos(todayLog.id) : [];
   const manualMacroEntries = todayLog ? await getManualMacroEntries(todayLog.id) : [];
 
-  const firstLogDate = historyLogs[0]?.log_date;
-  const programWeek = firstLogDate
-    ? Math.max(1, Math.floor((today.getTime() - new Date(firstLogDate).getTime()) / (7 * 86400000)) + 1)
-    : 1;
+  // Counted from the programme's start (the join date the coach set, else the first day ever logged), not from the first log inside the
+  // 84-day window, which made it read "week 13" for everyone forever (L1).
+  const programWeek = programWeekAt(todayIso, profile?.join_date ?? firstLoggedDate);
+  const streak = currentStreak(loggedDates, todayIso);
 
   return {
     profile,
@@ -196,5 +203,6 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     events,
     rewardsData,
     gymTimezone,
+    streak,
   };
 }
