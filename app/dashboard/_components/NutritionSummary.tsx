@@ -2,6 +2,7 @@
 
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import { Card } from '@/app/_components/ui';
+import { PLAN_BEING_SET_UP } from '@/lib/onboarding';
 
 type Macros = { calories: number; protein: number; carbs: number; fat: number };
 
@@ -26,26 +27,30 @@ function MacroRing({ label, unit, value, target, color }: { label: string; unit:
 
 // The four rings from the owner's "My coaching" overview: calories, protein, carbs and fats, each
 // with what's been eaten and its daily target. Shared so Food Tracking and the overview match.
-export function TargetRings({ totals, target }: { totals: Macros; target: Macros | null }) {
+// `held`: the member's plan is still waiting for their coach, so no target is shown (M8); a line says why.
+export function TargetRings({ totals, target, held = false }: { totals: Macros; target: Macros | null; held?: boolean }) {
   return (
+    <div className="space-y-2">
     <div className="grid grid-cols-4 gap-2">
       <MacroRing label="Calories" unit="" value={totals.calories} target={target?.calories ?? null} color={RING_COLORS.calories} />
       <MacroRing label="Protein" unit="g" value={totals.protein} target={target?.protein ?? null} color={RING_COLORS.protein} />
       <MacroRing label="Carbs" unit="g" value={totals.carbs} target={target?.carbs ?? null} color={RING_COLORS.carbs} />
       <MacroRing label="Fats" unit="g" value={totals.fat} target={target?.fat ?? null} color={RING_COLORS.fat} />
     </div>
+    {held && <p className="text-center text-xs font-semibold text-zinc-500">{PLAN_BEING_SET_UP}. Your targets will appear here once they have been checked.</p>}
+    </div>
   );
 }
 
 // The top of Food Tracking: the same "targets" card as the My coaching overview.
-export function NutritionSummary({ totals, target, title, dateLabel }: { totals: Macros; target: Macros | null; title: string; dateLabel: string }) {
+export function NutritionSummary({ totals, target, title, dateLabel, held = false }: { totals: Macros; target: Macros | null; title: string; dateLabel: string; held?: boolean }) {
   return (
     <Card>
       <div className="mb-3 flex items-baseline justify-between">
         <p className="text-sm font-bold text-black dark:text-zinc-50">{title}</p>
         <p className="text-xs text-zinc-500">{dateLabel}</p>
       </div>
-      <TargetRings totals={totals} target={target} />
+      <TargetRings totals={totals} target={target} held={held} />
     </Card>
   );
 }

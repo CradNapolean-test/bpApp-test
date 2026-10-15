@@ -6,7 +6,8 @@ import type { CheckinMetric } from '@/lib/checkinMetrics';
 import { TargetRings } from './NutritionSummary';
 import { Badge, Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { targetsHeldBack } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/dates';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
 import { trafficLight } from '@/lib/utils/accountability';
@@ -66,7 +67,8 @@ export function CoachingHub({
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
 
   const dayTarget = useMemo(() => {
-    const engineProfile = toEngineProfile(profile);
+    // This hub is the member's own: no target while their plan waits for their coach (M8).
+    const engineProfile = toMemberEngineProfile(profile, false);
     return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
   }, [profile, programWeek]);
 
@@ -155,7 +157,7 @@ export function CoachingHub({
                 {new Date(todayIso + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
               </p>
             </div>
-            <TargetRings totals={{ calories, protein, carbs, fat }} target={dayTarget} />
+            <TargetRings totals={{ calories, protein, carbs, fat }} target={dayTarget} held={targetsHeldBack(profile, false)} />
             <button
               type="button"
               onClick={() => onNavigate('Nutrition')}

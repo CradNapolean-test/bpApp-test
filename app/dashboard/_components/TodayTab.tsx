@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { CalendarDays, Camera, CheckSquare, ChevronRight, Flame, Heart } from 'lucide-react';
 import { weeklyTarget } from '@/lib/calculations';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { PLAN_BEING_SET_UP, targetsHeldBack } from '@/lib/onboarding';
 import { dayCaloriesOf, hasLoggedData } from '@/lib/utils/dailyLog';
 import { toIsoDate, addDays, formatClassTime, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { ProgressRing } from '@/app/_components/ProgressRing';
@@ -108,9 +109,11 @@ export function TodayTab({
   const todayCalories = todayLog ? dayCaloriesOf(todayLog) : 0;
 
   const dayTarget = useMemo(() => {
-    const engineProfile = toEngineProfile(profile);
+    const engineProfile = toMemberEngineProfile(profile, isCoachView);
     return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
-  }, [profile, programWeek]);
+  }, [profile, programWeek, isCoachView]);
+  // A member whose plan is waiting for their coach sees a message where the target would be (M8).
+  const planHeld = targetsHeldBack(profile, isCoachView);
 
   const streak = currentStreak(historyLogs, todayIso);
   const upcomingEvent = useMemo(() => bannerEvent(events, new Date()), [events]);
@@ -182,7 +185,7 @@ export function TodayTab({
                 <span className="block text-sm font-normal text-white/70">of {Math.round(dayTarget.calories).toLocaleString()} kcal target</span>
               </p>
             ) : (
-              <p className="text-sm text-white/80">Finish setup to see your targets.</p>
+              <p className="text-sm text-white/80">{planHeld ? `${PLAN_BEING_SET_UP}. Your targets appear here once they have been checked.` : 'Finish setup to see your targets.'}</p>
             )}
           </div>
         </div>

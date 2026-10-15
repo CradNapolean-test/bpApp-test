@@ -11,7 +11,7 @@ import { getDailyLogs, upsertDailyLog } from '@/lib/data/dailyLogs';
 import { LOCKED_DAY_MESSAGE, canBrowseWeek, canEditDay, changedFields } from '@/lib/dayPatch';
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { BODYWEIGHT_KG, bodyweightMessage, isValidBodyweight } from '@/lib/limits';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
@@ -151,9 +151,10 @@ function WeekLog({
   const [focusedDate, setFocusedDate] = useState(() => (weekDates.includes(todayIso) ? todayIso : weekDates[0]));
 
   const weekTarget = useMemo(() => {
-    const engineProfile = toEngineProfile(profile);
+    // No target is shown to a member whose plan is waiting for their coach (M8).
+    const engineProfile = toMemberEngineProfile(profile, isCoachView);
     return engineProfile ? weeklyTarget(engineProfile, programWeek) : null;
-  }, [profile, programWeek]);
+  }, [profile, programWeek, isCoachView]);
 
   function targetForDayType(dayType: DailyLogRow['day_type']): DayTarget | null {
     if (!weekTarget) return null;

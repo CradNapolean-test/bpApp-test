@@ -31,6 +31,38 @@ export const TRACKING_OPTIONS = [
 
 export type TrackingMode = (typeof TRACKING_OPTIONS)[number]['value'];
 
+// ---- who can sign up, and who sees a calorie target (M8) ----
+// D18 (recommended default): 16 is the youngest the app will set up on its own; younger members are set up by their coach. The calorie
+// engine is for adults, and the sign-up used to take anyone from 10. Change the number here to change the rule everywhere.
+export const MIN_AGE = 16;
+export const MAX_AGE = 100;
+export const UNDER_MIN_AGE_MESSAGE = 'Please ask your coach to set up your account.';
+
+// null when the age is fine; otherwise what to tell the person.
+export function ageProblem(age: number | null): string | null {
+  if (age == null || age < 0 || age > MAX_AGE) return 'Please check your date of birth.';
+  if (age < MIN_AGE) return UNDER_MIN_AGE_MESSAGE;
+  return null;
+}
+
+// The activity choice has to be one of the offered levels, not any number the browser sends.
+export function isActivityLevel(value: number): boolean {
+  return ACTIVITY_OPTIONS.some((o) => o.value === value);
+}
+
+// Below this BMI a weight-loss target is a clinical question, not a coaching one.
+export const BMI_FLOOR = 18.5;
+export const bmiOf = (heightCm: number, weightKg: number): number => weightKg / (heightCm / 100) ** 2;
+
+// D6 (recommended default: hold back). A member whose plan is still waiting for their coach (needs_coach_review) is not shown a calorie
+// or macro target yet: the starting numbers come straight from a formula and nobody has looked at them. The coach, and the member once
+// the coach has marked the plan reviewed, see them as usual. To show targets straight away instead, make this return false.
+export function targetsHeldBack(profile: { needs_coach_review?: boolean | null } | null | undefined, isCoachView: boolean): boolean {
+  return !isCoachView && profile?.needs_coach_review === true;
+}
+
+export const PLAN_BEING_SET_UP = 'Your coach is setting up your plan';
+
 export function ageFromDob(dob: string, today: Date = new Date()): number | null {
   const d = new Date(dob + 'T00:00:00Z');
   if (Number.isNaN(d.getTime())) return null;
@@ -98,6 +130,8 @@ export function buildOnboardingPlan(input: OnboardingInputs): OnboardingPlan | n
   if (input.goalWeight >= input.startWeight) reasons.push('Goal weight is not below start weight');
   if (input.startWeight - input.goalWeight > 25) reasons.push('Large weight-loss goal (over 25kg)');
   if (input.age < 18) reasons.push('Under 18');
+  if (bmiOf(input.heightCm, input.startWeight) < BMI_FLOOR) reasons.push(`Starting BMI is under ${BMI_FLOOR}`);
+  else if (bmiOf(input.heightCm, input.goalWeight) < BMI_FLOOR) reasons.push(`Goal weight would give a BMI under ${BMI_FLOOR}`);
   if (input.hasHealthNotes) reasons.push('Health or injury notes added');
   reasons.push('Membership may need setting up');
 

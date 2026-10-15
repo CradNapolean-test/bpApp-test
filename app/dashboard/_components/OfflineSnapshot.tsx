@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { weeklyTarget } from '@/lib/calculations';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
 import type { ClientProfileRow, DailyLogRow, WorkoutProgramRow } from '@/lib/data/types';
@@ -28,7 +28,8 @@ export function OfflineSnapshot({
   useEffect(() => {
     try {
       const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
-      const engine = toEngineProfile(profile);
+      // The offline copy of the targets follows the same hold-back as the screens (M8).
+      const engine = toMemberEngineProfile(profile, false);
       const target = engine ? weeklyTarget(engine, programWeek)?.dailyFlat ?? null : null;
 
       const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();

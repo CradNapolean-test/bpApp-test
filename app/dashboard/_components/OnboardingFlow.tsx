@@ -7,7 +7,7 @@ import { Logo } from '@/app/_components/Logo';
 import { useInstall } from '@/app/_components/useInstall';
 import { Button } from '@/app/_components/Button';
 import { completeOnboarding, completeShortOnboarding } from '@/lib/data/onboarding';
-import { ACTIVITY_OPTIONS, ageFromDob, buildOnboardingPlan, TRACKING_OPTIONS } from '@/lib/onboarding';
+import { ACTIVITY_OPTIONS, ageFromDob, ageProblem, buildOnboardingPlan, PLAN_BEING_SET_UP, TRACKING_OPTIONS } from '@/lib/onboarding';
 import type { TrackingMode } from '@/lib/onboarding';
 import type { ClientProfileRow } from '@/lib/data/types';
 
@@ -250,7 +250,9 @@ export function OnboardingFlow({
     if (key === 'about') {
       if (!name.trim()) return 'Please enter your name.';
       if (!gender) return 'Please choose an option for gender (we use it for your calorie calculation).';
-      if (age == null || age < 10 || age > 100) return 'Please enter your date of birth.';
+      if (age == null) return 'Please enter your date of birth.';
+      const ageError = ageProblem(age);
+      if (ageError) return ageError;
       if (!phone.trim()) return 'Please add a mobile number.';
       if (!emName.trim() || !emPhone.trim()) return 'Please add an emergency contact name and number.';
     }
@@ -572,26 +574,14 @@ export function OnboardingFlow({
             <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your daily plan</h2>
             {plan ? (
               <>
+                {/* The starting numbers come straight from a formula and nobody has looked at them, so they are not shown (M8, D6): the plan is
+                    still worked out and saved, and the coach sees it with the reasons to check it. */}
                 <div className="rounded-2xl bg-accent p-5 text-accent-foreground">
-                  <p className="text-xs opacity-85">Daily calories to start</p>
-                  <p className="text-4xl font-extrabold">{plan.calories} <span className="text-lg font-bold">kcal</span></p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { l: 'Protein', v: plan.protein, c: '#a07aff' },
-                    { l: 'Carbs', v: plan.carbs, c: '#e8a020' },
-                    { l: 'Fat', v: plan.fat, c: '#2ecc71' },
-                  ].map((m) => (
-                    <div key={m.l} className="rounded-2xl border border-black/[.06] bg-card p-3 text-center dark:border-white/10">
-                      <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: m.c }}>{m.l}</p>
-                      <p className="mt-0.5 text-xl font-extrabold text-black dark:text-zinc-50">{m.v}<span className="text-xs font-bold text-zinc-500">g</span></p>
-                    </div>
-                  ))}
+                  <p className="text-xl font-extrabold">{PLAN_BEING_SET_UP}</p>
                 </div>
                 <p className="text-sm text-zinc-500">
-                  This is your starting point, worked out from your height, weight, age and activity.{' '}
-                  {plan.bodyFatEstimated ? 'Your body fat was estimated, so ' : ''}
-                  {coachFirstName ?? 'your coach'} will review it and adjust it as you go.
+                  {coachFirstName ?? 'Your coach'} will work out your daily calories and macros from your height, weight, age and activity, and
+                  your numbers will appear here as soon as they have been checked.
                 </p>
               </>
             ) : (

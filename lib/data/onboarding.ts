@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ageFromDob, buildOnboardingPlan, TRACKING_OPTIONS } from '@/lib/onboarding';
+import { ageFromDob, ageProblem, buildOnboardingPlan, isActivityLevel, TRACKING_OPTIONS } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
@@ -76,7 +76,9 @@ export async function completeOnboarding(clientId: string, input: OnboardingSubm
   const name = input.name.trim();
   const age = ageFromDob(input.dateOfBirth);
   if (!name) return fail(null, 'Please enter your name');
-  if (age == null || age < 10 || age > 100) return fail(null, 'Please check your date of birth');
+  const ageError = ageProblem(age);
+  if (ageError || age == null) return fail(null, ageError ?? 'Please check your date of birth');
+  if (!isActivityLevel(input.activityLevel)) return fail(null, 'Please pick how active you are');
   if (!(input.startWeight >= 30 && input.startWeight <= 300)) return fail(null, 'Please check your weight');
   if (!(input.goalWeight >= 30 && input.goalWeight <= 300)) return fail(null, 'Please check your goal weight');
   if (!(input.heightCm >= 120 && input.heightCm <= 230)) return fail(null, 'Please check your height');
@@ -203,7 +205,8 @@ export async function completeShortOnboarding(clientId: string, input: ShortOnbo
   const name = input.name.trim();
   const age = ageFromDob(input.dateOfBirth);
   if (!name) return fail(null, 'Please enter your name');
-  if (age == null || age < 10 || age > 100) return fail(null, 'Please check your date of birth');
+  const ageError = ageProblem(age);
+  if (ageError || age == null) return fail(null, ageError ?? 'Please check your date of birth');
   if (!TRACKING_OPTIONS.some((o) => o.value === input.nutritionTrackingMode)) return fail(null, 'Pick how to track food');
 
   const { data, error } = await supabase

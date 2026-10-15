@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageFromDob, buildOnboardingPlan, estimateBodyFat } from './onboarding';
+import { ageFromDob, ageProblem, buildOnboardingPlan, estimateBodyFat, isActivityLevel, targetsHeldBack } from './onboarding';
 
 describe('onboarding', () => {
   it('works out age from date of birth', () => {
@@ -37,5 +37,48 @@ describe('onboarding', () => {
     expect(plan!.bodyFatPct).toBe(22);
     expect(plan!.reasons).toContain('Goal weight is not below start weight');
     expect(plan!.reasons).toContain('Health or injury notes added');
+  });
+});
+
+describe('who can sign up, and who sees a target (M8, D18, D6)', () => {
+  it('turns away anyone under 16 with a message that points to the coach', () => {
+    expect(ageProblem(15)).toBe('Please ask your coach to set up your account.');
+    expect(ageProblem(16)).toBeNull();
+    expect(ageProblem(40)).toBeNull();
+    expect(ageProblem(100)).toBeNull();
+  });
+
+  it('refuses an age that cannot be right', () => {
+    expect(ageProblem(null)).toBe('Please check your date of birth.');
+    expect(ageProblem(101)).toBe('Please check your date of birth.');
+    expect(ageProblem(-1)).toBe('Please check your date of birth.');
+  });
+
+  it('only accepts the activity levels the form offers', () => {
+    expect(isActivityLevel(1.2)).toBe(true);
+    expect(isActivityLevel(1.75)).toBe(true);
+    expect(isActivityLevel(3)).toBe(false);
+    expect(isActivityLevel(0.1)).toBe(false);
+  });
+
+  it('holds back targets from a member whose plan is waiting for their coach, but never from the coach', () => {
+    expect(targetsHeldBack({ needs_coach_review: true }, false)).toBe(true);
+    expect(targetsHeldBack({ needs_coach_review: true }, true)).toBe(false);
+    expect(targetsHeldBack({ needs_coach_review: false }, false)).toBe(false);
+    expect(targetsHeldBack({}, false)).toBe(false);
+    expect(targetsHeldBack(null, false)).toBe(false);
+  });
+
+  it('flags a starting or goal weight under a BMI of 18.5', () => {
+    const base = { gender: 'Female' as const, age: 30, heightCm: 170, activityLevel: 1.5, bodyFatPct: 25, hasHealthNotes: false };
+    // 170 cm at 52 kg is a BMI of 18.0.
+    const light = buildOnboardingPlan({ ...base, startWeight: 52, goalWeight: 50 });
+    expect(light!.reasons).toContain('Starting BMI is under 18.5');
+    // 80 kg to 52 kg: a normal start, a goal under the floor.
+    const aggressive = buildOnboardingPlan({ ...base, startWeight: 80, goalWeight: 52 });
+    expect(aggressive!.reasons).toContain('Goal weight would give a BMI under 18.5');
+    expect(aggressive!.reasons).not.toContain('Starting BMI is under 18.5');
+    const ordinary = buildOnboardingPlan({ ...base, startWeight: 80, goalWeight: 70 });
+    expect(ordinary!.reasons.some((r) => r.includes('BMI'))).toBe(false);
   });
 });

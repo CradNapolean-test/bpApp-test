@@ -35,7 +35,8 @@ import { fail, ok } from '@/lib/data/result';
 import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { targetsHeldBack } from '@/lib/onboarding';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
@@ -479,9 +480,9 @@ export function FoodTrackingTab({
   // context the way Weekly Log does, and threading that through here would be
   // disproportionate to a simple live comparison line.
   const dayTarget = useMemo(() => {
-    const engineProfile = toEngineProfile(profile);
+    const engineProfile = toMemberEngineProfile(profile, readOnly);
     return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
-  }, [profile, programWeek]);
+  }, [profile, programWeek, readOnly]);
 
   // Reads a day (never creates it: browsing back used to leave a blank row for every day looked at). A slow answer for a day the member
   // has already moved off is dropped.
@@ -760,7 +761,7 @@ export function FoodTrackingTab({
         buttonLabel="Leave feedback on this day"
       />
 
-      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} />
+      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} held={targetsHeldBack(profile, readOnly)} />
 
       {!entryReadOnly && !isManual && (
         <div className="space-y-2">

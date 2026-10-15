@@ -10,7 +10,8 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { addMealPlanEntry, logPlanToDiary, removeMealPlanEntry, updateMealPlanEntryPortions } from '@/lib/data/mealPlan';
 import { addRecipeToMealPlan } from '@/lib/data/recipes';
 import { weeklyTarget } from '@/lib/calculations';
-import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { targetsHeldBack } from '@/lib/onboarding';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
 import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
@@ -106,9 +107,9 @@ export function MealPlannerTab({
   const [addFoodSection, setAddFoodSection] = useState<{ key: MealPlanSection; label: string } | null>(null);
 
   const dayTarget = useMemo(() => {
-    const engineProfile = toEngineProfile(profile);
+    const engineProfile = toMemberEngineProfile(profile, readOnly);
     return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
-  }, [profile, programWeek]);
+  }, [profile, programWeek, readOnly]);
 
   // Returns whether it worked, so the Add food sheet stays open (keeping what was typed) when it did not (FS5).
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
@@ -157,7 +158,7 @@ export function MealPlannerTab({
 
   return (
     <div className="space-y-4">
-      <NutritionSummary totals={dayTotals} target={dayTarget} title={readOnly ? "Their typical day" : "Your typical day"} dateLabel={readOnly ? "vs their daily target" : "vs your daily target"} />
+      <NutritionSummary totals={dayTotals} target={dayTarget} title={readOnly ? "Their typical day" : "Your typical day"} dateLabel={readOnly ? "vs their daily target" : "vs your daily target"} held={targetsHeldBack(profile, readOnly)} />
 
       {canLog && initialEntries.length > 0 && (
         <button
