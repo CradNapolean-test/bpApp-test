@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shortGymName } from './gymNames';
+import { brandParts, prettyName, shortGymName } from './gymNames';
 
 describe('shortGymName', () => {
   const gyms = ['Acme Fitness - Northside', 'Acme Fitness - Southside'];
@@ -37,5 +37,33 @@ describe('shortGymName', () => {
   it('does not depend on any particular brand', () => {
     expect(shortGymName('Iron Works - Harbour Road', { siblings: ['Iron Works - Harbour Road', 'Iron Works - Mill Lane'] })).toBe('Harbour Road');
     expect(shortGymName('Peak Club: Hilltop', { siblings: ['Peak Club: Hilltop', 'Peak Club: Valley'] })).toBe('Hilltop');
+  });
+});
+
+describe('prettyName', () => {
+  it('turns a login address into a readable name', () => {
+    expect(prettyName('sam.jones@example.com')).toBe('Sam Jones');
+    expect(prettyName('alex_smith-lee@example.com')).toBe('Alex Smith Lee');
+  });
+
+  it('leaves a real name alone', () => {
+    expect(prettyName('Sam Jones')).toBe('Sam Jones');
+    expect(prettyName('')).toBe('');
+  });
+
+  it('keeps the address when nothing readable is left of it', () => {
+    expect(prettyName('...@example.com')).toBe('...@example.com');
+  });
+});
+
+describe('brandParts', () => {
+  it('splits off the last word for the accent colour', () => {
+    expect(brandParts('Acme Fitness')).toEqual({ lead: 'Acme', accent: 'Fitness' });
+    expect(brandParts('  Acme   Strength   Club ')).toEqual({ lead: 'Acme Strength', accent: 'Club' });
+  });
+
+  it('gives a one-word name no accent, and an empty name nothing', () => {
+    expect(brandParts('Acme')).toEqual({ lead: 'Acme', accent: '' });
+    expect(brandParts('')).toEqual({ lead: '', accent: '' });
   });
 });

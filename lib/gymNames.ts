@@ -41,3 +41,23 @@ export function shortGymName(name: string, options: { organisationName?: string 
   const shared = sharedSegmentCount([own, ...others.map(segmentsOf)]);
   return shared > 0 ? own.slice(shared).join(' - ') : trimmed;
 }
+
+// A coach with no display name arrives as their login address ("sam.jones@example.com"). Tidy that into something readable
+// ("Sam Jones"). A name that is not an address is returned as it is.
+export function prettyName(name: string): string {
+  if (!name.includes('@')) return name;
+  const words = name
+    .split('@')[0]
+    .split(/[-_.]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1));
+  return words.length > 0 ? words.join(' ') : name;
+}
+
+// An organisation's name split for the two-tone header ("Ballistic" in the text colour, "Performance" in the accent): everything before the
+// last word, and the last word. A one-word name has no accent part.
+export function brandParts(name: string): { lead: string; accent: string } {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return { lead: words[0] ?? '', accent: '' };
+  return { lead: words.slice(0, -1).join(' '), accent: words[words.length - 1] };
+}

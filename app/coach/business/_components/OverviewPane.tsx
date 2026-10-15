@@ -4,18 +4,8 @@ import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { Card, SectionLabel } from '@/app/_components/ui';
+import { prettyName } from '@/lib/gymNames';
 import type { BusinessOverview } from '@/lib/data/coachDashboard';
-
-// A coach with no display name shows as their email; tidy that into something readable.
-function prettyName(name: string): string {
-  if (!name.includes('@')) return name;
-  return name
-    .split('@')[0]
-    .split(/[-_.]+/)
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
-}
 
 const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 

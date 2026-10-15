@@ -4,27 +4,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { toCsv } from '@/lib/csv';
+import { downloadTextFile } from '@/lib/utils/csv';
 import { getOwnerActivityReport } from '@/lib/data/owner';
 import type { ActivityReport } from '@/lib/data/owner';
+import { lastTwo, maxOf, settle, weekSoFar, weekdayExtremes, weekdayName } from '@/lib/ownerReport';
 
 // Owner reports: check-ins through the week, per day and per week, and how much each coach has messaged.
 // A check-in is a member logging anything on their daily check-in that day (the same measure as the Overview's
 // "Logged this week"). Percentages are of members who finished onboarding in the chosen gym(s).
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const card = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-function saveCsv(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
+const saveCsv = (filename: string, text: string) => downloadTextFile(filename, text, 'text/csv;charset=utf-8');
 
 function Heading({ title, hint, onCsv }: { title: string; hint?: string; onCsv?: () => void }) {
   return (
@@ -62,13 +54,20 @@ function Bars({ items, max, label }: { items: { key: string; value: number; labe
 export function ReportsPane({ gymId }: { gymId: string | null }) {
   const [report, setReport] = useState<ActivityReport | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [error, setError] = useState('');
   const requested = useRef<string | null | undefined>(undefined);
 
+  // Never leaves the pane on "Loading…": a timeout or a dropped connection comes back as a failure with Try again (R30).
   const load = useCallback(async (id: string | null) => {
     setState('loading');
-    const data = await getOwnerActivityReport(id, 12);
-    setReport(data);
-    setState(data ? 'ready' : 'failed');
+    const result = await settle(() => getOwnerActivityReport(id, 12));
+    if (result.ok) {
+      setReport(result.data);
+      setState('ready');
+    } else {
+      setError(result.error);
+      setState('failed');
+    }
   }, []);
 
   // Fetch when the pane opens and whenever the gym filter changes (each value once).
@@ -79,43 +78,77 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
   }, [gymId, load]);
 
   if (state === 'loading' && !report) return <p className="text-sm text-zinc-500">Loading reports...</p>;
-  if (state === 'failed' || !report) {
-    return <EmptyState icon={Download} title="Reports are not available yet" hint="Run migration 0120, then reload." />;
+  if (state === 'failed') {
+    return (
+      <div className="rounded-lg border border-dashed border-black/10 p-8 text-center dark:border-white/15" role="alert">
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{error}</p>
+        <button
+          type="button"
+          onClick={() => void load(gymId)}
+          className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
+  if (!report) return null;
   if (report.members === 0) {
-    return <EmptyState icon={Download} title="No members to report on yet" hint="Reports count members who have finished onboarding." />;
+    return (
+      <EmptyState
+        icon={Download}
+        title="No members to report on yet"
+        hint={`Reports count members who have finished onboarding${report.allMembers ? `; ${report.allMembers} members have not yet.` : '.'}`}
+      />
+    );
   }
 
-  const thisWeek = report.perWeek[report.perWeek.length - 1];
-  const lastWeek = report.perWeek[report.perWeek.length - 2];
-  const best = [...report.byWeekday].sort((a, b) => b.avgPct - a.avgPct)[0];
-  const worst = [...report.byWeekday].sort((a, b) => a.avgPct - b.avgPct)[0];
-  const maxDay = Math.max(...report.perDay.map((d) => d.checkIns));
-  const weekdayLabel = (dow: number) => WEEKDAYS[dow - 1];
+  const { current: thisWeek, previous: lastWeek } = lastTwo(report.perWeek);
+  const extremes = weekdayExtremes(report.byWeekday);
+  const sofar = weekSoFar(report.perDay, report.members);
+  const maxDay = maxOf(report.perDay.map((d) => d.checkIns));
+  const weekdayLabel = weekdayName;
+  const weekdayWeeks = report.weekdayWeeks;
+  const weekdayHint =
+    weekdayWeeks == null
+      ? 'Share of members checking in on each weekday, average of the last 8 complete weeks.'
+      : weekdayWeeks === 0
+        ? 'Not enough history yet: the averages start after the first complete week of check-ins.'
+        : `Share of members checking in on each weekday, average of the ${weekdayWeeks} complete week${weekdayWeeks === 1 ? '' : 's'}${weekdayWeeks < 8 ? ' since check-ins began' : ' (the last 8)'}.`;
 
   return (
     <div className={`space-y-4 ${state === 'loading' ? 'opacity-60' : ''}`}>
       <p className="text-xs text-zinc-500">
         A check-in is a member logging anything on their daily check-in that day. Percentages are of the {report.members} members who have finished
-        onboarding.
+        onboarding{report.allMembers != null && report.allMembers !== report.members ? ` (${report.allMembers} members in total, the rest have not finished yet)` : ''}.
       </p>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Tile label="Checked in this week" value={`${thisWeek.pct}%`} sub={`${thisWeek.activeMembers} of ${report.members} members`} />
         <Tile
-          label="Last week"
+          label={sofar ? `Checked in this week so far (${sofar.label})` : 'Checked in this week so far'}
+          value={thisWeek ? `${thisWeek.pct}%` : '-'}
+          sub={
+            thisWeek
+              ? sofar && sofar.lastRate !== null
+                ? `${thisWeek.activeMembers} of ${report.members} members. Check-ins per day: ${sofar.thisRate}%, against ${sofar.lastRate}% on the same days last week`
+                : `${thisWeek.activeMembers} of ${report.members} members`
+              : undefined
+          }
+        />
+        <Tile
+          label="Last week (full week)"
           value={lastWeek ? `${lastWeek.pct}%` : '-'}
           sub={lastWeek ? `${lastWeek.activeMembers} of ${report.members} members` : undefined}
         />
-        <Tile label="Best day" value={weekdayLabel(best.dow)} sub={`${best.avgPct}% on average`} />
-        <Tile label="Quietest day" value={weekdayLabel(worst.dow)} sub={`${worst.avgPct}% on average`} />
+        <Tile label="Best day" value={extremes ? weekdayLabel(extremes.best.dow) : '-'} sub={extremes ? `${extremes.best.avgPct}% on average` : undefined} />
+        <Tile label="Quietest day" value={extremes ? weekdayLabel(extremes.worst.dow) : '-'} sub={extremes ? `${extremes.worst.avgPct}% on average` : undefined} />
       </div>
 
       <section className={card}>
-        <Heading title="Check-ins through the week" hint="Share of members checking in on each weekday, average of the last 8 complete weeks." />
+        <Heading title="Check-ins through the week" hint={weekdayHint} />
         <Bars
           label="Average check-in percentage by weekday"
-          max={Math.max(...report.byWeekday.map((d) => d.avgPct))}
+          max={maxOf(report.byWeekday.map((d) => d.avgPct))}
           items={report.byWeekday.map((d) => ({ key: String(d.dow), value: d.avgPct, label: weekdayLabel(d.dow), title: `${weekdayLabel(d.dow)}: ${d.avgPct}%` }))}
         />
         <div className="mt-1 flex justify-between px-0.5 text-[11px] font-semibold text-zinc-500">
@@ -175,7 +208,10 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
             <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
               {[...report.perWeek].reverse().map((w) => (
                 <tr key={w.weekStart}>
-                  <td className="py-2 pr-2 text-zinc-600 dark:text-zinc-300">{shortDate(w.weekStart)}</td>
+                  <td className="py-2 pr-2 text-zinc-600 dark:text-zinc-300">
+                    {shortDate(w.weekStart)}
+                    {thisWeek && w.weekStart === thisWeek.weekStart ? ' (so far)' : ''}
+                  </td>
                   <td className="px-2 py-2 text-right">{w.activeMembers}</td>
                   <td className="px-2 py-2 text-right font-semibold">{w.pct}%</td>
                   <td className="px-2 py-2 text-right">{w.coachMessages}</td>
