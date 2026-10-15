@@ -92,3 +92,85 @@
 
 - Report with before and after numbers for payload, query count and refresh calls; tests for the paging, the check-in window, the allow-list and the version-compare helper.
 - `## Status` lists skipped items with reasons and anything the owner must do (set `gyms.referral_url`, supply FAQ and policy text).
+
+## Status
+
+Branch `fix/07-member-platform` (cut from `fix/06-member-data`, so it contains briefs 01 to 06 as well), 16 commits plus this status commit. It was pushed once to the remote **as a branch only** (`origin/fix/07-member-platform`) on the owner's request; it was **not merged to `master` and nothing was deployed**. Two migrations: `0137_member_strength_bests.sql` and `0138_referral_url_and_consent.sql`.
+
+**Not tried against a real database or in a browser as a signed-in member.** There is no sandbox, and a member's own page writes today's blank rows when it loads, so it was not opened against live data. What did run: `npx tsc --noEmit` (clean), `npx eslint app lib` (0 errors; the one old warning in `CoachMemberOverview.tsx`), `npx vitest run` (704 pass, run in a clean copy of the committed tip so the owner's uncommitted edits could not hide a problem), `npx next build`, and a production server to measure the sign-in page (below).
+
+**Deploy order matters.** Apply `0136` and `0137` before deploying this code (it calls `member_strength_bests`; the Strength tab shows no earlier bests without it) and `0138` before the owner sets a referral link. The earlier briefs' orders still apply (see their Status sections and brief 12): `0143` goes last, after the deploy. The consent save and the push registration fall back to the old behaviour if `0138` / `0128` are not applied yet.
+
+### Before and after
+
+| Measure | Before | After |
+|---|---|---|
+| Sign-in page, scripts and styles in its HTML (production build, uncompressed) | 10 files, 1,149 KB (332 KB gzipped) | 10 files, 693 KB (201 KB gzipped) |
+| Sign-in checks per page view | 3 (middleware, layout, page), each a network call | 1 network call (layout and page share it); the middleware checks the token locally |
+| Set logged on the workout screen | one set save, then a full dashboard reload | one set save; the screen updates itself |
+| Check-in save | no reload per save (brief 06) | unchanged |
+| `/dashboard` document size | 347 KB (measured by the brief) | **not measured** (needs a member session). By what was removed it should be roughly 100 to 130 KB: the 190 KB library is now only the entries the member's programmes use, the 32 KB timetable and 11 KB of course assignments are fetched on open, and the credit history, habits, plans, credit packs, form and programme templates and course list are gone from a member's page. **The brief's target is under 120 KB; this is an estimate, not a result.** |
+| Data calls a member's page makes (counted from the code, not measured) | 47 | 39 |
+
+**The "under 15 queries" target was not met.** Getting there means every tab loading its own data, which is a rewrite of the page's structure; I did the heavy and unused parts and stopped.
+
+### Findings
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| R13 + M1 (1) library | done | `53cbc18` | A member's page carries only the library entries their programmes use (`lib/programLibrary.ts`); the coach's view of a member still carries the whole library. "Record a tested max" reads its exercise list when the form opens (`getExerciseOptions`). |
+| R13 + M1 (2) unused fetches | done | `53cbc18` | Removed the credit history (nothing showed it) and habits from both pages, and plans, credit packs, form and programme templates from a member's page (coach-only). |
+| R13 + M1 (3) on demand | partly | `53cbc18` | Timetable (Book screen and FAQ), Education courses and assignments, tested-max list and the Strength tab's earlier bests are read when their screen opens (`useOnDemand`) and again after a save. **Not moved:** events and rewards (Home uses them), recipes, photos, scans, measurements, notifications and the rest of the tabs. |
+| R13 + M1 (4) sign-in checks | done | `43cba91` | `lib/supabase/currentUser.ts` (`getCurrentUser`, `getMyProfileRow`, shared by the layout, the member page and the root page). The middleware uses `getClaims()`; see Things to know. **The coach pages still call `getUser()` themselves**, so they make 2 network checks, not 1 (one line each; they are brief 05's files). |
+| R13 + M1 (5) `ClientOnly` | partly | `43cba91` | Every `ClientOnly` shell now shows a server-rendered skeleton instead of a blank div. `ClientOnly` itself stays: the screens format dates and greetings in the viewer's locale and would mismatch on the server. |
+| R13 + M1 (6) reloads | partly | `c8f5d65` | The workout screen no longer reloads the dashboard per set (and shows one exercise's sets in the order they were done; they ran backwards). The page is refreshed once when a workout is finished or the screen is left. Other saves (notifications, Big Dog, photos) still reload; they are infrequent. |
+| H5 | done | `5f46c01`, `61c99f8`, `7bc9fdd` | Chat opens on the latest 50 messages with "Load earlier" (tested with 1,500). Bookings: the last 90 days plus everything ahead, renamed `getRecentAndUpcomingBookings`; the lifetime "sessions done" on Home comes from the rewards function. Sets: the last 90 days; `member_strength_bests` (0137) gives the all-time bests. **Differs from the brief:** it said bookings from yesterday on, but the check-in weeks show attended sessions from up to 84 days back. |
+| R43 | partly | `eb45406` | Sentry loads when the browser is idle and the Supabase client is fetched in the background on the sign-in page. **Not done:** lazy-loading the toast and confirm providers and the splash (small, and used on every page). The remaining 693 KB is mostly the framework. |
+| M5 | done | `5f46c01` | A sent message shows at once (Sending / Not sent with Try again), the thread and the header badge are fetched again when the live connection returns or the app is shown again, and a "Reconnecting" notice shows. |
+| M4 | done | `5f46c01` | MP4 where the browser can record it, the real type goes with the file, 2 minute cap with a visible timer, direct upload to storage, links made again before they run out, and a refused `play()` no longer shows a pause button. |
+| R8 + LT6 | done | `ee02778` | `/api/version` and an "A new version is ready. Update" banner; the service worker no longer reloads the page by itself. Skew protection is still a Vercel setting (brief 12). |
+| R18 + M3 | done | `3837386` | Registers through `register_web_push`, re-registers an existing subscription (at most every 12 hours per person) and removes the subscription on sign-out. |
+| R20 | done | `0b99146` | "Mark day as reviewed" and "Mark reviewed" buttons; leaving feedback counts. Looking no longer marks anything. |
+| R21 | done | `73dcdcc` | The four overlays register with the back handler (hook calls only in the food files). |
+| R22, OB3 | done | `fc0026e` | Draft saved on the phone as answers change (cleared on finishing and on sign-out), a "Your privacy" step with a recorded "I agree", a sign-out line on every screen, and the body questions for an existing member with no height or weight (only the missing figures are filled in, flagged for the coach). **Not done:** the "confirm details" mode brief 08 may ask for (not asked yet). |
+| R17 (UI) | done | `01b3af4` | `lib/checkinWindow.ts`: 30 minutes before to 60 after, tested; the closed message says when it opens. |
+| R16 (D7) | done | `5e2b493` | Referral link per gym (`gyms.referral_url`), screen and Home tile hidden without one; FAQ built from the club list, the member's plan, the gym's cancellation rule and the check-in window; the rest in `lib/faqContent.ts` with a to-do list. |
+| ED1 / ED link | done | `53cbc18`, `991496a` | Lessons that have not unlocked reach a member without their text or link (the title and date stay, for the lock row); links are clickable only when https; YouTube plays from `youtube-nocookie.com`. |
+| R23 (app) | done | `991496a` | Library pictures load only from the gym's storage and `NEXT_PUBLIC_IMAGE_HOSTS`, with no referrer. |
+| UI2, SH6, EV1, BD1, CT3 | done | `991496a`, `b1c1e9f`, `fc0026e` | iPad detection; splash hides once ready (400 ms minimum); event and kg formatting in en-GB; "Sex (used for calorie calculations)" on onboarding and Setup; the feedback form says the name is sent. |
+| L12 | skipped | n/a | Logging a set offline still fails with a toast. What was typed stays in the form so it can be sent again; a real queue needs a design for repeated sends (one set saved twice). |
+
+### What the owner must do
+
+1. **Before deploying:** set `NEXT_PUBLIC_IMAGE_HOSTS` in Vercel to the sites your exercise pictures come from, otherwise those pictures show the muscle-group icon. Find them with:
+   ```sql
+   select substring(image_url from '^https://([^/]+)') as host, count(*) from public.exercise_library
+   where image_url is not null group by 1 order by 2 desc;
+   ```
+   Pictures stored in your own Supabase storage need nothing.
+2. **Referral link:** after `0138`, set each gym's link, or the Refer a friend screen stays hidden:
+   `update public.gyms set referral_url = 'https://...' where id = '<gym id>';` (a settings field for admins is brief 08's).
+3. **Supply wording:** the FAQ answers and the to-do list at the top of `lib/faqContent.ts`; the privacy summary in `lib/consentText.ts`; the policy and terms pages the consent step links to (`/legal/privacy`, `/legal/terms` are still placeholders).
+4. **Try on a sandbox copy of the app:** send a chat message with the connection off and on; load earlier messages; record a voice note on an iPhone and an Android phone; log, correct and delete a set (the chips should stay in order and nothing reloads); open Book, Education and the Strength tab (each should load its own data and update after a save); scan through onboarding on a phone and reload half way (answers come back); sign in as a second member on a phone the first used (their pushes should move); leave the app open across a deployment (the banner should appear); press the back gesture with the Add food sheet, the scanner and a confirm question open.
+
+### For brief 01's trigger
+
+`client_profiles.consented_at` (0138) is written by the member's own onboarding save, so it is member-writable. It should be allowed to be set and re-stamped but never cleared, like `onboarding_completed_at`.
+
+### Things to know
+
+- **The middleware now checks the sign-in token itself (`getClaims`) instead of asking Supabase on every request and every Server Action.** The difference: a session ended elsewhere (signed out on another device, or a disabled account) keeps passing that routing gate until its token expires, up to an hour. Pages and actions that need to know exactly who is asking still call `getUser()`, and the database applies its own rules from the same token. If you would rather have the old strictness back, it is one line in `lib/supabase/middleware.ts`.
+- **Sentry is loaded after the page is idle**, so an error thrown in the first moments is not reported.
+- **Three small pieces of timing/ordering changed on purpose:** the Book, Education and FAQ screens show "Loading…" for a moment the first time they open; a workout's sets show in the order they were done; the Strength tab shows no personal-best flags until the earlier bests have loaded.
+- **Brief 09** adds its coach-notification call to `lib/data/chat.ts` (`sendMessage` and `notifyVoiceSent`/`notifyPhotoSent`); keep the voice-note one, which replaces the old `sendVoiceNote`.
+- **Brief 10:** when it adds a content security policy, `frame-src` must allow `https://www.youtube-nocookie.com` and `https://player.vimeo.com`, `img-src` must allow the image hosts, and `/api/version` must stay reachable without a login.
+- **Mistake caught and repaired:** commit `61c99f8` committed `BpHome.tsx` with some lines in the wrong place (staging by hunk while the owner's uncommitted edits shifted the line numbers). `7bc9fdd` repairs it; the tip is correct, and the clean-copy checks above were run on the tip. The later commits build the shared files from the committed version instead of staging hunks.
+- **The owner's uncommitted edits** in `BpHome.tsx`, `EventBanner.tsx`, `TodayTab.tsx` and the `scripts/seed-*.ts` files are not in any commit.
+- **Files outside the usual list I had to touch:** `lib/data/{classes,education,exerciseLibrary,workouts,gym,pushSubscriptions,onboarding}.ts`, `app/dashboard/{page,_components/DashboardShell}.tsx`, `app/coach/clients/[clientId]/page.tsx` (props removed), `app/layout.tsx`, `app/page.tsx`, `lib/supabase/middleware.ts`, `instrumentation-client.ts`, the nine `ClientOnly` shells (a one-line fallback each), `ConfirmDialog.tsx`, `SetupTab.tsx`, and `TodayTab.tsx` / `BpHome.tsx` (three props).
+
+### Hand-offs
+
+- **Brief 08:** the admin settings field for `gyms.referral_url`; the "confirm details" mode for onboarding if you want it.
+- **Brief 09:** see above (`chat.ts`).
+- **Brief 10:** the content security policy notes above; the coach pages' second `getUser()`.
+- **Brief 11:** the update banner, the skeleton and the Load earlier button need the accessibility pass; the consent checkbox uses the themed checkbox.
