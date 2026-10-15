@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { recordJobRun } from '@/lib/jobRuns';
 
 // Triggered daily by Vercel Cron (see vercel.json). Deliberately daily rather than
 // weekly: the underlying RPC only resets memberships whose last_reset_week isn't the
@@ -14,8 +15,10 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc('replenish_due_memberships');
   if (error) {
+    await recordJobRun('replenish-memberships', false, error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  await recordJobRun('replenish-memberships', true, `reset: ${JSON.stringify(data)}`);
   return NextResponse.json({ resetCount: data });
 }

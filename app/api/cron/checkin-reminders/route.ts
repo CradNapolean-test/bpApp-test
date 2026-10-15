@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToClient } from '@/lib/push';
+import { pushQuietly, sendPushToClient } from '@/lib/push';
+import { recordJobRun } from '@/lib/jobRuns';
 
 // Triggered daily by Vercel Cron (see vercel.json). The underlying RPC throttles repeat
 // reminders to each client's own checkin_reminder_days cadence via last_checkin_reminder_at,
@@ -19,22 +20,27 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc('send_checkin_reminders');
   if (error) {
+    await recordJobRun('checkin-reminders', false, error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const clientIds: string[] = data ?? [];
-  await Promise.all(
+  // Best-effort -- the in-app notification (already written by the RPC) is the source of truth; a push delivery failure shouldn't fail the
+  // whole cron run. The result is counted and reported (R41) instead of thrown away.
+  const results = await Promise.all(
     clientIds.map((clientId) =>
-      sendPushToClient(clientId, {
-        title: 'Check in with your coach',
-        body: "Haven't seen a check-in from you in a few days — how's it going?",
-        url: '/dashboard',
-      }).catch(() => {
-        // Best-effort -- the in-app notification (already written by the RPC) is the
-        // source of truth; a push delivery failure shouldn't fail the whole cron run.
-      })
+      pushQuietly('check-in reminder', () =>
+        sendPushToClient(clientId, {
+          title: 'Check in with your coach',
+          body: "Haven't seen a check-in from you in a few days — how's it going?",
+          url: '/dashboard',
+        })
+      )
     )
   );
+  const pushSent = results.reduce((n, r) => n + (r?.sent ?? 0), 0);
+  const pushFailed = results.reduce((n, r) => n + (r ? r.failed : 1), 0);
 
-  return NextResponse.json({ remindersSent: clientIds.length });
+  await recordJobRun('checkin-reminders', true, `${clientIds.length} reminded, push sent ${pushSent} failed ${pushFailed}`);
+  return NextResponse.json({ remindersSent: clientIds.length, pushSent, pushFailed });
 }

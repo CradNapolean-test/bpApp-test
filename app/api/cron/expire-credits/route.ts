@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { recordJobRun } from '@/lib/jobRuns';
 
 // Triggered daily by Vercel Cron (see vercel.json). Mirrors replenish-memberships/route.ts:
 // expire_bonus_credits is idempotent and catch-up safe (only processes grants past their
@@ -13,8 +14,10 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc('expire_bonus_credits');
   if (error) {
+    await recordJobRun('expire-credits', false, error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  await recordJobRun('expire-credits', true, `swept: ${JSON.stringify(data)}`);
   return NextResponse.json({ sweptCount: data });
 }
