@@ -72,10 +72,13 @@ export function BpHomeProgress({
   bookings,
   membership,
   rewards = [],
+  sessionsAttended,
 }: {
   bookings: BookingRow[];
   membership: ClientMembershipRow | null;
   rewards?: RewardRow[];
+  // The lifetime total, from the rewards function. The bookings carried here are only the last 90 days and what is ahead (H5).
+  sessionsAttended?: number;
 }) {
   // Attendance is marked by the coach after each session, so this counts sessions actually
   // attended rather than merely booked.
@@ -89,13 +92,10 @@ export function BpHomeProgress({
 
   return (
     <div className="space-y-5">
-  sessionsAttended,
       <div>
         <SectionLabel>Your progress</SectionLabel>
         <div className="grid grid-cols-2 gap-2">
           <Card className="text-center !p-3">
-  // The lifetime total, from the rewards function. The bookings carried here are only the last 90 days and what is ahead (H5).
-  sessionsAttended?: number;
             <p className="text-3xl font-black leading-none text-accent">{sessionsDone}</p>
             <p className="mt-1.5 text-[11px] uppercase tracking-wider text-zinc-500">Sessions done</p>
           </Card>
