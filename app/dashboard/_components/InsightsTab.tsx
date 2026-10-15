@@ -1,5 +1,8 @@
 import { Activity, Gauge, Moon } from 'lucide-react';
-import { calcEngine, cycleDayFor, dayCalories, estimateAdaptiveTdee, isPlateaued } from '@/lib/calculations';
+import { cycleDayFor, isPlateaued } from '@/lib/calculations';
+import { NEEDS_MORE_DATA, trustworthyAdaptiveTdee } from '@/lib/insights';
+import { PLAN_BEING_SET_UP, targetsHeldBack } from '@/lib/onboarding';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
@@ -31,7 +34,6 @@ function InsightCard({
   );
 }
 
-const ADAPTIVE_WINDOW_DAYS = 28;
 const DIVERGENCE_FLAG_KCAL = 150;
 
 export function InsightsTab({
@@ -44,46 +46,16 @@ export function InsightsTab({
   isCoachView?: boolean;
 }) {
   const who = isCoachView ? 'their' : 'your';
-  const loggedDays = historyLogs
-    .filter((l) => l.protein != null && l.carbs != null && l.fat != null)
-    .slice(-ADAPTIVE_WINDOW_DAYS);
-
   const bodyweightSeries = historyLogs
     .filter((l) => l.bodyweight != null)
     .map((l) => l.bodyweight as number);
 
-  let adaptiveInsight: { adaptiveTdee: number; formulaTdee: number; divergence: number } | null = null;
-  if (loggedDays.length >= 5 && profile?.age && profile.body_fat_pct) {
-    const avgLoggedCalories =
-      loggedDays.reduce((sum, l) => sum + dayCalories(l.protein ?? 0, l.carbs ?? 0, l.fat ?? 0), 0) /
-      loggedDays.length;
-    const bwLogged = loggedDays.filter((l) => l.bodyweight != null);
-    if (bwLogged.length >= 2) {
-      const weightChangeKg = (bwLogged.at(-1)!.bodyweight as number) - (bwLogged[0].bodyweight as number);
-      const spanDays =
-        (new Date(bwLogged.at(-1)!.log_date).getTime() - new Date(bwLogged[0].log_date).getTime()) / 86400000;
-      const adaptiveTdee = estimateAdaptiveTdee(avgLoggedCalories, weightChangeKg, spanDays);
-      const engine = calcEngine({
-        age: profile.age,
-        gender: profile.gender === 'Male' ? 'Male' : 'Female',
-        startWeight: profile.start_weight,
-        goalWeight: profile.goal_weight,
-        bodyFatPct: profile.body_fat_pct,
-        activityLevel: profile.activity_level,
-        dietApproach: profile.diet_approach,
-        goal: profile.nutrition_goal ?? 'fat_loss',
-        setting: profile.nutrition_setting ?? 'steady',
-        cycling: profile.cycling,
-      });
-      if (engine) {
-        adaptiveInsight = {
-          adaptiveTdee,
-          formulaTdee: engine.tdee,
-          divergence: adaptiveTdee - engine.tdee,
-        };
-      }
-    }
-  }
+  // The engine is only asked when there are two weeks of weigh-ins and ten food days, and an answer outside 1,000 to 6,000 kcal is not
+  // shown (R19). It used to extrapolate a day or two of change into a daily figure and could tell a member their maintenance was negative.
+  // While a new member's plan waits for their coach, the comparison with the plan is not shown to them either (M8).
+  const planHeld = targetsHeldBack(profile, isCoachView);
+  const adaptive = trustworthyAdaptiveTdee(historyLogs, profile, todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE));
+  const adaptiveInsight = adaptive.status === 'ok' && !planHeld ? adaptive : null;
 
   const plateaued = isPlateaued(bodyweightSeries.slice(-28));
 
@@ -110,8 +82,16 @@ export function InsightsTab({
             actually eaten and how {who} weight moved, it looks closer to{' '}
             <b className="text-black dark:text-zinc-50">{Math.round(adaptiveInsight.adaptiveTdee)} kcal</b>.
           </p>
+        ) : planHeld ? (
+          <p>{PLAN_BEING_SET_UP}. This appears once your plan has been checked.</p>
         ) : (
-          <p>{isCoachView ? 'Not enough data yet. This needs 5 logged days of food and at least 2 weigh-ins.' : 'Keep logging your food and weighing in. Once you have 5 logged days and at least 2 weigh-ins we can estimate this for you.'}</p>
+          <p>
+            {adaptive.status === 'not_enough' && adaptive.reason !== NEEDS_MORE_DATA
+              ? adaptive.reason
+              : isCoachView
+                ? 'Not enough data yet. This needs about two weeks of weigh-ins and 10 days of food logged.'
+                : 'Keep logging your food and weighing in. This needs about two weeks of weigh-ins and 10 days of food, then we can estimate it for you.'}
+          </p>
         )}
       </InsightCard>
 
