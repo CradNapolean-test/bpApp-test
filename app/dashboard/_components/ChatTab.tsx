@@ -21,6 +21,7 @@ import {
 import { uploadMimeType, voiceExtension } from '@/lib/voiceFormat';
 import { shrinkImage } from '@/lib/utils/shrinkImage';
 import { useBackHandler } from '@/app/_components/useBackHandler';
+import { PhotoViewer } from '@/app/_components/Overlays';
 import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -112,8 +113,11 @@ function PhotoBubble({ path, initial, onOpen }: { path: string; initial: string 
   return (
     <div ref={holderRef}>
       {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="Photo sent in chat" onClick={() => onOpen(url)} className="max-h-64 w-48 cursor-pointer object-cover" />
+        // A button, so the keyboard and screen readers can open it (it used to be a bare clickable picture).
+        <button type="button" onClick={() => onOpen(url)} aria-label="Open photo" className="block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="Photo sent in chat" className="max-h-64 w-48 object-cover" />
+        </button>
       ) : failed ? (
         <p className="flex items-center gap-1.5 px-3.5 py-2.5 italic opacity-70">
           <ImageIcon className="h-4 w-4" /> Photo unavailable
@@ -673,13 +677,10 @@ export function ChatTab({
         </form>
       )}
       {viewingPhoto && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setViewingPhoto(null)}>
-          <button type="button" aria-label="Close photo" className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white">
-            <X className="h-5 w-5" />
-          </button>
+        <PhotoViewer label="Photo sent in chat" onClose={() => setViewingPhoto(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={viewingPhoto} alt="Photo sent in chat" className="max-h-[85vh] max-w-full rounded-xl object-contain" />
-        </div>
+        </PhotoViewer>
       )}
     </div>
   );

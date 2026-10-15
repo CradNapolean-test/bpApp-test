@@ -23,9 +23,12 @@ export interface DialogOptions {
   onClose: () => void;
   // Close on Escape (default true). Set false only for a panel that must not be dismissed by accident.
   escape?: boolean;
+  // For an overlay written inline and shown with a condition (the component stays mounted): true while it is on screen. Default true,
+  // which is right for a component that is only mounted while it is open.
+  active?: boolean;
 }
 
-export function useDialog<T extends HTMLElement>({ onClose, escape = true }: DialogOptions) {
+export function useDialog<T extends HTMLElement>({ onClose, escape = true, active = true }: DialogOptions) {
   const ref = useRef<T>(null);
   const onCloseRef = useRef(onClose);
   const escapeRef = useRef(escape);
@@ -36,7 +39,7 @@ export function useDialog<T extends HTMLElement>({ onClose, escape = true }: Dia
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!active || !el) return;
     const id = stack.push();
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
@@ -94,7 +97,7 @@ export function useDialog<T extends HTMLElement>({ onClose, escape = true }: Dia
       // Give focus back to what opened it, if that is still on the page.
       if (trigger && document.contains(trigger)) trigger.focus({ preventScroll: true });
     };
-  }, []);
+  }, [active]);
 
   return ref;
 }

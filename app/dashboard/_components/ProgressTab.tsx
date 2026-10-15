@@ -14,6 +14,7 @@ import { downloadPhoto, downloadSideBySide } from '@/lib/utils/downloadPhotos';
 import { IDENTITY, ZoomablePhoto } from './ZoomablePhoto';
 import type { ZoomPan } from '@/lib/zoomPan';
 import { useBackHandler } from '@/app/_components/useBackHandler';
+import { useDialog } from '@/app/_components/useDialog';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta, siteReadings } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
@@ -66,6 +67,9 @@ export function ProgressTab({
   const { run: runDownload, busy: downloading } = useAction();
   useBackHandler(viewing != null, () => setViewing(null));
   useBackHandler(comparing, () => setComparing(false));
+  // Both full-screen views are real dialogs (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
+  const viewerRef = useDialog<HTMLDivElement>({ onClose: () => setViewing(null), active: viewing != null });
+  const compareRef = useDialog<HTMLDivElement>({ onClose: () => setComparing(false), active: comparing });
   const withImage = initialPhotos.filter((p) => p.signedUrl);
   const beforePhoto = withImage.find((p) => p.id === beforeId) ?? withImage[withImage.length - 1];
   const afterPhoto = withImage.find((p) => p.id === afterId) ?? withImage[0];
@@ -276,10 +280,10 @@ export function ProgressTab({
         </div>
       )}
       {comparing && beforePhoto && afterPhoto && (
-        <div className="fixed inset-0 z-[70] flex flex-col overflow-y-auto bg-background p-4">
+        <div ref={compareRef} role="dialog" aria-modal="true" aria-label="Before and after" className="fixed inset-0 z-[70] flex flex-col overflow-y-auto bg-background p-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-black dark:text-zinc-50">Before &amp; after</h3>
-            <button type="button" aria-label="Close comparison" onClick={() => setComparing(false)} className="rounded-full bg-black/5 p-2 dark:bg-white/10">
+            <button type="button" data-dialog-close aria-label="Close comparison" onClick={() => setComparing(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-black/5 dark:bg-white/10">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -343,8 +347,8 @@ export function ProgressTab({
         </div>
       )}
       {viewing?.signedUrl && (
-        <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 p-4" onClick={() => setViewing(null)}>
-          <button type="button" aria-label="Close photo" className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white">
+        <div ref={viewerRef} role="dialog" aria-modal="true" aria-label={`Progress photo ${viewing.photo_date}`} className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 p-4" onClick={() => setViewing(null)}>
+          <button type="button" data-dialog-close aria-label="Close photo" onClick={() => setViewing(null)} className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white">
             <X className="h-5 w-5" />
           </button>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md">

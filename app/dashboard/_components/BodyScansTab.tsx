@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client';
 import { addBodyScan, deleteBodyScan } from '@/lib/data/bodyScans';
 import { shrinkImage } from '@/lib/utils/shrinkImage';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
+import { PhotoViewer } from '@/app/_components/Overlays';
 import { TrendChart } from './OverviewTab';
 import type { BodyScan, ClientProfileRow } from '@/lib/data/types';
 
@@ -213,10 +214,10 @@ export function BodyScansTab({
       {adding && <AddScanSheet clientId={clientId} timezone={profile?.timezone} onClose={() => setAdding(false)} />}
 
       {viewing && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setViewing(null)}>
+        <PhotoViewer label="InBody printout" onClose={() => setViewing(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={viewing} alt="InBody printout" className="max-h-[88vh] max-w-full rounded-xl object-contain" />
-        </div>
+        </PhotoViewer>
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import { markReviewed } from '@/lib/data/coachReviews';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { FeedbackThread } from './FeedbackThread';
+import { PhotoViewer } from '@/app/_components/Overlays';
 import { useTodayIso } from './useTodayIso';
 import type { ClientProfileRow, FoodPhotoEntry, NutritionFeedbackRow } from '@/lib/data/types';
 
@@ -316,10 +317,10 @@ export function PhotoDiaryTab({
       )}
 
       {viewing && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setViewing(null)}>
+        <PhotoViewer label="Meal photo" onClose={() => setViewing(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={viewing} alt="Meal photo" className="max-h-[88vh] max-w-full rounded-xl object-contain" />
-        </div>
+        </PhotoViewer>
       )}
     </div>
   );
