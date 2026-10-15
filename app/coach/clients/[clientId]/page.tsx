@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { loadDashboardBundle } from '@/lib/data/dashboardBundle';
-import { getClientLastActive, getCoachUnreadForClient, getCoachUnreadTotal, memberHealthStatus } from '@/lib/data/coach';
+import { getClientLastActive, getCoachDisplayName, getCoachUnreadForClient, getCoachUnreadTotal, getLatestWeighIn, memberHealthStatus } from '@/lib/data/coach';
 import { getJournalEntries } from '@/lib/data/clientJournal';
 import { DashboardShell } from '@/app/dashboard/_components/DashboardShell';
 
@@ -37,7 +37,7 @@ export default async function CoachClientPage({
   if (!targetProfile) redirect('/coach/clients');
   const isOwnClient = targetProfile.coach_id === user.id;
 
-  const [bundle, lastActive, coachUnreadCount, perClientUnreadCount, journalEntries] = await Promise.all([
+  const [bundle, lastActive, coachUnreadCount, perClientUnreadCount, journalEntries, latestWeighIn, ownerCoachName] = await Promise.all([
     loadDashboardBundle(clientId, false),
     getClientLastActive(supabase, clientId),
     // The sum across every client, for the global inbox link...
@@ -45,6 +45,9 @@ export default async function CoachClientPage({
     // ...and just the thread with the client being viewed, for the header Messages icon.
     getCoachUnreadForClient(supabase, clientId),
     getJournalEntries(clientId),
+    getLatestWeighIn(supabase, clientId),
+    // Only needed to say whose member this is when it is a colleague's.
+    isOwnClient ? Promise.resolve(null) : getCoachDisplayName(supabase, targetProfile.coach_id as string | null),
   ]);
   // Built from what this page already has plus one narrow query for the last log, not the roster's statuses.
   const healthStatus = memberHealthStatus({
@@ -110,6 +113,8 @@ export default async function CoachClientPage({
       educationAssignments={bundle.educationAssignments}
       unreadMessageCount={bundle.unreadMessageCount}
       gymTimezone={bundle.gymTimezone}
+      latestWeighIn={latestWeighIn}
+      ownerCoachName={ownerCoachName}
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}
       rewardsData={bundle.rewardsData}

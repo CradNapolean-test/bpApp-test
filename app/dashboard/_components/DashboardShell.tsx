@@ -149,6 +149,8 @@ export function DashboardShell({
   rewardsData = { rewards: [], grantedIds: [], sessions: 0, months: 0 },
   unreadMessageCount = 0,
   gymTimezone = null,
+  latestWeighIn = null,
+  ownerCoachName = null,
   healthStatus = null,
   coachUnreadCount = 0,
   perClientUnreadCount = 0,
@@ -208,6 +210,9 @@ export function DashboardShell({
   unreadMessageCount?: number;
   // The member's gym's timezone (coach view): the Credits tab dates follow the gym's calendar.
   gymTimezone?: string | null;
+  // Coach view: the member's most recent weigh-in however old, and the name of the coach they belong to (for the read-only note).
+  latestWeighIn?: { date: string; weight: number } | null;
+  ownerCoachName?: string | null;
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
   coachUnreadCount?: number;
@@ -751,6 +756,8 @@ export function DashboardShell({
               journalEntries={journalEntries}
               healthStatus={healthStatus}
               isOwnClient={isOwnClient}
+              latestWeighIn={latestWeighIn}
+              ownerCoachName={ownerCoachName}
               onNavigate={handleNavigate}
               onOpenCheckin={(week) => {
                 setStartWeek(week);

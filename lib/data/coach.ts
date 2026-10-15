@@ -257,6 +257,28 @@ export async function getClientLastActive(supabase: SupabaseClient, clientId: st
   return (data?.[0]?.log_date as string | undefined) ?? null;
 }
 
+// The member's most recent weigh-in, however long ago. The member page's weight card is drawn from the last 84 days of logs, so a member
+// who last weighed in three months ago read "No weigh-ins" (MO).
+export async function getLatestWeighIn(supabase: SupabaseClient, clientId: string): Promise<{ date: string; weight: number } | null> {
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .select('log_date, bodyweight')
+    .eq('client_id', clientId)
+    .not('bodyweight', 'is', null)
+    .order('log_date', { ascending: false })
+    .limit(1);
+  if (error) raise(error);
+  const row = data?.[0];
+  return row && row.bodyweight != null ? { date: row.log_date as string, weight: Number(row.bodyweight) } : null;
+}
+
+// The name of the coach a member belongs to, for the "you are viewing another coach's member" note.
+export async function getCoachDisplayName(supabase: SupabaseClient, coachId: string | null): Promise<string | null> {
+  if (!coachId) return null;
+  const { data } = await supabase.from('profiles').select('display_name, email').eq('id', coachId).maybeSingle();
+  return (data?.display_name as string | null | undefined) || (data?.email as string | null | undefined) || null;
+}
+
 // ---- unread messages, for the header badge ----
 
 // The coach's total unread messages: one count (coach_unread_total, migration 0141) instead of building the whole inbox overview to add

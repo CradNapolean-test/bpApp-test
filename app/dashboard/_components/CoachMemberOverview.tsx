@@ -31,6 +31,7 @@ import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
 import { lastActiveLabel } from '@/lib/healthStatus';
+import { olderUnreviewed, olderUnreviewedLine } from '@/lib/memberReview';
 import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
@@ -121,6 +122,8 @@ export function CoachMemberOverview({
   journalEntries,
   healthStatus,
   isOwnClient,
+  latestWeighIn = null,
+  ownerCoachName = null,
   onNavigate,
   onOpenCheckin,
 }: {
@@ -140,6 +143,9 @@ export function CoachMemberOverview({
   journalEntries: ClientJournalEntryRow[];
   healthStatus: ClientHealthStatus | null;
   isOwnClient: boolean;
+  // Their most recent weigh-in however old (the logs here only go back 84 days), and the name of the coach they belong to.
+  latestWeighIn?: { date: string; weight: number } | null;
+  ownerCoachName?: string | null;
   onNavigate: (category: Category, screen?: Screen) => void;
   onOpenCheckin: (weekStart: string) => void;
 }) {
@@ -179,7 +185,9 @@ export function CoachMemberOverview({
 
   // ---- weight ----
   const weights = logged.filter((l) => l.bodyweight != null).sort((a, b) => (a.log_date < b.log_date ? -1 : 1));
-  const nowWeight = weights.at(-1)?.bodyweight ?? null;
+  // The last weigh-in in the 84 days of logs, else their latest ever (a member who last weighed in three months ago still has a weight).
+  const nowWeight = weights.at(-1)?.bodyweight ?? latestWeighIn?.weight ?? null;
+  const nowWeightDate = weights.at(-1)?.log_date ?? latestWeighIn?.date ?? null;
   const start = profile?.start_weight ?? null;
   const goal = profile?.goal_weight ?? null;
   const pct =
@@ -233,6 +241,24 @@ export function CoachMemberOverview({
         title: `Form to read: ${f.template.name}`,
         hint: `Completed ${shortDate((f.completed_at ?? '').slice(0, 10))}`,
         action: () => onNavigate('Accountability', 'Forms'),
+      });
+    }
+    // Anything older than the lookback above that nobody reviewed: one line, so it does not simply stop being mentioned.
+    const older = olderUnreviewed({
+      loggedDates: logged.map((l) => l.log_date),
+      completedForms: formAssignments.map((a) => ({ id: a.id, completedAt: a.completed_at })),
+      reviewedWeeks: reviews.week,
+      reviewedForms: reviews.form,
+      todayIso,
+    });
+    const olderLine = olderUnreviewedLine(older);
+    if (olderLine) {
+      todo.push({
+        key: 'older-unreviewed',
+        icon: Check,
+        title: olderLine.title,
+        hint: olderLine.hint,
+        action: () => (older.weeks.length > 0 ? onOpenCheckin(older.weeks[0]) : onNavigate('Accountability', 'Forms')),
       });
     }
   }
@@ -450,7 +476,10 @@ export function CoachMemberOverview({
               />
             </div>
           )}
-          {weights.length === 0 && <p className="mt-2 text-xs text-zinc-500">No weigh-ins logged yet.</p>}
+          {nowWeight == null && <p className="mt-2 text-xs text-zinc-500">No weigh-ins logged yet.</p>}
+          {nowWeight != null && weights.length === 0 && nowWeightDate && (
+            <p className="mt-2 text-xs text-zinc-500">Last weighed in on {longDate(nowWeightDate)}. Nothing in the last 12 weeks.</p>
+          )}
         </Card>
       </div>
 
@@ -517,7 +546,11 @@ export function CoachMemberOverview({
       {/* ---- big dog ---- */}
       <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Achievements', 'Big Dog')} />
 
-      {!isOwnClient && <p className="text-center text-xs text-zinc-500">You are viewing another coach&apos;s member (read-only).</p>}
+      {!isOwnClient && (
+        <p className="text-center text-xs text-zinc-500">
+          {ownerCoachName ? `${ownerCoachName}'s member` : "Another coach's member"}: you can read everything here, but only their coach can change it.
+        </p>
+      )}
       </div>
     </div>
   );
