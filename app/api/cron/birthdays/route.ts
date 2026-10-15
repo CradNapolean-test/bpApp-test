@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCron } from '@/lib/cronAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPersonalisedEmails } from '@/lib/email';
 import { pushQuietly, sendPushToClient } from '@/lib/push';
@@ -15,8 +16,8 @@ import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 // Members are read page by page (CM6): the database returns at most 1,000 rows per request, so one query used to miss everyone after
 // row 1,000.
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Refuses everyone when the secret is not set (lib/cronAuth.ts), instead of accepting "Bearer undefined".
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

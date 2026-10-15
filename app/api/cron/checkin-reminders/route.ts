@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCron } from '@/lib/cronAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { pushQuietly, sendPushToClient } from '@/lib/push';
 import { recordJobRun } from '@/lib/jobRuns';
@@ -12,8 +13,8 @@ import { recordJobRun } from '@/lib/jobRuns';
 // first notification path wired to Web Push; every other notifications-writing RPC still
 // only writes the in-app row (see GAP_ROADMAP.md for the follow-up to generalize this).
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Refuses everyone when the secret is not set (lib/cronAuth.ts), instead of accepting "Bearer undefined".
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

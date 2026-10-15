@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCron } from '@/lib/cronAuth';
 import { sendPushToClient } from '@/lib/push';
 
 // Thin authenticated wrapper around lib/push.ts's sendPushToClient. Not called by the one
@@ -7,8 +8,8 @@ import { sendPushToClient } from '@/lib/push';
 // point for generalizing push to every other notification-triggering RPC later (see
 // GAP_ROADMAP.md), and for manual testing.
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.PUSH_WEBHOOK_SECRET}`) {
+  // Refuses everyone when the secret is not set (lib/cronAuth.ts), instead of accepting "Bearer undefined".
+  if (!isAuthorizedCron(request, 'PUSH_WEBHOOK_SECRET')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

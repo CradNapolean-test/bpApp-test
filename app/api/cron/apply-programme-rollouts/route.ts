@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCron } from '@/lib/cronAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordJobRun } from '@/lib/jobRuns';
 
@@ -6,8 +7,8 @@ import { recordJobRun } from '@/lib/jobRuns';
 // start date has arrived to the members it covers; the work happens in Postgres
 // (apply_due_programme_rollouts), which uses each gym's own timezone to decide what is due.
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Refuses everyone when the secret is not set (lib/cronAuth.ts), instead of accepting "Bearer undefined".
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

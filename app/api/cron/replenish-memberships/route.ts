@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCron } from '@/lib/cronAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordJobRun } from '@/lib/jobRuns';
 
@@ -7,8 +8,8 @@ import { recordJobRun } from '@/lib/jobRuns';
 // current ISO week, so a missed run just catches up on the next one instead of silently
 // skipping a week or double-resetting.
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Refuses everyone when the secret is not set (lib/cronAuth.ts), instead of accepting "Bearer undefined".
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAuthorizedCron } from '@/lib/cronAuth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPersonalisedEmails } from '@/lib/email';
 import { EMAIL_RETRY_WINDOW_MS, shouldRetryEmail } from '@/lib/emailOutcome';
@@ -14,8 +15,8 @@ import { isMissingColumnError } from '@/lib/onboarding';
 // attempts were made, and the next daily run tries again (up to MAX_EMAIL_ATTEMPTS, and only for broadcasts under three days old). A
 // broadcast that was half sent is never re-sent: that would email the people who already got it a second time.
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Refuses everyone when the secret is not set (lib/cronAuth.ts), instead of accepting "Bearer undefined".
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
