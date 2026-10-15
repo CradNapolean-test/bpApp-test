@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatLongDate } from '@/lib/utils/dates';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -63,7 +64,7 @@ export function CoachSettingsShell({
   const showGymRow = isGymAdmin || myGyms.length > 1;
   const [openRow, setOpenRow] = useState<RowKey | null>(null);
   const logoUrl = useCoachLogoUrl();
-  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const todayLabel = formatLongDate(new Date());
   // No self-avatar here on purpose -- unlike every other coach hub page, this page's own
   // first section already is that avatar (the big profile card below), and a header link
   // back to /coach/settings while already on /coach/settings is a no-op.

@@ -206,7 +206,7 @@ function VoiceBubble({ path, initial, seed, seconds, mine }: { path: string; ini
         aria-label={playing ? 'Pause voice note' : 'Play voice note'}
         disabled={failed}
         onClick={() => void toggle()}
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${mine ? 'bg-black/20 text-white' : 'bg-accent text-accent-foreground'}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${mine ? 'bg-black/20 text-white' : 'bg-accent text-accent-foreground'}`}
       >
         {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
       </button>
@@ -563,7 +563,7 @@ export function ChatTab({
             type="button"
             onClick={onClose}
             aria-label="Hide chat"
-            className="shrink-0 rounded-full p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
           >
             <X className="h-4 w-4" />
           </button>
@@ -651,7 +651,7 @@ export function ChatTab({
               aria-label="Attach a photo"
               disabled={sending}
               onClick={() => photoInputRef.current?.click()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 disabled:opacity-50"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 disabled:opacity-50"
             >
               <ImageIcon className="h-[18px] w-[18px]" />
             </button>

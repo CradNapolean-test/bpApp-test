@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatLongDate } from '@/lib/utils/dates';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
@@ -69,7 +70,7 @@ export function MessagesHubShell({
     setThreadOpen(true);
   }
 
-  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const todayLabel = formatLongDate(new Date());
   const headerExtras = (
     <div className="flex items-center gap-3">
       <span className="hidden text-sm text-zinc-500 sm:inline">{todayLabel}</span>

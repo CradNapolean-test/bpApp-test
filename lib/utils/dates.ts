@@ -103,3 +103,55 @@ export function formatRelativeTime(iso: string): string {
   const weeks = Math.floor(days / 7);
   return `${weeks}w`;
 }
+
+// ---- Showing dates and times to people (en-GB everywhere) ----
+// The app is for a UK gym. Some screens wrote dates the American way ("Thursday, Oct 15"), the New Zealand way, or in whatever language the
+// phone was set to. These are the one set of formatters to use; they always write en-GB, take a timezone for server or gym-time output, and
+// accept either a Date, a full timestamp, or a plain 'YYYY-MM-DD' (read as that calendar day, in UTC, so it never shifts a day).
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function toDate(value: Date | string): Date {
+  if (value instanceof Date) return value;
+  return new Date(DATE_ONLY.test(value) ? `${value}T00:00:00Z` : value);
+}
+
+// A plain calendar day must be shown in UTC (it has no time of day); anything else uses the timezone asked for, else the device's own.
+function zoneFor(value: Date | string, timeZone?: string): string | undefined {
+  return typeof value === 'string' && DATE_ONLY.test(value) ? 'UTC' : timeZone;
+}
+
+// "Thursday 15 Oct"  (weekday: 'short' gives "Thu 15 Oct", false gives "15 Oct")
+export function formatLongDate(value: Date | string, options: { timeZone?: string; weekday?: 'long' | 'short' | false } = {}): string {
+  const weekday = options.weekday === undefined ? 'long' : options.weekday;
+  const text = toDate(value).toLocaleDateString('en-GB', {
+    ...(weekday ? { weekday } : {}),
+    day: 'numeric',
+    month: 'short',
+    timeZone: zoneFor(value, options.timeZone),
+  });
+  // en-GB puts a comma after the weekday in some versions of the browser's language data and not in others: never.
+  return text.replace(/^(\w+),\s/, '$1 ');
+}
+
+// "15 Oct"
+export function formatShortDate(value: Date | string, timeZone?: string): string {
+  return formatLongDate(value, { timeZone, weekday: false });
+}
+
+// "Thu", "Mon"
+export function formatWeekdayShort(value: Date | string, timeZone?: string): string {
+  return toDate(value).toLocaleDateString('en-GB', { weekday: 'short', timeZone: zoneFor(value, timeZone) });
+}
+
+// "6:00pm", "12:30am": the same 12-hour style as formatClassTime, for a moment in time.
+export function formatTime(value: Date | string, timeZone?: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: zoneFor(value, timeZone) }).formatToParts(toDate(value));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('hour')}:${get('minute')}${get('dayPeriod').toLowerCase().replace(/\./g, '')}`;
+}
+
+// "Fri 16 Oct, 6:00pm"
+export function formatDateTime(value: Date | string, timeZone?: string): string {
+  return `${formatLongDate(value, { timeZone, weekday: 'short' })}, ${formatTime(value, timeZone)}`;
+}

@@ -159,7 +159,7 @@ export function CoachingHub({
             <div className="mb-3 flex items-baseline justify-between">
               <p className="text-sm font-bold text-black dark:text-zinc-50">Today&apos;s targets</p>
               <p className="text-xs text-zinc-500">
-                {new Date(todayIso + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                {new Date(todayIso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
               </p>
             </div>
             <TargetRings totals={{ calories, protein, carbs, fat }} target={dayTarget} held={targetsHeldBack(profile, false)} />
@@ -201,7 +201,7 @@ export function CoachingHub({
                       ? !program.start_date
                         ? `${program.name} · no start date yet — ask your coach`
                         : program.start_date > todayIso
-                          ? `${program.name} · starts ${new Date(program.start_date + 'T00:00:00Z').toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+                          ? `${program.name} · starts ${new Date(program.start_date + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
                           : `${program.name} · this block has finished`
                       : 'No program assigned yet'
                 }

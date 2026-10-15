@@ -216,7 +216,7 @@ export function TodayTab({
                   {nextClass.class?.name} ·{' '}
                   {nextClass.booking_date === todayIso
                     ? 'today'
-                    : new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                    : new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}
                 </span>
               </button>
               {nextClass.booking_date === todayIso && (
@@ -266,7 +266,7 @@ export function TodayTab({
                 </span>
                 <span className="block text-sm text-zinc-500">
                   {nextClass
-                    ? `${new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })} · ${formatClassTime(nextClass.class?.start_time)}`
+                    ? `${new Date(nextClass.booking_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })} · ${formatClassTime(nextClass.class?.start_time)}`
                     : isCoachView ? '' : 'Tap to book a session'}
                 </span>
               </span>

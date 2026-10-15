@@ -862,7 +862,7 @@ export function WorkoutTab({
     return {
       sets,
       label: daysAgo >= 4 && daysAgo <= 10 ? 'Last week' : 'Last time',
-      date: new Date(latest.logged_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+      date: new Date(latest.logged_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
     };
   }
 

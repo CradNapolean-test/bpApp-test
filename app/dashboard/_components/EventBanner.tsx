@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from 'react';
 import { CalendarDays, X } from 'lucide-react';
+import { formatDateTime } from '@/lib/utils/dates';
 import type { EventWithSignup } from '@/lib/data/types';
 
 const key = (id: string) => `bp-event-banner-dismissed-${id}`;
@@ -24,8 +25,7 @@ export function EventBanner({ event, onOpen }: { event: EventWithSignup; onOpen:
   const hidden = closed || dismissedBefore;
   if (hidden) return null;
 
-  const start = new Date(event.starts_at);
-  const when = start.toLocaleString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  const when = formatDateTime(event.starts_at);
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent-soft p-3.5">
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-center">
@@ -48,7 +48,7 @@ export function EventBanner({ event, onOpen }: { event: EventWithSignup; onOpen:
           } catch {}
           setClosed(true);
         }}
-        className="shrink-0 rounded-full p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
       >
         <X className="h-4 w-4" />
       </button>

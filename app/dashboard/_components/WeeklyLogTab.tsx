@@ -349,9 +349,9 @@ function WeekLog({
               }`}
             >
               <span className="text-xs font-medium uppercase opacity-80">
-                {dateObj.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
+                {dateObj.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}
               </span>
-              <span className="text-sm font-bold">{dateObj.toLocaleDateString(undefined, { day: 'numeric', timeZone: 'UTC' })}</span>
+              <span className="text-sm font-bold">{dateObj.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</span>
               <span
                 className={`h-1.5 w-1.5 rounded-full ${
                   light
@@ -367,7 +367,7 @@ function WeekLog({
       <div className={cardCls}>
         <div className="flex items-center justify-between gap-2">
           <h4 className="font-medium text-black dark:text-zinc-50">
-            {new Date(focusedDate + 'T00:00:00Z').toLocaleDateString(undefined, {
+            {new Date(focusedDate + 'T00:00:00Z').toLocaleDateString('en-GB', {
               weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC',
             })}
           </h4>
@@ -561,8 +561,8 @@ function WeekLog({
           )}
 
           <div className="col-span-2 space-y-1 sm:col-span-4">
-            <label className={labelCls}>Notes</label>
-            <textarea className={inputCls} rows={2} maxLength={1000} value={d.notes ?? ''}
+            <label htmlFor="weekly-notes" className={labelCls}>Notes</label>
+            <textarea id="weekly-notes" className={inputCls} rows={2} maxLength={1000} value={d.notes ?? ''}
               onChange={(e) => {
                 updateDay(focusedDate, { notes: e.target.value });
                 scheduleSave(focusedDate, 'notes');

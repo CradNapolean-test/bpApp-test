@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { formatLongDate } from '@/lib/utils/dates';
 import { Avatar } from '@/app/_components/Avatar';
 import { CoachMessagesButton } from './CoachMessagesButton';
 
@@ -16,7 +17,7 @@ import { CoachMessagesButton } from './CoachMessagesButton';
 // client-side makes this the coach's own browser clock, which is what a "today" label here
 // should mean (there's no stored coach timezone to anchor to server-side, unlike client_profiles).
 export function CoachHeaderExtras({ unreadCount, email }: { unreadCount: number; email: string }) {
-  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const todayLabel = formatLongDate(new Date());
 
   return (
     <div className="flex items-center gap-3">

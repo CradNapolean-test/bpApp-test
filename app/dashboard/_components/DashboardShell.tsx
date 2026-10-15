@@ -46,7 +46,7 @@ import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
 import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
-import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
+import { addDays, DEFAULT_TIMEZONE, formatClassTime, formatLongDate, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { NotificationsTab } from './NotificationsTab';
 import { ClassesArea } from './ClassesArea';
@@ -487,9 +487,7 @@ export function DashboardShell({
   // WeeklyLogTab's day selection and every other tz-aware "today" in this codebase; a coach
   // viewing this client's dashboard from a different timezone must see the same "today" the
   // client themselves would, or the header and the day the log defaults to disagree.
-  const todayLabel = new Date()
-    .toLocaleDateString('en-US', { timeZone: profile?.timezone ?? DEFAULT_TIMEZONE, weekday: 'long', month: 'short', day: 'numeric' })
-    .toUpperCase();
+  const todayLabel = formatLongDate(new Date(), { timeZone: profile?.timezone ?? DEFAULT_TIMEZONE }).toUpperCase();
   const greetingHour = new Date().getHours();
   const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
   // Who the client is chatting with (coach sees the client's name; client sees a generic

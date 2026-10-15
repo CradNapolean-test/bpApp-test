@@ -6,10 +6,10 @@
 // period for a non-UTC coach. Client components so this reflects the coach's actual browser
 // clock, matching the fix applied to CoachHeaderExtras for the same reason.
 
+import { formatLongDate } from '@/lib/utils/dates';
+
 export function CoachTodayLabel({ className }: { className?: string }) {
-  const todayLabel = new Date()
-    .toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    .toUpperCase();
+  const todayLabel = formatLongDate(new Date()).toUpperCase();
   return <p className={className}>{todayLabel}</p>;
 }
 

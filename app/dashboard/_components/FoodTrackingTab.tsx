@@ -688,7 +688,7 @@ export function FoodTrackingTab({
 
   const otherEntries = entries.filter((e) => e.meal_section_id === null);
   const otherManualEntries = manualEntries.filter((e) => e.meal_section_id === null);
-  const dateLabel = new Date(viewingDate + 'T00:00:00Z').toLocaleDateString(undefined, {
+  const dateLabel = new Date(viewingDate + 'T00:00:00Z').toLocaleDateString('en-GB', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',

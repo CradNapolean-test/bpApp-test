@@ -29,7 +29,7 @@ function Heading({ title, hint, onCsv }: { title: string; hint?: string; onCsv?:
         <button
           type="button"
           onClick={onCsv}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+          className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
         >
           <Download className="h-3.5 w-3.5" /> CSV
         </button>

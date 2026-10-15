@@ -178,7 +178,7 @@ export function AccountabilityTracker({
                 onCommit(null);
               }}
               aria-label={`Clear ${cfg.label.toLowerCase()}`}
-              className="ml-3 rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-bold text-zinc-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+              className="ml-3 min-h-10 rounded-full border border-black/10 px-3.5 py-1 text-[11px] font-bold text-zinc-500 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
             >
               Clear
             </button>
@@ -191,7 +191,8 @@ export function AccountabilityTracker({
                 key={u}
                 type="button"
                 onClick={() => setWaterUnit(u)}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                aria-pressed={waterUnit === u}
+                className={`min-h-9 min-w-10 rounded-full px-3 py-1 text-[11px] font-extrabold ${
                   waterUnit === u ? 'bg-accent text-accent-foreground' : 'text-zinc-500'
                 }`}
               >

@@ -102,7 +102,7 @@ function JournalSection({
             <div className="min-w-0">
               {entry.related_date && (
                 <p className="text-xs font-medium text-accent">
-                  Re: {new Date(entry.related_date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} nutrition
+                  Re: {new Date(entry.related_date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' })} nutrition
                 </p>
               )}
               <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{entry.body}</p>

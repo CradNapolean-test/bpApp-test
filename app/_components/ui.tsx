@@ -181,7 +181,7 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           disabled={o.disabled}
           onClick={() => onChange(o.value)}
-          className={`whitespace-nowrap rounded-full text-center font-bold transition-colors disabled:opacity-40 ${size === 'md' ? 'px-3.5 py-2.5 text-sm' : 'px-3.5 py-1.5 text-xs'} ${fill ? 'flex-1' : ''} ${
+          className={`whitespace-nowrap rounded-full text-center font-bold transition-colors disabled:opacity-40 ${size === 'md' ? 'min-h-11 px-3.5 py-2.5 text-sm' : 'min-h-9 px-3.5 py-1.5 text-xs'} ${fill ? 'flex-1' : ''} ${
             value === o.value ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-200'
           }`}
         >

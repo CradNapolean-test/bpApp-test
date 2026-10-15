@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatDateTime } from '@/lib/utils/dates';
 import Link from 'next/link';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { CalendarDays, Gift, MessageSquare, Pencil, Plus, Star, Trash2, Users } from 'lucide-react';
@@ -121,7 +122,7 @@ function EventRow({ event, past = false }: { event: EventWithSignup; past?: bool
         <div className="min-w-0">
           <p className="font-semibold text-black dark:text-zinc-50">{event.title}</p>
           <p className="text-xs text-zinc-500">
-            {start.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+            {formatDateTime(start)}
             {event.location ? ` · ${event.location}` : ''}
           </p>
           {event.description && <p className="mt-1 text-xs text-zinc-500">{event.description}</p>}
