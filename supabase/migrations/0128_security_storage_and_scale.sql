@@ -193,3 +193,37 @@ create policy "coaches delete scanned foods"
   on public.foods for delete
   to authenticated
   using (source = 'scan' and public.my_gym_id() is not null);
+
+-- =====================================================================================================================
+-- R23 (database half). Library links could point anywhere.
+-- ExerciseEditor renders exercise_library.image_url as an <img> on every member's workout screen, so an address chosen by
+-- whoever can edit the library made every member's phone contact it. Both links must now be https:// addresses (or empty).
+-- Which hosts are allowed is decided in the app (brief 07). The constraints are added NOT VALID first (so they apply to every
+-- new or changed row straight away) and validated against the existing rows only if none is bad. A not-yet-validated
+-- constraint also stops edits to a bad row until its link is fixed or cleared.
+--
+-- PRE-FLIGHT (read-only; rows that break the rule. Fix or clear these, then the constraints validate; a blank link is stored as null):
+--   select id, name, image_url, video_url from public.exercise_library
+--   where (image_url is not null and image_url !~* '^https://') or (video_url is not null and video_url !~* '^https://');
+-- Note for the library screen (brief 07): its video check accepts http:// links, which this rule now refuses.
+-- =====================================================================================================================
+alter table public.exercise_library drop constraint if exists exercise_library_image_url_https;
+alter table public.exercise_library
+  add constraint exercise_library_image_url_https check (image_url is null or image_url ~* '^https://') not valid;
+alter table public.exercise_library drop constraint if exists exercise_library_video_url_https;
+alter table public.exercise_library
+  add constraint exercise_library_video_url_https check (video_url is null or video_url ~* '^https://') not valid;
+
+do $$
+begin
+  if not exists (select 1 from public.exercise_library where image_url is not null and image_url !~* '^https://') then
+    alter table public.exercise_library validate constraint exercise_library_image_url_https;
+  else
+    raise notice 'R23: some exercise_library.image_url values are not https:// links; constraint left NOT VALID until they are fixed';
+  end if;
+  if not exists (select 1 from public.exercise_library where video_url is not null and video_url !~* '^https://') then
+    alter table public.exercise_library validate constraint exercise_library_video_url_https;
+  else
+    raise notice 'R23: some exercise_library.video_url values are not https:// links; constraint left NOT VALID until they are fixed';
+  end if;
+end $$;
