@@ -23,7 +23,6 @@ export const isUuid = (value: unknown): value is string => typeof value === 'str
 // it cannot close the quoted hint and start giving instructions, and it is cut short.
 export function cleanDescription(text: string | null | undefined): string | null {
   const cleaned = (text ?? '')
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]+/g, ' ')
     .replace(/["`\\]+/g, "'")
     .replace(/\s+/g, ' ')
