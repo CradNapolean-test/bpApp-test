@@ -2,7 +2,8 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import type { MealPlanSection, RecipeRow, RecipeWithIngredients } from './types';
+import { syncFoodDiaryToLog } from './foodDiary';
+import type { FoodDiaryEntryRow, MealPlanSection, RecipeRow, RecipeWithIngredients } from './types';
 
 export async function getRecipes(clientId: string): Promise<RecipeRow[]> {
   const supabase = await createClient();
@@ -37,6 +38,15 @@ export async function createRecipe(clientId: string, name: string, servings: num
     .single();
   if (error) raise(error);
   return data.id;
+}
+
+// Renames a recipe (RC1): a name typed wrongly could not be changed.
+export async function renameRecipe(recipeId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('A recipe needs a name.');
+  const supabase = await createClient();
+  const { error } = await supabase.from('recipes').update({ name: trimmed }).eq('id', recipeId);
+  if (error) raise(error);
 }
 
 export async function updateRecipeServings(recipeId: string, servings: number): Promise<void> {
@@ -80,7 +90,7 @@ export async function logRecipeToDiary(
   recipeId: string,
   servings: number,
   mealSectionId: string | null = null
-): Promise<void> {
+): Promise<FoodDiaryEntryRow[]> {
   const supabase = await createClient();
   const { data: recipe, error: recipeError } = await supabase
     .from('recipes')
@@ -94,7 +104,7 @@ export async function logRecipeToDiary(
     .select('food_id, portions')
     .eq('recipe_id', recipeId);
   if (error) raise(error);
-  if (!ingredients || ingredients.length === 0) return;
+  if (!ingredients || ingredients.length === 0) return syncFoodDiaryToLog(dailyLogId);
 
   const scale = servings / recipe.servings;
   const rows = ingredients
@@ -107,6 +117,9 @@ export async function logRecipeToDiary(
     }));
   const { error: insertError } = await supabase.from('food_diary_entries').insert(rows);
   if (insertError) raise(insertError);
+  // The day's totals are written after a recipe too; they were not, so the recipe's food only reached the Weekly Log, Today and the
+  // coach's numbers after the next unrelated add or delete.
+  return syncFoodDiaryToLog(dailyLogId);
 }
 
 export async function addRecipeToMealPlan(

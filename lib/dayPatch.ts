@@ -48,3 +48,9 @@ export function canBrowseWeek(weekStart: string, todayIso: string): boolean {
 }
 
 export const LOCKED_DAY_MESSAGE = 'This day is more than 2 weeks old, so it can no longer be changed here. Ask your coach to change this.';
+
+// Whether a member may LOOK at this date (food diary, photos): not in the future, and within the browse window.
+export function canBrowseDate(date: string, todayIso: string): boolean {
+  const age = dayOffset(date, todayIso);
+  return age >= 0 && age <= BROWSE_DAYS;
+}

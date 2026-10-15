@@ -3,19 +3,17 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import type { FoodPhotoEntry, FoodPhotoEntryRow } from './types';
-import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
+import { getDailyLog } from './dailyLogs';
 import { dayFieldsFromPhotos } from '@/lib/utils/foodTotals';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
 
-// Date-nav resolver, same shape as getManualMacrosForDate: create:true (member) backfills a blank
-// daily_logs row for that day, create:false (coach) never does.
+// Date-nav resolver, same shape as getManualMacrosForDate: it only reads, so browsing back never creates a blank row (FT1).
 export async function getFoodPhotosForDate(
   clientId: string,
-  date: string,
-  create: boolean
+  date: string
 ): Promise<{ dailyLogId: string | null; photos: FoodPhotoEntry[] }> {
-  const dailyLog = create ? await getOrCreateDailyLog(clientId, date) : await getDailyLog(clientId, date);
+  const dailyLog = await getDailyLog(clientId, date);
   if (!dailyLog) return { dailyLogId: null, photos: [] };
   return { dailyLogId: dailyLog.id, photos: await getFoodPhotos(dailyLog.id) };
 }

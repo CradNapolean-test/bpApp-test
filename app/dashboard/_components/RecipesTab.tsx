@@ -11,6 +11,7 @@ import {
   createRecipe,
   deleteRecipe,
   removeRecipeIngredient,
+  renameRecipe,
   updateRecipeIngredientPortions,
   updateRecipeServings,
 } from '@/lib/data/recipes';
@@ -23,12 +24,45 @@ import type { FoodRow, RecipeIngredientRow, RecipeWithIngredients } from '@/lib/
 const MACRO_COLORS = { protein: '#a07aff', carbs: '#e8a020', fat: '#2ecc71' };
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
 
+// A recipe's name can be corrected (RC1): it used to be fixed once created, so a typo meant deleting the recipe and its ingredients.
+function RecipeNameInput({ recipeId, initial }: { recipeId: string; initial: string }) {
+  const { run } = useAction();
+  const [value, setValue] = useState(initial);
+
+  async function handleBlur() {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setValue(initial);
+      return;
+    }
+    setValue(trimmed);
+    if (trimmed === initial) return;
+    await run(() => renameRecipe(recipeId, trimmed), { success: 'Renamed' });
+  }
+
+  return (
+    <label className="block space-y-1 text-xs font-semibold text-zinc-500">
+      Name
+      <input
+        value={value}
+        maxLength={100}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm font-semibold text-black dark:border-white/10 dark:text-zinc-50"
+      />
+    </label>
+  );
+}
+
 function ServingsInput({ recipeId, initial }: { recipeId: string; initial: number }) {
   const { run } = useAction();
   const [value, setValue] = useState(String(initial));
 
   async function handleBlur() {
-    const parsed = Math.max(1, Number(value) || 1);
+    const parsed = Math.min(100, Math.max(1, Math.round(Number(value)) || 1));
     setValue(String(parsed));
     if (parsed === initial) return;
     await run(() => updateRecipeServings(recipeId, parsed));
@@ -41,6 +75,7 @@ function ServingsInput({ recipeId, initial }: { recipeId: string; initial: numbe
         type="number"
         inputMode="numeric"
         min={1}
+        max={100}
         className="w-16 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-center text-sm dark:border-white/10"
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -113,7 +148,7 @@ export function RecipesTab({
   }
 
   async function handleAddIngredient(recipeId: string, food: FoodRow, portions: number) {
-    await runMutate(() => addRecipeIngredient(recipeId, food.id, portions), { success: `${food.name} added` });
+    return runMutate(() => addRecipeIngredient(recipeId, food.id, portions), { success: `${food.name} added` });
   }
 
   const scan = useBarcodeAdd(async (food, portions, target) => {
@@ -197,6 +232,7 @@ export function RecipesTab({
                     </ul>
                     {!readOnly && (
                       <div className="mt-2 space-y-3">
+                        <RecipeNameInput key={recipe.name} recipeId={recipe.id} initial={recipe.name} />
                         <AddFoodButtons
                           label="Add ingredient"
                           onAdd={() => setAddingIngredient(true)}
@@ -277,6 +313,7 @@ export function RecipesTab({
       {editingIngredient && (
         <QuantitySheet
           title={editingIngredient.food?.name ?? 'Ingredient'}
+          limit={editingIngredient.food?.portion === '1 gram' ? 'grams' : 'portions'}
           unitLabel={editingIngredient.food?.portion === '1 gram' ? 'grams' : `× ${editingIngredient.food?.portion ?? 'portion'}`}
           initial={editingIngredient.portions}
           onClose={() => setEditingIngredient(null)}

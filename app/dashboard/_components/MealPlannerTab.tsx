@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { NotebookPen } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
+import { useToast } from '@/app/_components/ToastProvider';
+import { planLoggedMessage } from '@/lib/planLogging';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { addMealPlanEntry, logPlanToDiary, removeMealPlanEntry, updateMealPlanEntryPortions } from '@/lib/data/mealPlan';
 import { addRecipeToMealPlan } from '@/lib/data/recipes';
@@ -58,6 +60,7 @@ function EntryRow({
       {editing && !readOnly && (
         <QuantitySheet
           title={entry.food?.name ?? 'Planned food'}
+          limit={entry.food?.portion === '1 gram' ? 'grams' : 'portions'}
           unitLabel={entry.food?.portion === '1 gram' ? 'grams' : `× ${entry.food?.portion ?? 'portion'}`}
           initial={entry.portions}
           onClose={() => setEditing(false)}
@@ -94,6 +97,7 @@ export function MealPlannerTab({
   todayLogId: string | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const { run } = useAction();
   const { run: runRecipe } = useAction();
   const { run: runUpdate } = useAction();
@@ -106,8 +110,9 @@ export function MealPlannerTab({
     return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
   }, [profile, programWeek]);
 
+  // Returns whether it worked, so the Add food sheet stays open (keeping what was typed) when it did not (FS5).
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
-    await run(() => addMealPlanEntry(clientId, section, food.id, portions), { success: `${food.name} added` });
+    return run(() => addMealPlanEntry(clientId, section, food.id, portions), { success: `${food.name} added` });
   }
 
   const scan = useBarcodeAdd(async (food, portions, target) => {
@@ -118,7 +123,7 @@ export function MealPlannerTab({
 
   async function handleAddRecipe(section: MealPlanSection, recipeId: string, servings: number) {
     const recipe = recipes.find((r) => r.id === recipeId);
-    await runRecipe(() => addRecipeToMealPlan(clientId, section, recipeId, servings), {
+    return runRecipe(() => addRecipeToMealPlan(clientId, section, recipeId, servings), {
       success: recipe ? `${recipe.name} added` : 'Recipe added',
     });
   }
@@ -133,9 +138,18 @@ export function MealPlannerTab({
 
   async function handleLog(sectionKey: MealPlanSection | 'all', label: string) {
     if (!todayLogId) return;
-    await runLog(() => logPlanToDiary(clientId, todayLogId, sectionKey), {
-      success: sectionKey === 'all' ? "Plan added to today's diary" : `${label} added to today's diary`,
-    });
+    // What is already in today's diary is skipped, so a second tap says "already there" instead of adding everything again (MP1).
+    await runLog(
+      async () => {
+        const result = await logPlanToDiary(clientId, todayLogId, sectionKey);
+        if (result.ok) {
+          toast.success(planLoggedMessage(result.added, result.planned, sectionKey === 'all' ? 'Plan' : label));
+          if (result.added > 0) router.refresh();
+        }
+        return result;
+      },
+      { refresh: false }
+    );
   }
 
   const dayTotals = totalMacros(initialEntries);

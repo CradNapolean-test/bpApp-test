@@ -84,7 +84,8 @@ export function BarcodeScanner({
         <p className="p-4 text-sm text-red-400">{cameraError} — use search instead, or enter the barcode below.</p>
       ) : (
         <div className="relative min-h-0 flex-1">
-          <video ref={ref} className="h-full w-full object-cover" />
+          {/* playsInline and muted: without them iPhone Safari opens the camera full screen (or not at all) instead of in this frame (FT8). */}
+          <video ref={ref} playsInline muted autoPlay className="h-full w-full object-cover" />
           {/* Aiming guide only -- react-zxing scans the full frame regardless, this just gives
               the user a target so they hold the barcode steady in the camera's sweet spot. */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

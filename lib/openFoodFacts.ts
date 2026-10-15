@@ -10,6 +10,14 @@ export interface OpenFoodFactsProduct {
   fat: number | null;
   // Grams of fibre per gram; null when OFF has no figure (the food then adds no fibre).
   fibre: number | null;
+  // The pack's stated serving in grams, when OFF has one that makes sense; null otherwise (FT7).
+  servingGrams: number | null;
+}
+
+// OFF's serving_quantity is grams (a number or a numeric string). Anything missing, zero or silly is no serving.
+export function servingFrom(raw: unknown): number | null {
+  const grams = typeof raw === 'string' ? Number(raw) : typeof raw === 'number' ? raw : NaN;
+  return Number.isFinite(grams) && grams > 0 && grams <= 2000 ? Math.round(grams * 10) / 10 : null;
 }
 
 export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProduct | null> {
@@ -31,5 +39,6 @@ export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProdu
     carbs: perGram(nutriments.carbohydrates_100g),
     fat: perGram(nutriments.fat_100g),
     fibre: perGram(nutriments.fiber_100g),
+    servingGrams: servingFrom(product.serving_quantity),
   };
 }

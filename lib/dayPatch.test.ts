@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSE_DAYS, EDIT_DAYS, canBrowseWeek, canEditDay, changedFields } from './dayPatch';
+import { BROWSE_DAYS, EDIT_DAYS, canBrowseDate, canBrowseWeek, canEditDay, changedFields } from './dayPatch';
 
 // A stored day, as the form holds it.
 const stored = {
@@ -66,5 +66,15 @@ describe('the edit and browse window (R14, D20)', () => {
 
   it('always allows the current week', () => {
     expect(canBrowseWeek('2026-10-12', today)).toBe(true);
+  });
+});
+
+describe('canBrowseDate (FT1, D20)', () => {
+  const today = '2026-10-15';
+  it('lets a member look back 30 days, but not further or ahead', () => {
+    expect(canBrowseDate('2026-10-15', today)).toBe(true);
+    expect(canBrowseDate('2026-09-15', today)).toBe(true); // exactly 30 days
+    expect(canBrowseDate('2026-09-14', today)).toBe(false);
+    expect(canBrowseDate('2026-10-16', today)).toBe(false);
   });
 });

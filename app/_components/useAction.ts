@@ -27,7 +27,7 @@ export function useAction() {
   const [busy, setBusy] = useState(false);
 
   const run = useCallback(
-    async (fn: () => Promise<unknown>, opts?: { success?: string; onDone?: () => void }): Promise<boolean> => {
+    async (fn: () => Promise<unknown>, opts?: { success?: string; onDone?: () => void; refresh?: boolean }): Promise<boolean> => {
       setBusy(true);
       try {
         const result = await fn();
@@ -39,7 +39,8 @@ export function useAction() {
         }
         if (opts?.success) toast.success(opts.success);
         opts?.onDone?.();
-        router.refresh();
+        // The page is reloaded from the server after a change, unless the caller already has the new state in hand (refresh: false).
+        if (opts?.refresh !== false) router.refresh();
         return true;
       } catch (err) {
         toast.error(messageFrom(err));

@@ -7,6 +7,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { searchFoods } from '@/lib/data/foods';
 import { createClient } from '@/lib/supabase/client';
 import { dayCalories } from '@/lib/calculations';
+import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
 const GRAM_PRESETS = [50, 100, 150, 200];
@@ -44,6 +45,8 @@ function FoodResultRow({
   const carbs = food.carbs * qty;
   const fat = food.fat * qty;
   const calories = dayCalories(protein, carbs, fat);
+  const maxQty = isPerGram ? FOOD_LIMITS.grams : FOOD_LIMITS.portions;
+  const qtyProblem = qty > 0 ? checkFoodNumber(qty, isPerGram ? 'grams' : 'portions') : null;
 
   return (
     <li className="space-y-2 py-2">
@@ -68,7 +71,7 @@ function FoodResultRow({
             </p>
           </div>
         </div>
-        <Button variant="primary" size="sm" disabled={!(qty > 0)} onClick={() => onAdd(food, qty)}>
+        <Button variant="primary" size="sm" disabled={!(qty > 0) || qtyProblem != null} onClick={() => onAdd(food, qty)}>
           Add
         </Button>
       </div>
@@ -103,6 +106,7 @@ function FoodResultRow({
           type="number"
           inputMode="decimal"
           min={0}
+          max={maxQty}
           step={step}
           value={draft ?? String(qty)}
           onChange={(e) => {
@@ -124,29 +128,39 @@ function FoodResultRow({
           {Math.round(calories)} kcal · {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F
         </span>
       </div>
+      {qtyProblem && <p className="text-xs font-semibold text-danger">{qtyProblem}</p>}
     </li>
   );
 }
 
-function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => void }) {
+function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => unknown }) {
   const [name, setName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10';
-  const canSubmit = name.trim() && (calories || protein || carbs || fat);
+  // Each figure is optional, but whatever is typed has to be a sensible number (FS3, FS6).
+  const problem = firstFoodProblem([
+    checkFoodNumber(calories, 'kcal', { allowBlank: true }),
+    checkFoodNumber(protein, 'grams', { allowBlank: true }),
+    checkFoodNumber(carbs, 'grams', { allowBlank: true }),
+    checkFoodNumber(fat, 'grams', { allowBlank: true }),
+  ]);
+  const canSubmit = Boolean(name.trim() && (calories || protein || carbs || fat)) && problem == null;
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    onAdd({
+    const result = await onAdd({
       name: name.trim(),
       calories: calories === '' ? null : Number(calories),
       protein: protein === '' ? null : Number(protein),
       carbs: carbs === '' ? null : Number(carbs),
       fat: fat === '' ? null : Number(fat),
     });
+    // A failed add keeps what was typed (FS5).
+    if (result === false) return;
     setName('');
     setCalories('');
     setProtein('');
@@ -162,11 +176,12 @@ function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: num
       <div className="space-y-2">
         <input type="text" placeholder="What is it?" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <input type="number" placeholder="kcal" value={calories} onChange={(e) => setCalories(e.target.value)} className={inputCls} />
-          <input type="number" placeholder="protein g" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
-          <input type="number" placeholder="carbs g" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
-          <input type="number" placeholder="fat g" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.kcal} placeholder="kcal" aria-label="Calories" value={calories} onChange={(e) => setCalories(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="protein g" aria-label="Protein in grams" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="carbs g" aria-label="Carbs in grams" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="fat g" aria-label="Fat in grams" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
         </div>
+        {problem && <p className="text-xs font-semibold text-danger">{problem}</p>}
         <Button type="submit" variant="primary" size="sm" disabled={!canSubmit}>
           Add
         </Button>
@@ -185,15 +200,15 @@ export function FoodSearchPicker({
   favoriteIds,
   onToggleFavorite,
 }: {
-  onAdd: (food: FoodRow, grams: number) => void;
+  onAdd: (food: FoodRow, grams: number) => unknown;
   // When provided (even empty), a "Foods / Recipes" toggle appears so the same picker can
   // fan a saved recipe out into diary/meal-plan entries instead of one food at a time.
   recipes?: RecipeRow[];
-  onAddRecipe?: (recipeId: string, servings: number) => void;
+  onAddRecipe?: (recipeId: string, servings: number) => unknown;
   // Quick Add tab only appears when provided -- the Meal Planner also uses this picker (no
   // "date-specific logging" concept there, so quick-add wouldn't make sense) while Food
   // Tracking does.
-  onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => void;
+  onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => unknown;
   // Favorites/Recently Logged only appear (before a query is typed) when provided -- same
   // "Meal Planner has no per-client favoriting concept wired up" reasoning as Quick Add above.
   favorites?: FoodRow[];
@@ -312,6 +327,7 @@ export function FoodSearchPicker({
                   <input
                     type="number"
                     min={0.25}
+                    max={FOOD_LIMITS.portions}
                     step={0.25}
                     value={s}
                     onChange={(e) => setServings((v) => ({ ...v, [recipe.id]: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) }))}
@@ -319,7 +335,7 @@ export function FoodSearchPicker({
                     className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
                   />
                   <span className="text-xs text-zinc-500">servings</span>
-                  <Button variant="primary" size="sm" disabled={!(s > 0)} onClick={() => onAddRecipe?.(recipe.id, s)}>
+                  <Button variant="primary" size="sm" disabled={!(s > 0) || s > FOOD_LIMITS.portions} onClick={() => onAddRecipe?.(recipe.id, s)}>
                     Add
                   </Button>
                 </div>

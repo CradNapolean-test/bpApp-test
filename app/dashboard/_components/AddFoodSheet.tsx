@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
@@ -20,16 +21,31 @@ export function AddFoodSheet({
   onClose,
 }: {
   sectionLabel: string;
-  onAdd: (food: FoodRow, portions: number) => void;
+  // These return whether the add worked (or nothing, which counts as worked). The sheet closes only on success, so a failed add keeps
+  // what was typed (FS5).
+  onAdd: (food: FoodRow, portions: number) => unknown;
   recipes?: RecipeRow[];
-  onAddRecipe?: (recipeId: string, servings: number) => void;
-  onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => void;
+  onAddRecipe?: (recipeId: string, servings: number) => unknown;
+  onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => unknown;
   favorites?: FoodRow[];
   recentlyLogged?: FoodRow[];
   favoriteIds?: Set<string>;
   onToggleFavorite?: (food: FoodRow, isFavorite: boolean) => void;
   onClose: () => void;
 }) {
+  const [busy, setBusy] = useState(false);
+  // Runs the add, shows that it is working (no second tap), and closes only if it did not fail.
+  async function finish(add: () => unknown) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await add();
+      if (result !== false) onClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
       <div
@@ -49,33 +65,18 @@ export function AddFoodSheet({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <FoodSearchPicker
-          onAdd={(food, portions) => {
-            onAdd(food, portions);
-            onClose();
-          }}
-          recipes={recipes}
-          onAddRecipe={
-            onAddRecipe
-              ? (recipeId, servings) => {
-                  onAddRecipe(recipeId, servings);
-                  onClose();
-                }
-              : undefined
-          }
-          onAddQuickAdd={
-            onAddQuickAdd
-              ? (fields) => {
-                  onAddQuickAdd(fields);
-                  onClose();
-                }
-              : undefined
-          }
-          favorites={favorites}
-          recentlyLogged={recentlyLogged}
-          favoriteIds={favoriteIds}
-          onToggleFavorite={onToggleFavorite}
-        />
+        <div aria-busy={busy} className={busy ? 'pointer-events-none opacity-60' : undefined}>
+          <FoodSearchPicker
+            onAdd={(food, portions) => finish(() => onAdd(food, portions))}
+            recipes={recipes}
+            onAddRecipe={onAddRecipe ? (recipeId, servings) => finish(() => onAddRecipe(recipeId, servings)) : undefined}
+            onAddQuickAdd={onAddQuickAdd ? (fields) => finish(() => onAddQuickAdd(fields)) : undefined}
+            favorites={favorites}
+            recentlyLogged={recentlyLogged}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={onToggleFavorite}
+          />
+        </div>
       </div>
     </div>
   );

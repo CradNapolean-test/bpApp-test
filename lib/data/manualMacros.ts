@@ -2,7 +2,7 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
-import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
+import { getDailyLog } from './dailyLogs';
 import { dayCalories } from '@/lib/calculations';
 import { dayFieldsFromManual } from '@/lib/utils/foodTotals';
 import type { ManualMacroEntryRow } from './types';
@@ -17,14 +17,12 @@ function withDerivedCalories(f: MacroFields): MacroFields {
   return { ...f, calories: Math.round(dayCalories(f.protein ?? 0, f.carbs ?? 0, f.fat ?? 0)) };
 }
 
-// Same date-nav resolver shape as getFoodDiaryForDate (lib/data/foodDiary.ts): create:true
-// (client) backfills a blank daily_logs row, create:false (coach) never does.
+// Same date-nav resolver as getFoodDiaryForDate (lib/data/foodDiary.ts): it only reads, so browsing back never creates a blank row (FT1).
 export async function getManualMacrosForDate(
   clientId: string,
-  date: string,
-  create: boolean
+  date: string
 ): Promise<{ dailyLogId: string | null; entries: ManualMacroEntryRow[] }> {
-  const dailyLog = create ? await getOrCreateDailyLog(clientId, date) : await getDailyLog(clientId, date);
+  const dailyLog = await getDailyLog(clientId, date);
   if (!dailyLog) return { dailyLogId: null, entries: [] };
   const entries = await getManualMacroEntries(dailyLog.id);
   return { dailyLogId: dailyLog.id, entries };
@@ -51,7 +49,7 @@ export async function addManualMacroEntry(
   dailyLogId: string,
   mealSectionId: string | null,
   rawFields: MacroFields
-): Promise<void> {
+): Promise<ManualMacroEntryRow[]> {
   const fields = withDerivedCalories(rawFields);
   const supabase = await createClient();
   const { error } = await supabase.from('manual_macro_entries').insert({
@@ -63,14 +61,14 @@ export async function addManualMacroEntry(
     fat: fields.fat,
   });
   if (error) raise(error);
-  await syncManualMacrosToLog(dailyLogId);
+  return syncManualMacrosToLog(dailyLogId);
 }
 
 export async function updateManualMacroEntry(
   id: string,
   dailyLogId: string,
   rawFields: MacroFields
-): Promise<void> {
+): Promise<ManualMacroEntryRow[]> {
   const fields = withDerivedCalories(rawFields);
   const supabase = await createClient();
   const { error } = await supabase
@@ -83,23 +81,24 @@ export async function updateManualMacroEntry(
     })
     .eq('id', id);
   if (error) raise(error);
-  await syncManualMacrosToLog(dailyLogId);
+  return syncManualMacrosToLog(dailyLogId);
 }
 
-export async function removeManualMacroEntry(id: string, dailyLogId: string): Promise<void> {
+export async function removeManualMacroEntry(id: string, dailyLogId: string): Promise<ManualMacroEntryRow[]> {
   const supabase = await createClient();
   const { error } = await supabase.from('manual_macro_entries').delete().eq('id', id);
   if (error) raise(error);
-  await syncManualMacrosToLog(dailyLogId);
+  return syncManualMacrosToLog(dailyLogId);
 }
 
 // Same pattern as syncFoodDiaryToLog/syncFoodPhotosToLog: the day's protein, carbs, fat AND calories are summed and written, so an entry
 // of "400 kcal" with no macros still counts (R11, migration 0136); a day with no entries is written as nulls, not zeros (M2).
-export async function syncManualMacrosToLog(dailyLogId: string): Promise<void> {
+export async function syncManualMacrosToLog(dailyLogId: string): Promise<ManualMacroEntryRow[]> {
   const entries = await getManualMacroEntries(dailyLogId);
   const fields = dayFieldsFromManual(entries);
 
   const supabase = await createClient();
   const { error } = await supabase.from('daily_logs').update(fields).eq('id', dailyLogId);
   if (error) raise(error);
+  return entries;
 }

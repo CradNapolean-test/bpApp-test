@@ -3,21 +3,17 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
-import { dayFieldsFromDiary, type DayFoodFields } from '@/lib/utils/foodTotals';
+import { dayFieldsFromDiary } from '@/lib/utils/foodTotals';
 import type { FoodDiaryEntryRow } from './types';
 
-// Resolves a given date's diary, for the date-nav in FoodTrackingTab (Phase 3: past-day
-// editing for clients, past-day viewing for coaches). `create: true` (client) backfills a
-// blank daily_logs row so a client can start logging a day that has no row yet -- same as
-// dashboardBundle already does for "today". `create: false` (coach) never creates one: a
-// coach viewing a day the client never opened should see "nothing logged", not silently
-// materialize a row.
+// Resolves a given date's diary, for the date-nav in FoodTrackingTab. It only READS: browsing back day by day used to create a blank
+// daily_logs row for every day looked at (FT1). A day with no row comes back with dailyLogId null, and the row is created the moment
+// the first food is added to it (the screen calls getOrCreateDailyLog then).
 export async function getFoodDiaryForDate(
   clientId: string,
-  date: string,
-  create: boolean
+  date: string
 ): Promise<{ dailyLogId: string | null; entries: FoodDiaryEntryRow[] }> {
-  const dailyLog = create ? await getOrCreateDailyLog(clientId, date) : await getDailyLog(clientId, date);
+  const dailyLog = await getDailyLog(clientId, date);
   if (!dailyLog) return { dailyLogId: null, entries: [] };
   const entries = await getFoodDiaryEntries(dailyLog.id);
   return { dailyLogId: dailyLog.id, entries };
@@ -38,13 +34,13 @@ export async function addFoodDiaryEntry(
   foodId: string,
   portions: number,
   mealSectionId: string | null = null
-): Promise<void> {
+): Promise<FoodDiaryEntryRow[]> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('food_diary_entries')
     .insert({ daily_log_id: dailyLogId, food_id: foodId, portions, meal_section_id: mealSectionId });
   if (error) raise(error);
-  await syncFoodDiaryToLog(dailyLogId);
+  return syncFoodDiaryToLog(dailyLogId);
 }
 
 // Quick Add -- a diary row with no food_id, for something with no food-database match (a
@@ -54,7 +50,7 @@ export async function addQuickAddEntry(
   dailyLogId: string,
   mealSectionId: string | null,
   fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
-): Promise<void> {
+): Promise<FoodDiaryEntryRow[]> {
   const supabase = await createClient();
   const { error } = await supabase.from('food_diary_entries').insert({
     daily_log_id: dailyLogId,
@@ -68,14 +64,37 @@ export async function addQuickAddEntry(
     quick_add_fat: fields.fat,
   });
   if (error) raise(error);
-  await syncFoodDiaryToLog(dailyLogId);
+  return syncFoodDiaryToLog(dailyLogId);
 }
 
-export async function removeFoodDiaryEntry(id: string, dailyLogId: string): Promise<void> {
+// Corrects a Quick Add after the fact (FS5): they could only be deleted and typed again. Only a row with no food behind it, so this
+// can never turn a real food entry into a Quick Add.
+export async function updateQuickAddEntry(
+  entryId: string,
+  dailyLogId: string,
+  fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }
+): Promise<FoodDiaryEntryRow[]> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('food_diary_entries')
+    .update({
+      quick_add_name: fields.name,
+      quick_add_calories: fields.calories,
+      quick_add_protein: fields.protein,
+      quick_add_carbs: fields.carbs,
+      quick_add_fat: fields.fat,
+    })
+    .eq('id', entryId)
+    .is('food_id', null);
+  if (error) raise(error);
+  return syncFoodDiaryToLog(dailyLogId);
+}
+
+export async function removeFoodDiaryEntry(id: string, dailyLogId: string): Promise<FoodDiaryEntryRow[]> {
   const supabase = await createClient();
   const { error } = await supabase.from('food_diary_entries').delete().eq('id', id);
   if (error) raise(error);
-  await syncFoodDiaryToLog(dailyLogId);
+  return syncFoodDiaryToLog(dailyLogId);
 }
 
 // Re-files an entry into a different (or no) section -- covers legacy pre-migration rows
@@ -91,21 +110,30 @@ export async function updateFoodDiaryEntrySection(entryId: string, mealSectionId
 
 // Corrects a logged quantity after the fact (e.g. misjudged a portion) instead of forcing a
 // delete-and-re-add -- tapping a diary row opens this.
-export async function updateFoodDiaryEntryPortions(entryId: string, portions: number, dailyLogId: string): Promise<void> {
+export async function updateFoodDiaryEntryPortions(entryId: string, portions: number, dailyLogId: string): Promise<FoodDiaryEntryRow[]> {
   const supabase = await createClient();
   const { error } = await supabase.from('food_diary_entries').update({ portions }).eq('id', entryId);
   if (error) raise(error);
-  await syncFoodDiaryToLog(dailyLogId);
+  return syncFoodDiaryToLog(dailyLogId);
 }
 
-// "Copy from yesterday" entry point -- resolves the source day by date (client_id + a date
-// string, not a dailyLogId the UI doesn't have) rather than making FoodTrackingTab do its own
-// date math against getDailyLog. Returns 0 (not an error) if the source day never got a
-// daily_logs row at all -- "yesterday" being blank is an expected, common case.
-export async function copyFromDate(clientId: string, fromDate: string, toDailyLogId: string): Promise<number> {
+// "Copy from yesterday" entry point -- resolves both days by date (client_id + a date string) rather than making FoodTrackingTab do its
+// own date math. Returns count 0 (not an error) if the source day has nothing to copy -- "yesterday" being blank is an expected, common
+// case -- and then creates nothing: the target day's row is only made once there is something to put on it (FT1). Returns the target
+// day's entries so the screen can show them without another trip (FT3).
+export async function copyFromDate(
+  clientId: string,
+  fromDate: string,
+  toDate: string
+): Promise<{ count: number; dailyLogId: string | null; entries: FoodDiaryEntryRow[] }> {
   const fromDailyLog = await getDailyLog(clientId, fromDate);
-  if (!fromDailyLog) return 0;
-  return copyDiaryEntries(fromDailyLog.id, toDailyLogId);
+  if (!fromDailyLog) return { count: 0, dailyLogId: null, entries: [] };
+  const target = await getDailyLog(clientId, toDate);
+  const sourceEntries = await getFoodDiaryEntries(fromDailyLog.id);
+  if (sourceEntries.length === 0) return { count: 0, dailyLogId: target?.id ?? null, entries: [] };
+  const toLog = target ?? (await getOrCreateDailyLog(clientId, toDate));
+  const count = await copyDiaryEntries(fromDailyLog.id, toLog.id);
+  return { count, dailyLogId: toLog.id, entries: await getFoodDiaryEntries(toLog.id) };
 }
 
 // Copies a source day's entries (optionally scoped to one section) into a target day --
@@ -144,13 +172,14 @@ export async function copyDiaryEntries(
 
 // Writes the food diary's running totals into the day's Weekly Log row, so downstream Totals/Averages and floor-checks reflect what was
 // actually logged (PROJECT_SPEC.md #5). The day's calories are stored too, INCLUDING Quick Adds with no macros (R11, migration 0136), and a
-// day with no entries at all is written as nulls, not zeros (M2). Returns what it wrote, so the screen can show it without another trip.
-export async function syncFoodDiaryToLog(dailyLogId: string): Promise<DayFoodFields> {
+// day with no entries at all is written as nulls, not zeros (M2). Returns the day's entries, which it has just read, so the screen can
+// show the result without another round trip (FT3).
+export async function syncFoodDiaryToLog(dailyLogId: string): Promise<FoodDiaryEntryRow[]> {
   const entries = await getFoodDiaryEntries(dailyLogId);
   const fields = dayFieldsFromDiary(entries);
 
   const supabase = await createClient();
   const { error } = await supabase.from('daily_logs').update(fields).eq('id', dailyLogId);
   if (error) raise(error);
-  return fields;
+  return entries;
 }

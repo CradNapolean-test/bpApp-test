@@ -8,10 +8,13 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { deleteFoodPhoto, getFoodPhotosForDate, uploadFoodPhoto } from '@/lib/data/foodPhotos';
+import { getOrCreateDailyLog } from '@/lib/data/dailyLogs';
+import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
-import { addDays, DEFAULT_TIMEZONE, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
+import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { FeedbackThread } from './FeedbackThread';
+import { useTodayIso } from './useTodayIso';
 import type { ClientProfileRow, FoodPhotoEntry, NutritionFeedbackRow } from '@/lib/data/types';
 
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
@@ -42,8 +45,8 @@ export function PhotoDiaryTab({
   const { run: runUpload, busy: uploading } = useAction();
   const { run: runDelete } = useAction();
 
-  // Same "today" the server used for dailyLogId (the member's own timezone, not UTC).
-  const todayIso = useMemo(() => todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE), [profile?.timezone]);
+  // Today at the member's own timezone (not UTC), kept current past midnight (FT2).
+  const todayIso = useTodayIso(profile?.timezone ?? DEFAULT_TIMEZONE);
   const [viewingDate, setViewingDate] = useState(todayIso);
   // Today comes straight from props (they refresh after every action); a day browsed back to is
   // fetched and held locally.
@@ -52,6 +55,10 @@ export function PhotoDiaryTab({
   const isToday = viewingDate === todayIso;
   const photos = useMemo(() => (isToday ? initialPhotos : (other?.photos ?? [])), [isToday, initialPhotos, other]);
   const currentLogId = isToday ? dailyLogId : (other?.logId ?? null);
+  // Members add to the last two weeks and look back a month (D20); a coach sees any day and changes none.
+  const dayLocked = !readOnly && !canEditDay(viewingDate, todayIso);
+  const previousDay = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
+  const atBrowseLimit = !readOnly && !canBrowseDate(previousDay, todayIso);
 
   // The member's own coach looking at a day of photos counts as reviewing it (it leaves the
   // dashboard's To do); commenting does too.
@@ -82,7 +89,8 @@ export function PhotoDiaryTab({
         setOther(null);
         return;
       }
-      const result = await getFoodPhotosForDate(clientId, date, !readOnly);
+      // Only reads: browsing back no longer leaves a blank row behind for every day looked at (FT1).
+      const result = await getFoodPhotosForDate(clientId, date);
       setViewingDate(date);
       setOther({ logId: result.dailyLogId, photos: result.photos });
     } finally {
@@ -105,13 +113,20 @@ export function PhotoDiaryTab({
   }
 
   async function handleUpload() {
-    if (!currentLogId || !file) return;
+    if (!file) return;
     const formData = new FormData();
     formData.set('file', await shrinkImageFile(file));
     formData.set('clientId', clientId);
-    formData.set('dailyLogId', currentLogId);
     formData.set('description', description);
-    const ok = await runUpload(() => uploadFoodPhoto(formData), { success: 'Photo added' });
+    // The day's row is made when its first photo is added, not when the day is looked at (FT1).
+    const ok = await runUpload(
+      async () => {
+        const logId = currentLogId ?? (await getOrCreateDailyLog(clientId, viewingDate)).id;
+        formData.set('dailyLogId', logId);
+        return uploadFoodPhoto(formData);
+      },
+      { success: 'Photo added' }
+    );
     if (ok) {
       closeSheet();
       if (!isToday) await loadDate(viewingDate);
@@ -132,8 +147,8 @@ export function PhotoDiaryTab({
         <button
           type="button"
           aria-label="Previous day"
-          disabled={dateLoading}
-          onClick={() => loadDate(toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1)))}
+          disabled={dateLoading || atBrowseLimit}
+          onClick={() => loadDate(previousDay)}
           className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -160,7 +175,9 @@ export function PhotoDiaryTab({
         </div>
       </div>
 
-      {!readOnly && (
+      {dayLocked && <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{LOCKED_DAY_MESSAGE}</p>}
+
+      {!readOnly && !dayLocked && (
         <button
           type="button"
           onClick={() => {
@@ -207,7 +224,7 @@ export function PhotoDiaryTab({
                     <p className="text-sm font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
                     <p className="text-xs text-zinc-500">{timeOf(entry.created_at)}</p>
                   </div>
-                  {!readOnly && (
+                  {!readOnly && !dayLocked && (
                     <button type="button" aria-label="Delete photo" onClick={() => handleDelete(entry.id)} className="shrink-0 rounded-full p-2 text-zinc-400 hover:text-danger">
                       <Trash2 className="h-4 w-4" />
                     </button>

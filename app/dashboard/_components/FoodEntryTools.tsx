@@ -5,7 +5,9 @@ import { Barcode, Search } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { getFavoriteFoods, getFoodByBarcode, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { lookupBarcode } from '@/lib/openFoodFacts';
+import { useToast } from '@/app/_components/ToastProvider';
 import { BarcodeScanner } from './BarcodeScanner';
+import { QuantitySheet } from './QuantitySheet';
 import type { FoodRow } from '@/lib/data/types';
 
 // Shared by Food Tracking, the Meal Planner and Recipes so adding a food looks and works the same
@@ -21,16 +23,25 @@ export interface FoodTarget {
 export function useFoodShortcuts(clientId: string, enabled: boolean) {
   const [favorites, setFavorites] = useState<FoodRow[]>([]);
   const [recentlyLogged, setRecentlyLogged] = useState<FoodRow[]>([]);
+  const toast = useToast();
+  // A failed load leaves the lists empty (they are shortcuts, not essential) instead of an unhandled rejection (FT5).
   useEffect(() => {
     if (!enabled) return;
-    getFavoriteFoods(clientId).then(setFavorites);
-    getRecentlyLoggedFoods(clientId).then(setRecentlyLogged);
+    getFavoriteFoods(clientId).then(setFavorites).catch(() => {});
+    getRecentlyLoggedFoods(clientId).then(setRecentlyLogged).catch(() => {});
   }, [clientId, enabled]);
   const favoriteIds = useMemo(() => new Set(favorites.map((f) => f.id)), [favorites]);
 
+  // The star flips straight away; if saving fails it flips back and says so (it used to stay changed on screen while nothing was saved).
   async function toggleFavorite(food: FoodRow, isFavorite: boolean) {
+    const before = favorites;
     setFavorites((prev) => (isFavorite ? [food, ...prev.filter((f) => f.id !== food.id)] : prev.filter((f) => f.id !== food.id)));
-    await setFavoriteFood(clientId, food.id, isFavorite);
+    try {
+      await setFavoriteFood(clientId, food.id, isFavorite);
+    } catch {
+      setFavorites(before);
+      toast.error('Could not update your favourites. Please try again.');
+    }
   }
   return { favorites, recentlyLogged, favoriteIds, toggleFavorite };
 }
@@ -105,9 +116,10 @@ export function extractBarcode(raw: string): string {
 }
 
 // The barcode flow: start a scan aimed at a target (a diary section, a plan meal, a recipe), look
-// the code up (our food database first, then Open Food Facts), and hand the food back to be added
-// at 100g. `panel` is the scanner / "fill in the missing macros" form / status line to render once
-// anywhere on the screen.
+// the code up (our food database first, then Open Food Facts), ask how much (the pack's serving when
+// Open Food Facts states one, else 100 g) and hand the food back to be added. It used to add 100 g
+// silently (FT7). `panel` is the scanner / "fill in the missing macros" form / quantity sheet / status
+// line to render once anywhere on the screen.
 export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, target: FoodTarget | null) => Promise<unknown> | void) {
   const [scanTarget, setScanTarget] = useState<FoodTarget | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -118,7 +130,10 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     carbs: number | null;
     fat: number | null;
     target: FoodTarget | null;
+    servingGrams: number | null;
   } | null>(null);
+  // A product that was found and is waiting for the member to say how much.
+  const [quantity, setQuantity] = useState<{ food: FoodRow; target: FoodTarget | null; initial: number } | null>(null);
 
   function start(target: FoodTarget) {
     setScanTarget(target);
@@ -132,6 +147,7 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     setStatus('Looking up…');
     try {
       let food = await getFoodByBarcode(barcode);
+      let servingGrams: number | null = null;
       if (!food) {
         const product = await lookupBarcode(barcode);
         if (!product) {
@@ -142,9 +158,10 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           // OFF has this product but a contributor never filled in every nutrient -- ask for
           // just what's missing rather than discarding a real match as if it were a total miss.
           setStatus(null);
-          setPending({ barcode, name: product.name, protein: product.protein, carbs: product.carbs, fat: product.fat, target });
+          setPending({ barcode, name: product.name, protein: product.protein, carbs: product.carbs, fat: product.fat, target, servingGrams: product.servingGrams });
           return;
         }
+        servingGrams = product.servingGrams;
         food = await upsertFoodFromBarcode(barcode, {
           name: product.name,
           portion: '1 gram',
@@ -154,8 +171,8 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           fibre: product.fibre,
         });
       }
-      await onAddFood(food, 100, target);
-      setStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
+      setStatus(null);
+      setQuantity({ food, target, initial: servingGrams ?? 100 });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Lookup failed.');
     }
@@ -163,13 +180,13 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
 
   async function handleComplete(macros: { protein: number; carbs: number; fat: number }) {
     if (!pending) return;
-    const { barcode, name, target } = pending;
+    const { barcode, name, target, servingGrams } = pending;
     setPending(null);
     setStatus('Saving…');
     try {
       const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros });
-      await onAddFood(food, 100, target);
-      setStatus(`Added ${food.name} to ${target?.label ?? 'Other'}.`);
+      setStatus(null);
+      setQuantity({ food, target, initial: servingGrams ?? 100 });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Save failed.');
     }
@@ -179,6 +196,26 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     <>
       {scanTarget && <BarcodeScanner onDetected={handleDetected} onClose={() => setScanTarget(null)} />}
       {pending && <CompleteScannedFoodForm product={pending} onCancel={() => setPending(null)} onSave={handleComplete} />}
+      {quantity && (
+        <QuantitySheet
+          title={quantity.food.name}
+          unitLabel="grams"
+          initial={quantity.initial}
+          onClose={() => setQuantity(null)}
+          onSave={async (grams) => {
+            const { food, target } = quantity;
+            setQuantity(null);
+            setStatus('Adding…');
+            try {
+              const result = await onAddFood(food, grams, target);
+              // The screen's add reports false when it could not save, and has already said why.
+              setStatus(result === false ? null : `Added ${food.name} to ${target?.label ?? 'Other'}.`);
+            } catch (err) {
+              setStatus(err instanceof Error ? err.message : 'Could not add it.');
+            }
+          }}
+        />
+      )}
       {status && <p className="text-sm text-zinc-500">{status}</p>}
     </>
   );
