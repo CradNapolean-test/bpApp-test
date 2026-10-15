@@ -6,36 +6,26 @@ import { Upload } from 'lucide-react';
 import { useClickOutside } from '@/app/_components/useClickOutside';
 import { useToast } from '@/app/_components/ToastProvider';
 import { useActiveGymId } from './CoachGymsContext';
-import { parseCsv, headerIndex } from '@/lib/utils/csv';
+import { downloadTextFile, parseCsv } from '@/lib/utils/csv';
+import { IMPORT_BATCH_SIZE, IMPORT_MAX, extractEmails, importResultsCsv, splitIntoBatches, type ImportRow } from '@/lib/accountCreation';
 
-interface ImportResult {
-  email: string;
-  password?: string;
-  error?: string;
-}
-
-// Extracts a flat, deduped email list from either pasted text (one per line, or
-// comma-separated) or an uploaded CSV. If the first row looks like a header (has a cell
-// literally "email"), only that column is used and the header row skipped -- so other columns
-// (name, notes, ...) can't accidentally be mistaken for emails. Otherwise every cell from
-// every row is a candidate, which covers both a plain one-per-line paste and a headerless CSV.
-function extractEmails(text: string): string[] {
-  const parsed = parseCsv(text);
-  if (parsed.length === 0) return [];
-  const emailCol = headerIndex(parsed[0])('email');
-  const cells = emailCol >= 0 ? parsed.slice(1).map((r) => r[emailCol] ?? '') : parsed.flat();
-  return Array.from(new Set(cells.map((c) => c.trim()).filter((c) => c.includes('@'))));
-}
-
+// Imports up to IMPORT_MAX addresses (CM2). They are sent 20 at a time so no single request can run out of time halfway, with progress shown.
+// Nobody is shown a password: the result is a file with each address and its one-time link to choose a password, saved to the coach's
+// device and not kept anywhere else.
 export function ImportClientsButton() {
   const router = useRouter();
   const toast = useToast();
   const gymId = useActiveGymId();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [results, setResults] = useState<ImportResult[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [results, setResults] = useState<ImportRow[] | null>(null);
+  const [stoppedAt, setStoppedAt] = useState<number | null>(null);
+  // Entries that were not email addresses: left out of the import, listed on the result so the coach can fix them.
+  const [skipped, setSkipped] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const submitting = progress !== null;
   const ref = useClickOutside<HTMLDivElement>(() => {
     if (!submitting) setOpen(false);
   }, open);
@@ -50,39 +40,63 @@ export function ImportClientsButton() {
   }
 
   async function handleSubmit() {
-    const emails = extractEmails(text);
-    if (emails.length === 0) {
-      toast.error('No valid email addresses found');
+    setProblem(null);
+    const parsed = extractEmails(parseCsv(text));
+    if (parsed.valid.length === 0) {
+      setProblem(parsed.rejected.length > 0 ? `None of those are valid email addresses (for example: ${parsed.rejected[0]}).` : 'No email addresses found.');
       return;
     }
-    setSubmitting(true);
+    if (parsed.valid.length > IMPORT_MAX) {
+      setProblem(`That is ${parsed.valid.length} addresses. Import is limited to ${IMPORT_MAX} at a time: split the list and import it in parts.`);
+      return;
+    }
+    setSkipped(parsed.rejected);
+
+    const batches = splitIntoBatches(parsed.valid, IMPORT_BATCH_SIZE);
+    const all: ImportRow[] = [];
+    setStoppedAt(null);
+    setProgress({ done: 0, total: parsed.valid.length });
     try {
-      const res = await fetch('/api/coach/import-clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails, expectedGymId: gymId }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        toast.error(body.error ?? 'Import failed');
-        return;
+      for (const batch of batches) {
+        const res = await fetch('/api/coach/import-clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails: batch, expectedGymId: gymId }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(body.error ?? 'Import stopped');
+          setStoppedAt(all.length);
+          break;
+        }
+        all.push(...(body.results as ImportRow[]));
+        setProgress({ done: all.length, total: parsed.valid.length });
       }
-      setResults(body.results);
-      const created = (body.results as ImportResult[]).filter((r) => r.password).length;
-      toast.success(`${created} of ${emails.length} client${emails.length === 1 ? '' : 's'} created`);
-      router.refresh();
     } catch {
       toast.error('Could not reach the server. Check your connection and try again.');
+      setStoppedAt(all.length);
     } finally {
-      setSubmitting(false);
+      setProgress(null);
+    }
+    if (all.length > 0) {
+      setResults(all);
+      const added = all.filter((r) => r.link).length;
+      toast.success(`${added} of ${parsed.valid.length} client${parsed.valid.length === 1 ? '' : 's'} added`);
+      router.refresh();
     }
   }
 
   function reset() {
     setText('');
     setResults(null);
+    setProblem(null);
+    setStoppedAt(null);
+    setSkipped([]);
     setOpen(false);
   }
+
+  const added = results?.filter((r) => r.link).length ?? 0;
+  const notAdded = results?.filter((r) => !r.link) ?? [];
 
   return (
     <div ref={ref} className="relative">
@@ -102,45 +116,64 @@ export function ImportClientsButton() {
         >
           {results ? (
             <div className="space-y-3">
-              <p className="text-sm font-medium text-black dark:text-zinc-50">Import results</p>
-              <p className="text-xs text-zinc-500">
-                Passwords are shown once — pass them to each client now; they can&apos;t be retrieved later.
+              <p className="text-sm font-medium text-black dark:text-zinc-50">
+                {added} added{notAdded.length > 0 ? `, ${notAdded.length} not added` : ''}
               </p>
-              <div className="max-h-72 space-y-1.5 overflow-y-auto">
-                {results.map((r) => (
-                  <div key={r.email} className="rounded-md border border-black/10 p-2 text-xs dark:border-white/10">
-                    <p className="font-mono">{r.email}</p>
-                    {r.password ? (
-                      <p className="text-emerald-600 dark:text-emerald-400">
-                        Temp password: <span className="font-mono">{r.password}</span>
-                      </p>
-                    ) : (
-                      <p className="text-danger">{r.error}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+              {stoppedAt !== null && (
+                <p className="rounded-lg bg-warning/10 p-2 text-xs text-warning" role="alert">
+                  The import stopped after {stoppedAt} address{stoppedAt === 1 ? '' : 'es'}. The rest were not sent: import them again (ones already added will say they could not be added).
+                </p>
+              )}
+              <p className="text-xs text-zinc-500">
+                Save the file now: it has each person&apos;s one-time link to choose a password. It is not kept anywhere else, so send the links before
+                you close this.
+              </p>
               <button
-                onClick={reset}
-                className="w-full rounded-full bg-accent py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+                type="button"
+                onClick={() => downloadTextFile('imported-clients.csv', importResultsCsv(results), 'text/csv;charset=utf-8')}
+                className="w-full rounded-full border border-black/10 py-2 text-sm font-bold dark:border-white/15"
               >
+                Download file with links
+              </button>
+              {skipped.length > 0 && (
+                <p className="rounded-lg bg-warning/10 p-2 text-xs text-warning">
+                  {skipped.length} {skipped.length === 1 ? 'entry was' : 'entries were'} not an email address and left out: {skipped.slice(0, 3).join(', ')}
+                  {skipped.length > 3 ? '…' : ''}
+                </p>
+              )}
+              {notAdded.length > 0 && (
+                <div className="max-h-48 space-y-1.5 overflow-y-auto">
+                  {notAdded.map((r, i) => (
+                    <div key={`${r.email}-${i}`} className="rounded-md border border-black/10 p-2 text-xs dark:border-white/10">
+                      <p className="break-all font-mono">{r.email || '(blank)'}</p>
+                      <p className="text-danger">{r.error}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button onClick={reset} className="w-full rounded-full bg-accent py-2 text-sm font-bold text-accent-foreground hover:opacity-90">
                 Done
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="space-y-1">
-                <label className="text-sm font-medium text-zinc-500">Emails to invite</label>
+                <label htmlFor="import-emails" className="text-sm font-medium text-zinc-500">
+                  Emails to invite
+                </label>
                 <textarea
+                  id="import-emails"
                   rows={6}
                   placeholder={'One email per line, e.g.\nalex@example.com\njamie@example.com'}
                   className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
                   value={text}
+                  disabled={submitting}
                   onChange={(e) => setText(e.target.value)}
                 />
               </div>
               <button
                 type="button"
+                disabled={submitting}
                 onClick={() => fileRef.current?.click()}
                 className="text-xs font-medium text-accent hover:underline"
               >
@@ -148,9 +181,24 @@ export function ImportClientsButton() {
               </button>
               <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
               <p className="text-xs text-zinc-500">
-                A CSV with an &quot;email&quot; column works too — names aren&apos;t imported;
-                each client sets theirs when they complete Setup.
+                Up to {IMPORT_MAX} at a time. A CSV with an &quot;email&quot; column works too; names aren&apos;t imported, each client sets theirs when they
+                complete Setup. You get a file of one-time links to send, not passwords.
               </p>
+              {problem && (
+                <p className="text-xs text-danger" role="alert">
+                  {problem}
+                </p>
+              )}
+              {progress && (
+                <div aria-live="polite">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                    <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Adding {Math.min(progress.total, progress.done + IMPORT_BATCH_SIZE)} of {progress.total}…
+                  </p>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -162,6 +210,7 @@ export function ImportClientsButton() {
                 </button>
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => setOpen(false)}
                   className="rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium dark:border-white/10"
                 >
