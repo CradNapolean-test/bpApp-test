@@ -975,7 +975,7 @@ export function DashboardShell({
             />
           )}
           {effectiveScreen === 'Info' && isCoachView && (
-            <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} readOnly={!isOwnClient} />
+            <CoachInfoTab clientId={clientId} entries={journalEntries} profile={profile} readOnly={!isOwnClient} currentUserId={currentUserId} />
           )}
           {effectiveScreen === 'Events' && <EventsTab events={events} readOnly={isCoachView} />}
           {effectiveScreen === 'Rewards' && <RewardsTab data={rewardsData} />}

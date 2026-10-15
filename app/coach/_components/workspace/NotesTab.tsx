@@ -23,6 +23,7 @@ function JournalSection({
   placeholder,
   entries,
   readOnly,
+  currentUserId,
 }: {
   clientId: string;
   kind: ClientJournalEntryRow['kind'];
@@ -31,6 +32,8 @@ function JournalSection({
   placeholder: string;
   entries: ClientJournalEntryRow[];
   readOnly: boolean;
+  // Every coach at the member's gym can read the notes, but only the author can delete one (migration 0130, D3).
+  currentUserId?: string | null;
 }) {
   const [adding, setAdding] = useState(false);
   const [body, setBody] = useState('');
@@ -103,9 +106,12 @@ function JournalSection({
                 </p>
               )}
               <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{entry.body}</p>
-              <p className="mt-1 text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                {new Date(entry.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {currentUserId && entry.coach_id !== currentUserId ? ' · written by another coach' : ''}
+              </p>
             </div>
-            {!readOnly && (
+            {!readOnly && (!currentUserId || entry.coach_id === currentUserId) && (
               <button
                 onClick={() => handleDelete(entry.id)}
                 aria-label="Delete"
@@ -228,11 +234,13 @@ export function NotesTab({
   entries,
   profile,
   readOnly = false,
+  currentUserId = null,
 }: {
   clientId: string;
   entries: ClientJournalEntryRow[];
   profile?: ClientProfileRow | null;
   readOnly?: boolean;
+  currentUserId?: string | null;
 }) {
   return (
     <div className="space-y-4">
@@ -247,6 +255,7 @@ export function NotesTab({
           placeholder={section.placeholder}
           entries={entries.filter((e) => e.kind === section.kind)}
           readOnly={readOnly}
+          currentUserId={currentUserId}
         />
       ))}
     </div>
