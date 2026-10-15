@@ -1,6 +1,8 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireSandbox(); // refuses unless --ref names a listed sandbox, never the live project (scripts/_guard.ts, CM8)
 import { createAdminClient } from '../lib/supabase/admin';
+import { requireSandbox } from './_guard';
 
 // One-off: copies an education course (modules and lessons, no assignments) into another gym.
 //   npm run copy-course -- --title="Education Library" --to="Ballistic Performance - Salford Quays"

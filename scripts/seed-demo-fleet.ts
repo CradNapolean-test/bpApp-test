@@ -1,13 +1,16 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireSandbox(); // refuses unless --ref names a listed sandbox, never the live project (scripts/_guard.ts, CM8)
 
 import { createAdminClient } from '../lib/supabase/admin';
+import { randomPassword, requireSandbox } from './_guard';
 
 // Configurable so this can be smoke-tested at tiny scale before the real run.
 const NUM_COACHES = Number(process.env.SEED_COACHES ?? 3);
 const CLIENTS_PER_COACH = Number(process.env.SEED_CLIENTS ?? 100);
 const CONCURRENCY = 8;
-const PASSWORD = 'DemoFleet123!';
+// A new random password each run, printed once at the end of each coach (never a fixed one in the source).
+const PASSWORD = randomPassword();
 
 const supabase = createAdminClient();
 
@@ -314,7 +317,33 @@ async function withConcurrency<T>(items: T[], limit: number, fn: (item: T, i: nu
   await Promise.all(Array.from({ length: limit }, worker));
 }
 
+// Removes only what this script made: the demo-coach-N@example.com accounts, their clients (demo-coach-N-clientM@example.com) and the
+// classes and course it gave each coach. Nothing else.
+async function cleanup() {
+  const users: { id: string; email?: string }[] = [];
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    users.push(...data.users);
+    if (data.users.length < 1000) break;
+  }
+  const mine = users.filter((u) => /^demo-coach-\d+(-client\d+)?@example\.com$/.test(u.email ?? ''));
+  const coachIds = mine.filter((u) => /^demo-coach-\d+@example\.com$/.test(u.email ?? '')).map((u) => u.id);
+  for (const id of coachIds) {
+    await supabase.from('classes').delete().eq('coach_id', id);
+    await supabase.from('education_courses').delete().eq('coach_id', id);
+  }
+  let removed = 0;
+  for (const u of mine) {
+    const { error } = await supabase.auth.admin.deleteUser(u.id);
+    if (error) console.error(u.email, error.message);
+    else removed++;
+  }
+  console.log(`Removed ${removed} demo accounts.`);
+}
+
 async function main() {
+  if (process.argv.includes('--cleanup')) return cleanup();
   console.log(`Seeding ${NUM_COACHES} coach(es) x ${CLIENTS_PER_COACH} client(s) each...`);
 
   for (let c = 1; c <= NUM_COACHES; c++) {

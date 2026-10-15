@@ -1,8 +1,10 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireLiveConfirmation('creating an owner login'); // needs --yes-this-is-live (scripts/_guard.ts, CM8)
 
 import { randomBytes } from 'node:crypto';
 import { createAdminClient } from '../lib/supabase/admin';
+import { requireLiveConfirmation } from './_guard';
 
 // One-off: creates the business owner's login and puts every gym that has no organisation yet into one
 // organisation they own. Needs migrations 0102 and 0103.

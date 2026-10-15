@@ -1,9 +1,11 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireSandbox(); // refuses unless --ref names a listed sandbox, never the live project (scripts/_guard.ts, CM8)
 
 import { randomBytes } from 'node:crypto';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '../lib/supabase/admin';
+import { requireSandbox } from './_guard';
 
 // Creates 100 dummy client accounts + a handful of classes with varied capacity, then
 // exercises the real book_class/cancel_booking RPCs (signed in as each dummy client, not
@@ -51,7 +53,29 @@ async function signedInClient(email: string, password: string) {
   return client;
 }
 
+// Removes the stress-test-NNN@example.com accounts this script made (their bookings and credits go with them). The classes it created
+// for the run are not removed here: delete them from the coach's timetable.
+async function cleanup() {
+  const admin = createAdminClient();
+  const users: { id: string; email?: string }[] = [];
+  for (let page = 1; ; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    users.push(...data.users);
+    if (data.users.length < 1000) break;
+  }
+  const mine = users.filter((u) => /^stress-test-\d{3}@example\.com$/.test(u.email ?? ''));
+  let removed = 0;
+  for (const u of mine) {
+    const { error } = await admin.auth.admin.deleteUser(u.id);
+    if (error) console.error(u.email, error.message);
+    else removed++;
+  }
+  console.log(`Removed ${removed} stress-test accounts.`);
+}
+
 async function main() {
+  if (process.argv.includes('--cleanup')) return cleanup();
   const admin = createAdminClient();
   const today = new Date();
 
@@ -256,7 +280,7 @@ async function main() {
   console.log(`${clients.length} dummy clients created under coach ${COACH_ID}`);
   console.log(`${Object.keys(classIds).length} classes created`);
   console.log('Emails: stress-test-001@example.com .. stress-test-100@example.com');
-  console.log('This data is persistent -- not auto-cleaned up.');
+  console.log('This data is persistent. Remove the accounts with: tsx scripts/stress-test.ts --ref=<sandbox> --cleanup');
 }
 
 main().catch((e) => {

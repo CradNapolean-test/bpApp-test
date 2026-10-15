@@ -1,9 +1,11 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireSandbox(); // refuses unless --ref names a listed sandbox, never the live project (scripts/_guard.ts, CM8)
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createAdminClient } from '../lib/supabase/admin';
+import { requireSandbox } from './_guard';
 
 interface FoodSeed {
   name: string;

@@ -1,7 +1,9 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireLiveConfirmation('creating a gym'); // needs --yes-this-is-live (scripts/_guard.ts, CM8)
 
 import { createAdminClient } from '../lib/supabase/admin';
+import { requireLiveConfirmation } from './_guard';
 
 // One-off: there will only ever be a couple of these, created by hand rather than through an
 // in-app "create a new gym" flow (see scripts/create-coach.ts's --gym/--admin flags for

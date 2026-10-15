@@ -1,8 +1,10 @@
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+requireLiveConfirmation('creating a coach login'); // needs --yes-this-is-live (scripts/_guard.ts, CM8)
 
 import { randomBytes } from 'node:crypto';
 import { createAdminClient } from '../lib/supabase/admin';
+import { requireLiveConfirmation } from './_guard';
 
 function parseArgs() {
   const args = Object.fromEntries(
