@@ -262,7 +262,9 @@ export function CoachMemberOverview({
 
   // "6 Week Challenge · week 2 of 6 · ends 15 Nov" (or "starts 12 Oct" before it begins).
   const planLabel = (() => {
-    if (!membership?.package) return 'No plan set up';
+    if (!membership) return 'No plan set up';
+    // They have a plan but its row is not readable from here (R38): say so rather than that they have none.
+    if (!membership.package) return 'On a plan (name not available)';
     return planCountdownLabel(
       membership.package.name,
       planCountdown({ ...membership, durationWeeks: membership.package.duration_weeks ?? null }, todayIso),

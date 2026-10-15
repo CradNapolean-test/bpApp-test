@@ -11,9 +11,10 @@ import type { CourseRollupRow, EducationCourseAssignmentWithDetails, EducationCo
 // getProgramTemplatesWithDays) -- lets the coach-authoring UI derive its currently-open
 // course straight from these already-fresh props after any mutation (router.refresh() already
 // re-runs this), rather than a separate on-click fetch that could go stale.
-export async function getCourses(): Promise<EducationCourseWithModules[]> {
+// forGymId: a member's page lists the courses of the MEMBER'S gym; everywhere else it is the gym being worked in (R38).
+export async function getCourses(forGymId?: string | null): Promise<EducationCourseWithModules[]> {
   const supabase = await createClient();
-  const gymId = await resolveScopingGymId(supabase);
+  const gymId = forGymId ?? (await resolveScopingGymId(supabase));
   const { data, error } = await supabase
     .from('education_courses')
     .select('*, education_modules(*, education_lessons(*))')

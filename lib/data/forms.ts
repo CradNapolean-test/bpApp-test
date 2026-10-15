@@ -12,9 +12,10 @@ import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormT
 type QuestionInput = Omit<FormQuestionRow, 'id' | 'template_id' | 'archived_at' | 'answerCount'>;
 type TemplateFields = { name: string; description: string | null; is_default_onboarding: boolean };
 
-export async function getFormTemplates(): Promise<FormTemplateRow[]> {
+// forGymId: a member's page lists the forms of the MEMBER'S gym; everywhere else it is the gym being worked in (R38).
+export async function getFormTemplates(forGymId?: string | null): Promise<FormTemplateRow[]> {
   const supabase = await createClient();
-  const gymId = await resolveScopingGymId(supabase);
+  const gymId = forGymId ?? (await resolveScopingGymId(supabase));
   const { data, error } = await supabase
     .from('form_templates')
     .select('*, form_questions(count)')

@@ -49,13 +49,17 @@ export interface CoachClientRow {
   planName: string | null;
 }
 
-// The name of the plan on a member's open (not ended) membership, if any.
-function planNameOf(memberships: unknown): string | null {
+// What a plan is called when the member HAS one but its row cannot be read (it belongs to another gym than the coach's active one and no
+// rule lets the coach see it). Showing "No plan" for them was wrong: 63 members with a plan all read "No plan" (R38).
+export const PLAN_NAME_UNREADABLE = 'Plan';
+
+// The name of the plan on a member's open (not ended) membership; null only when they have none.
+export function planNameOf(memberships: unknown): string | null {
   const rows = (Array.isArray(memberships) ? memberships : []) as { ended_at: string | null; membership_packages: { name: string } | { name: string }[] | null }[];
   const open = rows.find((m) => m.ended_at === null);
   if (!open) return null;
   const pkg = Array.isArray(open.membership_packages) ? open.membership_packages[0] : open.membership_packages;
-  return pkg?.name ?? null;
+  return pkg?.name ?? PLAN_NAME_UNREADABLE;
 }
 
 export interface GymClientRow extends CoachClientRow {

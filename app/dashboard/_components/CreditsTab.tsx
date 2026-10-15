@@ -217,7 +217,7 @@ export function CreditsTab({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Membership</p>
-            <p className="mt-0.5 truncate text-lg font-extrabold text-black dark:text-zinc-50">{membership?.package?.name ?? 'No plan set up'}</p>
+            <p className="mt-0.5 truncate text-lg font-extrabold text-black dark:text-zinc-50">{membership ? (membership.package?.name ?? 'Plan (name not available)') : 'No plan set up'}</p>
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${status.tone}`}>{status.label}</span>
         </div>

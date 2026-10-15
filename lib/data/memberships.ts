@@ -7,6 +7,26 @@ import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientMembershipRow, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from './types';
 
+// The gym a member belongs to, which is not necessarily the gym their coach is working in right now (a coach in two gyms has
+// one active gym at a time). Anything offered to a member (plans, packs, forms) must come from THIS gym (R38).
+export async function getClientGymId(clientId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from('profiles').select('gym_id').eq('id', clientId).maybeSingle();
+  return (data?.gym_id as string | null | undefined) ?? null;
+}
+
+// The plans of one gym: for a member's page, the member's own gym, not whichever gym the coach has active.
+export async function getPackagesForGym(gymId: string): Promise<MembershipPackageRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('membership_packages')
+    .select('*')
+    .eq('gym_id', gymId)
+    .order('credits_per_week');
+  if (error) raise(error);
+  return data ?? [];
+}
+
 export async function getPackages(): Promise<MembershipPackageRow[]> {
   const supabase = await createClient();
   const gymId = await resolveScopingGymId(supabase);
@@ -100,6 +120,17 @@ export async function assignMembership(clientId: string, packageId: string): Pro
     p_package_id: packageId,
   });
   return error ? fail(error, 'Could not assign that package') : ok();
+}
+
+export async function getCreditPacksForGym(gymId: string): Promise<CreditPackRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('credit_packs')
+    .select('*')
+    .eq('gym_id', gymId)
+    .order('credits');
+  if (error) raise(error);
+  return data ?? [];
 }
 
 export async function getCreditPacks(): Promise<CreditPackRow[]> {

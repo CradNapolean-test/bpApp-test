@@ -257,9 +257,10 @@ export async function grantCredits(
 // `weeksBack` also generates recent past occurrences (the Attendance tab needs them, to mark
 // sessions that have already happened); members only ever see upcoming ones.
 // `includeCancelled` (coach screens) keeps dates that were cancelled, flagged, instead of dropping them.
-export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, includeCancelled = false): Promise<ScheduleOccurrence[]> {
+// forGymId: a member's page shows the timetable of the MEMBER'S gym; everywhere else it is the gym being worked in (R38).
+export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, includeCancelled = false, forGymId?: string | null): Promise<ScheduleOccurrence[]> {
   const supabase = await createClient();
-  const gymId = await resolveScopingGymId(supabase);
+  const gymId = forGymId ?? (await resolveScopingGymId(supabase));
 
   const { data: classes, error: classesError } = await supabase
     .from('classes')

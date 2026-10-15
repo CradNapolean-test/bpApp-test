@@ -13,9 +13,10 @@ import type {
   ProgramTemplateWithDays,
 } from './types';
 
-export async function getProgramTemplates(): Promise<ProgramTemplateRow[]> {
+// forGymId: a member's page lists the templates of the MEMBER'S gym; everywhere else it is the gym being worked in (R38).
+export async function getProgramTemplates(forGymId?: string | null): Promise<ProgramTemplateRow[]> {
   const supabase = await createClient();
-  const gymId = await resolveScopingGymId(supabase);
+  const gymId = forGymId ?? (await resolveScopingGymId(supabase));
   const { data, error } = await supabase
     .from('program_templates')
     .select('*')

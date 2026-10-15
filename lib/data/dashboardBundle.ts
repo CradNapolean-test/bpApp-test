@@ -23,7 +23,7 @@ import { getUpcomingEvents } from './community';
 import { getRewardsForMember } from './rewards';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getBlockChoices } from './blockChoices';
-import { getCreditPacks, getMyMembership, getPackages } from './memberships';
+import { getClientGymId, getCreditPacks, getCreditPacksForGym, getMyMembership, getPackages, getPackagesForGym } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
 import { getNutritionFeedback } from './nutritionFeedback';
@@ -47,7 +47,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
   // timezone is available before "today" is resolved -- this is the fix for a client's
   // logged data landing on the wrong day near a UTC boundary (see migration 0044's comment
   // for the full root-cause explanation). Every date below derives from this, not raw UTC.
-  const profile = await getClientProfile(clientId);
+  // The member's own gym too: a coach working in a different gym still sees the member's plans, forms and timetable, not their own (R38).
+  const [profile, gymId] = await Promise.all([getClientProfile(clientId), getClientGymId(clientId)]);
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const today = new Date(`${todayIso}T00:00:00Z`);
   const weekStart = startOfWeek(today);
@@ -102,7 +103,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     canWrite ? getOrCreateDailyLog(clientId, todayIso) : getDailyLog(clientId, todayIso),
     getMessages(clientId),
     getUpcomingBookings(clientId),
-    getScheduleOccurrences(),
+    getScheduleOccurrences(3, 0, false, gymId),
     getCreditsBalance(clientId),
     getCreditsBucketBalances(clientId),
     getCreditsLedger(clientId),
@@ -112,20 +113,20 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getWorkoutDayFeedback(clientId),
     getBlockChoices(clientId),
     getMyMembership(clientId),
-    getPackages(),
-    getCreditPacks(),
+    gymId ? getPackagesForGym(gymId) : getPackages(),
+    gymId ? getCreditPacksForGym(gymId) : getCreditPacks(),
     getPhotos(clientId),
     getBodyScans(clientId),
     getNutritionFeedback(clientId),
     getMeasurementLogs(clientId),
     getHabitsWithLogs(clientId, profile?.timezone ?? DEFAULT_TIMEZONE),
     getNotifications(clientId),
-    getFormTemplates(),
+    getFormTemplates(gymId),
     getClientFormAssignments(clientId),
     getExerciseLibrary(),
-    getProgramTemplates(),
+    getProgramTemplates(gymId),
     getRecipesWithIngredients(clientId),
-    getCourses(),
+    getCourses(gymId),
     getClientCourseAssignments(clientId),
     getClientUnreadCount(clientId),
     canWrite ? getOrCreateMealSections(clientId) : getMealSections(clientId),
