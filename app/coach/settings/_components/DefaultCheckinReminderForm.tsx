@@ -4,18 +4,20 @@ import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
 import { setDefaultCheckinReminderDays } from '@/lib/data/coachSettings';
 import { inputCls } from '@/app/_components/ui';
-
-const DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 14];
+import { reminderDayOptions } from '@/lib/reminderDays';
 
 export function DefaultCheckinReminderForm({ initialDays }: { initialDays: number }) {
   const { run, busy } = useAction();
   const [days, setDays] = useState(initialDays);
 
+  // The menu goes back to what is saved if the save fails (DC1), instead of showing a setting that was never stored.
   async function handleChange(value: number) {
+    const previous = days;
     setDays(value);
-    await run(() => setDefaultCheckinReminderDays(value), {
+    const saved = await run(() => setDefaultCheckinReminderDays(value), {
       success: value === 0 ? 'Default reminders turned off' : `Default set to ${value} days`,
     });
+    if (!saved) setDays(previous);
   }
 
   return (
@@ -32,7 +34,7 @@ export function DefaultCheckinReminderForm({ initialDays }: { initialDays: numbe
         className={inputCls}
       >
         <option value={0}>Off</option>
-        {DAY_OPTIONS.map((d) => (
+        {reminderDayOptions(days).map((d) => (
           <option key={d} value={d}>
             {d} {d === 1 ? 'day' : 'days'}
           </option>
