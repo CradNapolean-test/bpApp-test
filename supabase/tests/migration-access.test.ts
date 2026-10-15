@@ -74,9 +74,16 @@ describe('row-level security rules after every migration', () => {
     expect(left.length).toBeGreaterThan(0); // the read rule is still there
   });
 
-  it('the exercise library has one read rule and one coach-only write rule (H1)', () => {
-    const names = [...(policies.get('exercise_library') ?? new Map<string, string>()).keys()].sort();
-    expect(names).toEqual(['authenticated users read exercise_library', 'coaches manage exercise_library']);
+  it('the exercise library has a read rule and only the add / author-or-admin edit and delete rules (H1, then CM4 in 0130)', () => {
+    const left = policies.get('exercise_library') ?? new Map<string, string>();
+    expect([...left.keys()].sort()).toEqual([
+      'authenticated users read exercise_library',
+      'coaches add to exercise_library',
+      'owners delete exercise_library',
+      'owners edit exercise_library',
+    ]);
+    // no rule may let every signed-in user write: nothing is a catch-all "all" rule any more
+    expect([...left.values()].filter((command) => command === 'all')).toEqual([]);
   });
 
   it('the old open exercise-library rule is not recreated by any migration (H1)', () => {

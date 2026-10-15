@@ -713,3 +713,81 @@ begin
   update profiles set logo_path = p_path where id = auth.uid();
 end;
 $$;
+
+-- =====================================================================================================================
+-- CM4 (DECISION D4, recommended default). The exercise library had no owner.
+-- One library shared by the organisation, with an owner for each entry:
+--   * an entry can be edited or deleted by its author (created_by = the coach);
+--   * the seeded entries (created_by is null) can be edited or deleted by a gym admin only (profiles.is_gym_admin);
+--   * nobody else can; everyone signed in can still read; only a coach can add, and the author is always the adder.
+--   * is_active: an entry can be retired instead of deleted (an entry used by a programme cannot be deleted anyway: the
+--     foreign keys from workout_exercises and the templates do not cascade). Retired entries are still readable so existing
+--     programmes keep their names and videos; the coach pickers should hide them (brief 04).
+--   * created_by cannot be changed afterwards, so nobody can adopt someone else's entry.
+-- This replaces brief 01's single coach-only rule ("coaches manage exercise_library") with the finer ones below. If per-gym
+-- libraries are wanted later, add gym_id and scope these rules; not now.
+--
+-- PRE-FLIGHT (read-only; who owns the library today):
+--   select (created_by is null) as seeded, count(*) from public.exercise_library group by 1;
+--   select p.display_name, p.email, count(*) from public.exercise_library l join public.profiles p on p.id = l.created_by group by 1, 2;
+-- =====================================================================================================================
+alter table public.exercise_library add column if not exists is_active boolean not null default true;
+
+create or replace function public.can_edit_library_exercise(p_created_by uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select auth.uid() is not null
+    and public.my_gym_id() is not null
+    and (
+      p_created_by = auth.uid()
+      or (p_created_by is null and exists (select 1 from profiles where id = auth.uid() and is_gym_admin))
+    );
+$$;
+
+revoke execute on function public.can_edit_library_exercise(uuid) from public, anon;
+grant execute on function public.can_edit_library_exercise(uuid) to authenticated;
+
+drop policy if exists "coaches manage exercise_library" on public.exercise_library;
+drop policy if exists "coaches add to exercise_library" on public.exercise_library;
+drop policy if exists "owners edit exercise_library" on public.exercise_library;
+drop policy if exists "owners delete exercise_library" on public.exercise_library;
+
+create policy "coaches add to exercise_library"
+  on public.exercise_library for insert
+  to authenticated
+  with check (created_by = auth.uid() and public.my_gym_id() is not null);
+
+create policy "owners edit exercise_library"
+  on public.exercise_library for update
+  to authenticated
+  using (public.can_edit_library_exercise(created_by))
+  with check (public.can_edit_library_exercise(created_by));
+
+create policy "owners delete exercise_library"
+  on public.exercise_library for delete
+  to authenticated
+  using (public.can_edit_library_exercise(created_by));
+
+create or replace function public.exercise_library_protect_author()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null and new.created_by is distinct from old.created_by then
+    raise exception 'The author of a library entry cannot be changed';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.exercise_library_protect_author() from public, anon, authenticated;
+
+drop trigger if exists exercise_library_protect_author on public.exercise_library;
+create trigger exercise_library_protect_author
+  before update on public.exercise_library
+  for each row execute function public.exercise_library_protect_author();
