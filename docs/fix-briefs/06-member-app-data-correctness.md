@@ -91,3 +91,68 @@
 
 - Each item implemented or skipped with a reason in `## Status`; unit tests for `dayCaloriesOf`, the sync (null on empty), `shouldCommit`, the patch builder, the editable-window rule, `trustworthyAdaptiveTdee` and the streak.
 - Owner clean-up queries written (empty `0/0/0` days) but not run.
+
+## Status
+
+Branch `fix/06-member-data` (cut from `fix/05-active-gym`, so it builds on migrations 0127 to 0143), 12 commits plus this status commit, nothing pushed. One migration: `0136_member_data_correctness.sql`.
+
+**Not tried against a real database or in a browser.** There is no sandbox project, and the ground rules forbid logging or saving against live data. What did run: `npx tsc --noEmit` (clean), `npx eslint app lib` (0 errors; the same 3 warnings that were there before), `npx vitest run` (610 pass; the new logic lives in `lib/` helpers with tests beside them), and `npx next build`. The screens (Food, Weekly Log, Setup, Workout, Credits, the coach Foods tab) were changed and typechecked but not clicked through; the owner list below says what to try.
+
+**Deploy order matters.** Apply `0136` before deploying this branch. The code writes `daily_logs.calories` (the column is new) and calls `mark_all_notifications_read()`; the notification call falls back to one bulk update if the function is missing, but the calories column has no fallback. The `member_reward_progress()` change in the same file is optional for the code. The brief 05 notes still apply (`0143` goes last).
+
+### Findings
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| R11 (D9) | done | `38fe785` | `daily_logs.calories` (0 to 100,000, nullable). Every food write (diary, manual macros, photo diary, recipes, copy-day) goes through `lib/utils/foodTotals.ts`, which sums the day's kcal **including Quick Adds**. `dayCaloriesOf(log)` is `log.calories ?? dayCalories(p, c, f)` and replaced every `dayCalories(` on a log: Today, the Weekly Log averages, Insights, the streak, the Coach hub, the offline snapshot, and the coach's member overview (so brief 05's "Calories (avg)" hand-off is covered). Old rows keep `calories = null` and read as before. The engine is untouched. |
+| M2 | done | `38fe785` | Removing the last entry writes `null` for protein, carbs, fat and calories (`NO_FOOD_FIELDS`). `hasLoggedData` counts `calories` too. Clean-up for existing empty days: `supabase/cleanup/0136_empty_food_days.sql`, read-only counts and lists with the UPDATE commented out. **Not run.** |
+| R12 | done | `38fe785` | `lib/trackerInput.ts`: `shouldCommit(prev, next, touched)` and `interpretTyped` (a blank box is "clear this value", saved as `null`). A slider that was never touched is "not logged"; Tab onto it saves nothing. A small Clear control sits beside each value. |
+| R14 (D20) | done | `38fe785` | `lib/dayPatch.ts`: a day is loaded when you navigate to it (not cut from the 84-day window) and a save sends **only the fields that changed**. Members edit the last 14 days and browse the last 30 (`BROWSE_DAYS`); older days read "Ask your coach to change this". Saves are debounced and do not refresh the page. |
+| FT1 to FT9, FS3, FS5, FS6 | done | `7fc0a4d` | Browsing days no longer creates blank `daily_logs` rows (date resolvers only read; the row is made by the first entry). The screen rolls over at midnight in the member's timezone (`lib/midnight.ts`, `useTodayIso`). Food changes update local state from what the action returns and do not call `router.refresh()` per tap (see Things to know). A missing day shows an error, favourites roll back on failure, and the shortcut loaders have a `.catch`. A barcode scan opens the quantity sheet with the product's serving size (`servingFrom`) instead of adding 100 g. The scanner video has `playsInline` and `muted` (FT8: still needs a look on an iPhone). Limits: 5,000 kcal, 2,000 g, 50 portions (`lib/foodLimits.ts`), with an inline message. The Add sheet closes only on success. Quick Adds can be edited (`updateQuickAddEntry`). |
+| MP1 | done | `7fc0a4d` | `logPlanToDiary` skips rows already added (`newPlanRows`) and the button says "Already added". |
+| RC1 | partly | `7fc0a4d` | Recipes can be renamed (`renameRecipe`). **Fractional servings were not done:** `recipes.servings` is an integer with a 1 to 100 check, and this brief does not plan a type change. |
+| R15, SU2, SU3 | done | `7426943` | `lib/profilePatch.ts`: Setup holds an allow-list of member-editable fields and sends only the ones that changed. The coach-managed guard error (0110) reads "Your coach updated these details; reload to see them." Coach-controlled fields are explained, `start_weight` is read-only after the first save, and `timezone` is no longer written on every save. |
+| M8 (D6, D18) | done | `b824b25` | `targetsHeldBack` (`lib/onboarding.ts`) is the one switch: while `needs_coach_review` is set, Setup, the Coach hub and the Today ring say "Your coach is setting up your plan" instead of calorie and macro targets. Sign-up under 16 is refused ("Please ask your coach to set up your account"); `activityLevel` is checked against the allowed options; a starting or goal BMI under 18.5 adds a reason to the coach's review flag. |
+| R19 | done | `761d1a8` | `lib/insights.ts` `trustworthyAdaptiveTdee`: at least 14 days between the first and last weigh-in, at least 10 days with food, result between 1,000 and 6,000 kcal; otherwise "Needs about two weeks of food and weigh-ins". The audit's failing case is a test. |
+| L1 | done | `3a12894` | `lib/programWeek.ts`: the week counts from the programme's start date. A small change in `lib/data/dashboardBundle.ts`, which is brief 07's file. |
+| L2 | done | `3a12894` | `lib/streak.ts` `currentStreak`: counts from the latest logged day, yesterday keeps it alive, no 85-day ceiling (`getLoggedDates`, `getFirstLoggedDate`). The bundle now returns `streak`. |
+| L3 | done | `526dae4` | Notification toggles roll back when the save fails. |
+| L5 | done | `526dae4` | `lib/bookingRules.ts` and `getGymBookingRules`: blackout hours and cut-off come from the gym, not `occurrences[0]`. |
+| L4 | done | `d134e2e` | `lib/workoutSets.ts`: set numbers are unique after a middle set is deleted, an all-empty set is refused, block choices follow the server, and Finish workout says what was done. |
+| CH1 | done | `d134e2e` | The Coach hub uses `pickCurrentProgram`, and counts Quick Add calories. |
+| FM1, FM2 | done | `dcff438` | `lib/formAnswers.ts`: a required number question needs a real number. `SignOutButton` clears `form-draft:*` along with the offline snapshot (`lib/utils/localData.ts`). |
+| PT1 | done | `3363d42` | `siteReadings`: "Now" is the latest value per site; an empty form is refused. |
+| PT2, PT3, PT4 | done | `3363d42` | The file input is cleared in a `finally`, a busy state shows while the image shrinks, and signed links last an hour (was 10 minutes). |
+| BS1, BS2, L9, L11 | done | `3363d42` | `lib/scanDate.ts`: no future scan date, in the UI and the server action. A failed row insert deletes the uploaded file. Storage paths use a validated extension (`lib/utils/uploadName.ts`), not `file.name`. |
+| CC1 | done | `182c92e` | `getMyCreditHistory(clientId, 10)`: the last ten changes, the bonus credits that run out and when, and "Your weekly allowance resets every Monday". `ClientCreditsTab` is now a client component that reads it when opened. |
+| RW1 | done | `38fe785` | In `0136`, `member_reward_progress()` counts `attended and status is distinct from 'cancelled'`, the same rule as Home. Home (`BpHome.tsx`, the owner's uncommitted file) was not touched and keeps its own count; see Hand-offs. |
+| NO1 | done | `182c92e` | `mark_all_notifications_read()` in `0136`; the bell makes one call (`markAllNotificationsRead`). |
+| M12 (UI) | done | `2599f55` | The member food search (including the fallback path), favourites, recently logged and barcode lookup skip hidden foods. Scanning a product whose barcode a coach hid says "This product has been taken off the food list. Add it with Quick Add instead, or ask your coach." (a hidden row still holds its unique barcode, so it cannot be cached again). The coach side is a new **Foods** tab in Library (`FoodsPane.tsx`): search scanned foods by name or barcode, Hide / Show again. There was no coach food search to attach a button to (the coach views of the Food screens are read-only), so this is a small separate pane. Editing the numbers of a scanned food is **not** offered; the 0128 policy allows it but the brief only asked for Hide. |
+
+### Files outside the usual list I had to touch, kept small
+
+`lib/data/dashboardBundle.ts` (programme week from the start date; the bundle returns `streak`, `gymBlackout` and `gymTimezone`), `app/dashboard/_components/DashboardShell.tsx` and the two pages that render it (new props), `OnboardingFlow.tsx` (age and activity checks), `ClassesArea.tsx`, `CoachingHub.tsx`, `lib/data/gym.ts` (`getGymBookingRules`, `getGymTimezone`), `lib/data/coachSettings.ts`, `lib/data/coach.ts`, `app/_components/useAction.ts` (a `refresh: false` option), `app/_components/SignOutButton.tsx`, and `app/coach/library/_components/LibraryHubShell.tsx` (the Foods tab). `TodayTab.tsx` was committed hunk by hunk: the owner's uncommitted edits there, in `BpHome.tsx`, `EventBanner.tsx` and the `scripts/seed-*.ts` files, are not in any commit.
+
+### What the owner must check
+
+1. Apply nothing to live yet. On a sandbox, apply `0136`, then run the read-only steps of `supabase/cleanup/0136_empty_food_days.sql` (steps 1 and 2, and the sleep listing) and look at the lists before deciding whether to run step 3, the UPDATE.
+2. On a sandbox copy as a test member: log a 300 kcal Quick Add and check Food, Today, the Weekly Log average and the coach's overview all say 300; delete it and check the day goes back to "not logged". Tab onto the Sleep slider (nothing saved); type a value, clear the box, leave it (the value is removed). Open a week older than 14 days (read-only), and one inside 14 days (edit one field; the others keep their values).
+3. Leave Food open past midnight, or change the phone clock, and log something: it should land on the new day. Scan a barcode: the quantity sheet should open. Test the scanner on an iPhone (FT8).
+4. New member through onboarding (including an age of 15): targets show "Your coach is setting up your plan" until the coach clears the review flag.
+5. Credits screen on a member with bonus credits that expire; the bell with several unread notifications (one request in the network tab).
+6. As a coach: Library, Foods tab, Hide a scanned food; as a member, search for it and scan its barcode.
+
+### Things to know
+
+- **Targets are held back for every new member.** The onboarding flags everyone as `needs_coach_review`, so every new member sees "Your coach is setting up your plan" until a coach clears it. This follows D6 literally; if that is too many, change `targetsHeldBack` in `lib/onboarding.ts`, the one place it is decided.
+- **The 14-day edit and 30-day browse windows (D20) are in the screens only.** The database does not refuse an older save from a modified client.
+- **Signed photo and printout links now last an hour (was 10 minutes).** That is a small increase in how long a copied link works; it is the price of the screen not breaking while it is open.
+- **The Food screen refreshes the dashboard once, when you leave it,** instead of after every tap, and re-reads fresh server data when you come back. That removed the 40-query reload per add, but the wider "every action refreshes everything" pattern (R13) is brief 07's.
+- **Existing empty days stay as they are** until the owner runs the clean-up. They still count as logged days until then.
+- **Hiding is for scanned foods only** (the database rule in 0128 covers `source = 'scan'`); seed, Open Food Facts and government foods cannot be hidden from the app. Deleting a scanned food is not offered because the database refuses it once a member has logged it.
+
+### Hand-offs
+
+- **Brief 07:** the bundle and shell refresh architecture (R13); `streak`, `gymBlackout` and `gymTimezone` are now fields of the bundle; the credits screen reads its own history (`getMyCreditHistory`), so it does not depend on the bundle's `creditsLedger` fetch if you drop it.
+- **Brief 11:** the new Foods tab uses `HubTabBar`, so it gets the same `aria-current` work as the other hubs.
+- **`BpHome.tsx`** is untouched (the owner's uncommitted work); once it is committed, check its attended-class count against the new `member_reward_progress()`.
