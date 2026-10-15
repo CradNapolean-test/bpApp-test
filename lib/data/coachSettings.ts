@@ -2,6 +2,7 @@
 
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
+import { uploadExtension } from '@/lib/utils/uploadName';
 
 export async function setDisplayName(name: string): Promise<ActionResult> {
   const supabase = await createClient();
@@ -36,8 +37,7 @@ export async function uploadCoachLogo(formData: FormData): Promise<ActionResult>
   const file = formData.get('file') as File | null;
   if (!file) return fail(null, 'No file provided');
 
-  const ext = file.name.split('.').pop() || 'png';
-  const path = `${user.id}/logo-${Date.now()}.${ext}`;
+  const path = `${user.id}/logo-${Date.now()}.${uploadExtension(file, 'png')}`;
 
   const { error: uploadError } = await supabase.storage.from('coach-branding').upload(path, file, { upsert: true });
   if (uploadError) return fail(uploadError, 'Could not upload logo');

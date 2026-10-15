@@ -291,6 +291,9 @@ function AddScanSheet({ clientId, timezone, onClose }: { clientId: string; timez
       { success: 'Scan saved' }
     );
     if (ok) onClose();
+    // The scan was refused after the printout had gone up: take the file back down rather than leave it in storage with nothing pointing to
+    // it (BS2).
+    else if (printoutPath) await createClient().storage.from('inbody-scans').remove([printoutPath]).catch(() => {});
   }
 
   return (
@@ -298,7 +301,7 @@ function AddScanSheet({ clientId, timezone, onClose }: { clientId: string; timez
       <div className="space-y-3">
         <div className="space-y-1">
           <label className={labelCls}>Scan date</label>
-          <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="date" className={inputCls} value={date} max={todayIsoInTz(timezone ?? DEFAULT_TIMEZONE)} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           {field('weight', 'Weight (kg)', 'e.g. 82.4')}

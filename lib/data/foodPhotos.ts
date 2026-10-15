@@ -5,8 +5,10 @@ import { createClient } from '@/lib/supabase/server';
 import type { FoodPhotoEntry, FoodPhotoEntryRow } from './types';
 import { getDailyLog } from './dailyLogs';
 import { dayFieldsFromPhotos } from '@/lib/utils/foodTotals';
+import { uploadExtension } from '@/lib/utils/uploadName';
 
-const SIGNED_URL_TTL_SECONDS = 60 * 10;
+// How long a photo link works: an hour, so it does not run out while the screen is open (PT3).
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 // Date-nav resolver, same shape as getManualMacrosForDate: it only reads, so browsing back never creates a blank row (FT1).
 export async function getFoodPhotosForDate(
@@ -55,8 +57,7 @@ export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntr
   const file = formData.get('file') as File | null;
   if (!clientId || !dailyLogId || !file) throw new Error('Missing clientId, dailyLogId, or file');
 
-  const ext = file.name.split('.').pop() || 'jpg';
-  const path = `${clientId}/${dailyLogId}-${crypto.randomUUID()}.${ext}`;
+  const path = `${clientId}/${dailyLogId}-${crypto.randomUUID()}.${uploadExtension(file)}`;
 
   const { error: uploadError } = await supabase.storage.from('food-photos').upload(path, file);
   if (uploadError) raise(uploadError);
@@ -70,7 +71,11 @@ export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntr
     })
     .select()
     .single();
-  if (error) raise(error);
+  if (error) {
+    // Take the uploaded file back down rather than leave it in storage with nothing pointing to it (L11).
+    await supabase.storage.from('food-photos').remove([path]);
+    raise(error);
+  }
   // The photo diary is visual only: no calories or macros are estimated or written to the day's
   // totals (those come from the check-in), so nothing to sync here.
   return data;

@@ -15,7 +15,7 @@ import { IDENTITY, ZoomablePhoto } from './ZoomablePhoto';
 import type { ZoomPan } from '@/lib/zoomPan';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
-import { formatDelta } from '@/lib/utils/measurementDeltas';
+import { formatDelta, siteReadings } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
 
 const longDate = (iso: string) =>
@@ -52,6 +52,8 @@ export function ProgressTab({
   // a UTC boundary gets silently filed under the wrong calendar day.
   const today = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
+  // Choosing a photo reads and shrinks it first; that takes a moment on a big phone photo and used to show nothing (PT4).
+  const [preparing, setPreparing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [viewing, setViewing] = useState<ProgressPhoto | null>(null);
   const [comparing, setComparing] = useState(false);
@@ -76,16 +78,19 @@ export function ProgressTab({
     const input = e.currentTarget;
     const file = input.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.set('file', await shrinkImageFile(file));
-    formData.set('clientId', clientId);
-    formData.set('date', today);
-    await runUpload(() => uploadProgressPhoto(formData), {
-      success: 'Photo uploaded',
-      onDone: () => {
-        input.value = '';
-      },
-    });
+    try {
+      setPreparing(true);
+      const formData = new FormData();
+      formData.set('file', await shrinkImageFile(file));
+      formData.set('clientId', clientId);
+      formData.set('date', today);
+      setPreparing(false);
+      await runUpload(() => uploadProgressPhoto(formData), { success: 'Photo uploaded' });
+    } finally {
+      // Always cleared, even when the upload failed: otherwise choosing the same photo again does nothing (PT2).
+      setPreparing(false);
+      input.value = '';
+    }
   }
 
   async function handleDeletePhoto(id: string, date: string) {
@@ -105,6 +110,11 @@ export function ProgressTab({
         .filter(([, v]) => v !== '')
         .map(([k, v]) => [k, Number(v)])
     );
+    // An empty form used to be saved as an empty entry (PT1).
+    if (Object.keys(fields).length === 0) {
+      toast.error('Enter at least one measurement to save.');
+      return;
+    }
     if (!Object.values(fields).every(isValidMeasurement)) {
       toast.error(measurementMessage);
       return;
@@ -144,12 +154,12 @@ export function ProgressTab({
               <div>
                 <button
                   type="button"
-                  disabled={uploading}
+                  disabled={uploading || preparing}
                   onClick={() => fileInputRef.current?.click()}
                   className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-black/15 text-sm font-semibold text-zinc-500 disabled:opacity-50 dark:border-white/15"
                 >
                   <Plus className="h-5 w-5" />
-                  {uploading ? 'Uploading…' : 'Add photo'}
+                  {preparing ? 'Preparing…' : uploading ? 'Uploading…' : 'Add photo'}
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
               </div>
@@ -202,12 +212,9 @@ export function ProgressTab({
                 <span className="text-right">Now</span>
               </div>
               {MEASUREMENT_FIELDS.map(({ key, label }) => {
-                const latest = initialMeasurements[0][key];
-                // Start is the first measurement ever logged for this body part (members no longer
-                // type a start figure), so the very first entry becomes Start automatically.
-                const oldest = [...initialMeasurements].reverse().find((m) => m[key] != null);
-                const start = oldest?.[key] ?? null;
-                const last = initialMeasurements[1]?.[key] ?? null;
+                // Now is the latest value logged for THIS site; Start is the first ever (members no longer type a start figure, so the
+                // very first entry becomes Start automatically).
+                const { now: latest, last, start } = siteReadings(initialMeasurements, key);
                 const vsStart = latest != null && start != null ? latest - start : null;
                 const vsPrevious = latest != null && last != null ? latest - last : null;
                 const deltaLabel = formatDelta(vsStart);
@@ -223,7 +230,7 @@ export function ProgressTab({
                       <span className="text-right text-sm text-zinc-500">{last ?? '—'}</span>
                       <span className="text-right text-sm font-bold text-black dark:text-zinc-50">{latest ?? '—'}</span>
                     </div>
-                    {deltaLabel && initialMeasurements.length > 1 && (
+                    {deltaLabel && start != null && latest != null && (
                       <p className={`mt-0.5 text-[11px] font-medium ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-success' : 'text-danger'}`}>
                         {deltaLabel}cm since your first measurement
                         {formatDelta(vsPrevious) ? ` · ${formatDelta(vsPrevious)}cm since last time` : ''}

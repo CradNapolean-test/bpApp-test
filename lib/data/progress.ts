@@ -2,9 +2,12 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
+import { uploadExtension } from '@/lib/utils/uploadName';
 import type { MeasurementLogRow, ProgressPhoto, ProgressPhotoRow } from './types';
 
-const SIGNED_URL_TTL_SECONDS = 60 * 10;
+// How long a photo link works. 10 minutes ran out while the member was still looking at the screen (PT3); an hour covers a normal visit,
+// and the links are made again every time the page loads.
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 export async function getPhotos(clientId: string): Promise<ProgressPhoto[]> {
   const supabase = await createClient();
@@ -35,8 +38,8 @@ export async function uploadProgressPhoto(formData: FormData): Promise<ProgressP
   const file = formData.get('file') as File | null;
   if (!clientId || !date || !file) throw new Error('Missing clientId, date, or file');
 
-  const ext = file.name.split('.').pop() || 'jpg';
-  const path = `${clientId}/${date}-${crypto.randomUUID()}.${ext}`;
+  // The extension comes from the file's type, not its name, so a name like "x.php" or "a/../b" never reaches the storage path (L9).
+  const path = `${clientId}/${date}-${crypto.randomUUID()}.${uploadExtension(file)}`;
 
   const { error: uploadError } = await supabase.storage.from('progress-photos').upload(path, file);
   if (uploadError) raise(uploadError);
@@ -46,7 +49,11 @@ export async function uploadProgressPhoto(formData: FormData): Promise<ProgressP
     .insert({ client_id: clientId, photo_date: date, storage_path: path })
     .select()
     .single();
-  if (error) raise(error);
+  if (error) {
+    // The row was refused after the file went up: take the file back down rather than leave it in storage with nothing pointing to it (L11).
+    await supabase.storage.from('progress-photos').remove([path]);
+    raise(error);
+  }
   return data;
 }
 
@@ -84,6 +91,8 @@ export async function addMeasurementLog(
   logDate: string,
   fields: Partial<Omit<MeasurementLogRow, 'id' | 'client_id' | 'log_date' | 'created_at'>>
 ): Promise<void> {
+  // An empty entry would make every "Now" read as a dash (PT1).
+  if (!Object.values(fields).some((v) => typeof v === 'number')) throw new Error('Enter at least one measurement.');
   const supabase = await createClient();
   const { error } = await supabase
     .from('measurement_logs')

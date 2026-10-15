@@ -15,22 +15,32 @@ export interface MeasurementDelta {
   vsPrevious: number | null;
 }
 
-// `logs` must be ordered newest-first (getMeasurementLogs already returns them that way).
-// vsStart compares the latest entry to client_profiles' meas_<field>_start; vsPrevious
-// compares it to the immediately-preceding logged entry.
+// A body site's readings from the log, newest first (getMeasurementLogs already returns them that way). "Now" is the latest value
+// logged FOR THAT SITE, not whatever the newest entry happens to hold: logging only a waist left every other site showing a dash in the
+// Now column even though they had been measured last week (PT1). "Last" is the value before that, "Start" the first ever.
+export interface SiteReadings {
+  now: number | null;
+  last: number | null;
+  start: number | null;
+}
+
+export function siteReadings(logs: MeasurementLogRow[], field: MeasurementField): SiteReadings {
+  const values = logs.map((l) => l[field]).filter((v): v is number => v != null);
+  return { now: values[0] ?? null, last: values[1] ?? null, start: values.length > 0 ? values[values.length - 1] : null };
+}
+
+// vsStart compares the latest reading to client_profiles' meas_<field>_start; vsPrevious compares it to the reading before it.
 export function measurementDelta(
   logs: MeasurementLogRow[],
   profile: ClientProfileRow | null,
   field: MeasurementField
 ): MeasurementDelta {
-  const latest = logs[0]?.[field] ?? null;
-  if (latest == null) return { vsStart: null, vsPrevious: null };
+  const { now, last } = siteReadings(logs, field);
+  if (now == null) return { vsStart: null, vsPrevious: null };
 
   const startValue = profile?.[START_KEY[field]] as number | null | undefined;
-  const vsStart = startValue != null ? latest - startValue : null;
-
-  const previous = logs[1]?.[field] ?? null;
-  const vsPrevious = previous != null ? latest - previous : null;
+  const vsStart = startValue != null ? now - startValue : null;
+  const vsPrevious = last != null ? now - last : null;
 
   return { vsStart, vsPrevious };
 }

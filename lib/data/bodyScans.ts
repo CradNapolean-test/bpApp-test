@@ -4,9 +4,12 @@ import { raise } from './errors';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
+import { scanDateProblem } from '@/lib/scanDate';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import type { BodyScan, BodyScanRow } from './types';
 
-const SIGNED_URL_TTL_SECONDS = 60 * 10;
+// An hour, so a printout link does not run out while the screen is open (PT3).
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 // Newest first. A scan with no row table yet (migration 0084 not applied) just reads as "none".
 export async function getBodyScans(clientId: string): Promise<BodyScan[]> {
@@ -63,6 +66,11 @@ export async function addBodyScan(
   printoutPath: string | null
 ): Promise<ActionResult> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.scanDate)) return fail(null, 'Please pick the scan date');
+  // A scan cannot be dated in the future (BS1); "today" is the member's own day, not the server's.
+  const supabaseForDate = await createClient();
+  const { data: tzRow } = await supabaseForDate.from('client_profiles').select('timezone').eq('client_id', clientId).maybeSingle();
+  const dateError = scanDateProblem(input.scanDate, todayIsoInTz((tzRow?.timezone as string | null | undefined) || DEFAULT_TIMEZONE));
+  if (dateError) return fail(null, dateError);
   for (const [key, label, min, max] of RANGES) {
     const v = input[key] as number | null;
     if (v != null && !(v >= min && v <= max)) return fail(null, `Please check the ${label}`);
