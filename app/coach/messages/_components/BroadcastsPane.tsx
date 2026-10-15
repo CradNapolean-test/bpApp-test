@@ -15,6 +15,8 @@ import { deleteMessageTemplate, saveMessageTemplate } from '@/lib/data/messageTe
 import { FIRST_NAME_TOKEN, STARTER_MESSAGES } from '@/lib/broadcastMessages';
 import { broadcastConfirmation, formatInZone, isPastSchedule, nowAsWallTime, wallTimeToIso, weekdayInZone } from '@/lib/broadcastSend';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { nextRunLabel } from '@/lib/communicationsSchedule';
+import { emailStatusLabel } from '@/lib/emailOutcome';
 import { useToast } from '@/app/_components/ToastProvider';
 import type { ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
 
@@ -185,7 +187,12 @@ export function BroadcastsPane({
     const sendAt = timing === 'now' ? new Date().toISOString() : (scheduleIso as string);
     const isRepeat = timing === 'later' && repeat;
     await run(
-      () => composeCommunication({ message: message.trim(), target, groupId, sendAt, channel, repeat: isRepeat ? 'weekly' : 'none', expectedGymId: gymId }),
+      async () => {
+        const res = await composeCommunication({ message: message.trim(), target, groupId, sendAt, channel, repeat: isRepeat ? 'weekly' : 'none', expectedGymId: gymId });
+        // The in-app message went; if the email did not (or only partly), say so now instead of leaving the coach thinking it did (CM1).
+        if (res.ok && res.emailNotice) toast.error(res.emailNotice);
+        return res;
+      },
       {
         success: isRepeat ? `Repeating every ${weekday}` : timing === 'now' ? `Sent to ${audienceCount} client${audienceCount === 1 ? '' : 's'}` : 'Scheduled',
         onDone: () => {
@@ -321,7 +328,7 @@ export function BroadcastsPane({
           )}
           {timing === 'later' && (
             <p className="text-xs text-zinc-500">
-              Scheduled messages go out at the next daily run after that time, so they can arrive up to a day late.
+              Messages are sent once a day, not at the minute you choose: this one {nextRunLabel(new Date(), scheduleIso ? new Date(scheduleIso) : undefined)}.
             </p>
           )}
           {timing === 'later' && (
@@ -382,7 +389,7 @@ export function BroadcastsPane({
                   {targetLabel(c)} · {channelLabel[c.channel]} ·{' '}
                   {isCancelled ? 'Cancelled (its group was deleted)' : `${isSent ? 'Sent' : 'Scheduled for'} ${when(isSent ? (c.sent_at as string) : c.send_at)}`}
                   {c.series_id && ' · weekly'}
-                  {showsEmail && isSent && <span className={c.email_sent_at ? ' text-accent' : ''}>{c.email_sent_at ? ' · email sent' : ' · email waiting'}</span>}
+                  {showsEmail && isSent && <span className={c.email_sent_at && !c.email_failed_count ? ' text-accent' : c.email_error || c.email_failed_count ? ' text-warning' : ''}>{` · ${emailStatusLabel(c)}`}</span>}
                 </p>
               </div>
               {!isSent && (

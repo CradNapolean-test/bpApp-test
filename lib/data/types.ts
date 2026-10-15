@@ -797,6 +797,11 @@ export interface ScheduledCommunicationRow {
   sent_at: string | null;
   channel: 'message' | 'email' | 'both';
   email_sent_at: string | null;
+  // What happened to the email (migration 0139): how many went, how many failed, why, and how many times the daily job tried.
+  email_sent_count?: number | null;
+  email_failed_count?: number | null;
+  email_error?: string | null;
+  email_attempts?: number | null;
   created_at: string;
   // The group's name saved when the broadcast was made, so history can still say which group it went to after the group is deleted (0133).
   target_group_name?: string | null;

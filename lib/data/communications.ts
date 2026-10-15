@@ -6,7 +6,13 @@ import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { sendPersonalisedEmails } from '@/lib/email';
+import { emailNotice } from '@/lib/emailOutcome';
+import { recordEmailOutcome } from '@/lib/emailRecord';
 import type { ScheduledCommunicationRow } from './types';
+
+// A broadcast is also a chat message to each member, and a chat message is limited to 4,000 characters (migration 0108). The database
+// would refuse a longer one with a technical error after the audience was worked out, so it is checked here first.
+const MAX_BROADCAST_LENGTH = 4000;
 
 export async function getCommunications(): Promise<ScheduledCommunicationRow[]> {
   const supabase = await createClient();
@@ -31,7 +37,12 @@ export async function composeCommunication(input: {
   repeat: 'none' | 'weekly';
   // The gym the page was drawn for (R28): "whole gym" and groups mean that gym's members, so a tab left open on an old gym must not send.
   expectedGymId?: string | null;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { emailNotice?: string | null }> {
+  const text = input.message.trim();
+  if (!text) return fail({ message: 'Write a message first' });
+  if (text.length > MAX_BROADCAST_LENGTH) {
+    return fail({ message: `That message is ${text.length.toLocaleString('en-GB')} characters. The limit is ${MAX_BROADCAST_LENGTH.toLocaleString('en-GB')}: shorten it by ${(text.length - MAX_BROADCAST_LENGTH).toLocaleString('en-GB')}.` });
+  }
   const supabase = await createClient();
   const stale = await checkActiveGym(supabase, input.expectedGymId);
   if (stale) return stale;
@@ -46,25 +57,33 @@ export async function composeCommunication(input: {
   if (error) return fail(error, 'Could not send that');
 
   const result = data as { id: string; sent_now: boolean; recipients: string[] } | null;
+  let notice: string | null = null;
   if (result?.sent_now && result.recipients.length > 0 && (input.channel === 'email' || input.channel === 'both')) {
     const { data: people } = await supabase
       .from('profiles')
-      .select('email, client_profiles(name, email_notifications_enabled)')
+      .select('id, email, client_profiles(name, email_notifications_enabled)')
       .in('id', result.recipients);
     // Opted-out clients are skipped, not just muted -- same shape as notifications_enabled's existing gate on
     // send_checkin_reminders.
     const optedIn = (people ?? [])
       .map((r) => {
         const profile = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
-        return { email: r.email as string, name: (profile?.name as string | null) ?? null, on: profile?.email_notifications_enabled ?? true };
+        return { id: r.id as string, email: r.email as string, name: (profile?.name as string | null) ?? null, on: profile?.email_notifications_enabled ?? true };
       })
       .filter((r) => r.on && r.email);
-    const sent = await sendPersonalisedEmails(optedIn, input.message);
-    if (!sent.skipped) {
-      await supabase.from('scheduled_communications').update({ email_sent_at: new Date().toISOString() }).eq('id', result.id);
-    }
+    // Replies go to the coach who sent it. The email is stamped as sent only if at least one really went; what happened is kept on the
+    // row (CM1), and the coach is told when it did not go.
+    const { data: auth } = await supabase.auth.getUser();
+    const sent = await sendPersonalisedEmails(
+      optedIn.map((r) => ({ email: r.email, name: r.name, memberId: r.id })),
+      text,
+      undefined,
+      { replyTo: auth.user?.email ?? undefined }
+    );
+    await recordEmailOutcome(supabase, result.id, sent, 0);
+    notice = emailNotice(sent);
   }
-  return ok();
+  return { ...ok(), emailNotice: notice };
 }
 
 // How many clients each audience reaches, for the "This will message N" line: the coach's own, and the whole gym. "Whole gym" is the

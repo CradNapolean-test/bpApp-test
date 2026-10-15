@@ -46,6 +46,7 @@ export async function emailMyCoach(subject: string, message: string): Promise<Ac
     subject: title,
     message: text,
   });
+  // Same honesty as broadcasts (CM1): when email is not ready the member is told so, not that it failed.
   if (result.skipped) return { ok: false, error: 'Email is not set up yet. Please use the chat for now.' };
   if (!result.sent) return { ok: false, error: 'The email did not go through. Please try again, or use the chat.' };
 
