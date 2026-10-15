@@ -14,9 +14,12 @@ import {
   bulkCreateLibraryExercises,
   createLibraryExercise,
   deleteLibraryExercise,
+  setExerciseActive,
   updateLibraryExercise,
 } from '@/lib/data/exerciseLibrary';
 import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv';
+import { describeImport, prepareExerciseImport } from '@/lib/exerciseImport';
+import { normaliseLessonLink } from '@/lib/lessonLink';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
 
 const EXPORT_COLUMNS = [
@@ -102,6 +105,7 @@ function ExerciseFormSheet({
   onDelete?: (id: string, name: string) => void;
 }) {
   const { run, busy } = useAction();
+  const toast = useToast();
   const [name, setName] = useState(exercise?.name ?? '');
   const [videoUrl, setVideoUrl] = useState(exercise?.video_url ?? '');
   const [muscleGroup, setMuscleGroup] = useState(exercise?.muscle_group ?? '');
@@ -118,16 +122,23 @@ function ExerciseFormSheet({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Links open on every member's phone, so both must be secure (https://) addresses; the database refuses anything else.
+    const video = normaliseLessonLink(videoUrl);
+    const image = normaliseLessonLink(imageUrl);
+    if (!video.ok || !image.ok) {
+      toast.error(!video.ok ? `Video link: ${video.error}` : `Image link: ${(image as { error: string }).error}`);
+      return;
+    }
     const fields = {
       name: name.trim(),
-      video_url: videoUrl.trim() || null,
+      video_url: video.url,
       muscle_group: muscleGroup || null,
       equipment: equipment.trim() || null,
       default_sets: num(sets),
       default_reps: reps.trim() || null,
       default_rpe: num(rpe),
       default_rest_seconds: num(rest),
-      image_url: imageUrl.trim() || null,
+      image_url: image.url,
       instructions: instructions.trim() || null,
       notes: notes.trim() || null,
     };
@@ -230,13 +241,26 @@ export function ExerciseLibraryManager({
   const [visible, setVisible] = useState(PAGE_SIZE);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const hasVideo = (ex: ExerciseLibraryRow) => !!(ex.video_url?.startsWith('http://') || ex.video_url?.startsWith('https://'));
+  const hasVideo = (ex: ExerciseLibraryRow) => !!ex.video_url?.startsWith('https://');
   const missingVideos = useMemo(() => initialExercises.filter((ex) => !hasVideo(ex)).length, [initialExercises]);
 
+  // An exercise a programme template uses cannot be deleted (the database refuses): offer to retire it instead, which hides it from
+  // pickers and keeps it in the programmes that already use it.
   async function handleDelete(id: string, exerciseName: string) {
+    const templates = usage[id] ?? 0;
+    if (templates > 0) {
+      const retire = await confirm({
+        title: `“${exerciseName}” is in use`,
+        body: `In use by ${templates} programme template${templates === 1 ? '' : 's'}, so it can\u2019t be deleted. Retire it instead: it stays in those programmes but is not offered for new ones.`,
+        confirmLabel: 'Retire exercise',
+      });
+      if (!retire) return;
+      await runDelete(() => setExerciseActive(id, false), { success: 'Exercise retired', onDone: () => setEditingId(null) });
+      return;
+    }
     const ok = await confirm({
       title: `Delete “${exerciseName}” from the library?`,
-      body: 'This only removes it from the shared library — programs that already used it are unaffected.',
+      body: "No programme template uses it. If a member's workout still does, it can't be deleted and you can retire it instead.",
       destructive: true,
     });
     if (!ok) return;
@@ -260,9 +284,12 @@ export function ExerciseLibraryManager({
         toast.error('No exercise rows found in that file');
         return;
       }
-      await runImport(() => bulkCreateLibraryExercises(rows), {
-        success: `Imported ${rows.length} exercise${rows.length === 1 ? '' : 's'}`,
-      });
+      const plan = prepareExerciseImport(rows, initialExercises);
+      if (plan.tooMany || plan.rows.length === 0) {
+        toast.error(plan.tooMany ? describeImport(plan) : 'Nothing new to import: every row is already in the library or has a link that is not https://');
+        return;
+      }
+      await runImport(() => bulkCreateLibraryExercises(plan.rows), { success: describeImport(plan) });
     };
     reader.readAsText(file);
   }
@@ -381,14 +408,22 @@ export function ExerciseLibraryManager({
                 className="rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-bold text-black dark:text-zinc-50">{ex.name}</p>
+                  <p className="font-bold text-black dark:text-zinc-50">
+                    {ex.name}
+                    {ex.is_active === false && <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/10">Retired</span>}
+                  </p>
                   <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
                     <button type="button" onClick={() => setEditingId(ex.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
                       Edit
                     </button>
                     <DropdownMenu
                       triggerLabel={`More actions for ${ex.name}`}
-                      items={[{ label: 'Delete exercise', destructive: true, onSelect: () => handleDelete(ex.id, ex.name) }]}
+                      items={[
+                        ex.is_active === false
+                          ? { label: 'Bring back', onSelect: () => runDelete(() => setExerciseActive(ex.id, true), { success: 'Exercise is back in the library' }) }
+                          : { label: 'Retire exercise', onSelect: () => runDelete(() => setExerciseActive(ex.id, false), { success: 'Exercise retired' }) },
+                        { label: 'Delete exercise', destructive: true, onSelect: () => handleDelete(ex.id, ex.name) },
+                      ]}
                     />
                   </div>
                 </div>

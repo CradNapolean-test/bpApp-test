@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ExerciseLibraryRow } from './types';
 
@@ -78,8 +79,18 @@ export async function updateLibraryExercise(
   if (error) raise(error);
 }
 
-export async function deleteLibraryExercise(id: string): Promise<void> {
+// An exercise a programme or a member's workout uses cannot be deleted (the database refuses): retire it instead (is_active = false).
+// Returns rather than throws so that reason reaches the screen.
+export async function deleteLibraryExercise(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('exercise_library').delete().eq('id', id);
-  if (error) raise(error);
+  if (error?.code === '23503') return fail({ message: "That exercise is used in a programme, so it can't be deleted. Retire it instead." });
+  return error ? fail(error, 'Could not delete that exercise') : ok();
+}
+
+// Retires an exercise (hides it from pickers, keeps it in programmes that use it) or brings it back.
+export async function setExerciseActive(id: string, active: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('exercise_library').update({ is_active: active }).eq('id', id);
+  return error ? fail(error, 'Could not update that exercise') : ok();
 }

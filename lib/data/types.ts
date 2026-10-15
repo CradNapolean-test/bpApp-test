@@ -365,6 +365,8 @@ export interface ExerciseLibraryRow {
   default_rest_seconds: number | null;
   created_by: string | null;
   created_at: string;
+  // False once an entry was retired instead of deleted (migration 0130): it stays in programmes that use it but is not offered for new ones.
+  is_active?: boolean;
 }
 
 export interface ProgramTemplateExerciseRow extends ExerciseCoreFields {

@@ -523,7 +523,7 @@ export function ProgramTemplateManager({
 
           <ProgramDayList
             ownerId={previewTemplate.id}
-            library={library}
+            library={library.filter((l) => l.is_active !== false)}
             showPhaseLabel={false}
             onOpenDay={setOpenDayId}
             activeWeek={shownWeek}
@@ -746,7 +746,7 @@ export function ProgramTemplateManager({
 
           <ExerciseEditor
             exercises={openDay.program_template_exercises}
-            library={library}
+            library={library.filter((l) => l.is_active !== false)}
             canEdit
             showProgression
             onAdd={(fields) => addTemplateExercise(openDay.id, fields)}
