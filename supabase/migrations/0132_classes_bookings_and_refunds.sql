@@ -741,3 +741,100 @@ begin
   return v_booking;
 end;
 $fn$;
+
+-- =====================================================================================================================
+-- R26. Editing a booked session changed it silently.
+-- Moving a 6 am class to 7 am, changing its weekday, or lowering its capacity below the number booked all saved with no check and no notice.
+--   * before update (classes_guard_changes): capacity cannot go below the largest number of "booked" bookings on any upcoming date;
+--     the weekday (or the one-off date) cannot change while anyone is booked or waitlisted on an upcoming date. The coach is told to
+--     retire the slot and create a new one: the existing bookings are for specific dates, so moving the weekday would leave
+--     them pointing at a day the class no longer runs. A signed-out system change (no signed-in user) is not held to these rules.
+--   * after update (classes_notify_changes): when start_time changes, every member booked or waitlisted on an upcoming date gets
+--     one in-app notification with the old and new time.
+--
+-- PRE-FLIGHT (read-only; sessions where a capacity or weekday change would be refused right now):
+--   select c.id, c.name, c.capacity, max(x.booked) as most_booked_on_one_date
+--   from public.classes c
+--   join (select class_id, booking_date, count(*) filter (where status = 'booked') as booked
+--         from public.bookings where booking_date >= current_date group by 1, 2) x on x.class_id = c.id
+--   group by 1, 2, 3 order by 4 desc;
+-- =====================================================================================================================
+create or replace function public.classes_guard_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_today date;
+  v_most_booked integer;
+begin
+  if auth.uid() is null or new.retired_at is distinct from old.retired_at then
+    return new;
+  end if;
+
+  select public.local_date(timezone) into v_today from gyms where id = new.gym_id;
+  v_today := coalesce(v_today, current_date);
+
+  if new.capacity < old.capacity then
+    select coalesce(max(n), 0) into v_most_booked
+    from (
+      select count(*) as n from bookings
+      where class_id = new.id and status = 'booked' and booking_date >= v_today
+      group by booking_date
+    ) x;
+    if new.capacity < v_most_booked then
+      raise exception '% members are already booked on one of the upcoming sessions, so the capacity can''t go below that.', v_most_booked;
+    end if;
+  end if;
+
+  if (new.day_of_week is distinct from old.day_of_week or new.specific_date is distinct from old.specific_date)
+     and exists (
+       select 1 from bookings
+       where class_id = new.id and status in ('booked', 'waitlist') and booking_date >= v_today
+     ) then
+    raise exception 'Members are already booked on upcoming sessions. Retire this slot and create a new one instead.';
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke execute on function public.classes_guard_changes() from public, anon, authenticated;
+
+drop trigger if exists classes_guard_changes on public.classes;
+create trigger classes_guard_changes
+  before update on public.classes
+  for each row execute function public.classes_guard_changes();
+
+create or replace function public.classes_notify_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_today date;
+begin
+  select public.local_date(timezone) into v_today from gyms where id = new.gym_id;
+  v_today := coalesce(v_today, current_date);
+
+  insert into notifications (client_id, message)
+  select distinct b.client_id,
+    'Class time changed: ' || new.name || ' now starts at ' || coalesce(to_char(new.start_time, 'HH24:MI'), 'a time to be confirmed')
+      || ' (it was ' || coalesce(to_char(old.start_time, 'HH24:MI'), 'a time to be confirmed') || ').'
+  from bookings b
+  where b.class_id = new.id and b.status in ('booked', 'waitlist') and b.booking_date >= v_today;
+
+  return new;
+end;
+$$;
+
+revoke execute on function public.classes_notify_changes() from public, anon, authenticated;
+
+drop trigger if exists classes_notify_changes on public.classes;
+create trigger classes_notify_changes
+  after update on public.classes
+  for each row
+  when (old.start_time is distinct from new.start_time)
+  execute function public.classes_notify_changes();
