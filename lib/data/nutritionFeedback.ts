@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendPushToClient } from '@/lib/push';
+import { pushQuietly, sendPushToClient } from '@/lib/push';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
 import type { NutritionFeedbackRow } from './types';
@@ -44,11 +44,13 @@ export async function addNutritionFeedback(
     const admin = createAdminClient();
     const message = photoId ? 'Your coach commented on a meal photo' : 'Your coach left feedback on your food diary';
     await admin.from('notifications').insert({ client_id: clientId, message });
-    await sendPushToClient(clientId, {
-      title: message,
-      body: text.length > 120 ? `${text.slice(0, 117)}...` : text,
-      url: '/dashboard?open=nutrition',
-    });
+    await pushQuietly('nutrition feedback', () =>
+      sendPushToClient(clientId, {
+        title: message,
+        body: text.length > 120 ? `${text.slice(0, 117)}...` : text,
+        url: '/dashboard?open=nutrition',
+      })
+    );
   } catch {
     /* the feedback itself is saved; a missed notification must not fail it */
   }

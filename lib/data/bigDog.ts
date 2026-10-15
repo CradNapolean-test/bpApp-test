@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { EXERCISES, EXERCISE_KEYS, TIER_TITLE, bigDogCount, formatResult, genderFromProfile, levelForResult, tiersReached } from '@/lib/bigDog';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { MemberInfo, RawScore } from '@/lib/bigDogExport';
-import { sendPushToClient } from '@/lib/push';
+import { pushQuietly, sendPushToClient } from '@/lib/push';
 import type { BigDogLevel } from '@/lib/bigDog';
 import type { BigDogResultRow } from './types';
 
@@ -62,7 +62,7 @@ async function awardShirts(clientId: string): Promise<void> {
       const title = TIER_TITLE[row.tier as keyof typeof TIER_TITLE];
       const message = `You earned the ${title} T-shirt! Your coach will get it to you.`;
       await admin.from('notifications').insert({ client_id: clientId, message });
-      await sendPushToClient(clientId, { title: `${title} T-shirt earned`, body: message, url: '/dashboard' }).catch(() => {});
+      await pushQuietly('big dog shirt', () => sendPushToClient(clientId, { title: `${title} T-shirt earned`, body: message, url: '/dashboard' }));
     }
   } catch {
     // Swallowed on purpose, see above. The next verified result re-checks every tier.
