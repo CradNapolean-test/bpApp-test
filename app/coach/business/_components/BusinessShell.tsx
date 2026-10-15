@@ -10,6 +10,7 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
 import { CreditPackManager } from '@/app/coach/classes/_components/CreditPackManager';
@@ -27,6 +28,16 @@ import type {
 
 const ALL_TABS = ['Overview', 'Plans', 'Credit packs', 'Events', 'Rewards', 'Feedback'] as const;
 type Tab = (typeof ALL_TABS)[number];
+
+// What each tab is called in the address (?tab=...), so a reload or a shared link opens the same tab.
+const TAB_SLUG: Record<Tab, string> = {
+  Overview: 'overview',
+  Plans: 'plans',
+  'Credit packs': 'credit-packs',
+  Events: 'events',
+  Rewards: 'rewards',
+  Feedback: 'feedback',
+};
 
 const TAB_PARAM: Record<string, Tab> = {
   overview: 'Overview',
@@ -78,11 +89,15 @@ export function BusinessShell({
 }) {
   const searchParams = useSearchParams();
   const tabs = overview ? ALL_TABS : ALL_TABS.filter((t) => t !== 'Overview');
-  const [tab, setTab] = useState<Tab>(() => {
+  const [tab, setTabState] = useState<Tab>(() => {
     const wanted = TAB_PARAM[searchParams.get('tab') ?? ''];
     if (wanted && (wanted !== 'Overview' || overview)) return wanted;
     return overview ? 'Overview' : 'Plans';
   });
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    writeTabToUrl(TAB_SLUG[next]);
+  };
   const planCounts = Object.fromEntries((overview?.plans ?? []).map((p) => [p.name, p.count]));
 
   return (

@@ -10,6 +10,7 @@ import { Avatar } from '@/app/_components/Avatar';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -44,7 +45,12 @@ export function MessagesHubShell({
   email: string;
 }) {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') === 'broadcasts' ? 'broadcasts' : 'inbox'));
+  const [tab, setTabState] = useState<Tab>(() => (searchParams.get('tab') === 'broadcasts' ? 'broadcasts' : 'inbox'));
+  // The address says ?tab=broadcasts for Broadcasts and nothing for the inbox, so a reload opens the same tab.
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    writeTabToUrl(next === 'broadcasts' ? 'broadcasts' : null);
+  };
   // Phone only: whether a conversation is open (otherwise the list shows).
   const [threadOpen, setThreadOpen] = useState(false);
   const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =

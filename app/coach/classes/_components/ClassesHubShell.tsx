@@ -10,6 +10,7 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { TimetableView } from './TimetableView';
 import { SessionsView } from './SessionsView';
@@ -19,6 +20,9 @@ import type { CoachClientRow } from '@/lib/data/coach';
 
 const TABS = ['Sessions', 'Timetable', 'Reports'] as const;
 type Tab = (typeof TABS)[number];
+
+// What each tab is called in the address (?tab=...), so a reload or a shared link opens the same tab.
+const TAB_SLUG: Record<Tab, string> = { Sessions: 'sessions', Timetable: 'timetable', Reports: 'reports' };
 
 const TAB_PARAM: Record<string, Tab> = {
   manage: 'Timetable',
@@ -47,7 +51,11 @@ export function ClassesHubShell({
   timezone: string | null;
 }) {
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Sessions');
+  const [tab, setTabState] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Sessions');
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    writeTabToUrl(TAB_SLUG[next]);
+  };
 
   return (
     <ClientOnly fallback={<div className="min-h-screen" />}>
