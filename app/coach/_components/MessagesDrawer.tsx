@@ -7,6 +7,7 @@ import { ChatTab } from '@/app/dashboard/_components/ChatTab';
 import { useCoachMessages } from './useCoachMessages';
 import { ConversationList } from './ConversationList';
 import { getCoachChatOverview } from '@/lib/data/chat';
+import { useDialog } from '@/app/_components/useDialog';
 import type { ChatOverviewRow } from '@/lib/data/types';
 
 // Stable reference for the "not fetched yet" case -- `overview ?? []` would create a new
@@ -21,6 +22,8 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
   const [overview, setOverview] = useState<ChatOverviewRow[] | null>(null);
   const [overviewFailed, setOverviewFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
+  const dialogRef = useDialog<HTMLElement>({ onClose });
   const { localOverview, selected, selectClient, clearSelection, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =
     useCoachMessages(overview ?? EMPTY_OVERVIEW, currentUserId);
 
@@ -47,7 +50,13 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <aside className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black/10 bg-[var(--background)] shadow-xl dark:border-white/10">
+      <aside
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Messages"
+        className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black/10 bg-[var(--background)] shadow-xl dark:border-white/10"
+      >
         <div className="flex items-center justify-between gap-2 border-b border-black/10 p-4 dark:border-white/10">
           {selected ? (
             <button
@@ -61,9 +70,11 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
             <h2 className="text-base font-semibold text-black dark:text-zinc-50">Messages</h2>
           )}
           <button
+            type="button"
+            data-dialog-close
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
           >
             <X className="h-5 w-5" />
           </button>

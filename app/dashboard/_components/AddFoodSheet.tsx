@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import { useBackHandler } from '@/app/_components/useBackHandler';
+import { useDialog } from '@/app/_components/useDialog';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
 // Bottom-sheet "Add food" modal -- shared by the Nutrition header's "Search foods" button and
@@ -35,6 +36,8 @@ export function AddFoodSheet({
   onClose: () => void;
 }) {
   useBackHandler(true, onClose);
+  // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
   const [busy, setBusy] = useState(false);
   // Runs the add, shows that it is working (no second tap), and closes only if it did not fail.
   async function finish(add: () => unknown) {
@@ -51,6 +54,7 @@ export function AddFoodSheet({
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Add food · ${sectionLabel}`}
@@ -60,9 +64,11 @@ export function AddFoodSheet({
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-black dark:text-zinc-50">Add food &middot; {sectionLabel}</h2>
           <button
+            type="button"
+            data-dialog-close
             onClick={onClose}
             aria-label="Close"
-            className="flex h-7 w-7 items-center justify-center rounded-md bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
+            className="flex h-10 w-10 items-center justify-center rounded-md bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
           >
             <X className="h-4 w-4" />
           </button>

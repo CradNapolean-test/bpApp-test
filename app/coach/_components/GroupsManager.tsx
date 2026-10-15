@@ -7,6 +7,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useActiveGymId } from './CoachGymsContext';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { createGroup, deleteGroup, addClientsToGroup, removeClientsFromGroup } from '@/lib/data/clientGroups';
+import { useDialog } from '@/app/_components/useDialog';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
@@ -53,6 +54,8 @@ export function GroupsManager({
     await run(() => (add ? addClientsToGroup(groupId, clientIds) : removeClientsFromGroup(groupId, clientIds)));
   }
 
+  // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
   const needle = search.trim().toLowerCase();
   const shownClients = needle ? clients.filter((c) => `${c.name ?? ''} ${c.email}`.toLowerCase().includes(needle)) : clients;
 
@@ -60,6 +63,7 @@ export function GroupsManager({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Manage groups"
@@ -67,7 +71,7 @@ export function GroupsManager({
       >
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-black dark:text-zinc-50">Manage groups</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5">
+          <button type="button" data-dialog-close onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-md text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5">
             <X className="h-5 w-5" />
           </button>
         </div>

@@ -44,6 +44,7 @@ import { AddFoodSheet } from './AddFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
 import { NutritionSummary } from './NutritionSummary';
 import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
+import { useDialog } from '@/app/_components/useDialog';
 import { useTodayIso } from './useTodayIso';
 import type { NutritionTrackingMode } from './categories';
 import type {
@@ -207,10 +208,13 @@ function EditEntrySheet({
   const quickReady = qName.trim() !== '' && (qCalories !== '' || qProtein !== '' || qCarbs !== '' || qFat !== '') && quickProblem == null;
   const num = (text: string) => (text.trim() === '' ? null : Number(text));
   const boxCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
+  // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Edit food entry"

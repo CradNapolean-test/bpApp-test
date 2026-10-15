@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { MUSCLE_GROUPS } from '@/app/_components/workouts/muscleGroups';
+import { useDialog } from '@/app/_components/useDialog';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
 
 // First consumer of a modal overlay in this app besides ConfirmDialog -- mirrors its exact
@@ -20,6 +21,8 @@ export function BrowseExercisesModal({
 }) {
   const [query, setQuery] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
+  // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
+  const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
   const results = library.filter((e) => {
     const matchesQuery = query.trim() ? e.name.toLowerCase().includes(query.trim().toLowerCase()) : true;
@@ -31,6 +34,7 @@ export function BrowseExercisesModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Browse exercises"
@@ -39,9 +43,11 @@ export function BrowseExercisesModal({
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-black dark:text-zinc-50">Browse exercises</h2>
           <button
+            type="button"
+            data-dialog-close
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
           >
             <X className="h-4 w-4" />
           </button>
