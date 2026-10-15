@@ -12,6 +12,8 @@ export function JoinForm({ token }: { token: string }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set when the member has to confirm their email before they can sign in (the default, D17).
+  const [checkEmail, setCheckEmail] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,6 +28,10 @@ export function JoinForm({ token }: { token: string }) {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error ?? 'Something went wrong. Please try again.');
+        return;
+      }
+      if (body.confirm) {
+        setCheckEmail(true);
         return;
       }
       const { error: signInError } = await createClient().auth.signInWithPassword({ email, password });
@@ -44,6 +50,21 @@ export function JoinForm({ token }: { token: string }) {
   }
 
   const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-3 text-base dark:border-white/10';
+
+  if (checkEmail) {
+    return (
+      <div className="space-y-3 text-center" role="status">
+        <h2 className="text-lg font-bold text-black dark:text-zinc-50">Check your email</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          We sent a link to confirm your email address. Open it, then log in with the password you just chose.
+        </p>
+        <p className="text-xs text-zinc-500">Nothing there after a few minutes? Look in your spam folder, or ask your coach to help.</p>
+        <Link href="/login" className="inline-block text-sm font-semibold text-accent">
+          Go to log in
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
