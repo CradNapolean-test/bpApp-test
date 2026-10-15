@@ -279,3 +279,262 @@ create policy "author deletes client_journal_entries"
   on public.client_journal_entries for delete
   to authenticated
   using (coach_id = auth.uid() and (public.is_coach_of(client_id) or public.is_coach_in_gym(public.client_gym_id(client_id))));
+
+-- =====================================================================================================================
+-- R37 (database half, DECISION D2 recommended default). The owner could read far more than any screen uses.
+-- is_same_gym_as_client() (0103) also returned true for the owner of the member's gym, and every cross-coach read policy from
+-- 0053 calls it, so an owner could read through the API any member's food diary, meal photos, forms, habits, programmes, chat
+-- and the private coach notes. It is back to its coach-only meaning (0052). The owner keeps SELECT on profiles (no health
+-- columns) and coach_gym_memberships, and works through the functions below, each of which checks is_owner_of_gym(p_gym):
+--   owner_gym_roster         a roster with NO health fields; optional filter, search and paging
+--   owner_set_gym_admin, owner_add_coach_to_gym, owner_remove_coach_from_gym, owner_reassign_clients, owner_rename_gym,
+--   owner_set_gym_booking_settings   the same internals as the gym admin's own versions
+-- The existing owner screens only call owner_gyms_overview, owner_gym_stats and owner_activity_report (checked: lib/data/owner.ts
+-- and app/owner), so nothing on screen loses data. The sandbox check confirms an owner now reads 0 rows from the member tables.
+--
+-- owner_gym_roster(p_gym, p_filter, p_search, p_limit, p_offset) answers
+--   {"gymId", "total", "limit", "offset", "filter", "members": [{clientId, name, email, coachId, coachName, plan, planEndsOn,
+--    status, lastActive, onboarded, flagged, joinedOn}]}
+-- p_filter (the same definitions as owner_gym_stats, so an Overview number and its list agree): on_plan, no_plan, ending_soon
+-- (scheduled to end within 14 days), flagged (in the gym's latest red flag list), new_this_month, left_last_30. status is
+-- 'on_plan', 'ending_soon' or 'no_plan'. p_limit is capped at 500.
+--
+-- PRE-FLIGHT (read-only; what an owner can read directly today, to compare with the sandbox check afterwards):
+--   select polname, polrelid::regclass from pg_policy
+--   where pg_get_expr(polqual, polrelid) ilike '%is_same_gym_as_client%' order by 2, 1;
+-- =====================================================================================================================
+create or replace function public.is_same_gym_as_client(target_client_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select public.my_gym_id() is not null and public.my_gym_id() = public.client_gym_id(target_client_id);
+$$;
+
+create or replace function public.owner_set_gym_admin(p_gym uuid, p_coach uuid, p_is_admin boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._set_gym_admin(p_gym, p_coach, p_is_admin);
+end;
+$$;
+
+create or replace function public.owner_add_coach_to_gym(p_gym uuid, p_coach uuid, p_is_admin boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._add_coach_to_gym(p_gym, p_coach, p_is_admin);
+end;
+$$;
+
+create or replace function public.owner_remove_coach_from_gym(p_gym uuid, p_coach uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  return public._remove_coach_from_gym(p_gym, p_coach);
+end;
+$$;
+
+create or replace function public.owner_reassign_clients(p_gym uuid, p_from uuid, p_to uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  return public._reassign_clients(p_gym, p_from, p_to);
+end;
+$$;
+
+create or replace function public.owner_rename_gym(p_gym uuid, p_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._rename_gym(p_gym, p_name);
+end;
+$$;
+
+create or replace function public.owner_set_gym_booking_settings(p_gym uuid, p_timezone text, p_blackout_start time, p_blackout_end time)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  perform public._set_gym_booking_settings(p_gym, p_timezone, p_blackout_start, p_blackout_end);
+end;
+$$;
+
+create or replace function public.owner_gym_roster(
+  p_gym uuid,
+  p_filter text default null,
+  p_search text default null,
+  p_limit integer default 100,
+  p_offset integer default 0
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+stable
+as $fn$
+declare
+  v_tz text;
+  v_today date;
+  v_month date;
+  v_d30 date;
+  v_in14 date;
+  v_flag_week date;
+  v_limit integer := greatest(1, least(coalesce(p_limit, 100), 500));
+  v_offset integer := greatest(0, coalesce(p_offset, 0));
+  v_search text := nullif(btrim(coalesce(p_search, '')), '');
+  v_total integer;
+  v_rows jsonb;
+begin
+  if not coalesce(public.is_owner_of_gym(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+  if p_filter is not null and p_filter not in ('on_plan', 'no_plan', 'ending_soon', 'flagged', 'new_this_month', 'left_last_30') then
+    raise exception 'Unknown filter';
+  end if;
+
+  select coalesce(nullif(timezone, ''), 'UTC') into v_tz from gyms where id = p_gym;
+  v_today := public.local_date(v_tz);
+  v_month := date_trunc('month', v_today::timestamp)::date;
+  v_d30 := v_today - 30;
+  v_in14 := v_today + 14;
+  select max(week_start) into v_flag_week from red_flag_entries where gym_id = p_gym;
+
+  with roster as (
+    select
+      m.id as client_id,
+      coalesce(nullif(btrim(cp.name), ''), m.email) as name,
+      m.email,
+      m.coach_id,
+      coalesce(nullif(c.display_name, ''), c.email) as coach_name,
+      om.plan_name,
+      om.scheduled_end,
+      (om.plan_name is not null) as on_plan,
+      (select max(dl.log_date) from daily_logs dl
+        where dl.client_id = m.id
+          and (dl.protein is not null or dl.carbs is not null or dl.fat is not null or dl.water is not null
+               or dl.bodyweight is not null or dl.steps is not null or dl.sleep is not null)) as last_active,
+      (cp.onboarding_completed_at is not null) as onboarded,
+      (v_flag_week is not null and exists (
+        select 1 from red_flag_entries e where e.gym_id = p_gym and e.week_start = v_flag_week and e.client_id = m.id
+      )) as flagged,
+      (m.created_at at time zone v_tz)::date as joined_on,
+      exists (select 1 from client_memberships cm where cm.client_id = m.id and cm.ended_at >= v_d30) as left_recent
+    from profiles m
+    left join client_profiles cp on cp.client_id = m.id
+    left join profiles c on c.id = m.coach_id
+    left join lateral (
+      select p.name as plan_name, cm.scheduled_end
+      from client_memberships cm join membership_packages p on p.id = cm.package_id
+      where cm.client_id = m.id and cm.ended_at is null
+      limit 1
+    ) om on true
+    where m.role = 'client' and m.gym_id = p_gym
+  ),
+  filtered as (
+    select r.*
+    from roster r
+    where (v_search is null or r.name ilike '%' || v_search || '%' or r.email ilike '%' || v_search || '%')
+      and (
+        p_filter is null
+        or (p_filter = 'on_plan' and r.on_plan)
+        or (p_filter = 'no_plan' and not r.on_plan)
+        or (p_filter = 'ending_soon' and r.on_plan and r.scheduled_end between v_today and v_in14)
+        or (p_filter = 'flagged' and r.flagged)
+        or (p_filter = 'new_this_month' and r.joined_on >= v_month)
+        or (p_filter = 'left_last_30' and not r.on_plan and r.left_recent)
+      )
+  ),
+  page as (
+    select * from filtered order by lower(name), client_id limit v_limit offset v_offset
+  )
+  select
+    (select count(*) from filtered),
+    coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'clientId', p.client_id,
+          'name', p.name,
+          'email', p.email,
+          'coachId', p.coach_id,
+          'coachName', p.coach_name,
+          'plan', p.plan_name,
+          'planEndsOn', p.scheduled_end,
+          'status', case
+            when not p.on_plan then 'no_plan'
+            when p.scheduled_end between v_today and v_in14 then 'ending_soon'
+            else 'on_plan'
+          end,
+          'lastActive', p.last_active,
+          'onboarded', p.onboarded,
+          'flagged', p.flagged,
+          'joinedOn', p.joined_on
+        )
+        order by lower(p.name), p.client_id
+      )
+      from page p
+    ), '[]'::jsonb)
+  into v_total, v_rows;
+
+  return jsonb_build_object(
+    'gymId', p_gym,
+    'total', v_total,
+    'limit', v_limit,
+    'offset', v_offset,
+    'filter', p_filter,
+    'members', v_rows
+  );
+end;
+$fn$;
+
+revoke execute on function public.owner_set_gym_admin(uuid, uuid, boolean) from public, anon;
+revoke execute on function public.owner_add_coach_to_gym(uuid, uuid, boolean) from public, anon;
+revoke execute on function public.owner_remove_coach_from_gym(uuid, uuid) from public, anon;
+revoke execute on function public.owner_reassign_clients(uuid, uuid, uuid) from public, anon;
+revoke execute on function public.owner_rename_gym(uuid, text) from public, anon;
+revoke execute on function public.owner_set_gym_booking_settings(uuid, text, time, time) from public, anon;
+revoke execute on function public.owner_gym_roster(uuid, text, text, integer, integer) from public, anon;
+grant execute on function public.owner_set_gym_admin(uuid, uuid, boolean) to authenticated;
+grant execute on function public.owner_add_coach_to_gym(uuid, uuid, boolean) to authenticated;
+grant execute on function public.owner_remove_coach_from_gym(uuid, uuid) to authenticated;
+grant execute on function public.owner_reassign_clients(uuid, uuid, uuid) to authenticated;
+grant execute on function public.owner_rename_gym(uuid, text) to authenticated;
+grant execute on function public.owner_set_gym_booking_settings(uuid, text, time, time) to authenticated;
+grant execute on function public.owner_gym_roster(uuid, text, text, integer, integer) to authenticated;
