@@ -4,6 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
+import { gymMismatch, type GymMismatch } from '@/lib/gymMismatch';
 
 export interface GymCoachRow {
   id: string;
@@ -80,6 +81,30 @@ export async function getMyGyms(): Promise<MyGymRow[]> {
       isActive: row.gym_id === caller?.gym_id,
     };
   });
+}
+
+// Where the coach's own members are, against where the coach is looking (R38). Returns the warning to show, or null when there is
+// nothing to say: a coach in one gym, members in the active gym, or no members. Pass the gyms you already loaded to save the lookup.
+export async function getClientGymMismatch(gyms?: MyGymRow[]): Promise<GymMismatch | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const mine = gyms ?? (await getMyGyms());
+  if (mine.length < 2) return null;
+  const counts = await Promise.all(
+    mine.map(async (g) => {
+      const { count } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .eq('coach_id', user.id)
+        .eq('gym_id', g.gymId);
+      return { gymId: g.gymId, gymName: g.gymName, count: count ?? 0 };
+    })
+  );
+  return gymMismatch(counts, mine.find((g) => g.isActive)?.gymId ?? null);
 }
 
 // Moves the caller's active-gym pointer (profiles.gym_id/is_gym_admin) to a gym they already

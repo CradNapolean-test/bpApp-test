@@ -3,10 +3,12 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import type { MyGymRow } from '@/lib/data/gym';
+import type { GymMismatch } from '@/lib/gymMismatch';
 
 // The gyms (sites) this coach belongs to, loaded once in app/coach/layout.tsx so the site
 // switcher in every page header can read them without each page passing them down.
 const CoachGymsContext = createContext<MyGymRow[]>([]);
+const GymMismatchContext = createContext<GymMismatch | null>(null);
 
 export function useCoachGyms(): MyGymRow[] {
   return useContext(CoachGymsContext);
@@ -18,6 +20,15 @@ export function useActiveGymId(): string | null {
   return useCoachGyms().find((g) => g.isActive)?.gymId ?? null;
 }
 
-export function CoachGymsProvider({ gyms, children }: { gyms: MyGymRow[]; children: ReactNode }) {
-  return <CoachGymsContext.Provider value={gyms}>{children}</CoachGymsContext.Provider>;
+// Set when most of the coach's own members belong to a gym other than the one they are viewing (see lib/gymMismatch.ts).
+export function useGymMismatch(): GymMismatch | null {
+  return useContext(GymMismatchContext);
+}
+
+export function CoachGymsProvider({ gyms, mismatch = null, children }: { gyms: MyGymRow[]; mismatch?: GymMismatch | null; children: ReactNode }) {
+  return (
+    <CoachGymsContext.Provider value={gyms}>
+      <GymMismatchContext.Provider value={mismatch}>{children}</GymMismatchContext.Provider>
+    </CoachGymsContext.Provider>
+  );
 }

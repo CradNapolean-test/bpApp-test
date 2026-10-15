@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase/server';
 import { MessagesDrawerProvider } from './_components/MessagesDrawerContext';
 import { CoachBrandingProvider } from './_components/CoachBrandingContext';
 import { CoachGymsProvider } from './_components/CoachGymsContext';
-import { getMyGyms } from '@/lib/data/gym';
+import { GymMismatchBanner } from './_components/GymMismatchBanner';
+import { getClientGymMismatch, getMyGyms } from '@/lib/data/gym';
+import type { GymMismatch } from '@/lib/gymMismatch';
 
 // Mounts the shared MessagesDrawer overlay once for every /coach/** page (Next's nested-layout
 // composition), so CoachMessagesButton can open it from anywhere without each page threading a
@@ -21,9 +23,12 @@ export default async function CoachLayout({ children }: { children: React.ReactN
 
   let logoUrl: string | null = null;
   let gyms: Awaited<ReturnType<typeof getMyGyms>> = [];
+  let mismatch: GymMismatch | null = null;
   if (user) {
     // The sites this coach belongs to, for the header switcher. Never worth failing the page over.
     gyms = await getMyGyms().catch(() => []);
+    // Whether the coach's members are in a gym other than the one being viewed (R38); only a coach in several gyms can have this.
+    if (gyms.length > 1) mismatch = await getClientGymMismatch(gyms).catch(() => null);
     const { data: profile } = await supabase.from('profiles').select('logo_path').eq('id', user.id).maybeSingle();
     if (profile?.logo_path) {
       logoUrl = supabase.storage.from('coach-branding').getPublicUrl(profile.logo_path).data.publicUrl;
@@ -32,8 +37,11 @@ export default async function CoachLayout({ children }: { children: React.ReactN
 
   return (
     <CoachBrandingProvider logoUrl={logoUrl}>
-      <CoachGymsProvider gyms={gyms}>
-        <MessagesDrawerProvider currentUserId={user?.id ?? ''}>{children}</MessagesDrawerProvider>
+      <CoachGymsProvider gyms={gyms} mismatch={mismatch}>
+        <MessagesDrawerProvider currentUserId={user?.id ?? ''}>
+          <GymMismatchBanner />
+          {children}
+        </MessagesDrawerProvider>
       </CoachGymsProvider>
     </CoachBrandingProvider>
   );
