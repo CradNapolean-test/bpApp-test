@@ -159,8 +159,11 @@ alter table public.gyms alter column timezone set default 'Europe/London';
 
 -- =====================================================================================================================
 -- CL2. Functions that logged-out callers could still execute (they were missing from the 0105 list).
--- assign_education_content and mark_education_complete are signed-in-only functions. The three trigger functions are never
--- called directly (a trigger does not need EXECUTE at the moment it fires); they are locked like the others since 0110.
+-- The three trigger functions are never called directly (a trigger does not need EXECUTE at the moment it fires); they are locked like
+-- the others since 0110. (This section first also revoked assign_education_content and mark_education_complete. Migration 0026
+-- dropped both long ago, in favour of assign_education_course, which 0105 already locks, so on the live database that line failed with
+-- "function ... does not exist" and rolled the whole file back. They are gone from here. 0134 repeats this file's changes for a
+-- database where 0127 did not apply, and looks each function up first.)
 -- The helper functions that row-level-security rules call are handled in 0128, after the rules themselves stop applying to
 -- logged-out callers.
 --
@@ -168,8 +171,6 @@ alter table public.gyms alter column timezone set default 'Europe/London';
 --   select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 --   where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute') order by 1;
 -- =====================================================================================================================
-revoke execute on function public.assign_education_content(uuid, uuid) from public, anon;
-revoke execute on function public.mark_education_complete(uuid) from public, anon;
 revoke execute on function public.sync_profile_email() from public, anon, authenticated;
 revoke execute on function public.enforce_advance_booking_window() from public, anon, authenticated;
 revoke execute on function public.sync_gym_session_from_attendance() from public, anon, authenticated;

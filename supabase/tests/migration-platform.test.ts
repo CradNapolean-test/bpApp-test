@@ -49,3 +49,23 @@ describe('0138: referral link and consent (R16, R22)', () => {
     expect(sql).not.toMatch(/consented_at timestamptz not null/i);
   });
 });
+
+describe('0134: catch-up for 0127 on a database where it did not apply', () => {
+  const sql = read('0134_security_access_rules_catchup.sql');
+
+  it('drops the old open library rule without bringing back 0127 library rule that 0130 replaced', () => {
+    expect(sql).toMatch(/drop policy if exists "authenticated coaches manage exercise_library" on public\.exercise_library;/);
+    expect(sql).not.toMatch(/create policy "coaches manage exercise_library"/);
+  });
+
+  it('removes the two member write rules on bookings', () => {
+    expect(sql).toMatch(/drop policy if exists "client books for self" on public\.bookings;/);
+    expect(sql).toMatch(/drop policy if exists "client cancels own booking" on public\.bookings;/);
+  });
+
+  it('keeps the profile trigger, and skips a missing function instead of stopping', () => {
+    expect(sql).toMatch(/create trigger protect_coach_owned_profile_fields/);
+    expect(sql).toMatch(/for r in\s+select p\.oid::regprocedure as sig/);
+    expect(sql).not.toMatch(/assign_education_content|mark_education_complete/);
+  });
+});
