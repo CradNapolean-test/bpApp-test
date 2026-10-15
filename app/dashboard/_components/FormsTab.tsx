@@ -7,6 +7,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
 import { markReviewed } from '@/lib/data/coachReviews';
+import { answerProblems, parseNumberAnswer } from '@/lib/formAnswers';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow } from '@/lib/data/types';
 
 const fieldCls =
@@ -18,6 +19,9 @@ const fmtDate = (iso: string) =>
 type Answer = string | string[];
 
 const isAnswered = (a: Answer | undefined) => (Array.isArray(a) ? a.length > 0 : (a ?? '').trim() !== '');
+// A number question only counts as answered with a real number: "-" or "1.2.3" used to pass as an answer and then vanish when sent (FM2).
+const isAnsweredQ = (q: { question_type: string }, a: Answer | undefined) =>
+  q.question_type === 'number' ? parseNumberAnswer(typeof a === 'string' ? a : '').ok && isAnswered(a) : isAnswered(a);
 
 // What is stored for one answer: text/number as given, a list for multi-choice, null when blank.
 function toPayload(q: FormQuestionRow, a: Answer | undefined): unknown {
@@ -64,9 +68,11 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
     }
   });
   const [missing, setMissing] = useState<Set<string>>(new Set());
+  // Number answers that are not numbers, with what to tell the member (FM2).
+  const [invalid, setInvalid] = useState<Record<string, string>>({});
   // A question the coach took out after it had answers is archived: the member no longer sees it (R3).
   const questions = assignment.template.questions.filter((q) => !q.archived_at);
-  const answeredCount = questions.filter((q) => isAnswered(answers[q.id])).length;
+  const answeredCount = questions.filter((q) => isAnsweredQ(q, answers[q.id])).length;
   const firstRender = useRef(true);
 
   useEffect(() => {
@@ -83,6 +89,12 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
 
   function setAnswer(questionId: string, value: Answer) {
     setAnswers((a) => ({ ...a, [questionId]: value }));
+    setInvalid((i) => {
+      if (!(questionId in i)) return i;
+      const next = { ...i };
+      delete next[questionId];
+      return next;
+    });
     setMissing((m) => {
       if (!m.has(questionId)) return m;
       const next = new Set(m);
@@ -106,10 +118,12 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
   }
 
   async function handleSubmit() {
-    const unanswered = questions.filter((q) => q.required && !isAnswered(answers[q.id]));
-    if (unanswered.length > 0) {
-      setMissing(new Set(unanswered.map((q) => q.id)));
-      document.getElementById(`question-${unanswered[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const problems = answerProblems(questions, answers);
+    const flagged = questions.filter((q) => problems.missing.includes(q.id) || q.id in problems.invalid);
+    if (flagged.length > 0) {
+      setMissing(new Set(problems.missing));
+      setInvalid(problems.invalid);
+      document.getElementById(`question-${flagged[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     // An unanswered optional question is simply left out: the database refuses an empty answer, and
@@ -176,6 +190,7 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
                   onChange={(e) => setAnswer(q.id, e.target.value.replace(/[^0-9.\-]/g, ''))}
                 />
               )}
+              {invalid[q.id] && <p className="mt-1.5 text-xs font-semibold text-danger">{invalid[q.id]}</p>}
               {q.question_type === 'single_choice' && (
                 <div className="space-y-2">
                   {(q.options ?? []).map((opt) => (

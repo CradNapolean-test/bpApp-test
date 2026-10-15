@@ -16,6 +16,7 @@ import type { ThemePreference } from '@/app/_components/theme';
 import { updateEmailNotificationsEnabled, updateNotificationsEnabled } from '@/lib/data/clientProfile';
 import { deleteMyAccount } from '@/lib/data/deleteAccount';
 import { createClient as createBrowserClient } from '@/lib/supabase/client';
+import { browserLocalStorage, clearMemberLocalData } from '@/lib/utils/localData';
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -132,11 +133,7 @@ export function AccountTab({
       return;
     const done = await run(() => deleteMyAccount(deleteText));
     if (!done) return;
-    try {
-      localStorage.removeItem('bp-offline-snapshot');
-    } catch {
-      /* ignore */
-    }
+    clearMemberLocalData(browserLocalStorage());
     await createBrowserClient().auth.signOut().catch(() => {});
     window.location.replace('/login');
   }

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { browserLocalStorage, clearMemberLocalData } from '@/lib/utils/localData';
 import { Button } from './Button';
 
 export function SignOutButton({
@@ -14,12 +15,8 @@ export function SignOutButton({
   const router = useRouter();
 
   async function handleSignOut() {
-    // Don't leave a copy of the member's plan on a shared phone (see OfflineSnapshot).
-    try {
-      localStorage.removeItem('bp-offline-snapshot');
-    } catch {
-      /* ignore */
-    }
+    // Don't leave a copy of the member's plan, or half-written form answers, on a shared phone (see OfflineSnapshot, FormsTab).
+    clearMemberLocalData(browserLocalStorage());
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/login');
