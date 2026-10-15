@@ -59,6 +59,13 @@ export const CREDIT_FILTER_LABELS: Record<CreditFilter, string> = {
   automatic: 'Resets',
 };
 
+// How a ledger row reads to a person: the weekly reset rows say "Weekly allowance reset" and the week, not the system's own wording.
+export function friendlyCreditReason(reason: string): string {
+  const m = reason.match(/^membership reset: week of (\d{4}-\d{2}-\d{2})/);
+  if (m) return `Weekly allowance reset · week of ${new Date(`${m[1]}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`;
+  return reason;
+}
+
 export const HISTORY_PAGE = 25;
 export const PLAN_HISTORY_PAGE = 10;
 

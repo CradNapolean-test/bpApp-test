@@ -31,6 +31,20 @@ export async function getNotifications(clientId: string): Promise<NotificationRo
   return data ?? [];
 }
 
+// Marks every unread notification of the signed-in member read in one call (mark_all_notifications_read, migration 0136). The bell used
+// to send one request per notification, up to 50 at once (NO1). Falls back to a single bulk update if the function is not there yet.
+export async function markAllNotificationsRead(clientId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mark_all_notifications_read');
+  if (!error) return;
+  const { error: fallbackError } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+    .is('read_at', null);
+  if (fallbackError) raise(fallbackError);
+}
+
 export async function markRead(id: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase

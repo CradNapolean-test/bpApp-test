@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, X } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
-import { clearAllNotifications, clearNotification, markRead } from '@/lib/data/notifications';
+import { clearAllNotifications, clearNotification, markAllNotificationsRead } from '@/lib/data/notifications';
 import { formatRelativeTime } from '@/lib/utils/dates';
 import type { NotificationRow } from '@/lib/data/types';
 
@@ -27,8 +27,11 @@ export function NotificationsTab({ clientId, notifications, readOnly = false }: 
     markedRef.current = true;
     const unread = notifications.filter((n) => !n.read_at);
     if (unread.length === 0) return;
-    Promise.all(unread.map((n) => markRead(n.id))).then(() => router.refresh());
-  }, [notifications, router, readOnly]);
+    // One request, not one per notification (NO1).
+    markAllNotificationsRead(clientId)
+      .then(() => router.refresh())
+      .catch(() => {});
+  }, [notifications, router, readOnly, clientId]);
 
   async function clearOne(id: string) {
     setCleared((prev) => new Set(prev).add(id));

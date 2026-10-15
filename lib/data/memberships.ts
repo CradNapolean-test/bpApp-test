@@ -265,6 +265,29 @@ export async function getCreditHistory(
   return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
 }
 
+// A member's own view of their credits (CC1): the last few ledger rows, and the bonus credits that will run out, with when. A small
+// read; the full history is the coach's.
+export async function getMyCreditHistory(
+  clientId: string,
+  limit = 10
+): Promise<{ recent: CreditsLedgerRow[]; expiring: CreditsLedgerRow[] }> {
+  const supabase = await createClient();
+  const [recent, expiring] = await Promise.all([
+    supabase.from('credits_ledger').select('*').eq('client_id', clientId).order('created_at', { ascending: false }).order('id').limit(limit),
+    supabase
+      .from('credits_ledger')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('bucket', 'bonus')
+      .gt('delta', 0)
+      .is('expired_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('expires_at')
+      .limit(20),
+  ]);
+  return { recent: (recent.data ?? []) as CreditsLedgerRow[], expiring: (expiring.data ?? []) as CreditsLedgerRow[] };
+}
+
 // "Record an extra session": takes credits off with a note, from the weekly allowance first and then any bonus credits, never below
 // what they have. Through remove_credits (migration 0133), which does the sums under a lock so two removals cannot both pass the balance
 // check. Returns rather than throws so the reason reaches the screen ("They only have 2 credits.").

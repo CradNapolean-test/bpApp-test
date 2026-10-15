@@ -22,6 +22,7 @@ import {
   PLAN_HISTORY_PAGE,
   expiryToIso,
   extraSessionConfirmation,
+  friendlyCreditReason as friendlyReason,
   extraSessionExpiry,
   packConfirmation,
   parseCreditAmount,
@@ -55,12 +56,6 @@ function endFor(startIso: string, weeks: number | null | undefined): string {
   const start = new Date(startIso + 'T00:00:00Z');
   const buffer = start.getUTCDay() === 6 ? 0 : 1;
   return toIsoDate(addDays(start, weeks * 7 + buffer));
-}
-
-function friendlyReason(reason: string): string {
-  const m = reason.match(/^membership reset: week of (\d{4}-\d{2}-\d{2})/);
-  if (m) return `Weekly allowance reset · week of ${new Date(m[1] + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`;
-  return reason;
 }
 
 type SheetKind = 'start' | 'end' | 'add' | 'remove' | 'hold' | null;

@@ -3,6 +3,7 @@ import {
   creditKind,
   expiryToIso,
   extraSessionConfirmation,
+  friendlyCreditReason,
   extraSessionExpiry,
   packConfirmation,
   parseCreditAmount,
@@ -78,5 +79,15 @@ describe('confirmation wording', () => {
     expect(pack.title).toBe('Give Sam the "Ten pack" pack?');
     expect(pack.body).toMatch(/10 credits, valid for 90 days/);
     expect(packConfirmation('Sam', { name: 'Drop-in', credits: 1, expires_after_days: null }).body).toMatch(/1 credit, with no expiry/);
+  });
+});
+
+describe('friendlyCreditReason (CC1)', () => {
+  it('words the weekly reset rows for a person', () => {
+    expect(friendlyCreditReason('membership reset: week of 2026-10-12')).toBe('Weekly allowance reset · week of 12 Oct');
+  });
+  it('leaves any other reason as written', () => {
+    expect(friendlyCreditReason('Pack: Ten pack')).toBe('Pack: Ten pack');
+    expect(friendlyCreditReason('Extra session')).toBe('Extra session');
   });
 });

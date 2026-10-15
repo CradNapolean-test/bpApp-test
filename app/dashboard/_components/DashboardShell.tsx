@@ -975,6 +975,7 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Credits' && (!isCoachView || !isOwnClient) && (
             <ClientCreditsTab
+              clientId={clientId}
               creditsBalance={creditsBalance}
               creditsBuckets={creditsBuckets}
               membership={membership}
