@@ -8,6 +8,8 @@ import { ThemeSync } from "./_components/ThemeSync";
 import { ServiceWorkerRegister } from "./_components/ServiceWorkerRegister";
 import { SplashScreen } from "./_components/SplashScreen";
 import { OfflineBanner } from "./_components/OfflineBanner";
+import { UpdateBanner } from "./_components/UpdateBanner";
+import { buildId } from "@/lib/appVersion";
 import { getMyProfileRow } from "@/lib/supabase/currentUser";
 import type { ThemePreference } from "./_components/theme";
 
@@ -106,6 +108,7 @@ export default async function RootLayout({
             <ServiceWorkerRegister />
             <SplashScreen />
             <OfflineBanner />
+            <UpdateBanner currentVersion={buildId()} />
             {children}
           </ConfirmProvider>
         </ToastProvider>

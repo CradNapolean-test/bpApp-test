@@ -60,7 +60,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/auth/confirm') ||
     // Public sign-up link a coach shares (see app/join and app/api/join).
     request.nextUrl.pathname.startsWith('/join') ||
-    request.nextUrl.pathname.startsWith('/api/join');
+    request.nextUrl.pathname.startsWith('/api/join') ||
+    // Which deployment is serving: the app asks (R8), including from the sign-in page. Not sensitive.
+    request.nextUrl.pathname.startsWith('/api/version');
 
   // Deliberately NOT the same set as above: /reset-password must stay reachable even after a
   // user becomes authenticated mid-page. The recovery flow's whole point is to establish a

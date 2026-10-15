@@ -1,26 +1,23 @@
 'use client';
 
 import { useEffect } from 'react';
+import { UPDATE_READY_EVENT } from '@/lib/appVersion';
 
 // Mounted once near the root (RootLayout). Registers /sw.js on every visit (cheap, a no-op if
-// unchanged). When a newer version takes over, the open page is still running old code, so reload
-// it the next time the app comes back to the foreground (never mid-task). Actually subscribing to
-// push is a separate, explicit user action (see PushPrompt / the Profile toggle).
+// unchanged). When a newer version takes over, the open page is still running old code: it says so
+// (UpdateBanner shows "A new version is ready") and the member taps Update. It used to reload the page by
+// itself the next time the app came forward, which threw away what was being typed (R8). Actually
+// subscribing to push is a separate, explicit user action (see PushPrompt / the Profile toggle).
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
     // controller is null on a first-ever visit: the first claim is not an update.
     const hadController = !!navigator.serviceWorker.controller;
-    let updated = false;
     const onControllerChange = () => {
-      if (hadController) updated = true;
-    };
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && updated) window.location.reload();
+      if (hadController) window.dispatchEvent(new Event(UPDATE_READY_EVENT));
     };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    document.addEventListener('visibilitychange', onVisible);
 
     navigator.serviceWorker
       .register('/sw.js')
@@ -37,7 +34,6 @@ export function ServiceWorkerRegister() {
 
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
-      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
