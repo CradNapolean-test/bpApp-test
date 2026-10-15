@@ -250,3 +250,203 @@ $fn$;
 
 revoke execute on function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean) from public, anon;
 grant execute on function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean) to authenticated;
+
+-- =====================================================================================================================
+-- CL3. A template import was not atomic.
+-- importProgramTemplate inserted the template and then every day and exercise one request at a time, so a failure left a half-built
+-- template. import_program_template(p_json) builds the whole template in one transaction and answers its id. It takes the same
+-- shape as the export file ({"version": 1, "name", "days": [{week_num, day_label, sort_order, phase_label, notes, day_position,
+-- exercises: [...]}]}) and keeps only the fields the app's own validator keeps; anything else in the file is ignored.
+--   limits       20 different weeks, 14 days per week, 60 exercises per day; names up to 100 / 200 characters, notes 2,000
+--   numbers      out-of-range numbers (for example 5,000 sets) are left empty rather than failing the whole import
+--   video links  only https:// links are kept; anything else is left empty
+--   library      each exercise is linked to the library entry with the same name (ignoring case and spacing) when there is one
+--   1RM          an exercise prescribed as a % of 1RM needs a percentage and a library entry; otherwise the import is refused with
+--                the exercise's name (the database would have refused it anyway, but only after half the template was written)
+-- The template belongs to the caller and their active gym. Helpers: _import_text, _import_number, _import_int (internal).
+--
+-- PRE-FLIGHT: none (a new function; nothing existing changes).
+-- =====================================================================================================================
+create or replace function public._import_text(p jsonb, k text, p_max integer)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select case when jsonb_typeof(p -> k) = 'string' then nullif(left(btrim(p ->> k), p_max), '') end;
+$$;
+
+create or replace function public._import_number(p jsonb, k text)
+returns numeric
+language sql
+immutable
+set search_path = public
+as $$
+  select case when jsonb_typeof(p -> k) = 'number' then (p ->> k)::numeric end;
+$$;
+
+create or replace function public._import_int(p jsonb, k text, p_min integer, p_max integer)
+returns integer
+language sql
+immutable
+set search_path = public
+as $$
+  select case
+    when jsonb_typeof(p -> k) = 'number' and (p ->> k)::numeric between p_min and p_max then round((p ->> k)::numeric)::integer
+  end;
+$$;
+
+revoke execute on function public._import_text(jsonb, text, integer) from public, anon, authenticated;
+revoke execute on function public._import_number(jsonb, text) from public, anon, authenticated;
+revoke execute on function public._import_int(jsonb, text, integer, integer) from public, anon, authenticated;
+
+create or replace function public.import_program_template(p_json jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gym uuid := public.my_gym_id();
+  v_name text;
+  v_template uuid;
+  v_day jsonb;
+  v_ex jsonb;
+  v_day_id uuid;
+  v_week integer;
+  v_ex_name text;
+  v_library uuid;
+  v_prescription text;
+  v_percent numeric;
+  v_video text;
+  v_section text;
+  v_block_type text;
+  v_block_no integer;
+  v_block_part text;
+begin
+  if auth.uid() is null or v_gym is null then
+    raise exception 'Only a coach can import a programme';
+  end if;
+
+  if p_json is null or jsonb_typeof(p_json) <> 'object'
+     or coalesce(jsonb_typeof(p_json -> 'days'), '') <> 'array'
+     or public._import_text(p_json, 'name', 100) is null then
+    raise exception 'That file isn''t a recognised programme template export';
+  end if;
+  v_name := public._import_text(p_json, 'name', 100);
+
+  if jsonb_array_length(p_json -> 'days') > 20 * 14 then
+    raise exception 'That programme has too many days (up to 14 days a week for 20 weeks).';
+  end if;
+
+  -- Every day needs a week number and a label; limits per week and per day.
+  for v_day in select value from jsonb_array_elements(p_json -> 'days') loop
+    if jsonb_typeof(v_day) <> 'object'
+       or public._import_int(v_day, 'week_num', 0, 1000) is null
+       or public._import_text(v_day, 'day_label', 100) is null
+       or coalesce(jsonb_typeof(v_day -> 'exercises'), '') <> 'array' then
+      raise exception 'That file isn''t a recognised programme template export';
+    end if;
+    if jsonb_array_length(v_day -> 'exercises') > 60 then
+      raise exception 'A day can have up to 60 exercises.';
+    end if;
+  end loop;
+
+  if (select count(distinct public._import_int(d.value, 'week_num', 0, 1000)) from jsonb_array_elements(p_json -> 'days') d) > 20 then
+    raise exception 'A programme can have up to 20 weeks.';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_json -> 'days') d
+    group by public._import_int(d.value, 'week_num', 0, 1000)
+    having count(*) > 14
+  ) then
+    raise exception 'A week can have up to 14 days.';
+  end if;
+
+  insert into program_templates (coach_id, gym_id, name)
+  values (auth.uid(), v_gym, v_name)
+  returning id into v_template;
+
+  for v_day in select value from jsonb_array_elements(p_json -> 'days') loop
+    v_week := public._import_int(v_day, 'week_num', 0, 1000);
+
+    insert into program_template_days (template_id, week_num, day_label, sort_order, phase_label, notes, day_position)
+    values (
+      v_template,
+      v_week,
+      public._import_text(v_day, 'day_label', 100),
+      coalesce(public._import_int(v_day, 'sort_order', -100000, 100000), 0),
+      public._import_text(v_day, 'phase_label', 100),
+      public._import_text(v_day, 'notes', 2000),
+      public._import_int(v_day, 'day_position', 0, 1000)
+    )
+    returning id into v_day_id;
+
+    for v_ex in select value from jsonb_array_elements(v_day -> 'exercises') loop
+      if jsonb_typeof(v_ex) <> 'object' or public._import_text(v_ex, 'name', 200) is null then
+        raise exception 'That file isn''t a recognised programme template export';
+      end if;
+      v_ex_name := public._import_text(v_ex, 'name', 200);
+
+      select l.id into v_library
+      from exercise_library l
+      where lower(btrim(l.name)) = lower(v_ex_name)
+      order by l.is_active desc, l.created_at
+      limit 1;
+
+      v_prescription := case when v_ex ->> 'prescription_type' = 'percent_1rm' then 'percent_1rm' else 'absolute' end;
+      v_percent := public._import_number(v_ex, 'percent_1rm');
+      if v_percent is not null and (v_percent < 0 or v_percent > 200) then
+        v_percent := null;
+      end if;
+      if v_prescription = 'percent_1rm' and (v_percent is null or v_library is null) then
+        raise exception '"%" is prescribed as a percentage of 1RM, which needs a percentage and an entry in your exercise library.', v_ex_name;
+      end if;
+
+      v_video := public._import_text(v_ex, 'video_url', 500);
+      if v_video is not null and v_video !~* '^https://' then
+        v_video := null;
+      end if;
+
+      v_section := case when v_ex ->> 'section' in ('warmup', 'strong', 'conditioning') then v_ex ->> 'section' else 'lift' end;
+      v_block_type := case when v_ex ->> 'block_type' = 'circuit' then 'circuit' else 'exercise' end;
+      v_block_no := public._import_int(v_ex, 'block_no', 1, 2);
+      v_block_part := case when v_ex ->> 'block_part' in ('upper', 'lower', 'breath', 'burn') then v_ex ->> 'block_part' end;
+
+      insert into program_template_exercises (
+        template_day_id, exercise_library_id, name, sets, reps, load, rpe, notes, video_url, superset_group, rest_seconds, sort_order,
+        block_type, prescription_type, percent_1rm, progression_load_increment, progression_every_weeks,
+        section, block_no, block_format, block_part
+      )
+      values (
+        v_day_id,
+        v_library,
+        v_ex_name,
+        public._import_int(v_ex, 'sets', 0, 1000),
+        public._import_text(v_ex, 'reps', 40),
+        case when public._import_number(v_ex, 'load') between 0 and 10000 then public._import_number(v_ex, 'load') end,
+        case when public._import_number(v_ex, 'rpe') between 0 and 10 then public._import_number(v_ex, 'rpe') end,
+        public._import_text(v_ex, 'notes', 2000),
+        v_video,
+        public._import_text(v_ex, 'superset_group', 40),
+        public._import_int(v_ex, 'rest_seconds', 0, 3600),
+        coalesce(public._import_int(v_ex, 'sort_order', -100000, 100000), 0),
+        v_block_type,
+        v_prescription,
+        v_percent,
+        case when public._import_number(v_ex, 'progression_load_increment') between -1000 and 1000 then public._import_number(v_ex, 'progression_load_increment') end,
+        coalesce(public._import_int(v_ex, 'progression_every_weeks', 1, 52), 1),
+        v_section,
+        v_block_no,
+        public._import_text(v_ex, 'block_format', 60),
+        v_block_part
+      );
+    end loop;
+  end loop;
+
+  return v_template;
+end;
+$fn$;
+
+revoke execute on function public.import_program_template(jsonb) from public, anon;
+grant execute on function public.import_program_template(jsonb) to authenticated;
