@@ -74,3 +74,105 @@ Put H1, H2, M10, R31, M9 and CL2 in `0127_security_access_rules.sql`; put R9, M3
 
 - Two migration files, pre-flight queries documented, sandbox check scripts added, `npm test`/`tsc`/`lint` green.
 - A short list in `## Status` of everything the owner must run on the live database **before** applying (the pre-flight queries) and the order to apply.
+
+## Status
+
+Branch `fix/01-database-security`, 15 commits (the last is this status), nothing pushed. Two migrations: `0127_security_access_rules.sql` and `0128_security_storage_and_scale.sql`.
+
+**Not run anywhere yet.** No sandbox project exists and there is no Postgres on this machine, so the SQL has never been executed and the three sandbox scripts have never been run. What did run: `npm test` (194 pass, including 7 new static checks that replay the SQL files and fail without these two migrations), `npx tsc --noEmit` (clean), `npm run lint` (0 errors; the 9 warnings were already there and none are in files from this brief). The first real test is applying both files to the sandbox.
+
+### Findings
+
+| ID | Result | Commit | Notes |
+|---|---|---|---|
+| H1 | done | `4621af4` | Library is coach-only for writes; everyone signed in can still read. |
+| H2 | done | `9288d65` | Both `bookings` write policies dropped. Checked every writer: nothing under `app/` or `lib/` writes to the table, and all eight functions that do are security definer. |
+| M10 | done | `a314134` | See "Columns a member can still write" below. |
+| M9 | done | `1986879` | Defaults only; existing rows untouched. |
+| CL2 | done | `86727af` | Plus extras: see "Beyond the brief". |
+| R31 | **no change needed** | `3f122f8` | `event_signup_rules` (0112, system bypass in 0126) already locks the event row, refuses a full event and an event that ended more than 6 hours ago, and covers direct inserts. A comment in 0127 records that. Needs 0112 and 0126 to be applied live. |
+| R9 | done | `2cf03f4` | Dynamic loop over `pg_policies`; the exception list is empty on purpose. No new indexes: `profiles(coach_id)`, `profiles(gym_id)` and `daily_logs(client_id, log_date)` are already indexed, and there is no sandbox to EXPLAIN on. |
+| M3 (database) | done | `fa25a69` | `register_web_push`, unique endpoint, `last_seen_at`, cap of 5. |
+| M12 | done, differs from the brief | `74fd40d` | `foods.hidden` and the `search_foods` filter already existed (0074), so no column was added. Coach UPDATE and DELETE policies only. |
+| R23 (database) | done | `2354293` | `not valid` first, validated only if no existing row is bad. |
+| CM5 | done | `45314c3` | Coach-only policies, 1 MB, PNG / JPEG / WebP. |
+| Checks | added, not run | `8d3dddc`, `408f205`, `d1f81ff` | `access-rules-check.cjs`, `storage-and-scale-check.cjs`, a H2 block in `booking-rules-check.cjs`, and `supabase/tests/migration-access.test.ts`. |
+
+### Before applying: what the owner must do
+
+1. Take a database backup. Create the sandbox, apply `schema.sql` and every migration in order, then `0127`, then `0128`.
+2. On the sandbox run: `access-rules-check.cjs`, the extended `booking-rules-check.cjs`, `storage-and-scale-check.cjs`, then `rls-isolation-check.cjs` (R9 touches almost every table). Each needs `--ref=<sandbox ref>` and that ref in `AUDIT_ALLOWED_REFS`.
+3. On **live**, run these read-only queries. Nothing in them changes data:
+
+```sql
+-- H1: who created the library entries (a role other than coach means a member has already written to it)
+select p.role, count(*) from public.exercise_library l left join public.profiles p on p.id = l.created_by group by 1;
+
+-- H2: booked, paid sessions with no credit charge (some are legitimate: free classes, coach bookings)
+select b.client_id, count(*) from public.bookings b join public.classes c on c.id = b.class_id
+where b.status = 'booked' and c.credit_cost > 0
+  and not exists (select 1 from public.credits_ledger l where l.booking_id = b.id and l.delta < 0)
+group by 1 order by 2 desc;
+
+-- M9: what is there now
+select name, timezone from public.gyms;
+select timezone, count(*) from public.client_profiles group by 1;
+
+-- CL2: security-definer functions a logged-out caller can run (run again after 0128; expect none)
+select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute') order by 1;
+
+-- R31: confirm 0112 and 0126 are applied (expect one row, event_signup_rules, 'O')
+select tgname, tgenabled from pg_trigger where tgrelid = 'public.event_signups'::regclass and not tgisinternal;
+
+-- R9: the rules 0128 will move to "authenticated"
+select tablename, policyname, cmd from pg_policies where schemaname = 'public' and roles = array['public']::name[] order by 1, 2;
+
+-- M3: browser addresses held by more than one row (0128 keeps only the newest of each)
+select endpoint, count(*) as holders from public.push_subscriptions group by 1 having count(*) > 1;
+
+-- M12: scanned foods that would not pass the insert limits (a coach could only hide these, not edit them)
+select id, barcode, name, portion, protein, carbs, fat from public.foods
+where source = 'scan' and not hidden
+  and not (portion = '1 gram' and protein between 0 and 1 and carbs between 0 and 1 and fat between 0 and 1
+           and protein + carbs + fat <= 1.05 and char_length(name) between 1 and 200);
+
+-- R23: library links that break the https rule (fix or clear them, or the constraint stays NOT VALID)
+select id, name, image_url, video_url from public.exercise_library
+where (image_url is not null and image_url !~* '^https://') or (video_url is not null and video_url !~* '^https://');
+
+-- CM5: files already in the bucket that the new limits would have refused (they are not removed)
+select name, metadata->>'mimetype' as mimetype, (metadata->>'size')::bigint as bytes from storage.objects
+where bucket_id = 'coach-branding'
+  and (coalesce(metadata->>'mimetype', '') not in ('image/png', 'image/jpeg', 'image/webp')
+       or coalesce((metadata->>'size')::bigint, 0) > 1048576);
+```
+
+4. Apply to live one file at a time, `0127` then `0128`, and re-run the CL2 and R9 queries. Both files are safe to re-run.
+
+### Columns a member can still write on their own `client_profiles` row (for brief 06)
+
+Everything except these, which the trigger now judges:
+
+- `checkin_reminder_days`, `join_date`, `referral_source`: coach only (unchanged from 0110).
+- `needs_coach_review`: a member can raise it, never clear it.
+- `review_reasons`: a member can add to it, never remove from it. While onboarding is still open (`onboarding_completed_at` is null) and the flag stays raised, the full-onboarding save may replace the list.
+- `nutrition_goal`, `nutrition_setting`, `diet_approach`: a member can set them only while onboarding is open. After `onboarding_completed_at` is set they belong to the coach.
+- `onboarding_completed_at`: a member can complete onboarding (null to a date, or re-stamp a date) but not set it back to null.
+- `deletion_requested_at` is **still member-writable on purpose**: the "request account deletion" button and its cancel are member actions. The audit listed it, but blocking it would break that feature.
+
+The change for brief 06 (R15): until the Setup save sends only changed fields, a member whose coach changed their goal or setting while the Setup screen was open gets an error on Save instead of silently putting the old value back. Once Setup sends changed fields only, this trigger will not get in the way. Nothing else in the Setup, onboarding, InBody-scan or deletion flows needed a change.
+
+### Beyond the brief, and decisions made
+
+- **CL2 re-check.** `parse-functions.cjs` listed 15 security-definer functions a logged-out caller could still run. Besides the two education functions I revoked three trigger functions (`sync_profile_email`, `enforce_advance_booking_window`, `sync_gym_session_from_attendance`; a trigger does not need EXECUTE when it fires, as 0110 and 0112 already rely on) and, in 0128 right after the R9 change, the 12 row-level-security helper functions (`is_self`, `is_coach_of`, `owns_client`, `my_coach_id`, `my_gym_id`, `client_gym_id`, `is_same_gym_as_client`, `is_admin_of_gym`, `shares_gym_membership`, `is_owner`, `my_org_id`, `is_owner_of_gym`) from `public` and `anon`. Signed-in callers keep them. The only side effect I can see: a logged-out request to a storage object now gets a permission error from the policy instead of a plain refusal. That block is separate in 0128 and is easy to drop if you would rather not have it.
+- **M3 allows coaches as well as members** to call `register_web_push` (the brief said members only). 0060 always let any signed-in user subscribe, and brief 09 may add coach push, so restricting it would only have caused a second change later.
+- **M3 interim behaviour.** The table's "client manages own push_subscriptions" rule is unchanged, because the web app still writes there directly until brief 07 (R18) calls `register_web_push`. Until then, on a shared phone where another member's subscription is still stored, turning push on shows an error. That is deliberate: it stops the old silent sharing. Once R18 lands, the insert and update half of that rule can be dropped.
+- **Lint.** `npm run lint` had 77 errors, all `no-require-imports` in the existing `.cjs` audit scripts. `eslint.config.mjs` now switches that one rule off for `.cjs` files (commit `d1f81ff`). The `.claude/worktrees` copies of other chats are still linted by `npm run lint`; they add warnings only.
+
+### Hand-offs to other briefs
+
+- **02 (CM4, library scope):** after H1, any coach can still delete any library entry, and a coach can only edit entries they created (the existing `with check (created_by = auth.uid())`). That means seeded entries with another or no `created_by` cannot be edited by coaches today. Decide the gym scoping and edit rule there.
+- **06 (M12 coach screen):** `getFoodByBarcode` reads `foods` directly and does not skip hidden rows, and a hidden row still holds its unique barcode. For a barcode product, "correct the numbers" works; "hide" does not stop a scan from finding the row. Deleting a food that a member has logged is refused by the database, so hide it instead.
+- **07 (R18, R23):** call `register_web_push` instead of the direct upsert; add the host allowlist for library links; the library screen's `hasVideo` accepts `http://` links, which the database now refuses, so show a friendly message.
+- **08 (CM5 follow-up):** `uploadCoachLogo` (`lib/data/coachSettings.ts`) builds the file name from the extension and never deletes the previous logo; it should also show a plain message when the bucket refuses a file (over 1 MB, or not PNG / JPEG / WebP; SVG is now refused).
