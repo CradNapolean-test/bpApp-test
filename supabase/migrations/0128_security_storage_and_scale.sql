@@ -227,3 +227,57 @@ begin
     raise notice 'R23: some exercise_library.video_url values are not https:// links; constraint left NOT VALID until they are fixed';
   end if;
 end $$;
+
+-- =====================================================================================================================
+-- CM5. Any logged-in user could upload to the public coach-branding bucket.
+-- The three upload rules (0047) only checked that the first folder equals the caller's id, not that the caller is a coach, and
+-- the bucket had no size or type limit (0108, 0109 and 0114 skipped it). Now: coaches only, 1 MB, PNG / JPEG / WebP only
+-- (no SVG: an SVG served from a public address can carry script). Limits apply to new uploads; existing files are not touched.
+-- App follow-up (brief 08): uploadCoachLogo builds the file name from the file's extension and never deletes the previous logo,
+-- and should show a friendly message for a refused file.
+--
+-- PRE-FLIGHT (read-only; files already in the bucket that the new limits would not have allowed):
+--   select name, metadata->>'mimetype' as mimetype, (metadata->>'size')::bigint as bytes from storage.objects
+--   where bucket_id = 'coach-branding'
+--     and (coalesce(metadata->>'mimetype', '') not in ('image/png', 'image/jpeg', 'image/webp')
+--          or coalesce((metadata->>'size')::bigint, 0) > 1048576);
+-- =====================================================================================================================
+drop policy if exists "coach uploads own logo" on storage.objects;
+create policy "coach uploads own logo"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'coach-branding'
+    and (storage.foldername(name))[1] = auth.uid()::text
+    and public.my_gym_id() is not null
+  );
+
+drop policy if exists "coach replaces own logo" on storage.objects;
+create policy "coach replaces own logo"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'coach-branding'
+    and (storage.foldername(name))[1] = auth.uid()::text
+    and public.my_gym_id() is not null
+  )
+  with check (
+    bucket_id = 'coach-branding'
+    and (storage.foldername(name))[1] = auth.uid()::text
+    and public.my_gym_id() is not null
+  );
+
+drop policy if exists "coach deletes own logo" on storage.objects;
+create policy "coach deletes own logo"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'coach-branding'
+    and (storage.foldername(name))[1] = auth.uid()::text
+    and public.my_gym_id() is not null
+  );
+
+update storage.buckets
+set file_size_limit = 1048576,
+    allowed_mime_types = array['image/png', 'image/jpeg', 'image/webp']
+where id = 'coach-branding';
