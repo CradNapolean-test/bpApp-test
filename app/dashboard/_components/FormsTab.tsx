@@ -230,8 +230,8 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
 }
 
 // A finished form: one line until it's tapped, then the answers given.
-// When `reviewClientId` is set (the member's own coach), opening it counts as reviewed and drops it
-// off the dashboard's To do.
+// When `reviewClientId` is set (the member's own coach), a "Mark reviewed" button drops it off the dashboard's To do. Opening it to read
+// no longer does that by itself (R20): a coach expanding a form to look used to clear it unread.
 function CompletedForm({
   assignment,
   reviewClientId = null,
@@ -242,6 +242,8 @@ function CompletedForm({
   isCoachView?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [reviewed, setReviewed] = useState(false);
+  const { run: runReview, busy: reviewing } = useAction();
   // The coach also sees questions that were taken out after they had answers, labelled, so old answers stay readable; the member does not.
   const questions = assignment.template.questions.filter(
     (q) => !q.archived_at || (isCoachView && assignment.responses.some((r) => r.question_id === q.id))
@@ -250,10 +252,7 @@ function CompletedForm({
     <div className="rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
       <button
         type="button"
-        onClick={() => {
-          if (!open && reviewClientId) void markReviewed('form', reviewClientId, assignment.id);
-          setOpen((v) => !v);
-        }}
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className="flex w-full items-center gap-2.5 p-3.5 text-left"
       >
@@ -282,6 +281,22 @@ function CompletedForm({
               </div>
             );
           })}
+          {reviewClientId && (
+            <button
+              type="button"
+              disabled={reviewing || reviewed}
+              onClick={() =>
+                void runReview(() => markReviewed('form', reviewClientId, assignment.id), {
+                  success: 'Marked as reviewed',
+                  refresh: false,
+                  onDone: () => setReviewed(true),
+                })
+              }
+              className="w-full rounded-full border border-black/10 py-2 text-sm font-bold text-zinc-600 hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+            >
+              {reviewed ? '✓ Reviewed' : 'Mark reviewed'}
+            </button>
+          )}
         </dl>
       )}
     </div>

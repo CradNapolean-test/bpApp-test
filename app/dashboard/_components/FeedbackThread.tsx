@@ -5,6 +5,7 @@ import { MessageSquareText, Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { addNutritionFeedback, deleteNutritionFeedback } from '@/lib/data/nutritionFeedback';
+import { markReviewed } from '@/lib/data/coachReviews';
 import type { NutritionFeedbackRow } from '@/lib/data/types';
 
 const timeLabel = (iso: string) =>
@@ -44,6 +45,8 @@ export function FeedbackThread({
     if (ok) {
       setBody('');
       setOpen(false);
+      // Leaving feedback on a day counts as reviewing it (R20); simply looking at it does not.
+      if (canGive) void markReviewed('diary_day', clientId, date);
     }
   }
 

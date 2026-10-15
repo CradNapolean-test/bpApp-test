@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Camera, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -44,6 +44,9 @@ export function PhotoDiaryTab({
   const confirm = useConfirm();
   const { run: runUpload, busy: uploading } = useAction();
   const { run: runDelete } = useAction();
+  const { run: runReview, busy: reviewing } = useAction();
+  // Days this coach has marked reviewed during this visit (marking twice is harmless, so the button needs no other memory).
+  const [reviewedDays, setReviewedDays] = useState<Set<string>>(() => new Set());
 
   // Today at the member's own timezone (not UTC), kept current past midnight (FT2).
   const todayIso = useTodayIso(profile?.timezone ?? DEFAULT_TIMEZONE);
@@ -60,11 +63,16 @@ export function PhotoDiaryTab({
   const previousDay = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
   const atBrowseLimit = !readOnly && !canBrowseDate(previousDay, todayIso);
 
-  // The member's own coach looking at a day of photos counts as reviewing it (it leaves the
-  // dashboard's To do); commenting does too.
-  useEffect(() => {
-    if (canGiveFeedback && photos.length > 0) void markReviewed('diary_day', clientId, viewingDate);
-  }, [canGiveFeedback, photos.length, clientId, viewingDate]);
+  // Reviewing a day is something the coach says ("Mark day as reviewed", or leaving feedback on it), not something that happens by looking:
+  // paging through days used to clear every one of them from the dashboard's To do (R20).
+  async function markDayReviewed() {
+    const day = viewingDate;
+    await runReview(() => markReviewed('diary_day', clientId, day), {
+      success: 'Marked as reviewed',
+      refresh: false,
+      onDone: () => setReviewedDays((prev) => new Set(prev).add(day)),
+    });
+  }
 
   const [adding, setAdding] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -188,6 +196,17 @@ export function PhotoDiaryTab({
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-sm font-extrabold text-accent-foreground"
         >
           <Camera className="h-5 w-5" /> Add a meal photo
+        </button>
+      )}
+
+      {canGiveFeedback && photos.length > 0 && (
+        <button
+          type="button"
+          disabled={reviewing || reviewedDays.has(viewingDate)}
+          onClick={() => void markDayReviewed()}
+          className="w-full rounded-full border border-black/10 py-2 text-sm font-bold text-zinc-600 hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+        >
+          {reviewedDays.has(viewingDate) ? '✓ Reviewed' : 'Mark day as reviewed'}
         </button>
       )}
 
