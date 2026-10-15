@@ -230,24 +230,23 @@ export async function getCreditsLedger(clientId: string): Promise<CreditsLedgerR
   return data ?? [];
 }
 
-// Always writes to the 'bonus' bucket (the column default) -- manual grants are never the
-// reset-managed 'membership' bucket, which only replenish_due_memberships writes to.
+// Adds credits to a member through grant_credits (migration 0133), which checks the caller is the member's coach and the limits (1 to 50
+// at a time, a reason, a future expiry), takes a lock so a grant never interleaves with a refund, and writes the ledger row. Always the
+// 'bonus' bucket: manual grants are never the reset-managed 'membership' bucket. Returns rather than throws so the reason reaches the screen.
 export async function grantCredits(
   clientId: string,
-  delta: number,
+  amount: number,
   reason: string,
   expiresAt?: string | null
-): Promise<void> {
+): Promise<ActionResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { error } = await supabase
-    .from('credits_ledger')
-    .insert({ client_id: clientId, delta, reason, granted_by: user.id, expires_at: expiresAt ?? null });
-  if (error) raise(error);
+  const { error } = await supabase.rpc('grant_credits', {
+    p_client: clientId,
+    p_amount: amount,
+    p_reason: reason,
+    p_expires_at: expiresAt ?? null,
+  });
+  return error ? fail(error, 'Could not add the credits') : ok();
 }
 
 // Upcoming occurrences of every recurring class (day_of_week-based, not stored as

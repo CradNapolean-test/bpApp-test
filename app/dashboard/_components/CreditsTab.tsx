@@ -16,6 +16,17 @@ import {
   removeCredits,
   startMembership,
 } from '@/lib/data/memberships';
+import {
+  CREDIT_FILTER_LABELS,
+  HISTORY_PAGE,
+  PLAN_HISTORY_PAGE,
+  expiryToIso,
+  extraSessionConfirmation,
+  extraSessionExpiry,
+  packConfirmation,
+  parseCreditAmount,
+  type CreditFilter,
+} from '@/lib/creditsForm';
 import { updateCheckinReminderDays } from '@/lib/data/clientProfile';
 import { endHold, getActiveHold, startHold } from '@/lib/data/redFlags';
 import { addDays, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
@@ -66,6 +77,8 @@ export function CreditsTab({
   creditPacks,
   checkinReminderDays,
   lastCheckinReminderAt,
+  gymTimezone,
+  memberName,
 }: {
   clientId: string;
   creditsBalance: number;
@@ -75,19 +88,26 @@ export function CreditsTab({
   creditPacks: CreditPackRow[];
   checkinReminderDays: number;
   lastCheckinReminderAt: string | null;
+  // The member's gym's timezone: "today", the plan start options, hold dates and expiry dates follow the gym's calendar, not this browser's.
+  gymTimezone?: string | null;
+  memberName?: string | null;
 }) {
   const confirm = useConfirm();
   const { run, busy } = useAction();
-  const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
+  const tz = gymTimezone || DEFAULT_TIMEZONE;
+  const todayIso = todayIsoInTz(tz);
+  const who = memberName?.trim() || 'this member';
   const [sheet, setSheet] = useState<SheetKind>(null);
-  const [history, setHistory] = useState<{ memberships: ClientMembershipRow[]; credits: CreditsLedgerRow[] } | null>(null);
+  // What has been loaded so far, a page at a time. `more` says whether older rows exist, so nothing capped is ever called "all".
+  const [history, setHistory] = useState<{ memberships: ClientMembershipRow[]; plansMore: boolean; credits: CreditsLedgerRow[]; creditsMore: boolean } | null>(null);
+  const [creditFilter, setCreditFilter] = useState<CreditFilter>('all');
+  const [loadingMore, setLoadingMore] = useState(false);
   const [reminderDays, setReminderDays] = useState(checkinReminderDays);
   // A hold keeps them off the red flag lists while they are away (holiday, injury).
   const [hold, setHold] = useState<MembershipHoldRow | null>(null);
   const [holdFrom, setHoldFrom] = useState(todayIso);
   const [holdNote, setHoldNote] = useState('');
   const [holdTick, setHoldTick] = useState(0);
-  const [showAllCredits, setShowAllCredits] = useState(false);
 
   // Start-plan form
   const [packageId, setPackageId] = useState(membership?.package_id ?? '');
@@ -98,20 +118,40 @@ export function CreditsTab({
   // End-date form
   const [planEnd, setPlanEnd] = useState('');
   // Credit forms
-  const [amount, setAmount] = useState(1);
+  // Kept as text so the box can be emptied and retyped; checked by parseCreditAmount when it is used.
+  const [amountText, setAmountText] = useState('1');
   const [reason, setReason] = useState('');
   const [expires, setExpires] = useState('');
   const [selectedPack, setSelectedPack] = useState('');
 
   useEffect(() => {
     let live = true;
-    Promise.all([getMembershipHistory(clientId), getCreditHistory(clientId)]).then(([memberships, credits]) => {
-      if (live) setHistory({ memberships, credits });
+    Promise.all([
+      getMembershipHistory(clientId, { limit: PLAN_HISTORY_PAGE }),
+      getCreditHistory(clientId, { limit: HISTORY_PAGE, filter: creditFilter }),
+    ]).then(([plans, credits]) => {
+      if (live) setHistory({ memberships: plans.rows, plansMore: plans.hasMore, credits: credits.rows, creditsMore: credits.hasMore });
     });
     return () => {
       live = false;
     };
-  }, [clientId, membership?.id, membership?.scheduled_end, creditsBalance]);
+  }, [clientId, membership?.id, membership?.scheduled_end, creditsBalance, creditFilter]);
+
+  async function loadMoreCredits() {
+    if (!history) return;
+    setLoadingMore(true);
+    const next = await getCreditHistory(clientId, { offset: history.credits.length, limit: HISTORY_PAGE, filter: creditFilter });
+    setHistory((h) => (h ? { ...h, credits: [...h.credits, ...next.rows], creditsMore: next.hasMore } : h));
+    setLoadingMore(false);
+  }
+
+  async function loadMorePlans() {
+    if (!history) return;
+    setLoadingMore(true);
+    const next = await getMembershipHistory(clientId, { offset: history.memberships.length, limit: PLAN_HISTORY_PAGE });
+    setHistory((h) => (h ? { ...h, memberships: [...h.memberships, ...next.rows], plansMore: next.hasMore } : h));
+    setLoadingMore(false);
+  }
 
   useEffect(() => {
     let live = true;
@@ -170,29 +210,37 @@ export function CreditsTab({
     if (okConfirm) await run(() => endMembership(membership.id, null), { success: 'Plan ended' });
   }
 
+  // The amount box and the expiry date, checked once for both the button and the click.
+  const amountCheck = parseCreditAmount(amountText);
+  const expiryCheck = expiryToIso(expires, tz);
+
   async function submitAdd() {
-    const expiresAt = expires ? new Date(`${expires}T23:59:59`).toISOString() : null;
-    const ok = await run(() => grantCredits(clientId, amount, reason.trim() || 'Added by coach', expiresAt), {
+    if (!amountCheck.ok || !expiryCheck.ok) return;
+    const amount = amountCheck.amount;
+    const ok = await run(() => grantCredits(clientId, amount, reason.trim() || 'Added by coach', expiryCheck.iso), {
       success: `${amount} credit${amount === 1 ? '' : 's'} added`,
     });
     if (ok) setSheet(null);
   }
 
   async function submitRemove() {
+    if (!amountCheck.ok) return;
+    const amount = amountCheck.amount;
     const ok = await run(() => removeCredits(clientId, amount, reason), { success: `${amount} credit${amount === 1 ? '' : 's'} removed` });
     if (ok) setSheet(null);
   }
 
   async function extraSession() {
-    const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
-    await run(() => grantCredits(clientId, 1, 'Extra session', expiresAt), { success: 'Extra session added (valid 7 days)' });
+    if (!(await confirm({ ...extraSessionConfirmation(who) }))) return;
+    await run(() => grantCredits(clientId, 1, 'Extra session', extraSessionExpiry()), { success: 'Extra session added (valid 7 days)' });
   }
 
   async function grantPack() {
     const pack = creditPacks.find((p) => p.id === selectedPack);
     if (!pack) return;
-    await run(() => grantCreditPack(clientId, pack), { success: `${pack.name} granted` });
-    setSelectedPack('');
+    if (!(await confirm({ ...packConfirmation(who, pack) }))) return;
+    const ok = await run(() => grantCreditPack(clientId, pack.id), { success: `${pack.name} granted` });
+    if (ok) setSelectedPack('');
   }
 
   async function saveReminder(e: React.FormEvent) {
@@ -203,7 +251,7 @@ export function CreditsTab({
   }
 
   const openSheet = (kind: SheetKind) => {
-    setAmount(1);
+    setAmountText('1');
     setReason('');
     setExpires('');
     setPlanEnd(membership?.scheduled_end ?? '');
@@ -343,10 +391,28 @@ export function CreditsTab({
                 </li>
               ))}
             </ul>
-            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Recent credit activity</p>
+            {history.plansMore && (
+              <button type="button" disabled={loadingMore} onClick={loadMorePlans} className="mt-1 py-1 text-sm font-bold text-accent disabled:opacity-50">
+                {loadingMore ? 'Loading…' : 'Load older plans'}
+              </button>
+            )}
+            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Credit activity</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Filter credit activity">
+              {(Object.keys(CREDIT_FILTER_LABELS) as CreditFilter[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={creditFilter === key}
+                  onClick={() => setCreditFilter(key)}
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${creditFilter === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'}`}
+                >
+                  {CREDIT_FILTER_LABELS[key]}
+                </button>
+              ))}
+            </div>
             <ul className="mt-1 divide-y divide-black/[.05] dark:divide-white/10">
-              {history.credits.length === 0 && <li className="py-2 text-sm text-zinc-500">No credit activity yet.</li>}
-              {(showAllCredits ? history.credits : history.credits.slice(0, 5)).map((c) => (
+              {history.credits.length === 0 && <li className="py-2 text-sm text-zinc-500">{creditFilter === 'all' ? 'No credit activity yet.' : 'Nothing of this kind yet.'}</li>}
+              {history.credits.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-3 py-2">
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-black dark:text-zinc-50">{friendlyReason(c.reason)}</span>
@@ -362,9 +428,9 @@ export function CreditsTab({
                 </li>
               ))}
             </ul>
-            {history.credits.length > 5 && (
-              <button type="button" onClick={() => setShowAllCredits((v) => !v)} className="mt-1 py-1 text-sm font-bold text-accent">
-                {showAllCredits ? 'Show fewer' : `Show all ${history.credits.length}`}
+            {history.creditsMore && (
+              <button type="button" disabled={loadingMore} onClick={loadMoreCredits} className="mt-1 py-1 text-sm font-bold text-accent disabled:opacity-50">
+                {loadingMore ? 'Loading…' : 'Load more'}
               </button>
             )}
           </>
@@ -524,7 +590,8 @@ export function CreditsTab({
           <div className="space-y-3">
             <div className="space-y-1">
               <label className={labelCls}>Credits</label>
-              <input type="number" min={1} className={inputCls} value={amount} onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))} />
+              <input type="text" inputMode="numeric" className={inputCls} value={amountText} onChange={(e) => setAmountText(e.target.value)} />
+              {!amountCheck.ok && <p className="text-xs text-danger">{amountCheck.error}</p>}
             </div>
             <div className="space-y-1">
               <label className={labelCls}>Reason</label>
@@ -533,9 +600,11 @@ export function CreditsTab({
             <div className="space-y-1">
               <label className={labelCls}>Expires (optional)</label>
               <input type="date" className={inputCls} value={expires} onChange={(e) => setExpires(e.target.value)} />
+              {!expiryCheck.ok && <p className="text-xs text-danger">{expiryCheck.error}</p>}
+              {expiryCheck.ok && expiryCheck.iso && <p className="text-xs text-zinc-500">Ends at the end of that day at the gym.</p>}
             </div>
-            <button type="button" disabled={busy} onClick={submitAdd} className={`${btnCls} w-full py-3`}>
-              {busy ? 'Adding…' : `Add ${amount} credit${amount === 1 ? '' : 's'}`}
+            <button type="button" disabled={busy || !amountCheck.ok || !expiryCheck.ok} onClick={submitAdd} className={`${btnCls} w-full py-3`}>
+              {busy ? 'Adding…' : amountCheck.ok ? `Add ${amountCheck.amount} credit${amountCheck.amount === 1 ? '' : 's'}` : 'Add credits'}
             </button>
           </div>
         </BottomSheet>
@@ -547,14 +616,15 @@ export function CreditsTab({
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Use this to record an extra session they have used. The weekly allowance goes first, then bonus credits.</p>
             <div className="space-y-1">
               <label className={labelCls}>Credits</label>
-              <input type="number" min={1} className={inputCls} value={amount} onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))} />
+              <input type="text" inputMode="numeric" className={inputCls} value={amountText} onChange={(e) => setAmountText(e.target.value)} />
+              {!amountCheck.ok && <p className="text-xs text-danger">{amountCheck.error}</p>}
             </div>
             <div className="space-y-1">
               <label className={labelCls}>Note</label>
               <input type="text" className={inputCls} placeholder="e.g. Extra session on Saturday" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
-            <button type="button" disabled={busy} onClick={submitRemove} className={`${btnCls} w-full py-3`}>
-              {busy ? 'Removing…' : `Remove ${amount} credit${amount === 1 ? '' : 's'}`}
+            <button type="button" disabled={busy || !amountCheck.ok} onClick={submitRemove} className={`${btnCls} w-full py-3`}>
+              {busy ? 'Removing…' : amountCheck.ok ? `Remove ${amountCheck.amount} credit${amountCheck.amount === 1 ? '' : 's'}` : 'Remove credits'}
             </button>
           </div>
         </BottomSheet>

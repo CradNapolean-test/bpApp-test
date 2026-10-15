@@ -109,6 +109,7 @@ export default async function CoachClientPage({
       educationCourses={bundle.educationCourses}
       educationAssignments={bundle.educationAssignments}
       unreadMessageCount={bundle.unreadMessageCount}
+      gymTimezone={bundle.gymTimezone}
       bigDogResults={bundle.bigDogResults}
       events={bundle.events}
       rewardsData={bundle.rewardsData}

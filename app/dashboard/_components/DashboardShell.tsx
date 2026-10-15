@@ -148,6 +148,7 @@ export function DashboardShell({
   events = [],
   rewardsData = { rewards: [], grantedIds: [], sessions: 0, months: 0 },
   unreadMessageCount = 0,
+  gymTimezone = null,
   healthStatus = null,
   coachUnreadCount = 0,
   perClientUnreadCount = 0,
@@ -205,6 +206,8 @@ export function DashboardShell({
   events?: EventWithSignup[];
   rewardsData?: RewardsForMember;
   unreadMessageCount?: number;
+  // The member's gym's timezone (coach view): the Credits tab dates follow the gym's calendar.
+  gymTimezone?: string | null;
   // Only set when isCoachView -- the client's own dashboard load never computes this.
   healthStatus?: ClientHealthStatus | null;
   coachUnreadCount?: number;
@@ -953,6 +956,8 @@ export function DashboardShell({
               creditPacks={creditPacks}
               checkinReminderDays={profile?.checkin_reminder_days ?? 3}
               lastCheckinReminderAt={profile?.last_checkin_reminder_at ?? null}
+              gymTimezone={gymTimezone}
+              memberName={profile?.name ?? clientLabel}
             />
           )}
           {effectiveScreen === 'Credits' && (!isCoachView || !isOwnClient) && (

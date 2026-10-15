@@ -23,6 +23,7 @@ import { getUpcomingEvents } from './community';
 import { getRewardsForMember } from './rewards';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getBlockChoices } from './blockChoices';
+import { getGymTimezone } from './gym';
 import { getClientGymId, getCreditPacks, getCreditPacksForGym, getMyMembership, getPackages, getPackagesForGym } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
 import { getBodyScans } from './bodyScans';
@@ -95,6 +96,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bigDogResults,
     events,
     rewardsData,
+    gymTimezone,
   ] = await Promise.all([
     getDailyLogs(clientId, dates[0], dates[6]),
     getDailyLogs(clientId, historyStart, todayIso),
@@ -135,6 +137,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getBigDogResults(clientId),
     getUpcomingEvents(clientId),
     getRewardsForMember(clientId),
+    getGymTimezone(gymId),
   ]);
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
@@ -192,5 +195,6 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     bigDogResults,
     events,
     rewardsData,
+    gymTimezone,
   };
 }

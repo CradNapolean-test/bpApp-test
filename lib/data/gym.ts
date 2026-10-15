@@ -111,6 +111,14 @@ export async function getClientGymMismatch(gyms?: MyGymRow[]): Promise<GymMismat
   return gymMismatch(counts, mine.find((g) => g.isActive)?.gymId ?? null);
 }
 
+// The timezone of one gym (IANA name), for screens about a member who may belong to a different gym from the coach's active one.
+export async function getGymTimezone(gymId: string | null): Promise<string> {
+  if (!gymId) return DEFAULT_TIMEZONE;
+  const supabase = await createClient();
+  const { data } = await supabase.from('gyms').select('timezone').eq('id', gymId).maybeSingle();
+  return (data?.timezone as string | null | undefined) || DEFAULT_TIMEZONE;
+}
+
 // Moves the caller's active-gym pointer (profiles.gym_id/is_gym_admin) to a gym they already
 // belong to -- switch_active_gym (0056) validates membership server-side. Callers should
 // router.refresh() (or navigate) afterward since every server-loaded page depends on this.

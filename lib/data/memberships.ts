@@ -5,6 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
+import { HISTORY_PAGE, type CreditFilter } from '@/lib/creditsForm';
 import type { ClientMembershipRow, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from './types';
 
 // The gym a member belongs to, which is not necessarily the gym their coach is working in right now (a coach in two gyms has
@@ -182,30 +183,13 @@ export async function deleteCreditPack(packId: string, expectedGymId?: string | 
   if (error) raise(error);
 }
 
-// Grants a one-off pack as a 'bonus'-bucket credit: never resets, expires
-// expires_after_days from now if the pack has one set. A plain table insert (same RLS path
-// as grantCredits) rather than an RPC -- the pack's own fields, already fetched by the
-// caller, are all that's needed to compute the ledger row.
-export async function grantCreditPack(clientId: string, pack: CreditPackRow): Promise<void> {
+// Grants a one-off pack as a 'bonus'-bucket credit through grant_credit_pack (migration 0133): the database reads the pack itself (so the
+// numbers cannot be tampered with from the browser), checks it belongs to the member's gym, and sets the expiry. Returns rather than
+// throws so the reason reaches the screen.
+export async function grantCreditPack(clientId: string, packId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const expiresAt = pack.expires_after_days
-    ? new Date(Date.now() + pack.expires_after_days * 86400000).toISOString()
-    : null;
-
-  const { error } = await supabase.from('credits_ledger').insert({
-    client_id: clientId,
-    delta: pack.credits,
-    reason: `Pack: ${pack.name}`,
-    granted_by: user.id,
-    expires_at: expiresAt,
-    pack_id: pack.id,
-  });
-  if (error) raise(error);
+  const { error } = await supabase.rpc('grant_credit_pack', { p_client: clientId, p_pack: packId });
+  return error ? fail(error, 'Could not give that pack') : ok();
 }
 
 // ---- Coach membership panel (migration 0088) ----
@@ -236,58 +220,56 @@ export async function clearScheduledEnd(membershipId: string): Promise<ActionRes
   return error ? fail(error, 'Could not remove the end date') : ok();
 }
 
-export async function getMembershipHistory(clientId: string): Promise<ClientMembershipRow[]> {
+// A member's plans, newest first, a page at a time. `hasMore` says whether there are older ones, so the screen never calls a cut-off
+// list "all" (R27).
+export async function getMembershipHistory(
+  clientId: string,
+  options: { offset?: number; limit?: number } = {}
+): Promise<{ rows: ClientMembershipRow[]; hasMore: boolean }> {
+  const offset = options.offset ?? 0;
+  const limit = options.limit ?? 10;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('client_memberships')
     .select('*, package:membership_packages(*)')
     .eq('client_id', clientId)
     .order('started_at', { ascending: false })
-    .limit(10);
-  if (error) return [];
-  return (data ?? []) as unknown as ClientMembershipRow[];
+    .order('id')
+    .range(offset, offset + limit); // one more than asked for, to know if there is another page
+  if (error) return { rows: [], hasMore: false };
+  const rows = (data ?? []) as unknown as ClientMembershipRow[];
+  return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
 }
 
-export async function getCreditHistory(clientId: string, limit = 12): Promise<CreditsLedgerRow[]> {
+// A member's credit ledger, newest first, a page at a time, optionally only the manual changes, the booking rows or the automatic ones
+// (weekly resets and expiries dominate after a few months). `hasMore` says whether there are older rows.
+export async function getCreditHistory(
+  clientId: string,
+  options: { offset?: number; limit?: number; filter?: CreditFilter } = {}
+): Promise<{ rows: CreditsLedgerRow[]; hasMore: boolean }> {
+  const offset = options.offset ?? 0;
+  const limit = options.limit ?? HISTORY_PAGE;
+  const filter = options.filter ?? 'all';
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('credits_ledger')
-    .select('*')
-    .eq('client_id', clientId)
+  let query = supabase.from('credits_ledger').select('*').eq('client_id', clientId);
+  // The same three groups as creditKind() in lib/creditsForm.ts.
+  if (filter === 'booking') query = query.not('booking_id', 'is', null);
+  else if (filter === 'manual') query = query.is('booking_id', null).not('granted_by', 'is', null);
+  else if (filter === 'automatic') query = query.is('booking_id', null).is('granted_by', null);
+  const { data, error } = await query
     .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) return [];
-  return (data ?? []) as CreditsLedgerRow[];
+    .order('id')
+    .range(offset, offset + limit); // one more than asked for, to know if there is another page
+  if (error) return { rows: [], hasMore: false };
+  const rows = (data ?? []) as CreditsLedgerRow[];
+  return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
 }
 
-// "Record an extra session": takes credits off with a note, from the weekly allowance first and
-// then any bonus credits, never below what they have.
+// "Record an extra session": takes credits off with a note, from the weekly allowance first and then any bonus credits, never below
+// what they have. Through remove_credits (migration 0133), which does the sums under a lock so two removals cannot both pass the balance
+// check. Returns rather than throws so the reason reaches the screen ("They only have 2 credits.").
 export async function removeCredits(clientId: string, amount: number, reason: string): Promise<ActionResult> {
-  if (!Number.isInteger(amount) || amount < 1 || amount > 50) return fail(null, 'Enter a whole number of credits');
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return fail(null, 'Not signed in');
-
-  const { data: rows, error: balError } = await supabase
-    .from('credits_balance_by_bucket')
-    .select('bucket, balance')
-    .eq('client_id', clientId);
-  if (balError) return fail(balError, 'Could not read their credits');
-  const balance: Record<string, number> = { membership: 0, bonus: 0 };
-  for (const r of rows ?? []) balance[r.bucket as string] = r.balance;
-  if (balance.membership + balance.bonus < amount) return fail(null, `They only have ${balance.membership + balance.bonus} credits`);
-
-  const fromMembership = Math.min(amount, Math.max(balance.membership, 0));
-  const fromBonus = amount - fromMembership;
-  const note = reason.trim() || 'Removed by coach';
-  const entries = [
-    fromMembership > 0 && { bucket: 'membership', delta: -fromMembership },
-    fromBonus > 0 && { bucket: 'bonus', delta: -fromBonus },
-  ].filter(Boolean) as { bucket: string; delta: number }[];
-  const { error } = await supabase
-    .from('credits_ledger')
-    .insert(entries.map((e) => ({ client_id: clientId, delta: e.delta, bucket: e.bucket, reason: `Removed: ${note}`, granted_by: user.id })));
+  const { error } = await supabase.rpc('remove_credits', { p_client: clientId, p_amount: amount, p_reason: reason.trim() });
   return error ? fail(error, 'Could not remove the credits') : ok();
 }
