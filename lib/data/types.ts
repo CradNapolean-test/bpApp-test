@@ -93,6 +93,8 @@ export interface FoodRow {
   // Grams of fibre per gram of food (same unit as the macros); null when the source has no figure.
   fibre?: number | null;
   barcode: string | null;
+  // A coach can hide a wrong scanned food (M12); hidden foods stay out of every member list and search.
+  hidden?: boolean;
 }
 
 export interface RecipeIngredientRow {

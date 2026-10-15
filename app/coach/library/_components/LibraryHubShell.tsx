@@ -15,6 +15,7 @@ import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { ExerciseLibraryManager } from './ExerciseLibraryManager';
 import { ProgramTemplateManager } from './ProgramTemplateManager';
 import { EducationPane } from './EducationPane';
+import { FoodsPane } from './FoodsPane';
 import { FormsPane } from './FormsPane';
 import type {
   ClientGroupWithMembers,
@@ -26,17 +27,18 @@ import type {
   CourseRollupRow,
 } from '@/lib/data/types';
 
-const TABS = ['Exercises', 'Program templates', 'Education', 'Forms'] as const;
+const TABS = ['Exercises', 'Program templates', 'Education', 'Forms', 'Foods'] as const;
 type Tab = (typeof TABS)[number];
 
 // What each tab is called in the address (?tab=...), so a reload or a shared link opens the same tab.
-const TAB_SLUG: Record<Tab, string> = { Exercises: 'exercises', 'Program templates': 'templates', Education: 'education', Forms: 'forms' };
+const TAB_SLUG: Record<Tab, string> = { Exercises: 'exercises', 'Program templates': 'templates', Education: 'education', Forms: 'forms', Foods: 'foods' };
 
 const TAB_PARAM: Record<string, Tab> = {
   exercises: 'Exercises',
   templates: 'Program templates',
   education: 'Education',
   forms: 'Forms',
+  foods: 'Foods',
 };
 
 export function LibraryHubShell({
@@ -94,6 +96,7 @@ export function LibraryHubShell({
       )}
       {tab === 'Education' && <EducationPane initialCourses={initialCourses} members={members} groups={groups} rollup={courseRollup} otherGyms={otherGyms} />}
       {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}
+      {tab === 'Foods' && <FoodsPane />}
     </AppShell>
     </ClientOnly>
   );

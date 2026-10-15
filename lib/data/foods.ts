@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ActivityRow, FoodRow } from './types';
 
@@ -14,7 +15,8 @@ export async function searchFoods(query: string): Promise<FoodRow[]> {
     if (!ranked.error) return (ranked.data ?? []) as FoodRow[];
     // Not applied yet (or any other failure): fall back to the plain name search below.
   }
-  let request = supabase.from('foods').select('*').order('name').limit(25);
+  // Hidden foods stay out of the fallback too (M12), as they do in search_foods.
+  let request = supabase.from('foods').select('*').eq('hidden', false).order('name').limit(25);
   if (q) request = request.ilike('name', `%${q}%`);
   const { data, error } = await request;
   if (error) raise(error);
@@ -35,15 +37,23 @@ export async function barcodeVariants(barcode: string): Promise<string[]> {
   return [...variants];
 }
 
-export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null> {
+// Rows a coach has hidden are not found by a scan (M12). A hidden row still holds its unique barcode, so the caller that tries to cache
+// the product again has to tell "nothing here" from "hidden" -- see upsertFoodFromBarcode.
+async function findByBarcode(barcode: string): Promise<FoodRow | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('foods')
     .select('*')
     .in('barcode', await barcodeVariants(barcode))
+    .order('hidden')
     .limit(1);
   if (error) raise(error);
   return data?.[0] ?? null;
+}
+
+export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null> {
+  const found = await findByBarcode(barcode);
+  return found && !found.hidden ? found : null;
 }
 
 // Caches a barcode-scanned product into the shared foods table. Never overwrites an
@@ -65,9 +75,33 @@ export async function upsertFoodFromBarcode(
   // prior scan) already cached this barcode — fall through to the select below either way.
   if (insertError && insertError.code !== '23505') raise(insertError);
 
-  const existing = await getFoodByBarcode(barcode);
+  const existing = await findByBarcode(barcode);
   if (!existing) throw new Error('Failed to cache scanned food');
+  // The product was scanned before and a coach hid it (it was wrong). Say so, rather than adding it again or failing without a reason.
+  if (existing.hidden) throw new Error('This product has been taken off the food list. Add it with Quick Add instead, or ask your coach.');
   return existing;
+}
+
+// The coach's list of foods that members added by scanning a barcode (M12), by name, hidden ones included so they can be brought back.
+// Looks at the name, brand and barcode. Reading is open to any signed-in user; changing a row is the coach-only rule in migration 0128.
+export async function searchScannedFoods(query: string): Promise<FoodRow[]> {
+  const supabase = await createClient();
+  const q = query.trim().replace(/[%,()]/g, ' ').trim();
+  let request = supabase.from('foods').select('*').eq('source', 'scan').order('name').limit(40);
+  if (q) request = request.or(`name.ilike.%${q}%,barcode.ilike.%${q}%`);
+  const { data, error } = await request;
+  if (error) raise(error);
+  return (data ?? []) as FoodRow[];
+}
+
+// Hides a wrong scanned food from every member's search, favourites and scans, or brings it back. Deleting is not offered: a food that
+// has been logged cannot be deleted. A row that cannot be changed (not a scanned food, or not a coach) updates nothing, so say so.
+export async function setFoodHidden(foodId: string, hidden: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('foods').update({ hidden }).eq('id', foodId).eq('source', 'scan').select('id');
+  if (error) return fail(error, 'Could not change that food.');
+  if (!data || data.length === 0) return fail({ message: 'Only scanned foods can be hidden, and only by a coach.' });
+  return ok();
 }
 
 export async function getActivities(): Promise<ActivityRow[]> {
@@ -85,7 +119,7 @@ export async function getFavoriteFoods(clientId: string): Promise<FoodRow[]> {
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
   if (error) raise(error);
-  return ((data ?? []) as unknown as { food: FoodRow }[]).map((r) => r.food).filter(Boolean);
+  return ((data ?? []) as unknown as { food: FoodRow | null }[]).map((r) => r.food).filter((f): f is FoodRow => f != null && !f.hidden);
 }
 
 export async function isFavoriteFood(clientId: string, foodId: string): Promise<boolean> {
@@ -135,7 +169,7 @@ export async function getRecentlyLoggedFoods(clientId: string): Promise<FoodRow[
   const seen = new Set<string>();
   const recent: FoodRow[] = [];
   for (const row of (data ?? []) as unknown as { food_id: string; food: FoodRow | null }[]) {
-    if (!row.food || seen.has(row.food_id)) continue;
+    if (!row.food || row.food.hidden || seen.has(row.food_id)) continue;
     seen.add(row.food_id);
     recent.push(row.food);
     if (recent.length >= RECENTLY_LOGGED_LIMIT) break;
