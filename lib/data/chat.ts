@@ -3,9 +3,8 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { sendPushToClient } from '@/lib/push';
+import { CHAT_CATCH_UP_MAX, CHAT_PAGE, pageOfNewestFirst } from '@/lib/chatMessages';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from './types';
-
-const SIGNED_URL_TTL_SECONDS = 60 * 10;
 
 // A message from the coach pings the member's phone (when they've turned push on) so it can't be
 // missed. A member's own messages never push anyone here. Best-effort: push trouble must never
@@ -44,79 +43,96 @@ export async function notifyPhotoSent(clientId: string): Promise<void> {
   await pushMemberIfFromCoach(user.id, clientId, '📷 Sent you a photo');
 }
 
+// A message as the screen holds it. The links to photos and voice notes are not made here: signing every attachment of a thread cost
+// one request each on every load, so the chat window signs an attachment when its message scrolls into view (H5).
+function toMessage(row: ChatMessageRow): ChatMessage {
+  return { ...row, signedAudioUrl: null, signedImageUrl: null };
+}
+
+// The latest page of a thread, oldest first. Reading the whole thread, oldest first, stopped at the database's 1,000-row cap and so
+// dropped the newest messages (H5); "Load earlier" asks for older pages.
 export async function getMessages(clientId: string): Promise<ChatMessage[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('chat_messages')
     .select('*')
     .eq('client_id', clientId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(CHAT_PAGE);
   if (error) raise(error);
-
-  const rows = (data ?? []) as ChatMessageRow[];
-  return Promise.all(
-    rows.map(async (row) => {
-      let signedAudioUrl: string | null = null;
-      let signedImageUrl: string | null = null;
-      if (row.audio_path) {
-        const { data: signed } = await supabase.storage
-          .from('voice-notes')
-          .createSignedUrl(row.audio_path, SIGNED_URL_TTL_SECONDS);
-        signedAudioUrl = signed?.signedUrl ?? null;
-      }
-      if (row.image_path) {
-        const { data: signed } = await supabase.storage
-          .from('chat-photos')
-          .createSignedUrl(row.image_path, SIGNED_URL_TTL_SECONDS);
-        signedImageUrl = signed?.signedUrl ?? null;
-      }
-      return { ...row, signedAudioUrl, signedImageUrl };
-    })
-  );
+  return pageOfNewestFirst((data ?? []) as ChatMessageRow[], CHAT_PAGE).rows.map(toMessage);
 }
 
-export async function sendMessage(clientId: string, text: string): Promise<void> {
+// The page of messages before `beforeIso` (the oldest one on screen), and whether there are still older ones.
+export async function getEarlierMessages(clientId: string, beforeIso: string): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('client_id', clientId)
+    .lt('created_at', beforeIso)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(CHAT_PAGE + 1);
+  if (error) raise(error);
+  const page = pageOfNewestFirst((data ?? []) as ChatMessageRow[], CHAT_PAGE);
+  return { messages: page.rows.map(toMessage), hasMore: page.hasMore };
+}
+
+// Everything after `afterIso`: what a chat window asks for when its live connection came back or the page was left and returned to,
+// so a message that arrived while it was deaf still shows up (M5).
+export async function getMessagesSince(clientId: string, afterIso: string): Promise<ChatMessage[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('client_id', clientId)
+    .gt('created_at', afterIso)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(CHAT_CATCH_UP_MAX);
+  if (error) raise(error);
+  return pageOfNewestFirst((data ?? []) as ChatMessageRow[], CHAT_CATCH_UP_MAX).rows.map(toMessage);
+}
+
+// Returns the saved row so the sender's screen can show the message at once instead of waiting for the live connection to deliver it
+// (with the connection down the sender saw nothing and sent it again, M5).
+export async function sendMessage(clientId: string, text: string): Promise<ChatMessage> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('chat_messages')
-    .insert({ client_id: clientId, sender_id: user.id, text });
+    .insert({ client_id: clientId, sender_id: user.id, text })
+    .select('*')
+    .single();
   if (error) raise(error);
   await pushMemberIfFromCoach(user.id, clientId, text);
+  return toMessage(data as ChatMessageRow);
 }
 
-// Mirrors uploadProgressPhoto/uploadFoodPhoto's FormData-in convention -- the documented-safe
-// way to pass a File/Blob through a Next.js Server Action. Duration comes from the client
-// (VoiceRecorder's own timer) since there's no reliable way to read it server-side from a webm
-// Blob without a media-parsing dependency.
-export async function sendVoiceNote(clientId: string, formData: FormData): Promise<void> {
+// Voice notes go from the browser straight to storage and into the thread, like photos (the action used to carry the recording, which
+// is capped at 4 MB, M4). The browser calls this afterwards; it only pushes if the caller really did just send a voice note here.
+export async function notifyVoiceSent(clientId: string): Promise<void> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const file = formData.get('file') as File | null;
-  const durationRaw = formData.get('duration');
-  if (!file) throw new Error('Missing audio file');
-  const duration = durationRaw ? Number(durationRaw) : null;
-
-  const path = `${clientId}/${crypto.randomUUID()}.webm`;
-  const { error: uploadError } = await supabase.storage.from('voice-notes').upload(path, file);
-  if (uploadError) raise(uploadError);
-
-  const { error } = await supabase.from('chat_messages').insert({
-    client_id: clientId,
-    sender_id: user.id,
-    text: null,
-    audio_path: path,
-    audio_duration_seconds: duration,
-  });
-  if (error) raise(error);
+  if (!user || user.id === clientId) return;
+  const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from('chat_messages')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('sender_id', user.id)
+    .not('audio_path', 'is', null)
+    .gt('created_at', since)
+    .limit(1);
+  if (!data?.length) return;
   await pushMemberIfFromCoach(user.id, clientId, '🎤 Sent you a voice note');
 }
 

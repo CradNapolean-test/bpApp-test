@@ -4,13 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, X } from 'lucide-react';
 import { Button } from './Button';
 import { useToast } from './ToastProvider';
+import { MAX_VOICE_SECONDS, formatVoiceTimer, pickVoiceMimeType } from '@/lib/voiceFormat';
 
-// No existing audio-recording precedent anywhere in this codebase -- plain MediaRecorder, no
-// library. Records audio/webm (broadly supported, and what MediaRecorder defaults to on
-// Chrome/Firefox/Edge without an explicit mimeType). Duration is tracked with a simple interval
-// timer rather than read off the recorded Blob -- webm duration metadata from MediaRecorder is
-// unreliable across browsers, but the caller only needs an approximate "how long was this" for
-// display, not a frame-accurate value.
+// Plain MediaRecorder, no library. The format is whatever this browser can really record, preferring MP4 (Safari on iPhone records
+// MP4/AAC, and older iOS cannot play WebM); the Blob carries the real type so the file is labelled for what it is (M4). Duration is
+// tracked with an interval timer rather than read off the Blob -- duration metadata from MediaRecorder is unreliable across
+// browsers, and the caller only needs an approximate "how long was this". A note stops by itself at two minutes.
 export function VoiceRecorder({
   onRecorded,
   disabled,
@@ -32,7 +31,7 @@ export function VoiceRecorder({
 
   useEffect(() => {
     return () => {
-      timerRef.current && clearInterval(timerRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -43,14 +42,18 @@ export function VoiceRecorder({
       streamRef.current = stream;
       chunksRef.current = [];
       cancelledRef.current = false;
-      const recorder = new MediaRecorder(stream);
+      const wanted =
+        typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function'
+          ? pickVoiceMimeType((t) => MediaRecorder.isTypeSupported(t))
+          : null;
+      const recorder = wanted ? new MediaRecorder(stream, { mimeType: wanted }) : new MediaRecorder(stream);
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         if (!cancelledRef.current && chunksRef.current.length > 0) {
-          onRecorded(new Blob(chunksRef.current, { type: 'audio/webm' }), elapsedRef.current);
+          onRecorded(new Blob(chunksRef.current, { type: recorder.mimeType || wanted || 'audio/webm' }), elapsedRef.current);
         }
       };
       recorderRef.current = recorder;
@@ -61,6 +64,10 @@ export function VoiceRecorder({
       timerRef.current = setInterval(() => {
         elapsedRef.current += 1;
         setElapsed(elapsedRef.current);
+        if (elapsedRef.current >= MAX_VOICE_SECONDS) {
+          toast.success('Voice notes are up to 2 minutes. Sending what you recorded.');
+          stopRecording(false);
+        }
       }, 1000);
     } catch {
       toast.error('Could not access the microphone. Check your browser permissions.');
@@ -69,15 +76,10 @@ export function VoiceRecorder({
 
   function stopRecording(cancel: boolean) {
     cancelledRef.current = cancel;
-    timerRef.current && clearInterval(timerRef.current);
-    recorderRef.current?.stop();
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
     setRecording(false);
-  }
-
-  function formatElapsed(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
   }
 
   if (!recording) {
@@ -91,7 +93,9 @@ export function VoiceRecorder({
   return (
     <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/5 px-2 py-1">
       <span className="h-2 w-2 animate-pulse rounded-full bg-danger" />
-      <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">{formatElapsed(elapsed)}</span>
+      <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400" role="timer" aria-label="Recording time">
+        {formatVoiceTimer(elapsed)}
+      </span>
       <Button type="button" variant="icon" aria-label="Stop and send" onClick={() => stopRecording(false)}>
         <Square className="h-3.5 w-3.5" />
       </Button>

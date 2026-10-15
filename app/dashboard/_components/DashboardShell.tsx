@@ -7,6 +7,7 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { Avatar } from '@/app/_components/Avatar';
 import { createClient } from '@/lib/supabase/client';
+import { getClientUnreadCount } from '@/lib/data/chat';
 import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
 import { InstallBanner } from './InstallBanner';
@@ -251,6 +252,21 @@ export function DashboardShell({
     const supabase = createClient();
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let wasDown = false;
+    // Ask the server for the real count: after the live connection dropped (or the phone was locked) messages may have arrived that
+    // this badge never heard about (M5). Not while the thread is open, where the count is held at zero.
+    const recount = () => {
+      getClientUnreadCount(clientId)
+        .then((n) => {
+          if (!cancelled && !viewingMessagesRef.current) setLiveUnread(n);
+        })
+        .catch(() => {});
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') recount();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onVisible);
     // Wait for the session first -- see ChatTab: an early subscribe silently never delivers.
     supabase.auth.getSession().then(() => {
       if (cancelled) return;
@@ -265,10 +281,22 @@ export function DashboardShell({
             setLiveUnread((n) => n + 1);
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (cancelled) return;
+          if (status === 'SUBSCRIBED') {
+            if (wasDown) {
+              wasDown = false;
+              recount();
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            wasDown = true;
+          }
+        });
     });
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onVisible);
       if (channel) supabase.removeChannel(channel);
     };
   }, [clientId, currentUserId, isCoachView]);
