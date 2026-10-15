@@ -202,13 +202,13 @@ export function TodayTab({
       )}
 
       {!isCoachView && (
-        <div className="rounded-3xl border border-accent/30 bg-accent-soft p-4">
+        <div className="rounded-3xl border border-accent/30 bg-accent-soft p-4 text-center">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-accent">
             {nextClass ? (nextClass.booking_date === todayIso ? 'Today' : 'Next session') : 'Your next session'}
           </p>
           {nextClass ? (
             <>
-              <button type="button" onClick={onNavigateClasses} className="mt-1 block w-full text-left">
+              <button type="button" onClick={onNavigateClasses} className="mt-1 block w-full text-center">
                 <span className="block text-3xl font-black leading-tight text-black dark:text-zinc-50">
                   {formatClassTime(nextClass.class?.start_time) || nextClass.class?.name}
                 </span>
@@ -227,7 +227,7 @@ export function TodayTab({
               <button
                 type="button"
                 onClick={onNavigateClasses}
-                className="mt-3 flex w-full items-center justify-between gap-2 border-t border-accent/20 pt-3 text-left"
+                className="mt-3 flex w-full items-center justify-center gap-2.5 border-t border-accent/20 pt-3 text-center"
               >
                 <span className="flex items-center gap-2.5">
                   <CalendarDays className="h-4 w-4 text-accent" />
@@ -290,9 +290,9 @@ export function TodayTab({
       {(streakVisible || (!dailyCheckinHidden && !noTrackers)) && (
       <Card flush className={`grid divide-x divide-black/5 dark:divide-white/10 ${streakVisible && !dailyCheckinHidden && !noTrackers ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {streakVisible && (
-        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
+        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center justify-center gap-3 p-3.5 text-center">
           <IconChip icon={Flame} tone="muted" />
-          <span>
+          <span className="min-w-0">
             <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">
               {streak} {streak === 1 ? 'day' : 'days'}
             </span>
@@ -301,9 +301,9 @@ export function TodayTab({
         </button>
         )}
         {!dailyCheckinHidden && !noTrackers && (
-        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center gap-3 p-3.5 text-left">
+        <button type="button" onClick={() => onNavigate('Accountability', 'Weekly Log')} className="flex items-center justify-center gap-3 p-3.5 text-center">
           <IconChip icon={CheckSquare} tone="muted" />
-          <span>
+          <span className="min-w-0">
             <span className="block text-lg font-extrabold leading-tight text-black dark:text-zinc-50">
               {checkinDone} of {trackers.length}
             </span>

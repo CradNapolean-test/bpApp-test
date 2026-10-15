@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Award, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
+import { Award, ChevronRight, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
 import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
 import { clubProgress } from '@/lib/clubs';
 import { ClubBar } from './ClubBar';
@@ -38,7 +38,7 @@ export function Tile({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`relative flex w-full min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${
+      className={`relative flex min-w-0 items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${
         highlight ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-card dark:border-white/10'
       } ${disabled ? 'cursor-default opacity-50' : 'hover:bg-black/[.03] dark:hover:bg-white/[.04]'}`}
     >
@@ -51,9 +51,26 @@ export function Tile({
   );
 }
 
-// The second door into the app, full width under the next-session tile (bookings live inside that tile).
+// The second door into the app: a full-width tile under the next-session tile, laid out like it (small teal label,
+// big line, a divider and an action row). The top opens the coaching hub; the row opens the chat.
 export function BpMainTiles({ onNavigate }: { onNavigate: (category: Category, screen?: Screen) => void }) {
-  return <Tile icon={MessagesSquare} title="My coaching" subtitle="Chat & nutrition" highlight onClick={() => onNavigate('Coach')} />;
+  return (
+    <div className="rounded-3xl border border-accent/30 bg-accent-soft p-4 text-center">
+      <button type="button" onClick={() => onNavigate('Coach')} className="block w-full">
+        <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-accent">My coaching</span>
+        <span className="mt-1 block text-2xl font-black leading-tight text-black dark:text-zinc-50">Training and nutrition</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onNavigate('Messages')}
+        className="mt-3 flex w-full items-center justify-center gap-2.5 border-t border-accent/20 pt-3"
+      >
+        <MessagesSquare className="h-4 w-4 text-accent" />
+        <span className="text-sm font-bold text-black dark:text-zinc-50">Message your coach</span>
+        <ChevronRight className="h-4 w-4 text-accent" />
+      </button>
+    </div>
+  );
 }
 
 export function BpHomeHero({ profile }: { profile: ClientProfileRow | null }) {
