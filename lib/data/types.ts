@@ -779,6 +779,10 @@ export interface ScheduledCommunicationRow {
   channel: 'message' | 'email' | 'both';
   email_sent_at: string | null;
   created_at: string;
+  // The group's name saved when the broadcast was made, so history can still say which group it went to after the group is deleted (0133).
+  target_group_name?: string | null;
+  // Set when a pending broadcast was cancelled because its group was deleted (0133); such a row is never sent.
+  cancelled_at?: string | null;
   // Weekly repeats (migration 0097). A repeating row is a series: it is never "sent", it just keeps moving its
   // own send_at on a week; each occurrence is written as its own sent row pointing back via series_id.
   repeat?: 'none' | 'weekly';

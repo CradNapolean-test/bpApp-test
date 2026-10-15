@@ -5,7 +5,7 @@ import { Trash2, X } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
-import { createGroup, deleteGroup, addClientToGroup, removeClientFromGroup } from '@/lib/data/clientGroups';
+import { createGroup, deleteGroup, addClientsToGroup, removeClientsFromGroup } from '@/lib/data/clientGroups';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
@@ -23,6 +23,7 @@ export function GroupsManager({
   const confirm = useConfirm();
   const [newName, setNewName] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -31,13 +32,27 @@ export function GroupsManager({
   }
 
   async function handleDelete(groupId: string) {
-    if (!(await confirm({ title: 'Delete this group?', destructive: true }))) return;
-    await run(() => deleteGroup(groupId));
+    const ok = await confirm({
+      title: 'Delete this group?',
+      body: 'Messages already sent to it stay in the history under its name. Any message still waiting to go to it is cancelled.',
+      confirmLabel: 'Delete group',
+      destructive: true,
+    });
+    if (!ok) return;
+    await run(() => deleteGroup(groupId), { success: 'Group deleted' });
   }
 
   async function handleToggleMember(groupId: string, clientId: string, isMember: boolean) {
-    await run(() => (isMember ? removeClientFromGroup(groupId, clientId) : addClientToGroup(groupId, clientId)));
+    await run(() => (isMember ? removeClientsFromGroup(groupId, [clientId]) : addClientsToGroup(groupId, [clientId])));
   }
+
+  // "Select all" / "Clear" act on the members the search is showing, so a coach can search "morning" and add everyone it finds.
+  async function handleSetMany(groupId: string, clientIds: string[], add: boolean) {
+    await run(() => (add ? addClientsToGroup(groupId, clientIds) : removeClientsFromGroup(groupId, clientIds)));
+  }
+
+  const needle = search.trim().toLowerCase();
+  const shownClients = needle ? clients.filter((c) => `${c.name ?? ''} ${c.email}`.toLowerCase().includes(needle)) : clients;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -79,7 +94,10 @@ export function GroupsManager({
               <div key={group.id} className="rounded-md border border-black/10 dark:border-white/10">
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <button
-                    onClick={() => setExpandedId(isExpanded ? null : group.id)}
+                    onClick={() => {
+                      setExpandedId(isExpanded ? null : group.id);
+                      setSearch('');
+                    }}
                     className="flex-1 text-left text-sm font-medium text-black dark:text-zinc-50"
                   >
                     {group.name} <span className="font-normal text-zinc-500">({group.memberIds.length})</span>
@@ -94,7 +112,34 @@ export function GroupsManager({
                 </div>
                 {isExpanded && (
                   <div className="space-y-1 border-t border-black/5 p-2.5 dark:border-white/5">
-                    {clients.map((client) => {
+                    {clients.length > 0 && (
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <input
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Search clients"
+                          aria-label="Search clients"
+                          className="min-w-0 flex-1 rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+                        />
+                        <button
+                          type="button"
+                          disabled={busy || shownClients.length === 0}
+                          onClick={() => handleSetMany(group.id, shownClients.map((c) => c.id), true)}
+                          className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium dark:border-white/10"
+                        >
+                          Select all{search.trim() ? ' shown' : ''}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || shownClients.length === 0}
+                          onClick={() => handleSetMany(group.id, shownClients.map((c) => c.id), false)}
+                          className="rounded-md border border-black/10 px-2.5 py-1.5 text-xs font-medium dark:border-white/10"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                    {shownClients.map((client) => {
                       const isMember = group.memberIds.includes(client.id);
                       return (
                         <label key={client.id} className="flex items-center gap-2 text-sm">
@@ -108,6 +153,7 @@ export function GroupsManager({
                       );
                     })}
                     {clients.length === 0 && <p className="text-xs text-zinc-500">No clients yet.</p>}
+                    {clients.length > 0 && shownClients.length === 0 && <p className="text-xs text-zinc-500">No clients match that search.</p>}
                   </div>
                 )}
               </div>

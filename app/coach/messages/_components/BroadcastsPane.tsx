@@ -198,13 +198,14 @@ export function BroadcastsPane({
     if (ok) run(() => deleteCommunication(c.id));
   }
 
-  const series = communications.filter((c) => c.repeat === 'weekly' && c.sent_at == null);
-  const history = communications.filter((c) => !(c.repeat === 'weekly' && c.sent_at == null));
+  // A broadcast cancelled because its group was deleted is never sent: it stays in the history, marked, not in the repeating list.
+  const series = communications.filter((c) => c.repeat === 'weekly' && c.sent_at == null && !c.cancelled_at);
+  const history = communications.filter((c) => !(c.repeat === 'weekly' && c.sent_at == null && !c.cancelled_at));
   const targetLabel = (c: ScheduledCommunicationRow) =>
     c.target_type === 'my_clients'
       ? 'Their own clients'
       : c.target_type === 'group'
-        ? (groups.find((g) => g.id === c.target_group_id)?.name ?? 'Group')
+        ? (groups.find((g) => g.id === c.target_group_id)?.name ?? c.target_group_name ?? '(deleted group)')
         : 'Whole gym';
   const channelLabel = useMemo(() => ({ message: 'Message', email: 'Email', both: 'Message and email' }), []);
 
@@ -358,13 +359,15 @@ export function BroadcastsPane({
         {history.length === 0 && <EmptyState compact title="No broadcasts yet." />}
         {history.map((c) => {
           const isSent = c.sent_at != null;
+          const isCancelled = !isSent && c.cancelled_at != null;
           const showsEmail = c.channel === 'email' || c.channel === 'both';
           return (
             <div key={c.id} className="flex items-start justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-3.5 text-sm shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-3 whitespace-pre-wrap text-zinc-900 dark:text-zinc-100">{c.message}</p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {targetLabel(c)} · {channelLabel[c.channel]} · {isSent ? 'Sent' : 'Scheduled for'} {when(isSent ? (c.sent_at as string) : c.send_at)}
+                  {targetLabel(c)} · {channelLabel[c.channel]} ·{' '}
+                  {isCancelled ? 'Cancelled (its group was deleted)' : `${isSent ? 'Sent' : 'Scheduled for'} ${when(isSent ? (c.sent_at as string) : c.send_at)}`}
                   {c.series_id && ' · weekly'}
                   {showsEmail && isSent && <span className={c.email_sent_at ? ' text-accent' : ''}>{c.email_sent_at ? ' · email sent' : ' · email waiting'}</span>}
                 </p>

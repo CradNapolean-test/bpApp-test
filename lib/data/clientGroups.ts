@@ -1,6 +1,7 @@
 'use server';
 
 import { raise } from './errors';
+import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
 import type { ClientGroupWithMembers } from './types';
@@ -38,9 +39,28 @@ export async function createGroup(name: string): Promise<void> {
   if (error) raise(error);
 }
 
-export async function deleteGroup(groupId: string): Promise<void> {
+// Deleting a group cancels its pending and repeating broadcasts and keeps the group's name on the ones already sent (migration 0133).
+// Returns rather than throws so a refusal reaches the screen as words.
+export async function deleteGroup(groupId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('client_groups').delete().eq('id', groupId);
+  return error ? fail(error, 'Could not delete that group') : ok();
+}
+
+// Adds or removes many members in one request (the member picker's "select all").
+export async function addClientsToGroup(groupId: string, clientIds: string[]): Promise<void> {
+  if (clientIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('client_group_members')
+    .upsert(clientIds.map((client_id) => ({ group_id: groupId, client_id })), { onConflict: 'group_id,client_id', ignoreDuplicates: true });
+  if (error) raise(error);
+}
+
+export async function removeClientsFromGroup(groupId: string, clientIds: string[]): Promise<void> {
+  if (clientIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase.from('client_group_members').delete().eq('group_id', groupId).in('client_id', clientIds);
   if (error) raise(error);
 }
 
