@@ -71,7 +71,7 @@ export interface OwnerGymStats {
   gymId: string;
   // Every client row at the gym, finished onboarding or not.
   members: number;
-  // Members who finished onboarding (migration 0144); the Reports page counts these.
+  // Members who finished onboarding (migration 0142); the Reports page counts these.
   onboarded?: number;
   onPlan: number;
   newThisMonth: number;
@@ -80,7 +80,7 @@ export interface OwnerGymStats {
   endingSoon: number;
   attendedThisMonth: number;
   attendedLastMonth: number;
-  // Last month's attended bookings up to the same day of the month as today, and that day (migration 0144).
+  // Last month's attended bookings up to the same day of the month as today, and that day (migration 0142).
   attendedLastMonthToDate?: number;
   dayOfMonth?: number;
   // Past bookings nobody marked attended or no-show.
@@ -107,9 +107,9 @@ export async function getOwnerGymStats(): Promise<Loaded<OwnerGymStats[]>> {
 export interface ActivityReport {
   // Members who finished onboarding in the chosen gym(s); the base for every percentage.
   members: number;
-  // Every member, finished onboarding or not (migration 0144).
+  // Every member, finished onboarding or not (migration 0142).
   allMembers?: number;
-  // The gym's calendar date, and how many complete weeks the weekday averages cover (migration 0144).
+  // The gym's calendar date, and how many complete weeks the weekday averages cover (migration 0142).
   today?: string;
   weekdayWeeks?: number;
   // Last 28 days, oldest first. checkIns = members who logged anything that day.

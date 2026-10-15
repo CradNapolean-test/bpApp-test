@@ -21,8 +21,10 @@ export function DetailsConfirmBanner({
   const [hidden, setHidden] = useState(true); // hidden until we know the snooze state, so it does not flash
   const [open, setOpen] = useState(false);
 
+  // Read after the first paint: localStorage does not exist on the server, so the first render must not depend on it.
   useEffect(() => {
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHidden(snoozedRecently(localStorage.getItem(key(clientId))));
     } catch {
       setHidden(false);

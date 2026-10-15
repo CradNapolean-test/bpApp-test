@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
+import { useOnDemand } from '@/app/_components/useOnDemand';
 import { inputCls } from '@/app/_components/ui';
-import { getOwnerGymRoster, type OwnerRoster } from '@/lib/data/owner';
-import { createLatestOnly } from '@/lib/latestOnly';
-import { settle } from '@/lib/ownerReport';
+import { getOwnerGymRoster } from '@/lib/data/owner';
+import { LOAD_FAILED, settle } from '@/lib/ownerReport';
 import {
   ROSTER_FILTERS,
   ROSTER_FILTER_LABELS,
@@ -27,27 +27,15 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
   const [search, setSearch] = useState('');
   const [typed, setTyped] = useState('');
   const [offset, setOffset] = useState(0);
-  const [roster, setRoster] = useState<OwnerRoster | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
-  const [error, setError] = useState('');
-  const guard = useRef(createLatestOnly());
 
-  const load = useCallback(
-    async (f: RosterFilter | null, q: string, from: number) => {
-      const ticket = guard.current.next();
-      setState('loading');
-      const result = await settle(() => getOwnerGymRoster(gymId, { filter: f, search: q, limit: ROSTER_PAGE_SIZE, offset: from }));
-      if (!guard.current.isCurrent(ticket)) return;
-      if (result.ok) {
-        setRoster(result.data);
-        setState('ready');
-      } else {
-        setError(result.error);
-        setState('failed');
-      }
-    },
-    [gymId]
+  // One read per filter, search and page; an answer for an earlier choice is dropped, and a thrown error becomes a failed result.
+  const { data: answer, loading, reload } = useOnDemand(
+    () => settle(() => getOwnerGymRoster(gymId, { filter, search, limit: ROSTER_PAGE_SIZE, offset })),
+    `${gymId}|${filter ?? ''}|${search}|${offset}`
   );
+  const roster = answer?.ok ? answer.data : null;
+  const state: 'loading' | 'ready' | 'failed' = answer == null ? 'loading' : answer.ok ? 'ready' : 'failed';
+  const error = answer && !answer.ok ? answer.error : LOAD_FAILED;
 
   // Search runs half a second after typing stops, from the first page.
   useEffect(() => {
@@ -57,10 +45,6 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
     }, 450);
     return () => clearTimeout(id);
   }, [typed]);
-
-  useEffect(() => {
-    void load(filter, search, offset);
-  }, [load, filter, search, offset]);
 
   return (
     <div className="space-y-3">
@@ -99,7 +83,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
           <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{error}</p>
           <button
             type="button"
-            onClick={() => void load(filter, search, offset)}
+            onClick={reload}
             className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
           >
             Try again
@@ -108,7 +92,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
       )}
 
       {state !== 'failed' && (
-        <div className={state === 'loading' && roster ? 'opacity-60' : ''}>
+        <div>
           {!roster ? (
             <p className="text-sm text-zinc-500">Loading members…</p>
           ) : roster.members.length === 0 ? (
@@ -163,7 +147,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
               <span className="flex gap-2">
                 <button
                   type="button"
-                  disabled={!hasPreviousPage(roster.offset) || state === 'loading'}
+                  disabled={!hasPreviousPage(roster.offset) || loading}
                   onClick={() => setOffset(previousOffset(roster.limit, roster.offset))}
                   className="rounded-full border border-black/10 px-3 py-1.5 font-bold disabled:opacity-40 dark:border-white/15"
                 >
@@ -171,7 +155,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
                 </button>
                 <button
                   type="button"
-                  disabled={!hasNextPage(roster.total, roster.limit, roster.offset) || state === 'loading'}
+                  disabled={!hasNextPage(roster.total, roster.limit, roster.offset) || loading}
                   onClick={() => setOffset(roster.offset + roster.limit)}
                   className="rounded-full border border-black/10 px-3 py-1.5 font-bold disabled:opacity-40 dark:border-white/15"
                 >

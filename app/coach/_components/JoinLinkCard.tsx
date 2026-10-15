@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, Copy, Link2 } from 'lucide-react';
 import { createOrResetMyJoinLink, getMyJoinLinkToken, setJoinLinkActive } from '@/lib/data/onboarding';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { useOnDemand } from '@/app/_components/useOnDemand';
 import { useToast } from '@/app/_components/ToastProvider';
 
 type Link = { token: string; active: boolean };
-type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; link: Link | null };
 
 // The coach's reusable sign-up link: paste it into the Ontraport welcome email. Anyone who opens
 // it can create a login attached to this coach, then goes through onboarding.
@@ -17,25 +17,15 @@ type State = { status: 'loading' } | { status: 'error'; message: string } | { st
 export function JoinLinkCard() {
   const toast = useToast();
   const confirm = useConfirm();
-  const [state, setState] = useState<State>({ status: 'loading' });
+  const { data, loading, error, reload } = useOnDemand(() => getMyJoinLinkToken(), 'join-link');
+  // What this card changed itself (made, reset, switched on or off) wins over what was read when it opened.
+  const [local, setLocal] = useState<Link | null | undefined>(undefined);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    setState({ status: 'loading' });
-    try {
-      const res = await getMyJoinLinkToken();
-      setState(res.ok ? { status: 'ready', link: res.link } : { status: 'error', message: res.error });
-    } catch {
-      setState({ status: 'error', message: 'Could not load your sign-up link.' });
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const link = state.status === 'ready' ? state.link : null;
+  const failure = error ? 'Could not load your sign-up link.' : data && !data.ok ? data.error : null;
+  const ready = local !== undefined || (data?.ok === true);
+  const link: Link | null = local !== undefined ? local : data?.ok ? data.link : null;
   const url = link ? `${window.location.origin}/join/${link.token}` : '';
 
   async function copy() {
@@ -55,7 +45,7 @@ export function JoinLinkCard() {
     try {
       const res = await setJoinLinkActive(next);
       if (res.ok) {
-        setState({ status: 'ready', link: { ...link, active: next } });
+        setLocal({ ...link, active: next });
         toast.success(next ? 'Sign-up link switched on' : 'Sign-up link switched off');
       } else {
         toast.error(res.error ?? 'Could not update the link');
@@ -79,7 +69,7 @@ export function JoinLinkCard() {
     try {
       const res = await createOrResetMyJoinLink();
       if (res.ok) {
-        setState({ status: 'ready', link: res.link });
+        setLocal(res.link);
         toast.success(isReset ? 'New sign-up link made. The old one no longer works.' : 'Sign-up link created');
       } else {
         toast.error(res.error);
@@ -99,18 +89,18 @@ export function JoinLinkCard() {
         get a starting plan. You&apos;ll be asked to review it.
       </p>
 
-      {state.status === 'loading' && <p className="mt-2 text-xs text-zinc-500">Loading your link…</p>}
+      {loading && local === undefined && <p className="mt-2 text-xs text-zinc-500">Loading your link…</p>}
 
-      {state.status === 'error' && (
+      {failure && local === undefined && (
         <div className="mt-2 rounded-lg bg-danger/10 p-2.5 text-xs text-danger" role="alert">
-          <p>{state.message}</p>
-          <button type="button" onClick={() => void load()} className="mt-1.5 font-bold underline">
+          <p>{failure}</p>
+          <button type="button" onClick={reload} className="mt-1.5 font-bold underline">
             Try again
           </button>
         </div>
       )}
 
-      {state.status === 'ready' && !link && (
+      {ready && !link && (
         <button
           type="button"
           disabled={busy}

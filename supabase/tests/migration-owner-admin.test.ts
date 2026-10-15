@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
-// Static checks on the SQL files (no database) for fix brief 08: the owner report fixes (0144) and the small functions of 0142 must be
+// Static checks on the SQL files (no database) for fix brief 08: the owner report fixes and the small functions of 0142 must be
 // in the latest definition of each function after every migration is replayed. Their behaviour on real data is for the sandbox.
 const require = createRequire(import.meta.url);
 const { parseFunctions, access } = require('./security-audit/parse-functions.cjs') as {
@@ -17,7 +17,7 @@ const latest = (name: string) => {
 };
 const code = (name: string) => latest(name).body.replace(/--.*$/gm, '');
 
-describe('owner report numbers (R30, migration 0144)', () => {
+describe('owner report numbers (R30, migration 0142)', () => {
   it('the weekday averages are divided by the weeks since each gym started logging, not always 8', () => {
     const body = code('owner_activity_report');
     expect(body).not.toMatch(/8\s*\*\s*v_eligible/);
@@ -75,7 +75,7 @@ describe('sign-up link rotation and the admin audit (0142)', () => {
   });
 });
 
-describe('the referral link setting (R16, migration 0144)', () => {
+describe('the referral link setting (R16, migration 0142)', () => {
   it('only a gym admin of their own gym, or the gym\'s owner, can set it', () => {
     expect(code('set_gym_referral_url')).toMatch(/is_gym_admin/);
     expect(code('set_gym_referral_url')).toMatch(/my_gym_id\(\)/);

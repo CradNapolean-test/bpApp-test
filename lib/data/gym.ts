@@ -216,7 +216,7 @@ export async function addCoachToGym(coachId: string, isAdmin: boolean, expectedG
   return error ? fail(error, 'Could not add that coach to the gym') : ok();
 }
 
-// The page members are sent to when they refer a friend (gyms.referral_url, migrations 0138 and 0144). A blank value clears it.
+// The page members are sent to when they refer a friend (gyms.referral_url, migrations 0138 and 0142). A blank value clears it.
 export async function setGymReferralUrl(url: string, expectedGymId?: string | null): Promise<ActionResult> {
   const problem = referralUrlProblem(url);
   if (problem) return fail({ message: problem });
