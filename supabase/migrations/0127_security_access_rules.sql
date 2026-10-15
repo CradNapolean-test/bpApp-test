@@ -33,3 +33,23 @@ create policy "coaches manage exercise_library"
   using (public.my_gym_id() is not null)
   with check (created_by = auth.uid() and public.my_gym_id() is not null);
 -- The read policy "authenticated users read exercise_library" (0013) stays: everyone signed in can still see the library.
+
+-- =====================================================================================================================
+-- H2. Members could skip credits and fake attendance by writing to the bookings table.
+-- "client books for self" (INSERT) and "client cancels own booking" (UPDATE) let a member add any booking row and change
+-- any column of their own bookings (status, attended, no_show). Every write the web app makes goes through security-definer
+-- functions that ignore these policies: book_class, book_class_for_client, cancel_booking, coach_cancel_booking,
+-- check_in_booking, mark_attendance, mark_attendance_status, cancel_class_occurrence (checked: nothing under app/, lib/ writes
+-- to bookings, and the only scripts that do use the service role). The SELECT policy "select own or coached bookings" stays.
+--
+-- PRE-FLIGHT (informational; booked sessions that were never charged a credit. Some are legitimate: free classes, bookings a
+-- coach made on a member's behalf. A pile of them for one member points to the hole being used):
+--   select b.client_id, count(*)
+--   from public.bookings b
+--   join public.classes c on c.id = b.class_id
+--   where b.status = 'booked' and c.credit_cost > 0
+--     and not exists (select 1 from public.credits_ledger l where l.booking_id = b.id and l.delta < 0)
+--   group by 1 order by 2 desc;
+-- =====================================================================================================================
+drop policy if exists "client books for self" on public.bookings;
+drop policy if exists "client cancels own booking" on public.bookings;

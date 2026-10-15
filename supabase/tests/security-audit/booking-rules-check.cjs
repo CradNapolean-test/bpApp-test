@@ -4,6 +4,8 @@
 // A member must be able to book a real, upcoming, uncancelled session at their own gym, be charged for it, be
 // waitlisted when it is full (no charge) and be refused a second booking of the same session. They must NOT be able
 // to book: a past date, a weekday the class does not run, a coach-cancelled session, or another gym's class.
+// They must also NOT be able to write the bookings table directly (insert a row, mark themselves attended, un-cancel a
+// booking): the functions are the only way in (migration 0127).
 // Exit code 1 on any failure.
 require('./_safety.cjs');
 const fs = require('fs');
@@ -95,6 +97,27 @@ const nextDow = (from, target) => { let d = addDays(from, 1); while (dow(d) !== 
   if (wl.data && wl.data.status !== 'waitlist') failures.push('full session did not waitlist (status ' + wl.data.status + ')');
   if ((await balance()) !== b0) failures.push('waitlisting charged a credit');
   else console.log('  ok: waitlisting costs nothing');
+
+  // The table itself (migration 0127, H2): a member cannot write bookings directly, only through the functions above.
+  const directInsert = await A.from('bookings').insert({ class_id: weekly, client_id: aId, booking_date: addDays(nextMonday, 14), status: 'booked' }).select('id');
+  if (!directInsert.error && (directInsert.data ?? []).length) failures.push('a member inserted a booking row directly (it was ACCEPTED)');
+  else console.log('  ok: a member cannot insert a booking row directly');
+  const bookingId = good.data && good.data.id;
+  if (!bookingId) {
+    failures.push('could not find the control booking to tamper with');
+  } else {
+    const tamper = await A.from('bookings').update({ attended: true, no_show: false }).eq('id', bookingId).select('id');
+    const row = (await admin.from('bookings').select('attended').eq('id', bookingId).single()).data;
+    if ((!tamper.error && (tamper.data ?? []).length) || (row && row.attended)) failures.push('a member changed their own booking row directly (it was ACCEPTED)');
+    else console.log('  ok: a member cannot mark their own booking as attended');
+    const cancel = await A.rpc('cancel_booking', { p_booking_id: bookingId });
+    if (cancel.error) failures.push('control: the member can no longer cancel through cancel_booking (' + cancel.error.message + ')');
+    else console.log('  ok: the member can still cancel through cancel_booking');
+    const revive = await A.from('bookings').update({ status: 'booked' }).eq('id', bookingId).select('id');
+    const st = (await admin.from('bookings').select('status').eq('id', bookingId).single()).data;
+    if ((!revive.error && (revive.data ?? []).length) || (st && st.status !== 'cancelled')) failures.push('a member put a cancelled booking back to booked directly (it was ACCEPTED)');
+    else console.log('  ok: a member cannot put a cancelled booking back to booked');
+  }
 
   // Cleanup. The test's bookings and classes are removed, then one correcting ledger row returns the balance to where it
   // started (whatever the test granted or spent).
