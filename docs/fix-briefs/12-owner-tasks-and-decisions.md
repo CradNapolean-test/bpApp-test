@@ -117,3 +117,101 @@ Reply to any you want to change. Until you do, the briefs implement the **recomm
 - [ ] Backups confirmed (and one restore tried); plan and region decided.
 - [ ] Privacy policy and terms published and reachable when logged out.
 - [ ] One iPhone and one Android run through the real-device script; push arrives for a coach reply and a coach gets a push for a member message.
+
+## Status (after briefs 01 to 11)
+
+Written 16 Oct 2026 on branch `fix/12-owner-tasks`, which contains everything: `master` plus briefs 08 to 11 plus one small fix for brief 12 itself (below). `master` is an ancestor of this branch, so merging it is a straight fast-forward. This replaces the earlier `## Status (after briefs 01 to 06)` that sits on the separate branch `fix/12-owner-checklist` (it is out of date: briefs 01 to 07 are now on `master`, and 08 to 11 are done). That branch can be deleted.
+
+**Nothing in this section was done for you.** No dashboard setting was changed, no SQL was run, no account was created, nothing was pushed or deployed. `npm test` (118 files, 1,097 tests), `npx tsc --noEmit`, `npm run lint` (0 errors) and `npm run build` pass on this branch.
+
+### The one thing I changed for this brief
+
+**Task 1 (turn off public sign-up) used to break the join link.** The brief says "the app never uses sign-up", but brief 10's default join flow calls Supabase's public sign-up endpoint to get the confirmation email, and that endpoint is exactly what the switch turns off. Members using a coach's link would have got "We could not create your account" and nothing in the app would have said why. Fixed in `c6381cc`: when Supabase answers "sign-up is switched off", the link creates the login through the admin API instead (the old one-step flow), one Sentry warning is logged, and the rate limits and the daily cap per link still apply (`lib/joinFlow.ts` `isSignupDisabled`, `app/api/join/route.ts`, three new tests). **The cost:** with sign-up switched off, a new member is not asked to confirm their email (their address is trusted as typed). That is the pre-audit behaviour. Getting both (sign-up off **and** a confirmation email) means the app sending its own confirmation email through Resend; say so if you want that built. I could not test the fallback against a real Supabase project (no sandbox), only against a fake of its error; **try one join on a sandbox or a throwaway link after you switch sign-up off.**
+
+### Where I stopped, and why
+
+You asked for the migrations to be pushed and the code pushed live once this brief was done. I have **not** done either, for two reasons you should know about:
+
+1. **I cannot apply SQL from here.** This machine has the app's keys (anon, service role, Resend, Vercel) but no database connection string, no Supabase access token and no `psql` or Supabase CLI. The service key can read and write rows but cannot run `create function` or `alter table`. The migrations have to be pasted into the Supabase SQL editor by you.
+2. **The order matters.** Pushing to `master` deploys at once, and the new code calls things that only exist after migration `0142` (the owner team and report screens, "Reset link" on the sign-up link, the referral-link setters, the like-for-like owner figures). Until it is applied the owner roster and team actions show "We could not load this" and rotating a join link fails. `0139` and `0140` are safe to apply late (the app works without them, see their sections), but there is no reason to.
+
+### Release order (what I would run, and what is left for each step)
+
+You have been applying the earlier migrations yourself (the `0127`/`0134` fix on `master` says so), so I do not know which of `0127` to `0143` are already live. The three that are **new on this branch and not on `master`** are `0139`, `0140` and `0142`.
+
+1. **Back up** (Supabase, Database, Backups) and confirm the plan has backups.
+2. **Apply `0139`, `0140`, `0142` in the SQL editor, in that order.** Each is re-runnable and rejects nothing existing. If one stops with an error, expect the whole file to be rolled back, as `0127` was on live; send me the message. `0142` replaces `owner_gym_stats` and `owner_activity_report`, which already exist: if it complains about a changed return type, tell me the message rather than dropping anything. It depends on `0129`, `0131` and `0138` already being applied.
+3. If any of `0127` to `0136`, `0141`, `0143` is **not** applied yet: apply it first, in numeric order, with `0143` always last (it drops the coach's direct write to the credit ledger and the code for it is already on `master`).
+4. **Set the Vercel Production variables** (names only; never paste values into a chat): `RESEND_FROM_EMAIL` (a sender on a domain verified in Resend; **required in production now**, without it email is off and coaches are told), `UNSUBSCRIBE_SECRET` (a random string of 32 or more characters; do not change it later), `SUPPORT_EMAIL` or `VAPID_SUBJECT` (a business address; without one, push is off), and optionally `NEXT_PUBLIC_SITE_URL`. Leave `FEATURE_AI_PHOTO`, `JOIN_EMAIL_CONFIRMATION` and `CSP_ENFORCE` alone. Keep "Automatically expose System Environment Variables" on, and switch on **Skew Protection** (task in section 2).
+5. **Merge and push:** `git checkout master`, `git merge --ff-only fix/12-owner-tasks`, `git push origin master`. Wait for the Vercel build. Say the word and I will do this step: it is two commands once step 2 is confirmed.
+6. **Smoke-test on the production address** as a member, a coach and an owner: sign in, the Home screen, book and cancel a class, send a chat message, an owner Overview and Reports page, Settings > Gym (referral link, team).
+7. **Check `job_runs`** the next morning: `select job, ran_at, ok, detail from job_runs order by ran_at desc limit 20;` (brief 09). Watch Sentry for "CSP would block" for about a week, then set `CSP_ENFORCE = true` in `next.config.ts` (brief 10).
+8. **The two clean-up scripts** from briefs 02 and 06, each read first: `supabase/cleanup/0129_red_flag_entries_wrong_gym.sql` and `supabase/cleanup/0136_empty_food_days.sql`.
+
+**A short window to know about** (carried over from the brief 03 status): between applying the earlier migrations and deploying the code that uses them, the old app meets the new rules. That is long past for `0127` to `0136`, which are on `master`.
+
+### Section 1 tasks: where each stands
+
+| # | Task | State |
+|---|---|---|
+| 1 | Turn off public sign-up | **Yours, and now safe to do** (see above). The join link keeps working. |
+| 2 | Brad's active gym to Salford Quays | **Yours (a data setting).** Brief 05's banner tells a coach when their members are in another gym. |
+| 3 | The three habits (answered forms, "Everyone at the gym", one conversation at a time) | **Fixed in code** (briefs 04 and 05, on `master`); keep them until the migrations are live. |
+| 4 | Resend domain, `RESEND_FROM_EMAIL`, `VAPID_SUBJECT` | **Yours**, and now needed: see step 4 above. Also `UNSUBSCRIBE_SECRET`. |
+| 5, 6 | Custom SMTP for Supabase Auth; Site URL and Redirect URLs | **Yours.** Add one more setting: **Auth, email, link expiry** as long as you are comfortable with (up to 24 hours); the set-password links for new members and coaches (brief 08) use it, and the default of one hour can run out. |
+| 7 | Remove the 219 test accounts | **Yours.** **The guarded seeder will not do it on live any more:** brief 10's `--cleanup` refuses the live project on purpose, and it is meant for a sandbox. For live, use the Supabase Authentication dashboard or the SQL in section 3 (query 1 counts them; read the foreign keys or try it on a backup before deleting, as the rows they own are removed with them). Three scripts are still untracked on this machine (`scripts/seed-smoke-fleet.ts`, `seed-smoke-activity.ts`, `seed-walkthrough.ts`): they contain real coach addresses and gym ids, so decide whether to keep them local or clean them before they go into git. |
+| 8, 9 | Test event and templates; Worsley plan; Salford default form | **Yours.** |
+| 10 | Supabase plan, backups, region | **Yours** (D12: Pro plan and a London database before members grow). |
+
+### Section 3 clean-up queries: updates
+
+- **Query 5** (red-flag entries under the wrong gym): use `supabase/cleanup/0129_red_flag_entries_wrong_gym.sql` (brief 02).
+- **Query 6** (empty food days): use `supabase/cleanup/0136_empty_food_days.sql` (brief 06).
+- **Query 1** (the 219 test accounts): see task 7 above.
+- **Queries 2 to 4:** unchanged. Nothing was run.
+
+### Decisions in force (D1 to D20)
+
+Defaults are used wherever you have not said otherwise. The ones that changed since the last status:
+
+| ID | State |
+|---|---|
+| D5 check-in window | Server **and** screens (30 minutes before to 60 after), briefs 03 and 07. |
+| D7 referral link and FAQ | **Implemented** (per-gym link, hidden when empty; FAQ from live data), brief 07; the admin field to set the link is in brief 08 (needs `0142`). **Set each gym's link** (Settings > Gym or the owner's gym page) or members see nothing. |
+| D10 phone push tables | Kept, unused (comment in `lib/push.ts`), brief 09. |
+| D11 scheduled broadcasts | Daily, with honest wording ("about 6 am UK time, tomorrow"), brief 09. Change the constant in `lib/communicationsSchedule.ts` if you move to hourly runs. |
+| D13 privacy, retention, data requests | **Draft** policy and terms pages (`content/legal/*.md`, clearly marked "not legal advice") and a "Download my data" button, brief 10. **A lawyer-checked text is still yours to supply**, then change `status: draft` to `status: final`. |
+| D17 join link controls | Implemented (5 attempts per address per hour, a daily cap per link, optional end date, email confirmation). With sign-up switched off in Supabase the confirmation step is skipped (see above). |
+| D19 coach notifications | Implemented (no message text, quiet 21:00 to 07:00 gym time, one per member per 5 minutes), brief 09. Needs `VAPID_SUBJECT` or `SUPPORT_EMAIL`. |
+| D2, D3, D6, D20 | As in the earlier status: D2 database and screens done (brief 08); D3 only part (forms, meal photos, scans and chat read rules should be checked against your choice before you write the privacy policy); D6 holds back **every** new member until a coach clears them (`targetsHeldBack` in `lib/onboarding.ts` if that is too many); D20 is in the screens only. |
+| D8, D12 | Yours (gym set-up, hosting). |
+
+### Owner steps that came out of briefs 07 to 11
+
+- **Two-factor (R7):** switch on TOTP in Supabase Auth, then ask for the follow-up that adds the code step to the sign-in page and an enrolment card on `/owner/account` (brief 08 skipped it on purpose: a card without the sign-in step would look protective and do nothing).
+- **Legal text:** see D13.
+- **iPad splash artwork:** brief 10 did not add the missing sizes; it needs your approval of the look.
+- **`middleware` to `proxy` rename:** the build warns it is deprecated; the redirects still work. A separate change.
+- **A removed coach's scheduled broadcasts keep sending** under their name; cancel them by hand when a coach leaves (brief 05).
+- **A coach switched off by the owner can keep working** until their current sign-in expires (up to an hour).
+- **The fixed password that used to be in `seed-demo-fleet.ts`** is in git history: change or delete any real account that used it.
+- **Screen readers:** run VoiceOver (iPhone) and TalkBack (Android) through login, booking a class and logging food, and list anything announced as just "button" (brief 11).
+- **Look at the screens on a phone:** brief 11 made many controls 36 to 40 px tall; the Clients page, the Library filters and a member page changed most.
+
+### Go-live gate (section 8): where it stands
+
+| Gate | State |
+|---|---|
+| Sign-up off; SMTP works; a reset email reaches a non-team address | Yours. Not done. |
+| `RESEND_FROM_EMAIL` and `VAPID_SUBJECT` set; a test broadcast arrives | Yours. Not done. |
+| Test accounts and test content removed; Brad's gym; plans and forms | Yours. Not done. |
+| Briefs 01 to 04 and 10 merged and applied; proofs fail safely | 01 to 07 are on `master`; `0139`, `0140`, `0142` still to apply. **The proofs have never been run** (no sandbox). |
+| Backups confirmed and one restore tried; plan and region decided | Yours. Not done. |
+| Privacy policy and terms published and reachable when logged out | Pages are reachable (draft text); your text is still needed. |
+| iPhone and Android real-device run; push arrives | Yours. Not done. |
+
+### What I would do next
+
+1. Apply `0139`, `0140`, `0142` (steps 1 and 2) and tell me; I will fast-forward `master` and push (step 5).
+2. Do tasks 1 and 4 to 6 in the dashboards, then one join on a throwaway link.
+3. Create the sandbox (section 6) if you want the proofs run: it is the only thing that turns "reviewed" into "tested" for the SQL. Section 6 step 2 offers a guarded `scripts/apply-migrations.cjs`; it needs a Postgres driver (`pg`) added as a dev dependency, which needs your approval.
