@@ -345,6 +345,7 @@ function WeekLog({
             <button
               key={date}
               type="button"
+              aria-pressed={isFocused}
               onClick={() => setFocusedDate(date)}
               className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors ${
                 isFocused
@@ -356,7 +357,10 @@ function WeekLog({
                 {dateObj.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}
               </span>
               <span className="text-sm font-bold">{dateObj.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</span>
+              {/* The dot is colour only, so the same thing is said in words for a screen reader (L7). */}
+              <span className="sr-only">{light ? `${light} day` : logged ? 'logged' : 'nothing logged'}</span>
               <span
+                aria-hidden
                 className={`h-1.5 w-1.5 rounded-full ${
                   light
                     ? isFocused ? 'bg-accent-foreground' : LIGHT_DOT[light]
