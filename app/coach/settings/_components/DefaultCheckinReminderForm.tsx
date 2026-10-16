@@ -28,6 +28,7 @@ export function DefaultCheckinReminderForm({ initialDays }: { initialDays: numbe
         first saved. You can change it for one member under their Profile → Credits &amp; plan.
       </p>
       <select
+        aria-label="Default check-in reminder"
         value={days}
         disabled={busy}
         onChange={(e) => handleChange(Number(e.target.value))}

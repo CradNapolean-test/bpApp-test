@@ -63,7 +63,7 @@ export function GymMismatchBanner() {
         >
           {busy ? 'Switching…' : `Switch to ${name(mismatch.target.gymName)}`}
         </button>
-        <button type="button" onClick={dismiss} aria-label="Dismiss" className="shrink-0 rounded-full p-1 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10">
+        <button type="button" onClick={dismiss} aria-label="Dismiss" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10">
           <X className="h-4 w-4" />
         </button>
       </div>

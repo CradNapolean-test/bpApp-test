@@ -526,7 +526,7 @@ export function CoachMemberOverview({
                 <p className="line-clamp-3 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{n.body}</p>
               </div>
             ))}
-            <button type="button" onClick={() => onNavigate('Account Settings', 'Info')} className="text-xs font-bold text-accent">
+            <button type="button" onClick={() => onNavigate('Account Settings', 'Info')} className="inline-flex min-h-10 items-center text-xs font-bold text-accent">
               All notes →
             </button>
           </Card>

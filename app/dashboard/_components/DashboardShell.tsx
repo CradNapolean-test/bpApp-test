@@ -582,7 +582,7 @@ export function DashboardShell({
     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
       <Link
         href="/coach/clients"
-        className="flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
+        className="flex min-h-10 items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
       >
         &larr; All clients
       </Link>
@@ -590,12 +590,17 @@ export function DashboardShell({
         type="button"
         onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
         aria-pressed={chatOpen}
-        className={`relative flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold transition-colors ${
+        className={`relative flex min-h-10 items-center gap-1.5 rounded-full px-3.5 py-1 text-sm font-bold transition-colors ${
           chatOpen ? 'bg-accent text-accent-foreground' : 'text-accent hover:bg-accent/10'
         }`}
       >
         <MessageSquare className="h-4 w-4" /> Chat
-        {!chatOpen && perClientUnreadCount > 0 && <span className="h-2 w-2 rounded-full bg-danger" />}
+        {!chatOpen && perClientUnreadCount > 0 && (
+          <>
+            <span className="sr-only">(unread messages)</span>
+            <span aria-hidden className="h-2 w-2 rounded-full bg-danger" />
+          </>
+        )}
       </button>
       {healthStatus && (
         <span

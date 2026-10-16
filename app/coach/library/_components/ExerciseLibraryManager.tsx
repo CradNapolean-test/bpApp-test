@@ -306,7 +306,7 @@ export function ExerciseLibraryManager({
 
   const editing = editingId ? initialExercises.find((ex) => ex.id === editingId) : undefined;
   const chip = (active: boolean) =>
-    `rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+    `min-h-9 rounded-full border px-3 py-1 text-xs transition-colors ${
       active
         ? 'border-accent bg-accent-soft text-accent'
         : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
@@ -350,9 +350,11 @@ export function ExerciseLibraryManager({
       )}
 
       {initialExercises.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div role="group" aria-label="Filter exercises" className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs font-medium text-zinc-500">Filter:</span>
           <button
+            type="button"
+            aria-pressed={filterGroup === '' && !noVideoOnly}
             onClick={() => {
               setFilterGroup('');
               setNoVideoOnly(false);
@@ -364,6 +366,8 @@ export function ExerciseLibraryManager({
           </button>
           {missingVideos > 0 && (
             <button
+              type="button"
+              aria-pressed={noVideoOnly}
               onClick={() => {
                 setNoVideoOnly((v) => !v);
                 setVisible(PAGE_SIZE);
@@ -376,6 +380,8 @@ export function ExerciseLibraryManager({
           {MUSCLE_GROUPS.map((g) => (
             <button
               key={g}
+              type="button"
+              aria-pressed={filterGroup === g}
               onClick={() => {
                 setFilterGroup(filterGroup === g ? '' : g);
                 setVisible(PAGE_SIZE);
@@ -413,7 +419,7 @@ export function ExerciseLibraryManager({
                     {ex.is_active === false && <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/10">Retired</span>}
                   </p>
                   <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
-                    <button type="button" onClick={() => setEditingId(ex.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
+                    <button type="button" onClick={() => setEditingId(ex.id)} aria-label={`Edit ${ex.name}`} className="min-h-10 min-w-10 rounded-full px-3 py-1 text-accent hover:bg-accent/10">
                       Edit
                     </button>
                     <DropdownMenu
@@ -438,7 +444,7 @@ export function ExerciseLibraryManager({
                 {hasVideo(ex) ? (
                   <VideoDemo videoUrl={ex.video_url as string} title={ex.name} />
                 ) : (
-                  <button type="button" onClick={() => setEditingId(ex.id)} className="mt-1 text-xs font-semibold text-warning">
+                  <button type="button" onClick={() => setEditingId(ex.id)} className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-warning">
                     No video linked · add one
                   </button>
                 )}

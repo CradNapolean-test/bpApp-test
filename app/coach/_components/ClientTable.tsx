@@ -169,7 +169,7 @@ export function ClientTable({
   }
 
 const scopeBtnCls = (active: boolean) =>
-  `rounded-full px-4 py-1.5 text-center text-xs font-bold transition-colors ${
+  `min-h-10 rounded-full px-4 py-1.5 text-center text-xs font-bold transition-colors ${
     active
       ? 'bg-accent text-accent-foreground'
       : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
@@ -191,11 +191,11 @@ const scopeBtnCls = (active: boolean) =>
   return (
     <div className="space-y-2">
       {gymClients && (
-        <div className="grid w-full grid-cols-2 gap-1 rounded-full border border-black/10 p-0.5 sm:w-max dark:border-white/10">
-          <button onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
+        <div role="group" aria-label="Whose clients" className="grid w-full grid-cols-2 gap-1 rounded-full border border-black/10 p-0.5 sm:w-max dark:border-white/10">
+          <button type="button" aria-pressed={scope === 'mine'} onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
             My clients
           </button>
-          <button onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
+          <button type="button" aria-pressed={scope === 'gym'} onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
             Whole gym
           </button>
         </div>
@@ -257,7 +257,7 @@ const scopeBtnCls = (active: boolean) =>
           ]}
         />
       </div>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="group" aria-label="Quick filters" className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {([
           ['all', 'All', activeClients.length],
           ['review', 'New to review', quickCounts.review],
@@ -268,8 +268,9 @@ const scopeBtnCls = (active: boolean) =>
           <button
             key={key}
             type="button"
+            aria-pressed={quick === key}
             onClick={() => setQuick(key)}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold ${
+            className={`min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold ${
               quick === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
             }`}
           >
@@ -295,14 +296,14 @@ const scopeBtnCls = (active: boolean) =>
               setSortKey(e.target.value as SortKey);
               setAsc(true);
             }}
-            className="rounded-lg border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+            className="min-h-9 rounded-lg border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
           >
             <option value="name">Name A–Z</option>
             <option value="lastActive">Most inactive first</option>
             <option value="status">Needs attention first</option>
             <option value="credits">Fewest credits first</option>
           </select>
-          <button type="button" onClick={() => setLegend(true)} className="shrink-0 text-xs font-bold text-accent">
+          <button type="button" onClick={() => setLegend(true)} className="min-h-9 shrink-0 px-1 text-xs font-bold text-accent">
             Colour key
           </button>
         </div>

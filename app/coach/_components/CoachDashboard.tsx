@@ -313,7 +313,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
     <div className="space-y-5 pb-20 lg:pb-0">
       {isAdmin && (
         <div className="space-y-2">
-          <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+          <div role="group" aria-label="Whose members" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
             {([
               ['mine', 'My members'],
               ['gym', 'Whole gym'],
@@ -322,8 +322,9 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
               <button
                 key={key}
                 type="button"
+                aria-pressed={scope === key}
                 onClick={() => router.push(key === 'coach' ? scopeHref('coach', selectedCoachId ?? coaches[0]?.id) : scopeHref(key))}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${
+                className={`min-h-10 shrink-0 rounded-full px-4 py-2 text-sm font-bold ${
                   scope === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-500 dark:bg-white/10'
                 }`}
               >
@@ -455,7 +456,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
                 </Link>
                 <Link
                   href={`/coach/clients/${m.clientId}?open=messages`}
-                  className="mt-2 flex items-center justify-center gap-1 rounded-full bg-accent/15 py-1.5 text-xs font-bold text-accent"
+                  className="mt-2 flex min-h-10 items-center justify-center gap-1 rounded-full bg-accent/15 py-1.5 text-xs font-bold text-accent"
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> Message
                 </Link>

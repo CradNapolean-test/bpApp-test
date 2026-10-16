@@ -46,7 +46,7 @@ export function ActivityFeed({
               return (
                 <Link
                   href={`/coach/clients/${item.clientId}`}
-                  className="flex items-start gap-2 rounded-lg py-0.5 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                  className="flex min-h-10 items-start gap-2 rounded-lg py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-black dark:bg-zinc-50" />
                   <p className="min-w-0 flex-1 text-zinc-700 dark:text-zinc-300">

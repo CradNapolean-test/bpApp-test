@@ -53,7 +53,7 @@ export function GymSwitcherMenu({ alwaysShow = false }: { alwaysShow?: boolean }
         aria-label={`Site: ${shortGymName(active.gymName, { siblings })}. Change site`}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="rounded-full bg-black/5 px-2.5 py-1 hover:bg-black/10 disabled:opacity-60 dark:bg-white/10 dark:hover:bg-white/15"
+        className="min-h-9 rounded-full bg-black/5 px-3 py-1 hover:bg-black/10 disabled:opacity-60 dark:bg-white/10 dark:hover:bg-white/15"
       >
         {label}
       </button>

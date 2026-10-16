@@ -15,7 +15,7 @@ export function VideoDemo({ videoUrl, title, alwaysOpen = false }: { videoUrl: s
 
   if (!embedUrl) {
     return (
-      <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs text-accent hover:underline">
+      <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-9 items-center text-xs text-accent hover:underline">
         Open link ↗
       </a>
     );
@@ -23,7 +23,7 @@ export function VideoDemo({ videoUrl, title, alwaysOpen = false }: { videoUrl: s
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-1 inline-block text-xs text-accent hover:underline">
+      <button type="button" onClick={() => setOpen(true)} className="mt-1 inline-flex min-h-9 items-center text-xs text-accent hover:underline">
         ▶ Watch demo
       </button>
     );

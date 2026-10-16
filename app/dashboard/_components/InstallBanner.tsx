@@ -39,7 +39,7 @@ export function InstallBanner() {
 
   return (
     <div className="relative rounded-2xl border border-accent/30 bg-accent-soft p-3.5">
-      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-2 top-2 rounded-full p-1.5 text-zinc-400">
+      <button type="button" aria-label="Dismiss" onClick={dismiss} className="absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-full text-zinc-400">
         <X className="h-4 w-4" />
       </button>
       <div className="flex items-start gap-3 pr-6">
