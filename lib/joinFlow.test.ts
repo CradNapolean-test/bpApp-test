@@ -5,6 +5,7 @@ import {
   confirmationRequired,
   isExistingAccountAnswer,
   isMailRateLimit,
+  isSignupDisabled,
   joinFailure,
   linkDailyLimit,
   linkUsable,
@@ -89,6 +90,15 @@ describe('email confirmation (D17)', () => {
     expect(confirmationRequired('true')).toBe(true);
     expect(confirmationRequired('false')).toBe(false);
     expect(confirmationRequired(' False ')).toBe(false);
+  });
+
+  it('recognises Supabase saying public sign-up is switched off', () => {
+    expect(isSignupDisabled({ code: 'signup_disabled' })).toBe(true);
+    expect(isSignupDisabled({ message: 'Signups not allowed for this instance' })).toBe(true);
+    expect(isSignupDisabled({ message: 'Email signups are disabled' })).toBe(true);
+    expect(isSignupDisabled({ code: 'over_email_send_rate_limit' })).toBe(false);
+    expect(isSignupDisabled({ message: 'Database error saving new user' })).toBe(false);
+    expect(isSignupDisabled(null)).toBe(false);
   });
 
   it('treats an obfuscated sign-up answer as an existing account', () => {

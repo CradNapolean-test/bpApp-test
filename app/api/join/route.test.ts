@@ -127,6 +127,25 @@ describe('sign-up with email confirmation (the default)', () => {
   });
 });
 
+describe('public sign-up switched off in Supabase (brief 12, task 1)', () => {
+  it('still creates the member, through the admin API, and says no email is needed', async () => {
+    signUpResult = { data: { user: null, session: null }, error: { code: 'signup_disabled', status: 422, message: 'Signups not allowed for this instance' } };
+    const res = await POST(request(good));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, confirm: false });
+    expect(inserted).toEqual([{ id: 'new-1', role: 'client', coach_id: 'coach-1', gym_id: 'gym-1', email: 'new.member@example.com' }]);
+    expect(JSON.stringify(captureMessage.mock.calls)).not.toContain('new.member@example.com');
+  });
+
+  it('answers an existing address with the same neutral message as before', async () => {
+    signUpResult = { data: { user: null, session: null }, error: { code: 'signup_disabled', status: 422 } };
+    createUserResult = { data: { user: null }, error: { message: 'A user with this email address has already been registered' } };
+    const res = await POST(request(good));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).not.toMatch(/already/i);
+  });
+});
+
 describe('the one-step flow (JOIN_EMAIL_CONFIRMATION=false)', () => {
   beforeEach(() => {
     env.JOIN_EMAIL_CONFIRMATION = 'false';

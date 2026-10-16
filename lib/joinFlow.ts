@@ -76,6 +76,13 @@ export function isMailRateLimit(error: { code?: string; status?: number; message
   return error.code === 'over_email_send_rate_limit' || error.code === 'over_request_rate_limit' || error.status === 429 || /rate limit/i.test(error.message ?? '');
 }
 
+// Supabase's answer when "Allow new users to sign up" is switched off (brief 12, task 1). That switch only stops the public sign-up
+// endpoint; the join link creates the login through the admin API, which it does not affect.
+export function isSignupDisabled(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === 'signup_disabled' || /signups? (are |is )?(not allowed|disabled)|sign-?ups? (are |is )?disabled/i.test(error.message ?? '');
+}
+
 // signUp does not say "that address exists": for an address with a confirmed account it returns a user with no identities. Treat that as
 // the same outcome as a new sign-up, so the page cannot be used to find out who has an account.
 export function isExistingAccountAnswer(user: { identities?: unknown[] | null } | null | undefined): boolean {

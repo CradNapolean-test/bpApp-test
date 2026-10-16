@@ -10,6 +10,7 @@ import {
   confirmationRequired,
   isExistingAccountAnswer,
   isMailRateLimit,
+  isSignupDisabled,
   joinFailure,
   linkDailyLimit,
   linkUsable,
@@ -63,6 +64,23 @@ export async function POST(request: Request) {
   const { data: coach } = await admin.from('profiles').select('gym_id').eq('id', link.coach_id).maybeSingle();
   const profileRow = (id: string) => ({ id, role: 'client', coach_id: link.coach_id, gym_id: coach?.gym_id ?? null, email });
 
+  // The one-step flow: the address is marked verified without proof. Used when JOIN_EMAIL_CONFIRMATION=false, and when Supabase has public
+  // sign-up switched off (below).
+  async function createConfirmed() {
+    const { data: newUser, error: createUserError } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    if (createUserError || !newUser?.user) {
+      report('create user failed', createUserError);
+      return refuse(/already|registered|exists/i.test(createUserError?.message ?? '') ? 'exists' : 'create-failed');
+    }
+    const { error: profileError } = await admin.from('profiles').insert(profileRow(newUser.user.id));
+    if (profileError) {
+      report('profile insert failed', profileError);
+      await admin.auth.admin.deleteUser(newUser.user.id);
+      return refuse('profile-failed');
+    }
+    return NextResponse.json({ ok: true, confirm: false });
+  }
+
   if (confirmationRequired(process.env.JOIN_EMAIL_CONFIRMATION)) {
     // The login is created unconfirmed and Supabase emails the confirmation (it uses its own mailer, so this works without Resend). The member
     // signs in after confirming. An address that already has an account gets the same answer as a new one.
@@ -71,6 +89,12 @@ export async function POST(request: Request) {
     });
     const { data, error } = await anon.auth.signUp({ email, password, options: { emailRedirectTo: `${new URL(request.url).origin}/login` } });
     if (error) {
+      // Public sign-up is switched off in Supabase (the owner's first task, R1). The confirmation email can only come from that endpoint, so
+      // fall back to the one-step flow rather than stop every new member; the limits above still apply. Said once per sign-up in Sentry.
+      if (isSignupDisabled(error)) {
+        report('public sign-up is switched off in Supabase, so the one-step flow was used');
+        return createConfirmed();
+      }
       if (isMailRateLimit(error)) return refuse('mail-busy');
       report('sign-up failed', error);
       return refuse('create-failed');
@@ -92,17 +116,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, confirm: !data.session });
   }
 
-  // The one-step flow (JOIN_EMAIL_CONFIRMATION=false): the address is marked verified without proof.
-  const { data: newUser, error: createUserError } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-  if (createUserError || !newUser?.user) {
-    report('create user failed', createUserError);
-    return refuse(/already|registered|exists/i.test(createUserError?.message ?? '') ? 'exists' : 'create-failed');
-  }
-  const { error: profileError } = await admin.from('profiles').insert(profileRow(newUser.user.id));
-  if (profileError) {
-    report('profile insert failed', profileError);
-    await admin.auth.admin.deleteUser(newUser.user.id);
-    return refuse('profile-failed');
-  }
-  return NextResponse.json({ ok: true, confirm: false });
+  return createConfirmed();
 }
