@@ -74,7 +74,7 @@ export function ConversationList({
         </div>
       </div>
 
-      <nav className="space-y-1">
+      <nav aria-label="Conversations" className="space-y-1">
         {filtered.map((c) => (
           <div
             key={c.client_id}

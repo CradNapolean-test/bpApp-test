@@ -16,10 +16,13 @@ export function HubTabBar<T extends string>({
   tabs,
   active,
   onSelect,
+  label = 'Sections',
 }: {
   tabs: readonly T[];
   active: T;
   onSelect: (tab: T) => void;
+  // What the row is for, announced with the tab list ("Sections" unless a screen says better).
+  label?: string;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [moreRight, setMoreRight] = useState(false);
@@ -43,6 +46,7 @@ export function HubTabBar<T extends string>({
     <div
       ref={rowRef}
       role="tablist"
+      aria-label={label}
       onKeyDown={handleTabListKeys}
       onScroll={measure}
       style={moreRight ? { maskImage: 'linear-gradient(to right, black calc(100% - 36px), transparent)' } : undefined}
@@ -59,7 +63,7 @@ export function HubTabBar<T extends string>({
             tabIndex={isActive ? 0 : -1}
             data-active={isActive}
             onClick={() => onSelect(tab)}
-            className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 pt-2.5 text-sm transition-colors ${
               isActive
                 ? 'border-accent font-bold text-black dark:text-zinc-50'
                 : 'border-transparent font-medium text-zinc-500 hover:text-black dark:hover:text-zinc-300'

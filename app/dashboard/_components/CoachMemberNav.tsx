@@ -232,7 +232,7 @@ export function CoachMemberTabs({
             tabIndex={isActive ? 0 : -1}
             data-active={isActive}
             onClick={() => onSelect(t)}
-            className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 text-sm transition-colors ${
+            className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 pt-2.5 text-sm transition-colors ${
               isActive
                 ? 'border-accent font-bold text-black dark:text-zinc-50'
                 : 'border-transparent font-medium text-zinc-500 hover:text-black dark:hover:text-zinc-300'

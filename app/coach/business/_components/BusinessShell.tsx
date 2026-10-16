@@ -115,7 +115,7 @@ export function BusinessShell({
           <ActiveGymTag />
         </h1>
         <p className="mb-4 text-sm text-zinc-500">{BLURB[tab]}</p>
-        <HubTabBar tabs={tabs} active={tab} onSelect={setTab} />
+        <HubTabBar label="Business sections" tabs={tabs} active={tab} onSelect={setTab} />
 
         {tab === 'Overview' && overview && <OverviewPane data={overview} />}
         {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} />}

@@ -71,7 +71,7 @@ export function ClassesHubShell({
         Classes
         <ActiveGymTag />
       </h1>
-      <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
+      <HubTabBar label="Classes sections" tabs={TABS} active={tab} onSelect={setTab} />
 
       {tab === 'Sessions' && (
         <SessionsView

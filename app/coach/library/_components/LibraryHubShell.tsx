@@ -89,7 +89,7 @@ export function LibraryHubShell({
         Library
         <ActiveGymTag />
       </h1>
-      <HubTabBar tabs={TABS} active={tab} onSelect={setTab} />
+      <HubTabBar label="Library sections" tabs={TABS} active={tab} onSelect={setTab} />
 
       {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} usage={exerciseUsage} />}
       {tab === 'Program templates' && (

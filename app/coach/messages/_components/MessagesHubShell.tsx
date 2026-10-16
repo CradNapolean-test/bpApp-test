@@ -84,6 +84,7 @@ export function MessagesHubShell({
     <>
       <h1 className="mb-4 mt-3 text-2xl font-bold text-black md:mt-0 dark:text-zinc-50">Messages</h1>
       <HubTabBar
+        label="Messages sections"
         tabs={['Conversations', 'Broadcasts'] as const}
         active={TAB_LABEL[tab] as 'Conversations' | 'Broadcasts'}
         onSelect={(t) => setTab(t === 'Broadcasts' ? 'broadcasts' : 'inbox')}
