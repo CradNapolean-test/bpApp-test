@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getCoachReports } from '@/lib/data/reports';
 import type { CoachReport } from '@/lib/data/types';
 import { RedFlagsView } from './RedFlagsView';
+import { handleTabListKeys } from '@/app/_components/tabKeys';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
@@ -112,13 +113,21 @@ export function ReportsPane({ report: initialReport, onOpenAttendance }: { repor
 
   return (
     <div className="space-y-4">
-      <div className="flex w-full gap-1 overflow-x-auto rounded-full border border-black/10 p-1 [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden">
+      <div
+        role="tablist"
+        aria-label="Reports"
+        onKeyDown={handleTabListKeys}
+        className="flex w-full gap-1 overflow-x-auto rounded-full border border-black/10 p-1 [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden"
+      >
         {SECTIONS.map((sec) => (
           <button
             key={sec}
             type="button"
+            role="tab"
+            aria-selected={section === sec}
+            tabIndex={section === sec ? 0 : -1}
             onClick={() => setSection(sec)}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${section === sec ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
+            className={`min-h-10 shrink-0 rounded-full px-4 py-2 text-sm font-bold ${section === sec ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
           >
             {sec}
           </button>
@@ -129,13 +138,14 @@ export function ReportsPane({ report: initialReport, onOpenAttendance }: { repor
 
       {section !== 'Red flags' && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-1.5">
+          <div role="group" aria-label="Period" className="flex gap-1.5">
             {RANGES.map((r) => (
               <button
                 key={r}
                 type="button"
+                aria-pressed={days === r}
                 onClick={() => setDays(r)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
+                className={`min-h-10 rounded-full px-3.5 py-1.5 text-xs font-bold ${
                   days === r ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
                 }`}
               >
@@ -250,13 +260,14 @@ export function ReportsPane({ report: initialReport, onOpenAttendance }: { repor
       {section === 'Busiest' && (
         <div className={`${cardCls} p-4`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-1.5">
+            <div role="group" aria-label="Order" className="flex gap-1.5">
               {(['busiest', 'quietest'] as const).map((o) => (
                 <button
                   key={o}
                   type="button"
+                  aria-pressed={slotOrder === o}
                   onClick={() => setSlotOrder(o)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${
+                  className={`min-h-10 rounded-full px-3.5 py-1.5 text-xs font-bold capitalize ${
                     slotOrder === o ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
                   }`}
                 >

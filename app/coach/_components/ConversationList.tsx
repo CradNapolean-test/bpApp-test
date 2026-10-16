@@ -52,14 +52,17 @@ export function ConversationList({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search clients…"
+          aria-label="Search clients"
           className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3.5 py-2.5 text-base outline-none focus:border-accent sm:py-2 sm:text-sm dark:border-white/10 dark:bg-white/5"
         />
-        <div className="flex gap-1 text-xs">
+        <div role="group" aria-label="Show conversations" className="flex gap-1 text-xs">
           {(['active', 'unread', 'all'] as FilterMode[]).map((m) => (
             <button
               key={m}
+              type="button"
+              aria-pressed={mode === m}
               onClick={() => setMode(m)}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors sm:px-2.5 sm:py-1 sm:text-xs ${
+              className={`min-h-10 rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors sm:min-h-9 sm:px-2.5 sm:py-1 sm:text-xs ${
                 mode === m
                   ? 'bg-accent text-accent-foreground'
                   : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
@@ -87,7 +90,13 @@ export function ConversationList({
                     <span className={`truncate text-black dark:text-zinc-50 ${c.unread_count > 0 ? 'font-extrabold' : 'font-bold'}`}>{c.client_name}</span>
                     <span className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-400">
                       {c.last_message_at && relativeTime(c.last_message_at)}
-                      {c.unread_count > 0 && <span className="h-2 w-2 rounded-full bg-accent" aria-label="Unread" />}
+                      {c.unread_count > 0 && (
+                        <>
+                          {/* The dot is the picture; the text is what is announced (a label on a plain span is not). */}
+                          <span className="sr-only">Unread</span>
+                          <span aria-hidden className="h-2 w-2 rounded-full bg-accent" />
+                        </>
+                      )}
                     </span>
                   </div>
                   <p className={`truncate text-xs ${c.unread_count > 0 ? 'font-semibold text-zinc-700 dark:text-zinc-200' : 'text-zinc-500'}`}>
