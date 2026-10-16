@@ -72,7 +72,7 @@ export default function LoginPage() {
 
   if (mode === 'forgot') {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 dark:bg-black">
+      <main className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 dark:bg-black">
         <form
           onSubmit={handleResetRequest}
           className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900"
@@ -125,12 +125,12 @@ export default function LoginPage() {
           </button>
         </form>
         <LegalFooterLinks />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 dark:bg-black">
+    <main className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 dark:bg-black">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900"
@@ -189,6 +189,6 @@ export default function LoginPage() {
         </Button>
       </form>
       <LegalFooterLinks />
-    </div>
+    </main>
   );
 }

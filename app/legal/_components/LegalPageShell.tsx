@@ -45,7 +45,7 @@ function Block({ block }: { block: LegalBlock }) {
 
 export function LegalPageShell({ doc }: { doc: LegalDoc }) {
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 px-4 py-8 dark:bg-black">
+    <main className="flex flex-1 justify-center bg-zinc-50 px-4 py-8 dark:bg-black">
       <article className="w-full max-w-2xl space-y-3 rounded-lg border border-black/10 bg-white p-6 sm:p-8 dark:border-white/10 dark:bg-zinc-900">
         <div className="flex flex-col items-center gap-2 text-center">
           <Logo variant="full" size={64} />
@@ -73,6 +73,6 @@ export function LegalPageShell({ doc }: { doc: LegalDoc }) {
           &larr; Back to sign in
         </Link>
       </article>
-    </div>
+    </main>
   );
 }

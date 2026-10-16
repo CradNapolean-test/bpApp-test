@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">
+    <main className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">
       <div className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900">
         <div className="flex flex-col items-center gap-2 text-center">
           <Logo variant="full" size={88} />
@@ -174,6 +174,6 @@ export default function ResetPasswordPage() {
           </form>
         )}
       </div>
-    </div>
+    </main>
   );
 }
