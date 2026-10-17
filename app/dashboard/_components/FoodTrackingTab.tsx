@@ -320,6 +320,9 @@ function EntryRow({
 }) {
   const [editing, setEditing] = useState(false);
   const macros = entryMacros(entry);
+  // A quick-add can be calories only ("650 kcal, don't know the split"); showing P 0 / C 0 / F 0 there would be wrong.
+  const hasMacroSplit =
+    entry.food != null || entry.quick_add_protein != null || entry.quick_add_carbs != null || entry.quick_add_fat != null;
   // "150 g" for per-gram foods, "2 × 1 Egg" for unit foods; nothing for quick-adds.
   const amount = entry.food
     ? entry.food.portion === '1 gram'
@@ -339,6 +342,13 @@ function EntryRow({
             {entry.food?.name ?? entry.quick_add_name ?? 'Unknown food'}
           </span>
           {amount && <span className="block text-xs text-zinc-500">{amount}</span>}
+          {hasMacroSplit && (
+            <span className="block text-xs text-zinc-500">
+              <span style={{ color: '#a07aff' }}>P {Math.round(macros.protein)}g</span> ·{' '}
+              <span style={{ color: '#e8a020' }}>C {Math.round(macros.carbs)}g</span> ·{' '}
+              <span style={{ color: '#2ecc71' }}>F {Math.round(macros.fat)}g</span>
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-sm font-semibold text-black dark:text-zinc-50">
           {Math.round(macros.calories)} <span className="text-xs font-normal text-zinc-500">kcal</span>
