@@ -52,7 +52,7 @@ export function ClientCreditsTab({
         <p className="mt-1 text-xs opacity-80">
           {creditsBuckets.membership} from your weekly allowance · {creditsBuckets.bonus} bonus
         </p>
-        <p className="mt-1 text-xs opacity-80">Your weekly allowance resets every Monday.</p>
+        <p className="mt-1 text-xs opacity-80">Your weekly allowance resets every Saturday.</p>
       </div>
 
       {history && history.expiring.length > 0 && (

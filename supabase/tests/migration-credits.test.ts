@@ -127,9 +127,11 @@ describe('credit grants and removals (CM9)', () => {
     expect(code('grant_credit_pack')).toMatch(/same_gym_as_client\(v_pack\.gym_id, p_client\)/);
   });
 
-  it('migration 0143 is the last migration, drops only the direct insert, and says when to apply it', () => {
+  it('migration 0143 comes after the functions that replace the direct inserts, drops only the direct insert, and says when to apply it', () => {
     const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
-    expect(files[files.length - 1].startsWith('0143_')).toBe(true);
+    const at = (prefix: string) => files.findIndex((f) => f.startsWith(prefix));
+    expect(at('0143_')).toBeGreaterThan(at('0132_'));
+    expect(at('0143_')).toBeGreaterThan(at('0133_'));
     const text = migrationText('0143_');
     expect(text).toMatch(/drop policy if exists "coach grants credits" on public\.credits_ledger/);
     expect(text).toMatch(/APPLY THIS ONLY AFTER BRIEF 05/);
@@ -189,5 +191,52 @@ describe('deleting a group no longer fails and never sends to everyone (R33)', (
     const body = code('communication_recipients');
     expect(body).toMatch(/p_target = 'group'/);
     expect(body).toMatch(/m\.group_id = p_group/);
+  });
+});
+
+describe('weekly credits reset on Saturday (credit weeks run Saturday to Friday)', () => {
+  // The same arithmetic as credit_week_start in SQL: (isodow + 1) % 7 days back, isodow Monday = 1 ... Sunday = 7.
+  const weekStart = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    const isodow = d.getUTCDay() === 0 ? 7 : d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - ((isodow + 1) % 7));
+    return d.toISOString().slice(0, 10);
+  };
+
+  it('the week starts on the Saturday on or before the day', () => {
+    // 17 Oct 2026 is a Saturday.
+    expect(weekStart('2026-10-17')).toBe('2026-10-17'); // Saturday
+    expect(weekStart('2026-10-18')).toBe('2026-10-17'); // Sunday
+    expect(weekStart('2026-10-19')).toBe('2026-10-17'); // Monday
+    expect(weekStart('2026-10-20')).toBe('2026-10-17');
+    expect(weekStart('2026-10-21')).toBe('2026-10-17');
+    expect(weekStart('2026-10-22')).toBe('2026-10-17');
+    expect(weekStart('2026-10-23')).toBe('2026-10-17'); // Friday
+    expect(weekStart('2026-10-24')).toBe('2026-10-24'); // next Saturday: a new credit week
+  });
+
+  it('credit_week_start in SQL uses that arithmetic, is a plain helper nobody can call through the API', () => {
+    const fn = latest('credit_week_start');
+    expect(code('credit_week_start')).toMatch(/p_date - \(\(extract\(isodow from p_date\)::int \+ 1\) % 7\)/);
+    expect(access(fn)).toEqual({ anon: false, authenticated: false });
+  });
+
+  it('both reset functions use it, not the Monday of the ISO week', () => {
+    for (const name of ['replenish_due_memberships', 'top_up_membership_credits']) {
+      const body = code(name);
+      expect(body, name).toMatch(/credit_week_start\(current_date\)/);
+      expect(body, name).not.toMatch(/date_trunc\('week'/);
+    }
+  });
+
+  it('the daily job still resets once per credit week and the two functions stay closed to the API', () => {
+    const body = code('replenish_due_memberships');
+    expect(body).toMatch(/cm\.last_reset_week is null or cm\.last_reset_week < v_current_week/);
+    expect(body).toMatch(/'membership reset: week of ' \|\| v_current_week/);
+    expect(latest('replenish_due_memberships').securityDefiner).toBe(true);
+    expect(access(latest('replenish_due_memberships'))).toEqual({ anon: false, authenticated: false });
+    expect(access(latest('top_up_membership_credits'))).toEqual({ anon: false, authenticated: false });
+    // A plan started or changed mid-week must record the same Saturday, or the next daily run would reset the member again.
+    expect(code('top_up_membership_credits')).toMatch(/set last_reset_week = v_week/);
   });
 });

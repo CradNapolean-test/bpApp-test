@@ -44,7 +44,7 @@ export function describeClubs(milestones: readonly number[] = CLUB_MILESTONES): 
 export function buildFaqs(input: FaqInputs): Faq[] {
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const plan = input.planName
-    ? `You are on ${input.planName}${input.creditsPerWeek != null ? `, which gives you ${plural(input.creditsPerWeek, 'credit')} a week. Your weekly credits reset every Monday.` : '.'} Each session uses the credits shown on it, and your Credits screen shows your balance.`
+    ? `You are on ${input.planName}${input.creditsPerWeek != null ? `, which gives you ${plural(input.creditsPerWeek, 'credit')} a week. Your weekly credits reset every Saturday, so you can book the week ahead.` : '.'} Each session uses the credits shown on it, and your Credits screen shows your balance.`
     : 'Your coach sets up your plan. Ask them what it includes. Your credits are shown at the top of the Book tab.';
   const ahead =
     input.advanceBookingDays != null

@@ -269,7 +269,7 @@ export function CreditsTab({
           <dl className="mt-3 divide-y divide-black/[.05] text-sm dark:divide-white/10">
             <div className="flex justify-between py-2">
               <dt className="text-zinc-500">Weekly allowance</dt>
-              <dd className="font-semibold text-black dark:text-zinc-50">{membership.package.credits_per_week} credits, reset Mondays</dd>
+              <dd className="font-semibold text-black dark:text-zinc-50">{membership.package.credits_per_week} credits, reset Saturdays</dd>
             </div>
             <div className="flex justify-between py-2">
               <dt className="text-zinc-500">Started</dt>
