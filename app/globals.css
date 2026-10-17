@@ -9,7 +9,7 @@
   /* Native pop-ups (select lists, date pickers) follow the theme instead of staying white. */
   color-scheme: light;
   --background: #fdfcfb;
-  --foreground: #171717;
+  --foreground: #1d1d1b; /* logo black (K100 in the brand PDF) */
 
   /* Semantic palette. Deliberately small -- one accent plus status colours, so active
      states and primary actions read as intentional instead of the plain black-on-white
@@ -59,16 +59,16 @@
 
 .dark {
   color-scheme: dark;
-  /* Ballistic Performance brand: black background, teal #2ABFBF (from the owner's logo files
-     and BP app mockups). */
+  /* Ballistic Performance brand: black background, teal #19adb1 (the logo's teal, C74 M5 Y35
+     in the brand PDF; same as light mode). --accent-strong stays lighter for small text. */
   --background: #111111;
   --foreground: #f0f0f0;
   --card: #1e1e1e;
   --card-muted: #262626;
-  --accent: #2abfbf;
+  --accent: #19adb1;
   --accent-strong: #5fd6d6;
   --accent-foreground: #041f1f;
-  --accent-soft: rgb(42 191 191 / 0.12);
+  --accent-soft: rgb(25 173 177 / 0.14);
   --danger: #f87171;
   --muted: #a1a1aa;
   --border: rgb(255 255 255 / 0.1);

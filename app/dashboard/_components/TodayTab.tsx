@@ -149,7 +149,7 @@ export function TodayTab({
         type="button"
         onClick={() => onNavigate('Nutrition', 'Food Tracking')}
         className="block w-full overflow-hidden rounded-2xl p-5 text-left text-white shadow-[0_1px_2px_rgba(0,0,0,.02)]"
-        style={{ background: 'linear-gradient(155deg, #2abfbf, #157f7f)' }}
+        style={{ background: 'linear-gradient(155deg, #19adb1, #0e6266)' }}
       >
         {profile?.nutrition_tracking_mode === 'photo_diary' ? (
           <div>
