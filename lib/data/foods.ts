@@ -3,6 +3,8 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
+import type { PairHistoryRow } from '@/lib/foodPairs';
+import { addDays, toIsoDate } from '@/lib/utils/dates';
 import type { ActivityRow, FoodRow } from './types';
 
 export async function searchFoods(query: string): Promise<FoodRow[]> {
@@ -147,6 +149,33 @@ export async function setFavoriteFood(clientId: string, foodId: string, isFavori
       .eq('food_id', foodId);
     if (error) raise(error);
   }
+}
+
+const PAIR_HISTORY_DAYS = 60;
+const PAIR_HISTORY_ROWS = 1000;
+
+// The food rows of this member's last 60 days of diary, for working out which foods they usually eat together (lib/foodPairs.ts does the
+// working out). Food rows only: a Quick Add has no food to suggest. Like getRecentlyLoggedFoods, RLS keeps it to their own rows and the
+// clientId filter is clarity, not the security boundary.
+export async function getFoodPairHistory(clientId: string): Promise<PairHistoryRow[]> {
+  const supabase = await createClient();
+  const since = toIsoDate(addDays(new Date(), -PAIR_HISTORY_DAYS));
+  const { data, error } = await supabase
+    .from('food_diary_entries')
+    .select('daily_log_id, meal_section_id, food_id, portions, food:foods(*), daily_logs!inner(client_id, log_date)')
+    .eq('daily_logs.client_id', clientId)
+    .gte('daily_logs.log_date', since)
+    .not('food_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(PAIR_HISTORY_ROWS);
+  if (error) raise(error);
+  return ((data ?? []) as unknown as PairHistoryRow[]).map((r) => ({
+    daily_log_id: r.daily_log_id,
+    meal_section_id: r.meal_section_id,
+    food_id: r.food_id,
+    portions: r.portions,
+    food: r.food,
+  }));
 }
 
 const RECENTLY_LOGGED_LIMIT = 8;

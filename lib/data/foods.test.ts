@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ client: null as unknown }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => state.client) }));
 
-import { getFavoriteFoods, getFoodByBarcode, getRecentlyLoggedFoods, searchFoods, searchScannedFoods, setFoodHidden, upsertFoodFromBarcode } from './foods';
+import { getFavoriteFoods, getFoodByBarcode, getFoodPairHistory, getRecentlyLoggedFoods, searchFoods, searchScannedFoods, setFoodHidden, upsertFoodFromBarcode } from './foods';
 
 type Result = { data?: unknown; error?: { code?: string; message?: string } | null };
 
@@ -80,6 +80,30 @@ describe('hidden foods stay out of what a member sees (M12)', () => {
       },
     ]);
     expect((await getRecentlyLoggedFoods('c1')).map((f) => f.id)).toEqual(['a', 'c']);
+  });
+});
+
+describe('the food history behind "goes with" suggestions', () => {
+  it('reads only this member’s food rows from the last 60 days, and hands back just what the pairing needs', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-22T12:00:00Z'));
+    try {
+      const { calls } = fakeClient([
+        { data: [{ daily_log_id: 'l1', meal_section_id: 's1', food_id: 'a', portions: 150, created_at: 'x', food: food('a'), daily_logs: { client_id: 'c1', log_date: '2026-10-20' } }] },
+      ]);
+      const rows = await getFoodPairHistory('c1');
+      expect(rows).toEqual([{ daily_log_id: 'l1', meal_section_id: 's1', food_id: 'a', portions: 150, food: food('a') }]);
+      expect(calls).toContainEqual(['eq', ['daily_logs.client_id', 'c1']]);
+      expect(calls).toContainEqual(['gte', ['daily_logs.log_date', '2026-08-23']]);
+      expect(calls).toContainEqual(['not', ['food_id', 'is', null]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('is empty for a member with no history', async () => {
+    fakeClient([{ data: null }]);
+    expect(await getFoodPairHistory('c1')).toEqual([]);
   });
 });
 

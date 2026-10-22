@@ -40,12 +40,14 @@ import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { targetsHeldBack } from '@/lib/onboarding';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
+import { suggestPairs, type PairSuggestion } from '@/lib/foodPairs';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
 import { CopyFoodSheet, type CopyScope } from './CopyFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
 import { NutritionSummary } from './NutritionSummary';
-import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
+import { AddFoodButtons, useBarcodeAdd, useFoodPairs, useFoodShortcuts } from './FoodEntryTools';
+import { PairSuggestions } from './PairSuggestions';
 import { useDialog } from '@/app/_components/useDialog';
 import { useTodayIso } from './useTodayIso';
 import type { NutritionTrackingMode } from './categories';
@@ -491,6 +493,9 @@ export function FoodTrackingTab({
   // Favourites and recently logged foods for the Add food sheet, loaded once (not for coaches or
   // typed-totals members, who never open it).
   const { favorites, recentlyLogged, favoriteIds, toggleFavorite: handleToggleFavorite } = useFoodShortcuts(clientId, !readOnly && !isManual);
+  // What they usually eat with what, and the food just added (and where) that the "usually with" row under its meal is built on.
+  const pairIndex = useFoodPairs(clientId, !readOnly && !isManual);
+  const [pairBase, setPairBase] = useState<{ foodId: string; name: string; sectionId: string | null; date: string } | null>(null);
 
   const manualDay = dayFieldsFromManual(manualEntries);
   const totals = isManual
@@ -570,15 +575,18 @@ export function FoodTrackingTab({
     }, quiet);
   }
 
-  async function handleAdd(food: FoodRow, portions: number, sectionId: string | null = null) {
+  async function handleAdd(food: FoodRow, portions: number, sectionId: string | null = null, startsPairs = true) {
     const date = viewingDate;
-    return run(
+    const added = await run(
       async () => {
         const rows = await addFoodDiaryEntry(await ensureLogId(), food.id, portions, sectionId);
         if (viewingRef.current === date) setEntries(rows);
       },
       { success: `${food.name} added`, ...quiet }
     );
+    // A food the member picked starts a row of "usually with" suggestions under its meal; tapping one of those leaves the row as it was.
+    if (added && startsPairs && viewingRef.current === date) setPairBase({ foodId: food.id, name: food.name, sectionId, date });
+    return added;
   }
 
   async function handleAddQuickAdd(
@@ -710,6 +718,33 @@ export function FoodTrackingTab({
     if (target < 0 || target >= reordered.length) return;
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
     await run(() => reorderMealSections(reordered.map((s) => s.id)));
+  }
+
+  // The foods in a meal by id (a Quick Add has no food), to suggest what goes with them.
+  const foodIdsIn = (sectionId: string | null) => entries.filter((e) => e.meal_section_id === sectionId && e.food_id).map((e) => e.food_id as string);
+
+  // Under a meal, right after a food went into it: what the member usually has with that food, if anything. It is gone once that food is,
+  // on another day, and when every suggestion has been added.
+  function pairStrip(sectionId: string | null) {
+    if (!pairIndex || !pairBase || pairBase.date !== viewingDate || pairBase.sectionId !== sectionId) return null;
+    const inMeal = foodIdsIn(sectionId);
+    if (!inMeal.includes(pairBase.foodId)) return null;
+    const suggestions = suggestPairs(pairIndex, [pairBase.foodId], new Set(inMeal));
+    if (suggestions.length === 0) return null;
+    return (
+      <PairSuggestions
+        basedOn={pairBase.name}
+        suggestions={suggestions}
+        onAdd={(s) => handleAdd(s.food, s.portions, sectionId, false)}
+        onDismiss={() => setPairBase(null)}
+      />
+    );
+  }
+
+  // For the Add food sheet: what goes with the foods already in the meal it is adding to.
+  function goesWithMeal(sectionId: string | null): PairSuggestion[] {
+    const inMeal = foodIdsIn(sectionId);
+    return pairIndex && inMeal.length > 0 ? suggestPairs(pairIndex, inMeal, new Set(inMeal), 5) : [];
   }
 
   const otherEntries = entries.filter((e) => e.meal_section_id === null);
@@ -897,6 +932,7 @@ export function FoodTrackingTab({
                     </li>
                   )}
                 </ul>
+                {!entryReadOnly && pairStrip(section.id)}
                 {!entryReadOnly && (
                   <div className="mt-3">
                     <AddFoodButtons
@@ -952,6 +988,7 @@ export function FoodTrackingTab({
                   <EntryRow key={entry.id} entry={entry} readOnly={entryReadOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} onUpdateQuickAdd={handleUpdateQuickAdd} />
                 ))}
               </ul>
+              {!entryReadOnly && pairStrip(null)}
             </div>
           )}
 
@@ -997,6 +1034,7 @@ export function FoodTrackingTab({
           recipes={recipes}
           onAddRecipe={(recipeId, servings) => handleAddRecipe(recipeId, servings, addFoodTarget.id)}
           onAddQuickAdd={(fields) => handleAddQuickAdd(fields, addFoodTarget.id)}
+          goesWith={goesWithMeal(addFoodTarget.id)}
           favorites={favorites}
           recentlyLogged={recentlyLogged}
           favoriteIds={favoriteIds}

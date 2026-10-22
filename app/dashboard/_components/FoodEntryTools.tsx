@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Barcode, Search } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
-import { getFavoriteFoods, getFoodByBarcode, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { getFavoriteFoods, getFoodByBarcode, getFoodPairHistory, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { buildPairIndex, type PairIndex } from '@/lib/foodPairs';
 import { lookupBarcode } from '@/lib/openFoodFacts';
 import { useToast } from '@/app/_components/ToastProvider';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -44,6 +45,26 @@ export function useFoodShortcuts(clientId: string, enabled: boolean) {
     }
   }
   return { favorites, recentlyLogged, favoriteIds, toggleFavorite };
+}
+
+// What this member usually eats with what, worked out from their last 60 days of food (lib/foodPairs.ts), loaded once. Only Food Tracking
+// uses it, so it is its own hook rather than part of useFoodShortcuts (the Meal Planner and Recipes would pay for a load they never use).
+// Null until it arrives, and for good if it fails: suggestions are a nicety, and a failed load is no suggestions, not an error (FT5).
+export function useFoodPairs(clientId: string, enabled: boolean): PairIndex | null {
+  const [index, setIndex] = useState<PairIndex | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    getFoodPairHistory(clientId)
+      .then((rows) => {
+        if (!cancelled) setIndex(buildPairIndex(rows));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, enabled]);
+  return index;
 }
 
 // Shown when a barcode scan hits a real Open Food Facts product that's missing one or more

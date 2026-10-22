@@ -8,6 +8,7 @@ import { searchFoods } from '@/lib/data/foods';
 import { createClient } from '@/lib/supabase/client';
 import { dayCalories } from '@/lib/calculations';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
+import type { PairSuggestion } from '@/lib/foodPairs';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
 const GRAM_PRESETS = [50, 100, 150, 200];
@@ -195,6 +196,7 @@ export function FoodSearchPicker({
   recipes,
   onAddRecipe,
   onAddQuickAdd,
+  goesWith,
   favorites,
   recentlyLogged,
   favoriteIds,
@@ -209,6 +211,9 @@ export function FoodSearchPicker({
   // "date-specific logging" concept there, so quick-add wouldn't make sense) while Food
   // Tracking does.
   onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => unknown;
+  // Foods the member usually eats with what is already in this meal, each with the amount they usually have; shown first, before a query
+  // is typed. Food Tracking only, like the lists below.
+  goesWith?: PairSuggestion[];
   // Favorites/Recently Logged only appear (before a query is typed) when provided -- same
   // "Meal Planner has no per-client favoriting concept wired up" reasoning as Quick Add above.
   favorites?: FoodRow[];
@@ -382,8 +387,26 @@ export function FoodSearchPicker({
       />
       {isPending && <p className="mt-2 text-xs text-zinc-500">Searching…</p>}
 
-      {query === '' && !isPending && results.length === 0 && ((favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
+      {query === '' && !isPending && results.length === 0 && ((goesWith && goesWith.length > 0) || (favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
         <div className="mt-2 max-h-80 space-y-3 overflow-y-auto">
+          {goesWith && goesWith.length > 0 && (
+            <div>
+              <p className="px-0.5 text-xs font-semibold text-zinc-500">Goes with what&apos;s in this meal</p>
+              <ul className="divide-y divide-black/5 dark:divide-white/5">
+                {goesWith.map(({ food, portions }) => (
+                  <FoodResultRow
+                    key={food.id}
+                    food={food}
+                    qty={grams[food.id] ?? portions}
+                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
+                    onAdd={onAdd}
+                    isFavorite={favoriteIds?.has(food.id) ?? false}
+                    onToggleFavorite={onToggleFavorite}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
           {favorites && favorites.length > 0 && (
             <div>
               <p className="px-0.5 text-xs font-semibold text-zinc-500">Favorites</p>

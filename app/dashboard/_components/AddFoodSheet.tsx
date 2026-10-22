@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { FoodSearchPicker } from './FoodSearchPicker';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { useDialog } from '@/app/_components/useDialog';
+import type { PairSuggestion } from '@/lib/foodPairs';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 
 // Bottom-sheet "Add food" modal -- shared by the Nutrition header's "Search foods" button and
@@ -16,6 +17,7 @@ export function AddFoodSheet({
   recipes,
   onAddRecipe,
   onAddQuickAdd,
+  goesWith,
   favorites,
   recentlyLogged,
   favoriteIds,
@@ -29,6 +31,7 @@ export function AddFoodSheet({
   recipes?: RecipeRow[];
   onAddRecipe?: (recipeId: string, servings: number) => unknown;
   onAddQuickAdd?: (fields: { name: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }) => unknown;
+  goesWith?: PairSuggestion[];
   favorites?: FoodRow[];
   recentlyLogged?: FoodRow[];
   favoriteIds?: Set<string>;
@@ -79,6 +82,7 @@ export function AddFoodSheet({
             recipes={recipes}
             onAddRecipe={onAddRecipe ? (recipeId, servings) => finish(() => onAddRecipe(recipeId, servings)) : undefined}
             onAddQuickAdd={onAddQuickAdd ? (fields) => finish(() => onAddQuickAdd(fields)) : undefined}
+            goesWith={goesWith}
             favorites={favorites}
             recentlyLogged={recentlyLogged}
             favoriteIds={favoriteIds}
