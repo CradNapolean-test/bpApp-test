@@ -29,6 +29,32 @@ describe('newPlanRows (MP1)', () => {
   it('is not thrown by tiny rounding differences in portions', () => {
     expect(newPlanRows([row('oats', 33.3333333)], [row('oats', 33.333)])).toEqual([]);
   });
+
+  describe('Quick Adds', () => {
+    const quick = (name: string, calories: number | null, section: string | null = 's1') => ({
+      food_id: null,
+      portions: 1,
+      meal_section_id: section,
+      quick_add_name: name,
+      quick_add_calories: calories,
+      quick_add_protein: null,
+      quick_add_carbs: null,
+      quick_add_fat: null,
+    });
+
+    it('treats a different Quick Add as a different row', () => {
+      expect(newPlanRows([quick('Burrito', 700)], [quick('Latte', 150)])).toEqual([quick('Burrito', 700)]);
+      expect(newPlanRows([quick('Burrito', 700)], [quick('Burrito', 650)])).toEqual([quick('Burrito', 700)]);
+    });
+
+    it('skips a Quick Add that is already there', () => {
+      expect(newPlanRows([quick('Burrito', 700)], [quick('Burrito', 700)])).toEqual([]);
+    });
+
+    it('does not mistake a Quick Add for a food', () => {
+      expect(newPlanRows([quick('Burrito', 700)], [row('oats', 1)])).toHaveLength(1);
+    });
+  });
 });
 
 describe('planLoggedMessage', () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Trash2, Utensils } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useBackHandler } from '@/app/_components/useBackHandler';
@@ -12,7 +12,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import {
   addFoodDiaryEntry,
   addQuickAddEntry,
-  copyFromDate,
+  copyDiaryBetweenDates,
   getFoodDiaryForDate,
   removeFoodDiaryEntry,
   updateFoodDiaryEntryPortions,
@@ -32,15 +32,17 @@ import {
   reorderMealSections,
 } from '@/lib/data/mealSections';
 import { logRecipeToDiary } from '@/lib/data/recipes';
-import { fail, ok } from '@/lib/data/result';
+import { ok } from '@/lib/data/result';
 import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { targetsHeldBack } from '@/lib/onboarding';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
+import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
+import { CopyFoodSheet, type CopyScope } from './CopyFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
 import { NutritionSummary } from './NutritionSummary';
 import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
@@ -428,6 +430,8 @@ export function FoodTrackingTab({
   // section's own "+ Add food" button. One sheet for all entry points, matching the
   // prototype's single shared addFoodModal instead of an always-visible inline panel.
   const [addFoodTarget, setAddFoodTarget] = useState<{ id: string | null; label: string } | null>(null);
+  // The Copy sheet: null is closed, otherwise it copies the whole day or one meal.
+  const [copyScope, setCopyScope] = useState<CopyScope | null>(null);
   const [newSectionLabel, setNewSectionLabel] = useState('');
   const isManual = nutritionMode === 'manual_import';
 
@@ -617,21 +621,33 @@ export function FoodTrackingTab({
 
   const scan = useBarcodeAdd((food, portions, target) => handleAdd(food, portions, target?.id ?? null));
 
-  async function handleCopyFromYesterday() {
+  // Copies a day or a meal between two days. When the food lands on the day on screen it is shown straight away; when it goes to another
+  // day there is nothing to show but the message. Returns whether it worked, so the sheet can stay open if not.
+  async function handleCopy(request: DiaryCopyRequest): Promise<boolean> {
     const date = viewingDate;
-    const yesterday = toIsoDate(addDays(new Date(date + 'T00:00:00Z'), -1));
-    await run(
+    const intoViewed = request.toDate === date;
+    return run(
       async () => {
-        const copied = await copyFromDate(clientId, yesterday, date);
-        if (copied.count === 0) return fail(null, 'Nothing logged yesterday to copy.');
-        if (viewingRef.current === date) {
+        const copied = await copyDiaryBetweenDates(clientId, request.fromDate, request.toDate, {
+          fromSectionId: request.fromSectionId,
+          toSectionId: request.toSectionId,
+        });
+        if (!copied.ok) return copied;
+        if (intoViewed && viewingRef.current === date) {
           setCurrentDailyLogId(copied.dailyLogId);
           setEntries(copied.entries);
         }
+        const where = intoViewed ? `from ${dayLabel(request.fromDate, todayIso, true)}` : `to ${dayLabel(request.toDate, todayIso, true)}`;
+        toast.success(copyMessage(copied.added, copied.found, where));
         return ok();
       },
-      { success: 'Copied from yesterday', ...quiet }
+      quiet
     );
+  }
+
+  function handleCopyFromYesterday() {
+    const yesterday = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
+    return handleCopy({ fromDate: yesterday, toDate: viewingDate });
   }
 
   async function handleRemove(id: string) {
@@ -782,11 +798,16 @@ export function FoodTrackingTab({
       {!entryReadOnly && !isManual && (
         <div className="space-y-2">
           {scan.panel}
-          {entries.length === 0 && (
-            <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-semibold text-accent hover:underline">
-              Copy yesterday&apos;s food
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {entries.length === 0 && (
+              <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-semibold text-accent hover:underline">
+                Copy yesterday&apos;s food
+              </button>
+            )}
+            <button type="button" onClick={() => setCopyScope({ kind: 'day' })} className="text-sm font-semibold text-accent hover:underline">
+              {entries.length === 0 ? 'Choose another day…' : 'Copy this day…'}
             </button>
-          )}
+          </div>
         </div>
       )}
       {!entryReadOnly && isManual && (
@@ -814,6 +835,16 @@ export function FoodTrackingTab({
                   {Math.round(isManual ? sectionManualCalories : sectionTotals.calories)} kcal
                 </span>
               </div>
+              {!entryReadOnly && !isManual && (
+                <button
+                  type="button"
+                  aria-label={`Copy ${section.label}`}
+                  onClick={() => setCopyScope({ kind: 'meal', section })}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-black/5 hover:text-accent dark:hover:bg-white/10"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              )}
               {readOnly && editingSections && (
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
@@ -943,6 +974,19 @@ export function FoodTrackingTab({
           onAdd={() => setAddFoodTarget({ id: null, label: 'Other' })}
           onScan={() => scan.start({ id: null, label: 'Other' })}
           scanLabel="Scan a barcode"
+        />
+      )}
+
+      {copyScope && (
+        <CopyFoodSheet
+          scope={copyScope}
+          sections={sections}
+          clientId={clientId}
+          viewingDate={viewingDate}
+          todayIso={todayIso}
+          hasFood={copyScope.kind === 'meal' ? entries.some((e) => e.meal_section_id === copyScope.section.id) : entries.length > 0}
+          onCopy={handleCopy}
+          onClose={() => setCopyScope(null)}
         />
       )}
 
