@@ -106,8 +106,10 @@ export interface FoodRow {
   barcode: string | null;
   // A coach can hide a wrong scanned food (M12); hidden foods stay out of every member list and search.
   hidden?: boolean;
-  // Typical units that come with a per-gram food, e.g. 1 rasher = 25 g (migration 0147). Null/absent: grams only.
-  serving_options?: { label: string; grams: number }[] | null;
+  // Where the food came from: 'seed', 'cofid' (UK tables), 'off' (import) or 'scan' (a member's barcode scan).
+  source?: string;
+  // The food's own servings, e.g. the pack's "1 biscuit" = 15 g, or ones a coach set (migration 0148). `default` marks the one shown first. Null/absent: grams only.
+  serving_options?: { label: string; grams: number; default?: boolean }[] | null;
 }
 
 export interface RecipeIngredientRow {

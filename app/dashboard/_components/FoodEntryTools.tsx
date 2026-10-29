@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Barcode, Search } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
-import { getFavoriteFoods, getFoodByBarcode, getFoodPairHistory, getRecentlyLoggedFoods, setFavoriteFood, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { getFavoriteFoods, getFoodByBarcode, getFoodPairHistory, getRecentlyLoggedFoods, setFavoriteFood, setFoodServings, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { buildPairIndex, type PairIndex } from '@/lib/foodPairs';
 import { lookupBarcode } from '@/lib/openFoodFacts';
 import { useToast } from '@/app/_components/ToastProvider';
 import { BarcodeScanner } from './BarcodeScanner';
 import { QuantitySheet } from './QuantitySheet';
 import type { FoodRow } from '@/lib/data/types';
+import { defaultUnit, unitsFor, type ServingOption } from '@/lib/utils/foodUnits';
 
 // Shared by Food Tracking, the Meal Planner and Recipes so adding a food looks and works the same
 // everywhere: the same "Add food" + barcode buttons, the same favourites / recently-logged shortcuts
@@ -152,6 +153,7 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     fat: number | null;
     target: FoodTarget | null;
     servingGrams: number | null;
+    serving: ServingOption | null;
   } | null>(null);
   // A product that was found and is waiting for the member to say how much.
   const [quantity, setQuantity] = useState<{ food: FoodRow; target: FoodTarget | null; initial: number } | null>(null);
@@ -169,6 +171,14 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     try {
       let food = await getFoodByBarcode(barcode);
       let servingGrams: number | null = null;
+      if (food && food.source === 'scan' && !food.serving_options?.length) {
+        // Scanned before servings existed: take the pack's serving from Open Food Facts now, once, so it is offered from here on.
+        const product = await lookupBarcode(barcode).catch(() => null);
+        if (product?.serving) {
+          const saved = await setFoodServings(food.id, [product.serving]).catch(() => null);
+          if (saved?.ok) food = { ...food, serving_options: [product.serving] };
+        }
+      }
       if (!food) {
         const product = await lookupBarcode(barcode);
         if (!product) {
@@ -179,7 +189,7 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           // OFF has this product but a contributor never filled in every nutrient -- ask for
           // just what's missing rather than discarding a real match as if it were a total miss.
           setStatus(null);
-          setPending({ barcode, name: product.name, protein: product.protein, carbs: product.carbs, fat: product.fat, target, servingGrams: product.servingGrams });
+          setPending({ barcode, name: product.name, protein: product.protein, carbs: product.carbs, fat: product.fat, target, servingGrams: product.servingGrams, serving: product.serving });
           return;
         }
         servingGrams = product.servingGrams;
@@ -190,10 +200,12 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           carbs: product.carbs,
           fat: product.fat,
           fibre: product.fibre,
+          serving_options: product.serving ? [product.serving] : null,
         });
       }
       setStatus(null);
-      setQuantity({ food, target, initial: servingGrams ?? 100 });
+      const stated = defaultUnit(unitsFor(food, []));
+      setQuantity({ food, target, initial: stated?.grams ?? servingGrams ?? 100 });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Lookup failed.');
     }
@@ -201,13 +213,14 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
 
   async function handleComplete(macros: { protein: number; carbs: number; fat: number }) {
     if (!pending) return;
-    const { barcode, name, target, servingGrams } = pending;
+    const { barcode, name, target, servingGrams, serving } = pending;
     setPending(null);
     setStatus('Saving…');
     try {
-      const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros });
+      const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros, serving_options: serving ? [serving] : null });
       setStatus(null);
-      setQuantity({ food, target, initial: servingGrams ?? 100 });
+      const stated = defaultUnit(unitsFor(food, []));
+      setQuantity({ food, target, initial: stated?.grams ?? servingGrams ?? 100 });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Save failed.');
     }
@@ -222,6 +235,10 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           title={quantity.food.name}
           unitLabel="grams"
           initial={quantity.initial}
+          serving={(() => {
+            const stated = defaultUnit(unitsFor(quantity.food, []));
+            return stated ? { label: stated.label, grams: stated.grams } : undefined;
+          })()}
           onClose={() => setQuantity(null)}
           onSave={async (grams) => {
             const { food, target } = quantity;

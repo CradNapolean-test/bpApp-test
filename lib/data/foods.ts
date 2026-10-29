@@ -5,6 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { PairHistoryRow } from '@/lib/foodPairs';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
+import type { ServingOption } from '@/lib/utils/foodUnits';
 import type { ActivityRow, FoodRow } from './types';
 
 export async function searchFoods(query: string): Promise<FoodRow[]> {
@@ -64,7 +65,7 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null>
 // already there rather than risk clobbering curated macros with a lower-quality OFF entry.
 export async function upsertFoodFromBarcode(
   barcode: string,
-  fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null }
+  fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null; serving_options?: ServingOption[] | null }
 ): Promise<FoodRow> {
   const supabase = await createClient();
   const { error: insertError } = await supabase
@@ -82,6 +83,22 @@ export async function upsertFoodFromBarcode(
   // The product was scanned before and a coach hid it (it was wrong). Say so, rather than adding it again or failing without a reason.
   if (existing.hidden) throw new Error('This product has been taken off the food list. Add it with Quick Add instead, or ask your coach.');
   return existing;
+}
+
+// Sets what a food's servings are ("1 biscuit = 15 g"), or clears them with null. A coach can do this on any food; a member can only fill
+// them in on a scanned food that has none yet (the database decides, migration 0148), which is how a product scanned before servings
+// existed picks up the pack's serving. A refusal comes back as a message.
+export async function setFoodServings(foodId: string, options: ServingOption[] | null): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('set_food_servings', { p_food_id: foodId, p_options: options });
+  if (error) return fail(error, 'Could not save those servings.');
+  if (data !== true) return fail({ message: 'Only a coach can change the servings on this food.' });
+  return ok();
+}
+
+// The coach's search across the whole food list (not just scanned products), hidden ones excluded, for setting servings.
+export async function searchAllFoodsForCoach(query: string): Promise<FoodRow[]> {
+  return searchFoods(query);
 }
 
 // The coach's list of foods that members added by scanning a barcode (M12), by name, hidden ones included so they can be brought back.

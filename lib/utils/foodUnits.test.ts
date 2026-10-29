@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { countFromGrams, gramsFromCount, parseUnitInput, unitsFor, type OwnUnitRow } from './foodUnits';
+import { cleanServings, countFromGrams, defaultUnit, gramsFromCount, parseUnitInput, servingFromPack, unitText, unitsFor, type OwnUnitRow } from './foodUnits';
 
-const bacon = { id: 'f1', portion: '1 gram', serving_options: [{ label: 'rasher', grams: 25 }] };
+const bacon = { id: 'f1', portion: '1 gram', serving_options: [{ label: 'rasher', grams: 25, default: true }] };
 const own: OwnUnitRow[] = [
   { id: 'u1', food_id: 'f1', label: 'big rasher', grams: 40 },
   { id: 'u2', food_id: 'other', label: 'x', grams: 1 },
@@ -39,5 +39,46 @@ describe('parseUnitInput', () => {
     expect(parseUnitInput('rasher', '0').ok).toBe(false);
     expect(parseUnitInput('rasher', 'abc').ok).toBe(false);
     expect(parseUnitInput('rasher', '99999').ok).toBe(false);
+  });
+});
+
+describe('the default serving', () => {
+  it("is the one the food marks as its default, and there is none otherwise", () => {
+    expect(defaultUnit(unitsFor(bacon, own))?.label).toBe('rasher');
+    expect(defaultUnit(unitsFor({ id: 'f4', portion: '1 gram', serving_options: [{ label: 'slice', grams: 20 }] }, []))).toBeNull();
+  });
+  it('reads as the name with its weight, or just the name for a measure like ml', () => {
+    expect(unitText({ label: 'rasher', grams: 25 })).toBe('rasher (25 g)');
+    expect(unitText({ label: 'ml', grams: 1.03 })).toBe('ml');
+  });
+});
+
+describe('servingFromPack', () => {
+  it('names the serving after what the pack says, using the stated weight', () => {
+    expect(servingFromPack('1 biscuit (15 g)', 15)).toEqual({ label: 'biscuit', grams: 15, default: true });
+    expect(servingFromPack('2 slices (60g)', 60)).toEqual({ label: '2 slices', grams: 60, default: true });
+  });
+  it('calls a plain weight a serving', () => {
+    expect(servingFromPack('30 g', 30)).toEqual({ label: 'serving', grams: 30, default: true });
+    expect(servingFromPack('250ml', 250)).toEqual({ label: 'serving', grams: 250, default: true });
+    expect(servingFromPack(undefined, 40)).toEqual({ label: 'serving', grams: 40, default: true });
+  });
+  it('gives nothing without a sensible weight', () => {
+    expect(servingFromPack('1 pot', null)).toBeNull();
+    expect(servingFromPack('1 pot', 0)).toBeNull();
+    expect(servingFromPack('1 pot', 9000)).toBeNull();
+  });
+});
+
+describe('cleanServings', () => {
+  it('keeps the rows and marks the default', () => {
+    expect(cleanServings([{ label: 'egg', grams: '50', isDefault: true }, { label: 'white', grams: '33', isDefault: false }])).toEqual({
+      ok: true,
+      options: [{ label: 'egg', grams: 50, default: true }, { label: 'white', grams: 33 }],
+    });
+  });
+  it('refuses a repeated name or a bad row', () => {
+    expect(cleanServings([{ label: 'egg', grams: '50', isDefault: false }, { label: 'EGG', grams: '40', isDefault: false }]).ok).toBe(false);
+    expect(cleanServings([{ label: '', grams: '50', isDefault: false }]).ok).toBe(false);
   });
 });

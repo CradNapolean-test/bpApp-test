@@ -10,9 +10,8 @@ import { dayCalories } from '@/lib/calculations';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import type { PairSuggestion } from '@/lib/foodPairs';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
-import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, parseUnitInput, unitsFor, type FoodUnit, type OwnUnitRow } from '@/lib/utils/foodUnits';
+import { MAX_UNIT_LABEL, countFromGrams, defaultUnit, gramsFromCount, parseUnitInput, startingAmount, unitText, unitsFor, type FoodUnit, type OwnUnitRow } from '@/lib/utils/foodUnits';
 
-const GRAM_PRESETS = [50, 100, 150, 200];
 const UNIT_PRESETS = [0.5, 1, 2, 3];
 
 // ml-sized units (under 5 g each) preset and step in bigger counts than a rasher or a slice.
@@ -52,7 +51,11 @@ function FoodResultRow({
   // What the box shows while it is being typed in: lets it be emptied (counts as 0) and lets a
   // number starting with 1 be typed without jumping to a minimum. Reset to the real value on blur.
   const [draft, setDraft] = useState<string | null>(null);
-  const [unitKey, setUnitKey] = useState<string | null>(null);
+  // Starts on the food's own serving when the amount is exactly one of it (not for a usual-amount suggestion, which is its own weight).
+  const [unitKey, setUnitKey] = useState<string | null>(() => {
+    const stated = defaultUnit(units);
+    return stated && qty === stated.grams ? stated.key : null;
+  });
   const [addingUnit, setAddingUnit] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newGrams, setNewGrams] = useState('');
@@ -63,7 +66,7 @@ function FoodResultRow({
   const small = unit ? isSmallUnit(unit) : false;
   const step = unit ? (small ? 10 : 0.5) : isPerGram ? 5 : 0.25;
   const shown = unit ? countFromGrams(qty, unit) : qty;
-  const presets = unit ? (small ? SMALL_UNIT_PRESETS : UNIT_COUNT_PRESETS) : isPerGram ? GRAM_PRESETS : UNIT_PRESETS;
+  const presets = unit ? (small ? SMALL_UNIT_PRESETS : UNIT_COUNT_PRESETS) : isPerGram ? [] : UNIT_PRESETS;
   const setShown = (value: number) => onQtyChange(unit ? gramsFromCount(Math.max(0, value), unit) : value);
 
   function chooseUnit(next: FoodUnit | null) {
@@ -114,9 +117,11 @@ function FoodResultRow({
           <div className="min-w-0">
             <p className="truncate font-medium text-black dark:text-zinc-50">{food.name}</p>
             <p className="text-xs text-zinc-500">
-              {isPerGram
-                ? `per 100 g · ${Math.round(dayCalories(food.protein * 100, food.carbs * 100, food.fat * 100))} kcal`
-                : `per ${food.portion}`}
+              {unit && !small
+                ? `per ${unitText(unit)} · ${Math.round(dayCalories(food.protein * unit.grams, food.carbs * unit.grams, food.fat * unit.grams))} kcal`
+                : isPerGram
+                  ? `per 100 g · ${Math.round(dayCalories(food.protein * 100, food.carbs * 100, food.fat * 100))} kcal`
+                  : `per ${food.portion}`}
             </p>
           </div>
         </div>
@@ -126,32 +131,37 @@ function FoodResultRow({
       </div>
 
       {isPerGram && onSaveUnit && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button type="button" onClick={() => chooseUnit(null)} className={chip(unit == null)}>
-            grams
-          </button>
-          {units.map((u) => (
-            <span key={u.key} className="inline-flex items-center">
-              <button type="button" onClick={() => chooseUnit(u)} className={chip(unitKey === u.key)} title={`about ${u.grams} g each`}>
-                {u.label}
-              </button>
-              {u.own && unitKey === u.key && onDeleteUnit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onDeleteUnit(u.key);
-                    setUnitKey(null);
-                  }}
-                  aria-label={`Remove ${u.label}`}
-                  className="ml-1 text-xs text-zinc-400 hover:text-danger"
-                >
-                  ×
-                </button>
-              )}
-            </span>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-zinc-500" htmlFor={`serving-${food.id}`}>
+            Serving
+          </label>
+          <select
+            id={`serving-${food.id}`}
+            value={unitKey ?? ''}
+            onChange={(e) => chooseUnit(units.find((u) => u.key === e.target.value) ?? null)}
+            className="max-w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
+          >
+            <option value="">grams (g)</option>
+            {units.map((u) => (
+              <option key={u.key} value={u.key}>
+                {unitText(u)}
+              </option>
+            ))}
+          </select>
+          {unit?.own && onDeleteUnit && (
+            <button
+              type="button"
+              onClick={() => {
+                onDeleteUnit(unit.key);
+                setUnitKey(null);
+              }}
+              className="text-xs text-zinc-400 hover:text-danger"
+            >
+              Remove
+            </button>
+          )}
           <button type="button" onClick={() => setAddingUnit((v) => !v)} className="text-xs text-accent hover:underline">
-            {addingUnit ? 'Cancel' : '+ Own unit'}
+            {addingUnit ? 'Cancel' : '+ Own serving'}
           </button>
         </div>
       )}
@@ -231,7 +241,7 @@ function FoodResultRow({
           }} aria-label="Increase quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
           +
         </Button>
-        {isPerGram && <span className="text-xs text-zinc-500">{unit ? `${unit.label} (${Math.round(qty)} g)` : 'g'}</span>}
+        {isPerGram && <span className="text-xs text-zinc-500">{unit ? `× ${unit.label} = ${Math.round(qty)} g` : 'g'}</span>}
         <span className="ml-1 text-xs text-zinc-500">
           {Math.round(calories)} kcal · {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F
         </span>
@@ -565,7 +575,7 @@ export function FoodSearchPicker({
                   <FoodResultRow
                     key={food.id}
                     food={food}
-                    qty={grams[food.id] ?? (food.portion === '1 gram' ? 100 : 1)}
+                    qty={grams[food.id] ?? startingAmount(food)}
                     onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
                     onAdd={onAdd}
                     isFavorite={favoriteIds?.has(food.id) ?? true}
@@ -584,7 +594,7 @@ export function FoodSearchPicker({
                   <FoodResultRow
                     key={food.id}
                     food={food}
-                    qty={grams[food.id] ?? (food.portion === '1 gram' ? 100 : 1)}
+                    qty={grams[food.id] ?? startingAmount(food)}
                     onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
                     onAdd={onAdd}
                     isFavorite={favoriteIds?.has(food.id) ?? false}
@@ -602,7 +612,7 @@ export function FoodSearchPicker({
             <FoodResultRow
               key={food.id}
               food={food}
-              qty={grams[food.id] ?? (food.portion === '1 gram' ? 100 : 1)}
+              qty={grams[food.id] ?? startingAmount(food)}
               onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
               onAdd={onAdd}
               isFavorite={favoriteIds?.has(food.id) ?? false}
