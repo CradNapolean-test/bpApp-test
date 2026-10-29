@@ -164,7 +164,7 @@ function LogSetForm({
 }
 
 export function ExerciseCard({
-  exercise, index, tz, library, resolvedMax, logs, last, priorBest, onLog, onEditSet,
+  exercise, index, tz, library, resolvedMax, logs, last, priorBest, onLog, onEditSet, onTickWarmup, onUntickWarmup,
 }: {
   exercise: WorkoutExerciseRow;
   index: number;
@@ -176,8 +176,12 @@ export function ExerciseCard({
   priorBest: number | null;
   onLog: (exercise: WorkoutExerciseRow, setNumber: number, v: { reps: number | null; load: number | null; rpe: number | null }) => void;
   onEditSet: (log: WorkoutLogRow, index: number) => void;
+  // Warm-up exercises are ticked off instead of logged as sets, reps and weight.
+  onTickWarmup: (exercise: WorkoutExerciseRow) => void;
+  onUntickWarmup: (logs: WorkoutLogRow[]) => void;
 }) {
   const t = useTheme();
+  const isWarmup = exercise.section === 'warmup' && exercise.block_type === 'exercise';
   const isCircuit = exercise.block_type === 'circuit';
   const isPercent = exercise.prescription_type === 'percent_1rm';
   const kg = isPercent ? percentOfMaxKg(resolvedMax, exercise.percent_1rm) : null;
@@ -216,7 +220,7 @@ export function ExerciseCard({
         <Pressable onPress={() => void Linking.openURL(safeHttpUrl(videoUrl) as string).catch(() => {})} accessibilityRole="link"><AppText variant="small" color="accent" style={{ fontWeight: '600' }}>▶ Watch demo ↗</AppText></Pressable>
       ) : null}
 
-      {last ? (
+      {last && !isWarmup ? (
         <View style={{ gap: 4 }}>
           <AppText variant="small" color="accent" style={{ fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 }}>{last.label} · {when}</AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -229,7 +233,21 @@ export function ExerciseCard({
         </View>
       ) : null}
 
-      {!isCircuit ? (
+      {isWarmup ? (
+        <Pressable
+          onPress={() => (logs.length > 0 ? onUntickWarmup(logs) : onTickWarmup(exercise))}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: logs.length > 0 }}
+          accessibilityLabel={`${exercise.name} done`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm, minHeight: 48 }}>
+          <View style={{ width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: logs.length > 0 ? t.success : t.border, backgroundColor: logs.length > 0 ? t.success : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+            {logs.length > 0 ? <AppText style={{ color: '#fff', fontWeight: '800' }}>✓</AppText> : null}
+          </View>
+          <AppText style={{ fontWeight: '700' }}>{logs.length > 0 ? 'Done' : 'Tick when done'}</AppText>
+        </Pressable>
+      ) : null}
+
+      {!isCircuit && !isWarmup ? (
         <>
           {logs.length > 0 ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>

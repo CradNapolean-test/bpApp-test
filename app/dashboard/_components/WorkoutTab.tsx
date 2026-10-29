@@ -242,6 +242,45 @@ function RestTimer({ seconds }: { seconds: number }) {
   return <p className="mt-1 text-xs font-medium text-accent">Rest: {mm}:{ss}</p>;
 }
 
+// Warm-up exercises are done or not done, so they get one tick box instead of sets, reps and weight. Ticking saves a single set
+// (set 1, no numbers, marked as a warm-up so it never counts towards training volume or bests); unticking takes it back out.
+function WarmupTick({
+  clientId,
+  exerciseId,
+  logs,
+  onChange,
+}: {
+  clientId: string;
+  exerciseId: string;
+  logs: WorkoutLogRow[];
+  onChange: (change: SetChange<WorkoutLogRow>) => void;
+}) {
+  const { run, busy } = useAction();
+  const done = logs.length > 0;
+  function toggle() {
+    void run(
+      async () => {
+        if (done) {
+          for (const l of logs) {
+            await deleteSet(l.id);
+            onChange({ kind: 'deleted', id: l.id });
+          }
+        } else {
+          const saved = await logSet(clientId, exerciseId, { set_number: 1, actual_reps: null, actual_load: null, actual_rpe: null, set_type: 'warmup' as SetType });
+          onChange({ kind: 'added', row: saved });
+        }
+      },
+      { refresh: false }
+    );
+  }
+  return (
+    <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
+      <input type="checkbox" checked={done} disabled={busy} onChange={toggle} className="h-6 w-6 shrink-0 accent-[var(--accent)]" />
+      <span className={`text-sm font-semibold ${done ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{done ? 'Done' : 'Tick when done'}</span>
+    </label>
+  );
+}
+
 function LogSetForm({
   clientId,
   exerciseId,
@@ -1253,12 +1292,13 @@ export function WorkoutTab({
                 return l ? { reps: l.actual_reps, load: l.actual_load } : null;
               };
               const seed = logs.length > 0 ? logs[logs.length - 1] : (last?.sets[0] ?? null);
+              const isWarmup = ex.section === 'warmup' && ex.block_type === 'exercise';
               return (
                 <>
                   {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && (
                     <VideoDemo videoUrl={videoUrl} title={ex.name} alwaysOpen />
                   )}
-                  {last && (
+                  {last && !isWarmup && (
                     <div className="mt-2">
                       <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-accent">
                         {last.label} · {last.date}
@@ -1282,7 +1322,8 @@ export function WorkoutTab({
                       </div>
                     </div>
                   )}
-                  {!isCoachView && ex.block_type === 'exercise' && (
+                  {!isCoachView && isWarmup && <WarmupTick clientId={clientId} exerciseId={ex.id} logs={logs} onChange={changeSets} />}
+                  {!isCoachView && ex.block_type === 'exercise' && !isWarmup && (
                     <>
                       {logs.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">

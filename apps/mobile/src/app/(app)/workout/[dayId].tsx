@@ -83,6 +83,8 @@ export default function WorkoutDay() {
         priorBest={Math.max(priorBestLoad(earlier) ?? 0, d.priorBests[ex.exercise_library_id ?? `n:${ex.name.toLowerCase()}`] ?? 0) || null}
         onLog={(e, setNumber, v) => logSet.mutate({ exercise: e, setNumber, actual_reps: v.reps, actual_load: v.load, actual_rpe: v.rpe })}
         onEditSet={(log, i) => setEditing({ log, index: i })}
+        onTickWarmup={(e) => logSet.mutate({ exercise: e, setNumber: 1, setType: 'warmup', actual_reps: null, actual_load: null, actual_rpe: null })}
+        onUntickWarmup={(rows) => rows.forEach((r) => deleteSet.mutate({ logId: r.id }))}
       />
     );
   };
