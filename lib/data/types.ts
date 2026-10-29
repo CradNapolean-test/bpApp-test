@@ -478,7 +478,8 @@ export interface NutritionFeedbackRow {
 export interface FoodPhotoEntryRow {
   id: string;
   daily_log_id: string;
-  storage_path: string;
+  // Null for a meal logged with a description alone (migration 0145).
+  storage_path: string | null;
   description: string | null;
   estimated_calories: number | null;
   estimated_protein: number | null;

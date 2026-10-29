@@ -6,6 +6,7 @@ import type { FoodPhotoEntry, FoodPhotoEntryRow } from './types';
 import { getDailyLog } from './dailyLogs';
 import { dayFieldsFromPhotos } from '@/lib/utils/foodTotals';
 import { uploadExtension } from '@/lib/utils/uploadName';
+import { cleanPhotoDescription, validateMealEntry, validatePhotoDescription } from '@/lib/utils/photoDiary';
 
 // How long a photo link works: an hour, so it does not run out while the screen is open (PT3).
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -39,6 +40,8 @@ export async function getFoodPhotos(dailyLogId: string): Promise<FoodPhotoEntry[
   const entries = (data ?? []) as FoodPhotoEntryRow[];
   return Promise.all(
     entries.map(async (entry) => {
+      // A meal logged with a description alone has no file to sign.
+      if (!entry.storage_path) return { ...entry, signedUrl: null };
       const { data: signed } = await supabase.storage
         .from('food-photos')
         .createSignedUrl(entry.storage_path, SIGNED_URL_TTL_SECONDS);
@@ -49,18 +52,23 @@ export async function getFoodPhotos(dailyLogId: string): Promise<FoodPhotoEntry[
 
 // Takes a FormData (not typed File args directly) -- same reasoning as uploadProgressPhoto:
 // the documented-safe way to pass a File through a Next.js Server Action.
+// The photo is optional: a meal can be logged with a description alone, but not with neither.
 export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntryRow> {
   const supabase = await createClient();
   const clientId = formData.get('clientId') as string;
   const dailyLogId = formData.get('dailyLogId') as string;
-  const description = (formData.get('description') as string) || null;
+  const description = cleanPhotoDescription((formData.get('description') as string) ?? '');
   const file = formData.get('file') as File | null;
-  if (!clientId || !dailyLogId || !file) throw new Error('Missing clientId, dailyLogId, or file');
+  if (!clientId || !dailyLogId) throw new Error('Missing clientId or dailyLogId');
+  const problem = validateMealEntry(!!file, description ?? '') ?? validatePhotoDescription(description ?? '');
+  if (problem) throw new Error(problem);
 
-  const path = `${clientId}/${dailyLogId}-${crypto.randomUUID()}.${uploadExtension(file)}`;
-
-  const { error: uploadError } = await supabase.storage.from('food-photos').upload(path, file);
-  if (uploadError) raise(uploadError);
+  let path: string | null = null;
+  if (file) {
+    path = `${clientId}/${dailyLogId}-${crypto.randomUUID()}.${uploadExtension(file)}`;
+    const { error: uploadError } = await supabase.storage.from('food-photos').upload(path, file);
+    if (uploadError) raise(uploadError);
+  }
 
   const { data, error } = await supabase
     .from('food_photo_entries')
@@ -73,7 +81,7 @@ export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntr
     .single();
   if (error) {
     // Take the uploaded file back down rather than leave it in storage with nothing pointing to it (L11).
-    await supabase.storage.from('food-photos').remove([path]);
+    if (path) await supabase.storage.from('food-photos').remove([path]);
     raise(error);
   }
   // The photo diary is visual only: no calories or macros are estimated or written to the day's
@@ -90,8 +98,10 @@ export async function deleteFoodPhoto(id: string): Promise<void> {
     .single();
   if (fetchError) raise(fetchError);
 
-  const { error: removeError } = await supabase.storage.from('food-photos').remove([entry.storage_path]);
-  if (removeError) raise(removeError);
+  if (entry.storage_path) {
+    const { error: removeError } = await supabase.storage.from('food-photos').remove([entry.storage_path]);
+    if (removeError) raise(removeError);
+  }
 
   const { error } = await supabase.from('food_photo_entries').delete().eq('id', id);
   if (error) raise(error);

@@ -38,6 +38,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   big_dog_results_value_range: 'That result is outside the range allowed.',
   big_dog_results_key_length: 'That exercise name is too long.',
   food_photo_entries_description_length: 'Descriptions can be 500 characters at most.',
+  food_photo_entries_photo_or_note: 'Add a photo or a short description of the meal.',
   food_photo_entries_estimates_range: 'Those estimates are outside the range allowed.',
   manual_macro_entries_range: 'Calories and macros must be between 0 and 10,000 (calories up to 100,000).',
 };

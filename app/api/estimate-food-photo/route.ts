@@ -35,6 +35,8 @@ export async function POST(request: Request) {
     .single();
   if (entryError || !entry) return NextResponse.json({ error: 'Photo entry not found' }, { status: 404 });
 
+  if (!entry.storage_path) return NextResponse.json({ error: 'This meal has no photo to estimate from.' }, { status: 400 });
+
   const { data: file, error: downloadError } = await supabase.storage.from('food-photos').download(entry.storage_path);
   if (downloadError || !file) return NextResponse.json({ error: 'Could not load photo' }, { status: 500 });
   if (file.size > MAX_PHOTO_BYTES) return NextResponse.json({ error: 'That photo is too large to estimate.' }, { status: 413 });

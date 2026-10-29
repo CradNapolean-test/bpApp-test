@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Camera, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, PencilLine, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
@@ -12,6 +12,7 @@ import { getOrCreateDailyLog } from '@/lib/data/dailyLogs';
 import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
+import { validateMealEntry } from '@/lib/utils/photoDiary';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { FeedbackThread } from './FeedbackThread';
 import { PhotoViewer } from '@/app/_components/Overlays';
@@ -122,9 +123,10 @@ export function PhotoDiaryTab({
   }
 
   async function handleUpload() {
-    if (!file) return;
+    if (validateMealEntry(!!file, description)) return;
     const formData = new FormData();
-    formData.set('file', await shrinkImageFile(file));
+    // The photo is optional: a meal can be logged with a description alone.
+    if (file) formData.set('file', await shrinkImageFile(file));
     formData.set('clientId', clientId);
     formData.set('description', description);
     // The day's row is made when its first photo is added, not when the day is looked at (FT1).
@@ -134,7 +136,7 @@ export function PhotoDiaryTab({
         formData.set('dailyLogId', logId);
         return uploadFoodPhoto(formData);
       },
-      { success: 'Photo added' }
+      { success: 'Meal added' }
     );
     if (ok) {
       closeSheet();
@@ -144,9 +146,9 @@ export function PhotoDiaryTab({
 
   async function handleDelete(id: string) {
     if (!currentLogId) return;
-    const ok = await confirm({ title: 'Delete this photo?', destructive: true });
+    const ok = await confirm({ title: 'Delete this meal?', destructive: true });
     if (!ok) return;
-    const done = await runDelete(() => deleteFoodPhoto(id), { success: 'Photo deleted' });
+    const done = await runDelete(() => deleteFoodPhoto(id), { success: 'Meal deleted' });
     if (done && !isToday) await loadDate(viewingDate);
   }
 
@@ -187,17 +189,26 @@ export function PhotoDiaryTab({
       {dayLocked && <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{LOCKED_DAY_MESSAGE}</p>}
 
       {!readOnly && !dayLocked && (
-        <button
-          type="button"
-          onClick={() => {
-            setAdding(true);
-            // Straight to the phone's camera/photo picker.
-            setTimeout(() => fileRef.current?.click(), 50);
-          }}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-sm font-extrabold text-accent-foreground"
-        >
-          <Camera className="h-5 w-5" /> Add a meal photo
-        </button>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(true);
+              // Straight to the phone's camera/photo picker.
+              setTimeout(() => fileRef.current?.click(), 50);
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-sm font-extrabold text-accent-foreground"
+          >
+            <Camera className="h-5 w-5" /> Add a meal photo
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 py-3 text-sm font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+          >
+            <PencilLine className="h-4 w-4" /> Add without a photo
+          </button>
+        </div>
       )}
 
       {canGiveFeedback && photos.length > 0 && (
@@ -230,22 +241,23 @@ export function PhotoDiaryTab({
         <div className="space-y-3">
           {photos.map((entry) => (
             <div key={entry.id} className="overflow-hidden rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
+              {/* A meal logged with a description alone has no picture, so no empty picture box either. */}
               {entry.signedUrl ? (
                 <button type="button" aria-label="View photo" onClick={() => setViewing(entry.signedUrl)} className="block w-full">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={entry.signedUrl} alt={entry.description ?? 'Food photo'} className="aspect-[4/3] w-full object-cover" />
                 </button>
-              ) : (
+              ) : entry.storage_path ? (
                 <div className="aspect-[4/3] w-full bg-black/5 dark:bg-white/5" />
-              )}
+              ) : null}
               <div className="space-y-2 p-3.5">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
+                    <p className="whitespace-pre-wrap break-words text-sm font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
                     <p className="text-xs text-zinc-500">{timeOf(entry.created_at)}</p>
                   </div>
                   {!readOnly && !dayLocked && (
-                    <button type="button" aria-label="Delete photo" onClick={() => handleDelete(entry.id)} className="shrink-0 rounded-full p-2 text-zinc-400 hover:text-danger">
+                    <button type="button" aria-label={entry.storage_path ? 'Delete photo' : 'Delete meal'} onClick={() => handleDelete(entry.id)} className="shrink-0 rounded-full p-2 text-zinc-400 hover:text-danger">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   )}
@@ -277,7 +289,7 @@ export function PhotoDiaryTab({
       />
 
       {adding && (
-        <BottomSheet title="Add a meal photo" onClose={closeSheet}>
+        <BottomSheet title="Add a meal" onClose={closeSheet}>
           <div className="space-y-3">
             {preview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -288,7 +300,7 @@ export function PhotoDiaryTab({
                 onClick={() => fileRef.current?.click()}
                 className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-black/15 text-sm font-semibold text-zinc-500 dark:border-white/15"
               >
-                <Camera className="h-6 w-6" /> Take or choose a photo
+                <Camera className="h-6 w-6" /> Take or choose a photo (optional)
               </button>
             )}
             {preview && (
@@ -300,13 +312,14 @@ export function PhotoDiaryTab({
               maxLength={500}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is it? e.g. Chicken salad, small portion"
-              rows={2}
+              placeholder={file ? 'What is it? e.g. Chicken salad, small portion' : 'Describe the meal, e.g. Chicken salad, small portion'}
+              rows={file ? 2 : 3}
               className={`${inputCls} resize-none`}
             />
+            {!file && <p className="text-xs text-zinc-500">No photo? That is fine, a description is enough.</p>}
             <button
               type="button"
-              disabled={!file || uploading}
+              disabled={!!validateMealEntry(!!file, description) || uploading}
               onClick={handleUpload}
               className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
             >
