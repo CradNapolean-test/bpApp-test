@@ -1,0 +1,965 @@
+import type { BlockPart, WorkoutSection } from '../workoutSections';
+export interface ClientProfileRow {
+  client_id: string;
+  name: string;
+  gender: string | null;
+  goal_description: string | null;
+  experience: string | null;
+  age: number | null;
+  body_fat_pct: number | null;
+  start_weight: number;
+  goal_weight: number;
+  activity_level: number;
+  diet_approach: 'High Carb Low Fat' | 'Higher Fat';
+  // Deprecated, kept in the table: replaced by nutrition_goal / nutrition_setting.
+  tier: 1 | 2 | 3;
+  nutrition_goal: 'fat_loss' | 'muscle_gain';
+  nutrition_setting: 'steady' | 'moderate' | 'aggressive';
+  cycling: boolean;
+  meas_arm_start: number | null; meas_arm_goal: number | null;
+  meas_chest_start: number | null; meas_chest_goal: number | null;
+  meas_waist_start: number | null; meas_waist_goal: number | null;
+  meas_hips_start: number | null; meas_hips_goal: number | null;
+  meas_quad_start: number | null; meas_quad_goal: number | null;
+  lift_db_press_start: number | null; lift_db_press_goal: number | null;
+  lift_squats_start: number | null; lift_squats_goal: number | null;
+  lift_pull_ups_start: number | null; lift_pull_ups_goal: number | null;
+  lift_rdl_start: number | null; lift_rdl_goal: number | null;
+  lift_hip_thrust_start: number | null; lift_hip_thrust_goal: number | null;
+  checkin_reminder_days: number;
+  last_checkin_reminder_at: string | null;
+  notifications_enabled: boolean;
+  email_notifications_enabled: boolean;
+  nutrition_tracking_mode: 'full_tracking' | 'manual_import' | 'photo_diary';
+  timezone: string;
+  // Minutes this member takes to walk 1,000 steps (Activity swap screen).
+  minutes_per_1000_steps: number;
+  // Client-editable contact/personal fields.
+  phone: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  address: string | null;
+  date_of_birth: string | null;
+  // Coach-managed fields -- edited via set_client_admin_details, never the client's own
+  // Setup save (see upsertClientProfile's Omit list). The coach's private notes are not on this
+  // row any more: they live in client_coach_notes (0124), which members cannot read.
+  join_date: string | null;
+  referral_source: string | null;
+  // Client-owned request flag -- see updateClientAdminDetails/requestAccountDeletion for how
+  // this differs from a real hard-delete (there isn't one; the coach handles it manually).
+  deletion_requested_at: string | null;
+  // Onboarding (migration 0083). onboarding_completed_at null = still to onboard; undefined only
+  // if the migration has not been applied yet.
+  height_cm?: number | null;
+  body_fat_estimated?: boolean;
+  health_notes?: string | null;
+  onboarding_completed_at?: string | null;
+  // Set when a coach asks the member to check their details (migration 0142); cleared when they finish the quick check.
+  details_confirm_requested_at?: string | null;
+  // When the member agreed to the privacy notice in onboarding (migration 0138). Null until they have.
+  consented_at?: string | null;
+  needs_coach_review?: boolean;
+  review_reasons?: string[];
+  // A daily target typed in by the member or their coach (migration 0146); all four or none. Replaces the calculated target.
+  custom_calories?: number | null;
+  custom_protein?: number | null;
+  custom_carbs?: number | null;
+  custom_fat?: number | null;
+  // The coach has switched off the member's ability to change their own targets.
+  custom_targets_locked?: boolean;
+}
+
+export interface DailyLogRow {
+  id: string;
+  client_id: string;
+  log_date: string;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  fibre: number | null;
+  // The day's total kcal including Quick Adds with no macros (migration 0136). Null on older rows and on days with no food: read it
+  // with dayCaloriesOf() (lib/utils/dailyLog.ts), which falls back to the macros.
+  calories: number | null;
+  water: number | null;
+  bodyweight: number | null;
+  steps: number | null;
+  sleep: number | null;
+  gym_session: boolean;
+  day_type: 'flat' | 'low' | 'high';
+  hunger: number | null;
+  energy: number | null;
+  motivation: number | null;
+  stress: number | null;
+  period_started: boolean;
+  notes: string | null;
+}
+
+export interface FoodRow {
+  id: string;
+  name: string;
+  portion: string | null;
+  protein: number;
+  carbs: number;
+  fat: number;
+  // Grams of fibre per gram of food (same unit as the macros); null when the source has no figure.
+  fibre?: number | null;
+  barcode: string | null;
+  // A coach can hide a wrong scanned food (M12); hidden foods stay out of every member list and search.
+  hidden?: boolean;
+  // Where the food came from: 'seed', 'cofid' (UK tables), 'off' (import) or 'scan' (a member's barcode scan).
+  source?: string;
+  // The food's own servings, e.g. the pack's "1 biscuit" = 15 g, or ones a coach set (migration 0148). `default` marks the one shown first. Null/absent: grams only.
+  serving_options?: { label: string; grams: number; default?: boolean }[] | null;
+}
+
+export interface RecipeIngredientRow {
+  id: string;
+  recipe_id: string;
+  food_id: string | null;
+  portions: number;
+  food: FoodRow | null;
+}
+
+export interface RecipeRow {
+  id: string;
+  client_id: string;
+  name: string;
+  servings: number;
+  created_at: string;
+}
+
+export interface RecipeWithIngredients extends RecipeRow {
+  recipe_ingredients: RecipeIngredientRow[];
+}
+
+export interface FoodDiaryEntryRow {
+  id: string;
+  daily_log_id: string;
+  food_id: string | null;
+  portions: number;
+  meal_section_id: string | null;
+  food: FoodRow | null;
+  created_at: string;
+  // Quick Add -- set when food_id is null (a logged item with no food-database match).
+  quick_add_name: string | null;
+  quick_add_calories: number | null;
+  quick_add_protein: number | null;
+  quick_add_carbs: number | null;
+  quick_add_fat: number | null;
+}
+
+// Customizable per-client tracking sections (MyFitnessPal-style) -- distinct from
+// MealPlanSection below, which is a fixed enum used only by the Meal Planner.
+export interface MealSectionRow {
+  id: string;
+  client_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface MealPlanEntryRow {
+  id: string;
+  client_id: string;
+  section: MealPlanSection;
+  food_id: string | null;
+  portions: number;
+  food: FoodRow | null;
+}
+
+export type MealPlanSection =
+  | 'breakfast'
+  | 'mid_morning_snack'
+  | 'lunch'
+  | 'afternoon_snack'
+  | 'dinner'
+  | 'evening_snack';
+
+export interface ActivityRow {
+  id: string;
+  name: string;
+  met: number;
+}
+
+export interface ChatMessageRow {
+  id: string;
+  client_id: string;
+  sender_id: string;
+  text: string | null;
+  audio_path: string | null;
+  audio_duration_seconds: number | null;
+  image_path?: string | null;
+  created_at: string;
+}
+
+export interface ChatMessage extends ChatMessageRow {
+  signedAudioUrl: string | null;
+  signedImageUrl?: string | null;
+}
+
+export interface ChatOverviewRow {
+  client_id: string;
+  client_name: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  last_sender_id: string | null;
+  unread_count: number;
+}
+
+export interface ClassRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  day_of_week: number | null;
+  // Set for a one-off session (happens on this date only); null for a weekly recurring slot.
+  specific_date: string | null;
+  start_time: string | null;
+  capacity: number;
+  coach_note: string | null;
+  cutoff_hours: number;
+  credit_cost: number;
+  // Set when the session was retired instead of deleted (migration 0132): it keeps its history but cannot be booked.
+  retired_at?: string | null;
+}
+
+export type BookingStatus = 'booked' | 'waitlist' | 'cancelled';
+
+export interface BookingRow {
+  id: string;
+  class_id: string;
+  client_id: string;
+  booking_date: string;
+  status: BookingStatus;
+  created_at: string;
+  attended: boolean;
+  attended_at: string | null;
+  class: ClassRow | null;
+}
+
+export type CreditBucket = 'membership' | 'bonus';
+
+export interface CreditsLedgerRow {
+  id: string;
+  client_id: string;
+  delta: number;
+  reason: string;
+  granted_by: string | null;
+  created_at: string;
+  bucket: CreditBucket;
+  expires_at: string | null;
+  expired_at: string | null;
+  booking_id: string | null;
+  pack_id: string | null;
+}
+
+export interface CreditBucketBalances {
+  membership: number;
+  bonus: number;
+}
+
+export type BlockType = 'exercise' | 'circuit';
+export type PrescriptionType = 'absolute' | 'percent_1rm';
+export type SetType = 'working' | 'warmup' | 'failure' | 'drop';
+
+// Shared shape between a live workout_exercises row and a program_template_exercises row --
+// identical except for the parent-day FK name and the two progression fields, which are
+// template-only (a live program's per-week rows are already materialized, no ongoing rule).
+export interface ExerciseCoreFields {
+  // Which part of the session it belongs to (migration 0091). Strong/Conditioning rows also say which
+  // of the two 10-minute blocks and may carry the block's format.
+  section: WorkoutSection;
+  block_no: number | null;
+  block_format: string | null;
+  // 'upper' / 'lower' when Strong block 2 is split (migration 0093).
+  block_part: BlockPart | null;
+  exercise_library_id: string | null;
+  name: string;
+  sets: number | null;
+  reps: string | null;
+  load: number | null;
+  rpe: number | null;
+  notes: string | null;
+  video_url: string | null;
+  superset_group: string | null;
+  rest_seconds: number | null;
+  sort_order: number;
+  block_type: BlockType;
+  prescription_type: PrescriptionType;
+  percent_1rm: number | null;
+}
+
+export interface WorkoutExerciseRow extends ExerciseCoreFields {
+  id: string;
+  program_day_id: string;
+}
+
+export interface WorkoutProgramDayRow {
+  id: string;
+  program_id: string;
+  week_num: number;
+  day_label: string;
+  sort_order: number;
+  phase_label: string | null;
+  notes: string | null;
+  // Which weekday (Mon-Sat, 1=Monday..6=Saturday matching classes.day_of_week's convention)
+  // this day falls on -- shared by every week of the block. A class scheduled for the same
+  // weekday auto-links to it for client check-in, see lib/utils/checkin.ts. Null until a coach
+  // sets it; day_label (free text) and sort_order (defaults to 0 everywhere) aren't reliable
+  // ordinals for this.
+  day_position: number | null;
+  workout_exercises: WorkoutExerciseRow[];
+}
+
+export interface WorkoutProgramRow {
+  id: string;
+  client_id: string;
+  name: string;
+  created_at: string;
+  // Null = not yet assigned to a rolling block, so it can't resolve for check-in purposes
+  // (still fully usable for manual logging/editing). Block length is derived from
+  // max(week_num) across workout_program_days, not stored separately.
+  start_date: string | null;
+  workout_program_days: WorkoutProgramDayRow[];
+}
+
+// What a member did in one of the two 10-minute slots of a workout (migration 0095).
+export interface WorkoutBlockChoiceRow {
+  id: string;
+  client_id: string;
+  program_day_id: string;
+  slot: 1 | 2;
+  block_key: string;
+  chosen_at: string;
+}
+
+// A member's best set for one exercise (member_strength_bests, migration 0137). `exercise_key` is the library id, else "n:<name>".
+export interface StrengthBest {
+  exercise_key: string;
+  best_load: number;
+  best_reps: number;
+  // The estimated one-rep max of that set (the load itself above 12 reps).
+  best_score: number;
+  logged_at: string;
+}
+
+export interface WorkoutLogRow {
+  id: string;
+  client_id: string;
+  exercise_id: string | null;
+  exercise_library_id: string | null;
+  set_number: number | null;
+  actual_reps: number | null;
+  actual_load: number | null;
+  actual_rpe: number | null;
+  set_type: SetType;
+  logged_at: string;
+}
+
+export interface ClientExerciseMaxRow {
+  id: string;
+  client_id: string;
+  exercise_library_id: string;
+  tested_max: number;
+  // 1 = a true 1RM (the default, matching every pre-existing row's implicit behavior).
+  // >1 = a rep max (e.g. a 3RM) -- %1RM resolution estimates a true 1RM from this via Epley.
+  reps: number;
+  is_estimated: boolean;
+  tested_date: string;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+export interface WorkoutDayFeedbackRow {
+  id: string;
+  client_id: string;
+  program_day_id: string;
+  feedback_date: string;
+  session_rpe: number | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ExerciseLibraryRow {
+  id: string;
+  name: string;
+  default_sets: number | null;
+  default_reps: string | null;
+  default_rpe: number | null;
+  video_url: string | null;
+  notes: string | null;
+  muscle_group: string | null;
+  equipment: string | null;
+  instructions: string | null;
+  image_url: string | null;
+  default_rest_seconds: number | null;
+  created_by: string | null;
+  created_at: string;
+  // False once an entry was retired instead of deleted (migration 0130): it stays in programmes that use it but is not offered for new ones.
+  is_active?: boolean;
+}
+
+export interface ProgramTemplateExerciseRow extends ExerciseCoreFields {
+  id: string;
+  template_day_id: string;
+  progression_load_increment: number | null;
+  progression_every_weeks: number;
+}
+
+export interface ProgramTemplateDayRow {
+  id: string;
+  template_id: string;
+  week_num: number;
+  day_label: string;
+  sort_order: number;
+  phase_label: string | null;
+  notes: string | null;
+  day_position: number | null;
+  program_template_exercises: ProgramTemplateExerciseRow[];
+}
+
+export interface ProgramTemplateRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  // Added by migration 0090; undefined until it has been applied.
+  description?: string | null;
+  created_at: string;
+}
+
+// A scheduled "give this programme to these people on this date" (migration 0094).
+export interface ProgrammeRolloutRow {
+  id: string;
+  template_id: string;
+  template_name: string | null;
+  program_name: string;
+  start_date: string;
+  audience: 'all' | 'selected';
+  client_ids: string[];
+  applied_at: string | null;
+}
+
+export interface ProgramTemplateWithDays extends ProgramTemplateRow {
+  program_template_days: ProgramTemplateDayRow[];
+}
+
+export interface ProgressPhotoRow {
+  id: string;
+  client_id: string;
+  photo_date: string;
+  storage_path: string;
+  created_at: string;
+}
+
+export interface ProgressPhoto extends ProgressPhotoRow {
+  signedUrl: string | null;
+}
+
+// InBody (body composition) scan -- migration 0084.
+export interface BodyScanRow {
+  id: string;
+  client_id: string;
+  scan_date: string;
+  weight_kg: number | null;
+  skeletal_muscle_kg: number | null;
+  body_fat_pct: number | null;
+  body_fat_kg: number | null;
+  visceral_fat_level: number | null;
+  bmr_kcal: number | null;
+  inbody_score: number | null;
+  notes: string | null;
+  printout_path: string | null;
+  created_at: string;
+}
+
+export interface BodyScan extends BodyScanRow {
+  signedPrintoutUrl: string | null;
+}
+
+// Coach feedback on a member's food diary (migration 0085). photo_id null = feedback on the whole day.
+export interface NutritionFeedbackRow {
+  id: string;
+  client_id: string;
+  coach_id: string;
+  log_date: string;
+  photo_id: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface FoodPhotoEntryRow {
+  id: string;
+  daily_log_id: string;
+  // Null for a meal logged with a description alone (migration 0145).
+  storage_path: string | null;
+  description: string | null;
+  estimated_calories: number | null;
+  estimated_protein: number | null;
+  estimated_carbs: number | null;
+  estimated_fat: number | null;
+  created_at: string;
+}
+
+export interface FoodPhotoEntry extends FoodPhotoEntryRow {
+  signedUrl: string | null;
+}
+
+export interface ManualMacroEntryRow {
+  id: string;
+  daily_log_id: string;
+  meal_section_id: string | null;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  created_at: string;
+}
+
+export interface MeasurementLogRow {
+  id: string;
+  client_id: string;
+  log_date: string;
+  arm: number | null;
+  chest: number | null;
+  waist: number | null;
+  hips: number | null;
+  quad: number | null;
+  created_at: string;
+}
+
+export interface HabitRow {
+  id: string;
+  client_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface HabitLogRow {
+  id: string;
+  habit_id: string;
+  log_date: string;
+  completed: boolean;
+  created_at: string;
+}
+
+export interface HabitWithLogs extends HabitRow {
+  logs: HabitLogRow[];
+}
+
+export interface NotificationRow {
+  id: string;
+  client_id: string;
+  message: string;
+  created_at: string;
+  read_at: string | null;
+  cleared_at?: string | null;
+}
+
+export interface PushSubscriptionRow {
+  id: string;
+  client_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
+}
+
+export interface CoachReport {
+  attendanceRate: number | null; // 0-100 of sessions that have been marked, null if none marked yet
+  totalBooked: number;
+  totalAttended: number;
+  // Past bookings the coach hasn't marked attended or no-show yet -- excluded from the rates.
+  unmarked: number;
+  noShowRate: number | null; // 0-100, null if no data
+  avgClassesPerClient: number | null; // per unique client, over the report window
+  activeBookings: number; // currently booked, today or later (not time-windowed)
+  noShows: { clientId: string; clientName: string; className: string; date: string }[];
+  // attended = how many of those bookings were marked attended (for the attendance rate of each slot).
+  classPopularity: { className: string; bookingCount: number; attended: number }[];
+}
+
+export interface MembershipPackageRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  credits_per_week: number;
+  description: string | null;
+  created_at: string;
+  // null = unrestricted (every DISABLEABLE_SCREENS entry available); non-null = the subset of
+  // screen names a client on this package can see, enforced live -- see
+  // categories.ts's toEffectiveDisabledScreenSet.
+  included_screens: string[] | null;
+  // How many days ahead a member on this package may book; null = no limit (migration 0064).
+  advance_booking_days: number | null;
+  // Length of the plan in weeks (e.g. 6 for the 6-week challenge); null = ongoing (migration 0088).
+  duration_weeks?: number | null;
+}
+
+export interface ClientMembershipRow {
+  id: string;
+  client_id: string;
+  package_id: string;
+  started_at: string;
+  ended_at: string | null;
+  last_reset_week: string | null;
+  // Planned last day; the plan stays active until then (migration 0088).
+  scheduled_end?: string | null;
+  created_at: string;
+  package: MembershipPackageRow | null;
+}
+
+export interface CreditPackRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  credits: number;
+  expires_after_days: number | null;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ScheduleOccurrence {
+  classId: string;
+  className: string;
+  date: string;
+  startTime: string | null;
+  capacity: number;
+  creditCost: number;
+  bookedCount: number;
+  // Cancellation rule for this class's gym (migration 0064): refund if cancelled before
+  // start - cutoffHours, with a deadline inside the blackout window moved to its start.
+  cutoffHours: number;
+  blackoutStart: string | null;
+  blackoutEnd: string | null;
+  // Past bookings on this date not yet marked attended / no-show.
+  unmarkedCount?: number;
+  // Only set when the coach asks for cancelled dates too: this date was cancelled, and why (if they said).
+  cancelled?: boolean;
+  cancelReason?: string | null;
+}
+
+export interface RosterEntry {
+  bookingId: string;
+  clientId: string;
+  clientName: string;
+  status: BookingStatus;
+  attended: boolean;
+  noShow: boolean;
+  // A cancelled booking whose credit was not given back (cancelled inside the cut-off, or removed without a refund).
+  lateCancel?: boolean;
+}
+
+export type AttendanceStatus = 'unmarked' | 'attended' | 'no_show';
+
+export type FormQuestionType = 'short_text' | 'long_text' | 'number' | 'single_choice' | 'multi_choice';
+
+export interface FormTemplateRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  description: string | null;
+  is_default_onboarding: boolean;
+  created_at: string;
+  questionCount: number;
+}
+
+export interface FormQuestionRow {
+  id: string;
+  template_id: string;
+  order_index: number;
+  question_text: string;
+  question_type: FormQuestionType;
+  options: string[] | null;
+  required: boolean;
+  // Set when the coach took the question out (or changed its type) after it had answers: hidden from members, kept for the coach (0135).
+  archived_at: string | null;
+  // How many answers it has; only filled in for the editor (getFormTemplateWithQuestions).
+  answerCount?: number;
+}
+
+export interface FormTemplateWithQuestions extends FormTemplateRow {
+  questions: FormQuestionRow[];
+}
+
+export interface FormAssignmentRow {
+  id: string;
+  template_id: string;
+  client_id: string;
+  assigned_at: string;
+  completed_at: string | null;
+}
+
+export interface FormResponseRow {
+  id: string;
+  assignment_id: string;
+  question_id: string;
+  answer: unknown;
+}
+
+export interface FormAssignmentWithDetails extends FormAssignmentRow {
+  template: FormTemplateWithQuestions;
+  responses: FormResponseRow[];
+}
+
+// Who has a course and how far they have got: lessons done, for one member on one course.
+export interface CourseRollupRow {
+  course_id: string;
+  client_id: string;
+  assigned_at: string;
+  done: number;
+}
+
+export interface EducationLessonRow {
+  id: string;
+  module_id: string;
+  title: string;
+  body: string | null;
+  link_url: string | null;
+  sort_order: number;
+  // Nullable: null = available as soon as the course is assigned. A date in the future means
+  // the lesson renders locked until then.
+  unlock_at: string | null;
+}
+
+export interface EducationModuleRow {
+  id: string;
+  course_id: string;
+  title: string;
+  sort_order: number;
+}
+
+export interface EducationModuleWithLessons extends EducationModuleRow {
+  education_lessons: EducationLessonRow[];
+}
+
+export interface EducationCourseRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface EducationCourseWithModules extends EducationCourseRow {
+  education_modules: EducationModuleWithLessons[];
+}
+
+export interface EducationCourseAssignmentRow {
+  id: string;
+  course_id: string;
+  client_id: string;
+  assigned_at: string;
+}
+
+export interface EducationLessonCompletionRow {
+  id: string;
+  lesson_id: string;
+  client_id: string;
+  completed_at: string;
+}
+
+// One round trip for the whole client-facing library view: each assignment carries its full
+// course (with nested modules/lessons) plus this client's own completions across every
+// lesson in that course.
+export interface EducationCourseAssignmentWithDetails extends EducationCourseAssignmentRow {
+  course: EducationCourseWithModules;
+  completions: EducationLessonCompletionRow[];
+}
+
+export interface ClientJournalEntryRow {
+  id: string;
+  client_id: string;
+  coach_id: string;
+  kind: 'note' | 'goal' | 'injury';
+  body: string;
+  created_at: string;
+  related_date: string | null;
+}
+
+export interface ActivityEventRow {
+  client_id: string;
+  event_type: 'measurement' | 'habit' | 'workout' | 'photo' | 'booking' | 'food';
+  occurred_at: string;
+  detail: string | null;
+}
+
+export interface ClientGroupRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface ClientGroupWithMembers extends ClientGroupRow {
+  memberIds: string[];
+}
+
+export interface ScheduledCommunicationRow {
+  id: string;
+  coach_id: string;
+  gym_id: string;
+  message: string;
+  target_type: 'group' | 'all_clients' | 'my_clients' | 'gym';
+  target_group_id: string | null;
+  send_at: string;
+  sent_at: string | null;
+  channel: 'message' | 'email' | 'both';
+  email_sent_at: string | null;
+  // What happened to the email (migration 0139): how many went, how many failed, why, and how many times the daily job tried.
+  email_sent_count?: number | null;
+  email_failed_count?: number | null;
+  email_error?: string | null;
+  email_attempts?: number | null;
+  created_at: string;
+  // The group's name saved when the broadcast was made, so history can still say which group it went to after the group is deleted (0133).
+  target_group_name?: string | null;
+  // Set when a pending broadcast was cancelled because its group was deleted (0133); such a row is never sent.
+  cancelled_at?: string | null;
+  // Weekly repeats (migration 0097). A repeating row is a series: it is never "sent", it just keeps moving its
+  // own send_at on a week; each occurrence is written as its own sent row pointing back via series_id.
+  repeat?: 'none' | 'weekly';
+  last_sent_at?: string | null;
+  series_id?: string | null;
+}
+
+// ---- Red flag report (migration 0098) ----
+export type RedFlagStatus = 'covered' | 'new' | 'hold' | 'ended';
+
+export interface RedFlagStat {
+  client_id: string;
+  name: string;
+  coach_id: string | null;
+  status: RedFlagStatus;
+  attended: number;
+  late_cancels: number;
+  no_shows: number;
+  // Past bookings in the week not yet marked attended or no-show.
+  unmarked: number;
+}
+
+export interface RedFlagEntry {
+  id: string;
+  client_id: string;
+  week_start: string;
+  attended: number;
+  late_cancels: number;
+  no_shows: number;
+  low_attendance: boolean;
+  late_or_no_show: boolean;
+  contacted: 'no' | 'yes' | 'na';
+  reason: string | null;
+  tier: 'red' | 'amber' | 'green' | null;
+  coach_id: string | null;
+}
+
+export interface RedFlagThresholds {
+  min_attended: number;
+  late_cancels: number;
+  no_shows: number;
+}
+
+export interface RedFlagReport {
+  gym_id?: string;
+  week_start: string;
+  // false for a week whose list was never written: viewing a week no longer writes it (migration 0129). stats and entries are then empty.
+  generated?: boolean;
+  generated_at?: string | null;
+  // Monday of the last finished week at the gym, by the gym's own calendar.
+  latest_completed_week?: string;
+  thresholds: RedFlagThresholds;
+  stats: RedFlagStat[];
+  entries: RedFlagEntry[];
+  master: {
+    weeks: string[];
+    // counts per week, oldest first; null = not a covered member that week
+    members: { client_id: string; name: string; coach_id: string | null; counts: (number | null)[] }[];
+  };
+}
+
+export interface MembershipHoldRow {
+  id: string;
+  client_id: string;
+  started_on: string;
+  ended_on: string | null;
+  note: string | null;
+}
+
+export interface MessageTemplateRow {
+  id: string;
+  gym_id: string;
+  coach_id: string;
+  title: string;
+  body: string;
+  created_at: string;
+}
+
+export interface BigDogResultRow {
+  id: string;
+  client_id: string;
+  exercise_key: string;
+  level: 'none' | 'rookie' | 'strong' | 'big_dog';
+  result_text: string | null;
+  // The score as one number (kg, reps, seconds or metres); null on older coach-recorded rows.
+  result_value: number | null;
+  // Logged by the member themselves rather than recorded by a coach.
+  self_reported: boolean;
+  tested_date: string;
+  recorded_by: string | null;
+  created_at: string;
+}
+
+export interface GymEventRow {
+  id: string;
+  gym_id: string;
+  created_by: string | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  starts_at: string;
+  capacity: number | null;
+  created_at: string;
+}
+
+export interface EventWithSignup extends GymEventRow {
+  signups: number;
+  signedUp: boolean;
+}
+
+export interface FeedbackRow {
+  id: string;
+  client_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  clientName: string;
+}
+
+export interface RewardRow {
+  id: string;
+  gym_id: string;
+  name: string;
+  description: string | null;
+  kind: 'sessions' | 'months';
+  threshold: number;
+  created_at: string;
+}
+
+export interface RewardsForMember {
+  rewards: RewardRow[];
+  grantedIds: string[];
+  sessions: number;
+  months: number;
+}
+
+export interface RewardOverview extends RewardRow {
+  grantedCount: number;
+  eligible: { clientId: string; name: string }[];
+  // Who has already been given it, newest first.
+  given: { clientId: string; name: string; grantedAt: string }[];
+}

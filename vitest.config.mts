@@ -8,5 +8,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // The Expo app and the shared package have their own installs; the web's tests only cover the web.
+    exclude: ['**/node_modules/**', 'apps/**', 'packages/**'],
   },
 });

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Expo app and the shared package are linted by their own setup.
+    "apps/**",
+    "packages/**",
   ]),
   // The Node scripts under supabase/tests/security-audit are CommonJS on purpose (run with `node`, not bundled).
   {
