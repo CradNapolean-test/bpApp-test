@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
-import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, Mail, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
-import { EmailCoachSheet } from './EmailCoachSheet';
+import { useMemo } from 'react';
+import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
 import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
 import type { CheckinMetric } from '@/lib/checkinMetrics';
 import { TargetRings } from './NutritionSummary';
@@ -64,7 +63,6 @@ export function CoachingHub({
   // Opens a specific programme day in the Workout screen (today's workout from the Training card).
   onOpenWorkoutDay: (dayId: string) => void;
 }) {
-  const [emailOpen, setEmailOpen] = useState(false);
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
 
@@ -127,14 +125,6 @@ export function CoachingHub({
           )}
         </button>
       </Card>
-      <button
-        type="button"
-        onClick={() => setEmailOpen(true)}
-        className="-mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-black/10 py-2.5 text-sm font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
-      >
-        <Mail className="h-4 w-4" /> Email your coach
-      </button>
-      {emailOpen && <EmailCoachSheet onClose={() => setEmailOpen(false)} />}
 
       {show('Nutrition') && (
         <div>

@@ -71,7 +71,7 @@ export function buildFaqs(input: FaqInputs): Faq[] {
       a: `Check-in opens ${plural(CHECKIN_OPENS_BEFORE_MIN, 'minute')} before your session and closes ${plural(CHECKIN_CLOSES_AFTER_MIN, 'minute')} after it starts. Open Home or the Book tab and tap Check in.`,
     },
     { q: 'What is the daily check-in?', a: 'Three quick numbers each day: sleep, steps and water. It takes a few seconds and helps your coach see how you are going.' },
-    { q: 'How do I get in touch with my coach?', a: 'Open the Coach tab. Use Message for the chat (voice notes and photos work too), or Email your coach if you would rather write an email.' },
+    { q: 'How do I get in touch with my coach?', a: 'Open the Coach tab. Use Message for the chat (voice notes and photos work too). To write an email instead, see Email your coach in this FAQ.' },
     { q: 'How do I add my InBody results?', a: 'Go to Progress, then Body Scans, and add the numbers from your InBody printout. You can attach a photo of the printout too.' },
     { q: 'What are the session clubs?', a: `Clubs mark the sessions you have attended: ${describeClubs()}. Your progress towards the next club is on your Home screen.` },
     { q: 'How do I get my reward?', a: 'When a reward shows Earned on the Rewards screen, ask your coach and they will give it to you.' },
