@@ -56,10 +56,10 @@ export interface ClientProfileRow {
   onboarding_completed_at?: string | null;
   // Set when a coach asks the member to check their details (migration 0142); cleared when they finish the quick check.
   details_confirm_requested_at?: string | null;
+  // When the member agreed to the privacy notice in onboarding (migration 0138). Null until they have.
+  consented_at?: string | null;
   needs_coach_review?: boolean;
   review_reasons?: string[];
-}
-
   // A daily target typed in by the member or their coach (migration 0146); all four or none. Replaces the calculated target.
   custom_calories?: number | null;
   custom_protein?: number | null;
@@ -67,6 +67,8 @@ export interface ClientProfileRow {
   custom_fat?: number | null;
   // The coach has switched off the member's ability to change their own targets.
   custom_targets_locked?: boolean;
+}
+
 export interface DailyLogRow {
   id: string;
   client_id: string;
@@ -104,6 +106,8 @@ export interface FoodRow {
   barcode: string | null;
   // A coach can hide a wrong scanned food (M12); hidden foods stay out of every member list and search.
   hidden?: boolean;
+  // Typical units that come with a per-gram food, e.g. 1 rasher = 25 g (migration 0147). Null/absent: grams only.
+  serving_options?: { label: string; grams: number }[] | null;
 }
 
 export interface RecipeIngredientRow {
