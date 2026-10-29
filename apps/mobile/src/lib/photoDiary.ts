@@ -49,7 +49,7 @@ export function useAddMealPhoto(date: string) {
   const userId = useUserId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ photo, description, currentCount }: { photo: PickedPhoto | null; description: string; currentCount: number }): Promise<FoodPhotoEntryRow> => {
+    mutationFn: async ({ photo, description, currentCount, mealSectionId }: { photo: PickedPhoto | null; description: string; currentCount: number; mealSectionId: string | null }): Promise<FoodPhotoEntryRow> => {
       if (!canAddPhoto(currentCount)) throw new Error(`A day can hold ${MAX_PHOTOS_PER_DAY} photos.`);
       const problem = validateMealEntry(!!photo, description) ?? validatePhotoDescription(description);
       if (problem) throw new Error(problem);
@@ -62,7 +62,7 @@ export function useAddMealPhoto(date: string) {
       }
       const { data, error } = await supabase
         .from('food_photo_entries')
-        .insert({ daily_log_id: dailyLogId, storage_path: path, description: cleanPhotoDescription(description) })
+        .insert({ daily_log_id: dailyLogId, storage_path: path, description: cleanPhotoDescription(description), meal_section_id: mealSectionId })
         .select('*')
         .single();
       if (error) {

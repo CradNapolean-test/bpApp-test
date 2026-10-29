@@ -2,16 +2,16 @@ import { Image } from 'expo-image';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
-import type { FoodPhotoEntryRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
-import { canAddPhoto, MAX_PHOTO_DESCRIPTION, MAX_PHOTOS_PER_DAY, validateMealEntry } from '@ballistic/shared/utils/photoDiary';
+import type { FoodPhotoEntryRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
+import { canAddPhoto, groupByMealSection, MAX_PHOTO_DESCRIPTION, MAX_PHOTOS_PER_DAY, suggestMealSection, validateMealEntry } from '@ballistic/shared/utils/photoDiary';
 
 import { Pressable } from '@/components/press';
 import { CoachFeedbackCard, DateNav } from '@/components/food';
 import { NutritionTabs } from '@/components/pagetabs';
 import { Icon } from '@/components/icons';
 import { PhotoSourceMenu, PhotoViewer } from '@/components/media';
-import { AppText, Button, Card, ConfirmSheet, ScrollScreen, SheetFrame } from '@/components/ui';
-import { useNutritionFeedback } from '@/lib/food';
+import { AppText, Button, Card, Chip, ConfirmSheet, ScrollScreen, SheetFrame } from '@/components/ui';
+import { useMealSections, useNutritionFeedback } from '@/lib/food';
 import { PhotoPermissionError, pickPhoto, useSignedUrl, type PickedPhoto } from '@/lib/media';
 import { useAddMealPhoto, useDeleteMealPhoto, usePhotoDiary } from '@/lib/photoDiary';
 import { radius, spacing, useTheme } from '@/theme';
@@ -61,14 +61,21 @@ function MealPhotoCard({ photo, feedback, onOpen, onDelete }: { photo: FoodPhoto
 }
 
 // The chosen picture (if any) and a short note, before it is added to the diary. A meal can be added with the note alone.
-function AddPhotoSheet({ photo, busy, error, onChangePhoto, onSave, onClose }: { photo: PickedPhoto | null; busy: boolean; error: string | null; onChangePhoto: () => void; onSave: (description: string) => void; onClose: () => void }) {
+function AddPhotoSheet({ photo, sections, busy, error, onChangePhoto, onSave, onClose }: { photo: PickedPhoto | null; sections: MealSectionRow[]; busy: boolean; error: string | null; onChangePhoto: () => void; onSave: (description: string, mealSectionId: string | null) => void; onClose: () => void }) {
   const t = useTheme();
   const [description, setDescription] = useState('');
+  // Starts on the meal for the time of day; tap it again to clear it.
+  const [mealSectionId, setMealSectionId] = useState<string | null>(() => suggestMealSection(sections, new Date().getHours()));
   const missing = validateMealEntry(!!photo, description);
   return (
     <SheetFrame title={photo ? 'Add a meal photo' : 'Add a meal'} onClose={onClose}>
       {photo ? <Image source={{ uri: photo.uri }} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: radius.md }} contentFit="cover" /> : null}
       <Pressable onPress={onChangePhoto} accessibilityRole="button"><AppText variant="small" color="accent" style={{ fontWeight: '700' }}>{photo ? 'Choose a different photo' : 'Add a photo (optional)'}</AppText></Pressable>
+      {sections.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {sections.map((s) => <Chip key={s.id} label={s.label} active={mealSectionId === s.id} onPress={() => setMealSectionId((cur) => (cur === s.id ? null : s.id))} />)}
+        </View>
+      ) : null}
       <TextInput
         value={description}
         onChangeText={setDescription}
@@ -79,7 +86,7 @@ function AddPhotoSheet({ photo, busy, error, onChangePhoto, onSave, onClose }: {
         style={{ backgroundColor: t.card, color: t.foreground, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12, minHeight: 64, textAlignVertical: 'top', fontSize: 16 }}
       />
       {error ? <AppText variant="small" color="danger">{error}</AppText> : null}
-      <Button title="Add to my diary" onPress={() => onSave(description)} loading={busy} disabled={!!missing} />
+      <Button title="Add to my diary" onPress={() => onSave(description, mealSectionId)} loading={busy} disabled={!!missing} />
     </SheetFrame>
   );
 }
@@ -94,6 +101,7 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
   const feedbackQ = useNutritionFeedback(date);
   const add = useAddMealPhoto(date);
   const del = useDeleteMealPhoto(date);
+  const sections = useMealSections().data ?? [];
 
   const [menu, setMenu] = useState(false);
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
@@ -156,8 +164,13 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
           </Card>
         ) : null}
         {del.isError ? <AppText color="danger">{del.error.message}</AppText> : null}
-        {photos.map((p) => (
-          <MealPhotoCard key={p.id} photo={p} feedback={feedback.filter((f) => f.photo_id === p.id)} onOpen={(url, caption) => setViewing({ url, caption })} onDelete={() => setDeleting(p)} />
+        {groupByMealSection(photos, sections).map((group, _i, all) => (
+          <View key={group.section?.id ?? 'none'} style={{ gap: spacing.md }}>
+            {all.length > 1 || group.section ? <AppText variant="small" color="muted" style={{ fontWeight: '700', textTransform: 'uppercase' }}>{group.section?.label ?? 'Other'}</AppText> : null}
+            {group.entries.map((p) => (
+              <MealPhotoCard key={p.id} photo={p} feedback={feedback.filter((f) => f.photo_id === p.id)} onOpen={(url, caption) => setViewing({ url, caption })} onDelete={() => setDeleting(p)} />
+            ))}
+          </View>
         ))}
       </ScrollScreen>
 
@@ -165,6 +178,7 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
       {composing ? (
         <AddPhotoSheet
           photo={photo}
+          sections={sections}
           busy={add.isPending}
           error={add.isError ? add.error.message : null}
           onChangePhoto={() => {
@@ -172,7 +186,7 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
             setComposing(false);
             setMenu(true);
           }}
-          onSave={(description) => add.mutate({ photo, description, currentCount: photos.length }, { onSuccess: () => { setPhoto(null); setComposing(false); } })}
+          onSave={(description, mealSectionId) => add.mutate({ photo, description, currentCount: photos.length, mealSectionId }, { onSuccess: () => { setPhoto(null); setComposing(false); } })}
           onClose={() => { setPhoto(null); setComposing(false); }}
         />
       ) : null}

@@ -59,6 +59,8 @@ export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntr
   const dailyLogId = formData.get('dailyLogId') as string;
   const description = cleanPhotoDescription((formData.get('description') as string) ?? '');
   const file = formData.get('file') as File | null;
+  // Which of the member's meals it is; the database checks the section is theirs.
+  const mealSectionId = ((formData.get('mealSectionId') as string | null) ?? '') || null;
   if (!clientId || !dailyLogId) throw new Error('Missing clientId or dailyLogId');
   const problem = validateMealEntry(!!file, description ?? '') ?? validatePhotoDescription(description ?? '');
   if (problem) throw new Error(problem);
@@ -76,6 +78,7 @@ export async function uploadFoodPhoto(formData: FormData): Promise<FoodPhotoEntr
       daily_log_id: dailyLogId,
       storage_path: path,
       description,
+      meal_section_id: mealSectionId,
     })
     .select()
     .single();

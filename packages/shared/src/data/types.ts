@@ -494,6 +494,8 @@ export interface FoodPhotoEntryRow {
   // Null for a meal logged with a description alone (migration 0145).
   storage_path: string | null;
   description: string | null;
+  // Which of the member's meal sections this meal is (migration 0150); null when they did not say.
+  meal_section_id?: string | null;
   estimated_calories: number | null;
   estimated_protein: number | null;
   estimated_carbs: number | null;

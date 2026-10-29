@@ -930,6 +930,7 @@ export function DashboardShell({
               clientId={clientId}
               dailyLogId={todayLogId}
               initialPhotos={foodPhotos}
+              sections={mealSections}
               readOnly={isCoachView}
               canGiveFeedback={isCoachView && isOwnClient}
               feedback={nutritionFeedback}

@@ -12,12 +12,12 @@ import { getOrCreateDailyLog } from '@/lib/data/dailyLogs';
 import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
-import { validateMealEntry } from '@/lib/utils/photoDiary';
+import { groupByMealSection, suggestMealSection, validateMealEntry } from '@/lib/utils/photoDiary';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { FeedbackThread } from './FeedbackThread';
 import { PhotoViewer } from '@/app/_components/Overlays';
 import { useTodayIso } from './useTodayIso';
-import type { ClientProfileRow, FoodPhotoEntry, NutritionFeedbackRow } from '@/lib/data/types';
+import type { ClientProfileRow, FoodPhotoEntry, MealSectionRow, NutritionFeedbackRow } from '@/lib/data/types';
 
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
 
@@ -30,6 +30,7 @@ export function PhotoDiaryTab({
   clientId,
   dailyLogId,
   initialPhotos,
+  sections,
   readOnly,
   canGiveFeedback,
   feedback,
@@ -38,6 +39,8 @@ export function PhotoDiaryTab({
   clientId: string;
   dailyLogId: string | null;
   initialPhotos: FoodPhotoEntry[];
+  // The member's meal types (Breakfast, Lunch, ...), offered when adding a meal.
+  sections: MealSectionRow[];
   readOnly: boolean;
   canGiveFeedback: boolean;
   feedback: NutritionFeedbackRow[];
@@ -80,6 +83,7 @@ export function PhotoDiaryTab({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [description, setDescription] = useState('');
+  const [mealSectionId, setMealSectionId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useBackHandler(viewing != null, () => setViewing(null));
@@ -116,9 +120,16 @@ export function PhotoDiaryTab({
     });
   }
 
+  // Opens the add sheet with the meal type for the time of day already chosen (the member can change or clear it).
+  function openSheet() {
+    setMealSectionId(suggestMealSection(sections, new Date().getHours()));
+    setAdding(true);
+  }
+
   function closeSheet() {
     setAdding(false);
     setDescription('');
+    setMealSectionId(null);
     pickFile(null);
   }
 
@@ -129,6 +140,7 @@ export function PhotoDiaryTab({
     if (file) formData.set('file', await shrinkImageFile(file));
     formData.set('clientId', clientId);
     formData.set('description', description);
+    if (mealSectionId) formData.set('mealSectionId', mealSectionId);
     // The day's row is made when its first photo is added, not when the day is looked at (FT1).
     const ok = await runUpload(
       async () => {
@@ -151,6 +163,8 @@ export function PhotoDiaryTab({
     const done = await runDelete(() => deleteFoodPhoto(id), { success: 'Meal deleted' });
     if (done && !isToday) await loadDate(viewingDate);
   }
+
+  const mealGroups = groupByMealSection(photos, sections);
 
   return (
     <div className="space-y-4">
@@ -193,7 +207,7 @@ export function PhotoDiaryTab({
           <button
             type="button"
             onClick={() => {
-              setAdding(true);
+              openSheet();
               // Straight to the phone's camera/photo picker.
               setTimeout(() => fileRef.current?.click(), 50);
             }}
@@ -203,7 +217,7 @@ export function PhotoDiaryTab({
           </button>
           <button
             type="button"
-            onClick={() => setAdding(true)}
+            onClick={openSheet}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 py-3 text-sm font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
           >
             <PencilLine className="h-4 w-4" /> Add without a photo
@@ -239,7 +253,12 @@ export function PhotoDiaryTab({
         />
       ) : (
         <div className="space-y-3">
-          {photos.map((entry) => (
+          {mealGroups.map((group) => (
+            <div key={group.section?.id ?? 'none'} className="space-y-3">
+              {(mealGroups.length > 1 || group.section) && (
+                <p className="px-1 pt-1 text-xs font-bold uppercase tracking-wide text-zinc-500">{group.section?.label ?? 'Other'}</p>
+              )}
+          {group.entries.map((entry) => (
             <div key={entry.id} className="overflow-hidden rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
               {/* A meal logged with a description alone has no picture, so no empty picture box either. */}
               {entry.signedUrl ? (
@@ -272,6 +291,8 @@ export function PhotoDiaryTab({
                   buttonLabel="Comment on this meal"
                 />
               </div>
+            </div>
+          ))}
             </div>
           ))}
         </div>
@@ -307,6 +328,23 @@ export function PhotoDiaryTab({
               <button type="button" onClick={() => fileRef.current?.click()} className="text-xs font-semibold text-accent">
                 Choose a different photo
               </button>
+            )}
+            {sections.length > 0 && (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Which meal">
+                {sections.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    aria-pressed={mealSectionId === s.id}
+                    onClick={() => setMealSectionId((cur) => (cur === s.id ? null : s.id))}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                      mealSectionId === s.id ? 'border-accent bg-accent-soft text-accent' : 'border-black/10 text-zinc-500 dark:border-white/10'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             )}
             <textarea
               maxLength={500}
