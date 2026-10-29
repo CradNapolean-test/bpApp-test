@@ -63,6 +63,10 @@ export function targetsHeldBack(profile: { needs_coach_review?: boolean | null }
 
 export const PLAN_BEING_SET_UP = 'Your coach is setting up your plan';
 
+// Shown in place of the targets when there are none and the plan is not simply waiting for review (details missing, so nothing to
+// calculate from). A member can type in their own (migration 0146), or their coach can add them.
+export const NO_TARGETS_YET = 'No daily targets are set for you yet. Set your own below, or message your coach and they will add them.';
+
 // OB3: the short flow is for existing members confirming details, and never asked for height or weights, so a member whose profile has
 // none finished it with nothing to build a plan from. They are asked for what is missing.
 export function needsBodyStep(existing: { height_cm?: number | null; start_weight?: number | null; goal_weight?: number | null } | null): boolean {

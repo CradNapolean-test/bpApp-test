@@ -19,6 +19,15 @@ export interface ClientProfile {
   goal: NutritionGoal;
   setting: NutritionSetting;
   cycling: boolean;
+  // A daily target typed in by the member or their coach. When present it is the target on every day, instead of the calculation.
+  customTarget?: CustomTarget;
+}
+
+export interface CustomTarget {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
 
 export interface EngineResult {
@@ -137,6 +146,19 @@ function dayMacros(engine: EngineResult, targetCals: number): DayTarget {
 // Full weekly target for a given profile + week number (1-12). The rate of change is the same every
 // week; the week only picks the phase label.
 export function weeklyTarget(profile: ClientProfile, week: number): WeeklyTarget | null {
+  if (profile.customTarget) {
+    // A target the person typed in: the same every day, with no minimums applied to it.
+    const flat: DayTarget = { ...profile.customTarget, floorApplied: false };
+    return {
+      phase: phaseForWeek(week),
+      calories: flat.calories * 7,
+      protein: flat.protein * 7,
+      fat: flat.fat * 7,
+      carbs: flat.carbs * 7,
+      floorApplied: false,
+      dailyFlat: flat,
+    };
+  }
   const engine = calcEngine(profile);
   if (!engine) return null;
   const base = engine.tdee + dailyAdjustment(profile.goal, profile.setting, profile.startWeight);

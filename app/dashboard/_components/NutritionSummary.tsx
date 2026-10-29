@@ -2,7 +2,7 @@
 
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import { Card } from '@/app/_components/ui';
-import { PLAN_BEING_SET_UP } from '@/lib/onboarding';
+import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@/lib/onboarding';
 
 type Macros = { calories: number; protein: number; carbs: number; fat: number };
 
@@ -28,7 +28,8 @@ function MacroRing({ label, unit, value, target, color }: { label: string; unit:
 // The four rings from the owner's "My coaching" overview: calories, protein, carbs and fats, each
 // with what's been eaten and its daily target. Shared so Food Tracking and the overview match.
 // `held`: the member's plan is still waiting for their coach, so no target is shown (M8); a line says why.
-export function TargetRings({ totals, target, held = false }: { totals: Macros; target: Macros | null; held?: boolean }) {
+// `memberView`: this is the member's own screen, so with no target (and not held) a line says the coach sets it; a coach does not need telling.
+export function TargetRings({ totals, target, held = false, memberView = false }: { totals: Macros; target: Macros | null; held?: boolean; memberView?: boolean }) {
   return (
     <div className="space-y-2">
     <div className="grid grid-cols-4 gap-2">
@@ -38,19 +39,20 @@ export function TargetRings({ totals, target, held = false }: { totals: Macros; 
       <MacroRing label="Fats" unit="g" value={totals.fat} target={target?.fat ?? null} color={RING_COLORS.fat} />
     </div>
     {held && <p className="text-center text-xs font-semibold text-zinc-500">{PLAN_BEING_SET_UP}. Your targets will appear here once they have been checked.</p>}
+    {!held && !target && memberView && <p className="text-center text-xs font-semibold text-zinc-500">{NO_TARGETS_YET}</p>}
     </div>
   );
 }
 
 // The top of Food Tracking: the same "targets" card as the My coaching overview.
-export function NutritionSummary({ totals, target, title, dateLabel, held = false }: { totals: Macros; target: Macros | null; title: string; dateLabel: string; held?: boolean }) {
+export function NutritionSummary({ totals, target, title, dateLabel, held = false, memberView = false }: { totals: Macros; target: Macros | null; title: string; dateLabel: string; held?: boolean; memberView?: boolean }) {
   return (
     <Card>
       <div className="mb-3 flex items-baseline justify-between">
         <p className="text-sm font-bold text-black dark:text-zinc-50">{title}</p>
         <p className="text-xs text-zinc-500">{dateLabel}</p>
       </div>
-      <TargetRings totals={totals} target={target} held={held} />
+      <TargetRings totals={totals} target={target} held={held} memberView={memberView} />
     </Card>
   );
 }

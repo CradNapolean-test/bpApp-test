@@ -162,7 +162,7 @@ export function CoachingHub({
                 {new Date(todayIso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
               </p>
             </div>
-            <TargetRings totals={{ calories, protein, carbs, fat }} target={dayTarget} held={targetsHeldBack(profile, false)} />
+            <TargetRings totals={{ calories, protein, carbs, fat }} target={dayTarget} held={targetsHeldBack(profile, false)} memberView />
             <button
               type="button"
               onClick={() => onNavigate('Nutrition')}

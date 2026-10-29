@@ -10,6 +10,7 @@ import { updateNutritionTrackingMode, upsertClientProfile, type ProfileEditableF
 import { COACH_SETUP_FIELDS, MEMBER_SETUP_FIELDS, mergeIncoming, profilePatch } from '@/lib/profilePatch';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { MemberMetricToggles, MemberScreenToggles } from './MemberScreenToggles';
+import { CustomTargetsSheet } from './CustomTargetsSheet';
 import { MemberResetLink } from '@/app/coach/_components/MemberResetLink';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
@@ -123,6 +124,7 @@ export function SetupTab({
   const startWeightLocked = !isCoachView && baseline != null && baseline.start_weight > 0;
   const [error, setError] = useState<string | null>(null);
   const [nutritionMode, setNutritionMode] = useState(initialProfile?.nutrition_tracking_mode ?? 'full_tracking');
+  const [targetsOpen, setTargetsOpen] = useState(false);
 
   async function handleModeChange(mode: ClientProfileRow['nutrition_tracking_mode']) {
     await runMode(() => updateNutritionTrackingMode(clientId, mode), {
@@ -339,6 +341,28 @@ export function SetupTab({
             </button>
           </div>
         )}
+
+        {isCoachView && !readOnly && (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-black dark:text-zinc-50">Daily targets override</p>
+              <p className="text-xs text-zinc-500">
+                {initialProfile?.custom_calories != null
+                  ? `Set: ${Math.round(initialProfile.custom_calories)} kcal · P ${initialProfile.custom_protein}g · C ${initialProfile.custom_carbs}g · F ${initialProfile.custom_fat}g.`
+                  : 'Using the calculated targets.'}
+                {initialProfile?.custom_targets_locked ? ' Member cannot change them.' : ' Member can set their own.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTargetsOpen(true)}
+              className="shrink-0 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold dark:border-white/15"
+            >
+              Edit
+            </button>
+          </div>
+        )}
+        {targetsOpen && <CustomTargetsSheet clientId={clientId} profile={initialProfile} isCoach onClose={() => setTargetsOpen(false)} />}
 
         {isCoachView && !readOnly && <MemberResetLink clientId={clientId} />}
 

@@ -60,6 +60,13 @@ export interface ClientProfileRow {
   review_reasons?: string[];
 }
 
+  // A daily target typed in by the member or their coach (migration 0146); all four or none. Replaces the calculated target.
+  custom_calories?: number | null;
+  custom_protein?: number | null;
+  custom_carbs?: number | null;
+  custom_fat?: number | null;
+  // The coach has switched off the member's ability to change their own targets.
+  custom_targets_locked?: boolean;
 export interface DailyLogRow {
   id: string;
   client_id: string;

@@ -5,6 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import { messageToHtml, sendBroadcastEmail } from '@/lib/email';
 import { friendlyProfileError } from '@/lib/profilePatch';
+import { TARGETS_LOCKED_MESSAGE, type CustomTargetValues } from '@/lib/utils/customTargets';
 import type { ClientProfileRow } from './types';
 
 export async function getClientProfile(clientId: string): Promise<ClientProfileRow | null> {
@@ -38,6 +39,7 @@ export type ProfileEditableFields = Omit<
   | 'details_confirm_requested_at'
   | 'needs_coach_review'
   | 'review_reasons'
+  | 'custom_targets_locked'
 >;
 
 // Saves ONLY the fields it is given (R15). It used to take the whole form and write every column back, so a stale copy overwrote a
@@ -132,6 +134,34 @@ export async function updateMinutesPer1000Steps(clientId: string, minutes: numbe
   const supabase = await createClient();
   const { error } = await supabase.from('client_profiles').update({ minutes_per_1000_steps: minutes }).eq('client_id', clientId);
   return error ? fail(error, 'Could not save that') : ok();
+}
+
+// A member's own daily targets, or (null) back to the calculated ones; a coach can do the same for any of their members. The
+// database refuses a member's change while the coach has locked it (migration 0146), and that comes back as words.
+export async function saveCustomTargets(clientId: string, values: CustomTargetValues | null): Promise<ActionResult> {
+  const supabase = await createClient();
+  const fields = values ?? { custom_calories: null, custom_protein: null, custom_carbs: null, custom_fat: null };
+  const { data: updated, error } = await supabase
+    .from('client_profiles')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+    .select('client_id');
+  if (error) return fail(error, /locked your daily targets/i.test(error.message) ? TARGETS_LOCKED_MESSAGE : 'Could not save the targets');
+  if (!updated?.length) return fail(null, 'Could not save: finish setting up your details first.');
+  return ok();
+}
+
+// Coach only (the database refuses anyone else): lets the member change their own targets again, or stops them.
+export async function setCustomTargetsLocked(clientId: string, locked: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from('client_profiles')
+    .update({ custom_targets_locked: locked, updated_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+    .select('client_id');
+  if (error) return fail(error, 'Could not change that setting');
+  if (!updated?.length) return fail(null, 'Could not change that setting: you do not have access to this profile.');
+  return ok();
 }
 
 // Client-owned request flag, not a real delete -- the coach sees deletion_requested_at set

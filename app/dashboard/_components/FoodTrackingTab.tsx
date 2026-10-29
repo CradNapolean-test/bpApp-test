@@ -38,6 +38,7 @@ import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { targetsHeldBack } from '@/lib/onboarding';
+import { CustomTargetsSheet } from './CustomTargetsSheet';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
 import { suggestPairs, type PairSuggestion } from '@/lib/foodPairs';
@@ -504,6 +505,7 @@ export function FoodTrackingTab({
   // Uses the flat (non-cycling-aware) daily target -- this tab has no per-day day_type
   // context the way Weekly Log does, and threading that through here would be
   // disproportionate to a simple live comparison line.
+  const [targetsOpen, setTargetsOpen] = useState(false);
   const dayTarget = useMemo(() => {
     const engineProfile = toMemberEngineProfile(profile, readOnly);
     return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
@@ -828,7 +830,18 @@ export function FoodTrackingTab({
         buttonLabel="Leave feedback on this day"
       />
 
-      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} held={targetsHeldBack(profile, readOnly)} />
+      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} held={targetsHeldBack(profile, readOnly)} memberView={!readOnly} />
+      {!readOnly && (
+        <div className="-mt-2 flex items-center justify-between gap-3 px-1">
+          <p className="text-xs text-zinc-500">
+            {profile?.custom_calories != null ? 'Using the daily targets you set.' : 'Track somewhere else, or want different numbers?'}
+          </p>
+          <button type="button" onClick={() => setTargetsOpen(true)} className="shrink-0 text-xs font-bold text-accent hover:underline">
+            {profile?.custom_calories != null ? 'Change my targets' : 'Set my own targets'}
+          </button>
+        </div>
+      )}
+      {targetsOpen && <CustomTargetsSheet clientId={clientId} profile={profile} isCoach={false} onClose={() => setTargetsOpen(false)} />}
 
       {!entryReadOnly && !isManual && (
         <div className="space-y-2">
