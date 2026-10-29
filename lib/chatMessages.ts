@@ -7,6 +7,8 @@ import type { ChatMessage } from '@/lib/data/types';
 export const CHAT_PAGE = 50;
 // The most a catch-up after a dropped connection fetches in one go.
 export const CHAT_CATCH_UP_MAX = 200;
+// How often an open chat asks "anything new?" as a backstop, in case the live connection is deaf without reporting an error.
+export const CHAT_POLL_MS = 10_000;
 
 // A message the sender sees at once while it is still being saved ("sending"), or one that could not be saved ("failed").
 export type LocalChatMessage = ChatMessage & { pending?: 'sending' | 'failed' };

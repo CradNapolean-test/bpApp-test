@@ -10,6 +10,7 @@ import { Avatar } from '@/app/_components/Avatar';
 import { VoiceRecorder } from '@/app/_components/VoiceRecorder';
 import { getEarlierMessages, getMessages, getMessagesSince, markChatRead, notifyPhotoSent, notifyVoiceSent, sendMessage } from '@/lib/data/chat';
 import {
+  CHAT_POLL_MS,
   applyIncoming,
   firstSavedAt,
   lastSavedAt,
@@ -313,6 +314,13 @@ export function ChatTab({
   const toast = useToast();
   useBackHandler(viewingPhoto != null, () => setViewingPhoto(null));
 
+  // Marks the thread read; a failure is tried once more shortly after, since a silent failure left the unread badge stuck on.
+  const markRead = useCallback(() => {
+    markChatRead(clientId).catch(() => {
+      window.setTimeout(() => markChatRead(clientId).catch(() => {}), 3000);
+    });
+  }, [clientId]);
+
   // Fetch whatever was written after the newest message on screen: after the live connection came back, or after the page was
   // hidden and shown again (a phone that was locked stops the socket), so nothing sent in the gap is missing (M5).
   const catchUp = useCallback(async () => {
@@ -321,11 +329,22 @@ export function ChatTab({
       const fresh = after ? await getMessagesSince(clientId, after) : await getMessages(clientId);
       if (fresh.length === 0) return;
       setMessages((prev) => mergeMessages(prev, fresh));
-      if (activeRef.current && fresh.some((m) => m.sender_id !== currentUserId)) markChatRead(clientId).catch(() => {});
+      if (activeRef.current && fresh.some((m) => m.sender_id !== currentUserId)) markRead();
     } catch {
       // The next catch-up (or the live connection) brings it in.
     }
-  }, [clientId, currentUserId]);
+  }, [clientId, currentUserId, markRead]);
+
+  // The messages this chat was handed may already be old (they were fetched when the page loaded), so look for newer ones as it
+  // opens. While it stays open and visible, keep asking as a backstop for a live connection that went deaf without saying so.
+  useEffect(() => {
+    if (!active) return;
+    void catchUp();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void catchUp();
+    }, CHAT_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [active, catchUp]);
 
   useEffect(() => {
     // Subscribing before the realtime socket's own auth handshake resolves is a real race:
@@ -351,7 +370,7 @@ export function ChatTab({
             // The row is raw: no signed link. The message signs its own attachment when it scrolls into view.
             setMessages((prev) => applyIncoming(prev, withNoLinks(row)));
             // Looking at the conversation as it arrives: it is read.
-            if (activeRef.current && row.sender_id !== currentUserId) markChatRead(clientId).catch(() => {});
+            if (activeRef.current && row.sender_id !== currentUserId) markRead();
           }
         )
         .subscribe((status) => {
@@ -373,7 +392,7 @@ export function ChatTab({
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [clientId, currentUserId, catchUp]);
+  }, [clientId, currentUserId, catchUp, markRead]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -407,9 +426,9 @@ export function ChatTab({
     // Viewing the thread marks it read -- best-effort, a failure here just means the badge
     // doesn't clear this time rather than blocking anything the user is doing.
     if (!active) return;
-    markChatRead(clientId).catch(() => {});
+    markRead();
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [clientId, active]);
+  }, [clientId, active, markRead]);
 
   async function loadEarlier() {
     const before = firstSavedAt(messages);

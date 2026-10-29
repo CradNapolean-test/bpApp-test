@@ -833,7 +833,7 @@ export function DashboardShell({
               weekLogs={weekLogs}
               programs={programs}
               bigDogResults={bigDogResults}
-              unreadMessageCount={unreadMessageCount}
+              unreadMessageCount={liveUnread}
               pendingForms={formAssignments.filter((f) => !f.completed_at).length}
               hiddenCategories={disabledCategories}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
