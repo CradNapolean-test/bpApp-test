@@ -31,8 +31,10 @@ Don't reintroduce that ambiguity.
 
 See `lib/calculations.ts` for exact implementation. Summary:
 
-- **BMR**: Katch-McArdle formula using lean mass and fat mass derived from body fat %,
-  with a +198 offset for male gender, adjusted by age.
+- **BMR**: a lean mass + fat mass equation, with lean and fat mass derived from body fat %:
+  `13.587 × lean kg + 9.613 × fat kg + 198 (male only) − 3.351 × age + 674`. This is **not** the
+  classic Katch-McArdle formula (`370 + 21.6 × lean kg`, no age or sex term); it is the equation
+  from the validated spreadsheet, so the name "Katch-McArdle" should not be used for it.
 - **TDEE**: BMR × activity level multiplier.
 - **Protein target**: g/kg of start weight, tiered by (start weight − goal weight) gap:
   ≤5kg → 2.2 g/kg, ≤8kg → 2.0, ≤12kg → 1.8, >12kg → 1.6 (unchanged from the original engine).

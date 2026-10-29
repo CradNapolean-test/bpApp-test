@@ -1,5 +1,5 @@
 // Ballistic Performance — calculation engine
-// Maintenance is Katch-McArdle BMR x activity (ported from a validated prototype). The calorie
+// Maintenance is a lean mass + fat mass BMR x activity (ported from a validated prototype). The calorie
 // change and macro split follow the Muscle & Strength Nutrition Pyramid and the gym's nutrition SOP
 // (docs/SOPS.md section 4): a goal (fat loss or muscle gain) and a setting (steady, moderate,
 // aggressive) set the rate of weight change, which sets the daily calories; protein, fat (a share of
@@ -94,8 +94,10 @@ export function stepTargetForWeek(week: number): number {
   return 13000;
 }
 
-// BMR via Katch-McArdle (uses lean mass, more accurate than Mifflin-St Jeor when body fat
-// % is known). TDEE = BMR * activity level multiplier.
+// BMR from lean mass and fat mass (so body fat % must be known), with a male offset and an age term:
+// 13.587 x lean + 9.613 x fat + 198 (male) - 3.351 x age + 674. This is not the classic Katch-McArdle
+// (370 + 21.6 x lean mass); it is the equation from the validated spreadsheet. TDEE = BMR * activity
+// level multiplier.
 // Fat as a share of calories. 'High Carb Low Fat' sits mid-range for the goal (Pyramid: 15-25% when
 // cutting, 20-30% when gaining); 'Higher Fat' goes toward the 40% ceiling for people who do better on
 // lower carb.

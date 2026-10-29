@@ -16,7 +16,7 @@ import {
 } from './calculations';
 
 // Golden values below are hand-verified against the formulas in docs/PROJECT_SPEC.md
-// section 3 (Katch-McArdle BMR, tiered protein/fat, phase deficits) -- these tests exist to
+// section 3 (lean mass + fat mass BMR, tiered protein/fat, phase deficits) -- these tests exist to
 // catch accidental regressions to a formula CLAUDE.md says is already validated against a
 // real coaching spreadsheet, not to re-derive the formulas themselves.
 
@@ -47,7 +47,7 @@ const femaleCycling: ClientProfile = {
 };
 
 describe('calcEngine', () => {
-  it('computes BMR/TDEE via Katch-McArdle with the male +198 offset', () => {
+  it('computes BMR/TDEE from lean and fat mass with the male +198 offset', () => {
     const result = calcEngine(maleFlat);
     expect(result).not.toBeNull();
     expect(result!.bmr).toBeCloseTo(2030.82, 2);
