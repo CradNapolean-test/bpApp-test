@@ -242,41 +242,46 @@ function RestTimer({ seconds }: { seconds: number }) {
   return <p className="mt-1 text-xs font-medium text-accent">Rest: {mm}:{ss}</p>;
 }
 
-// Warm-up exercises are done or not done, so they get one tick box instead of sets, reps and weight. Ticking saves a single set
-// (set 1, no numbers, marked as a warm-up so it never counts towards training volume or bests); unticking takes it back out.
+// The warm-up is done or not done as a whole, so it gets one tick box instead of sets, reps and weight for each exercise. Ticking saves
+// one set (set 1, no numbers, marked as a warm-up so it never counts towards training volume or bests) for every warm-up exercise that
+// has none yet; unticking takes them back out.
 function WarmupTick({
   clientId,
-  exerciseId,
-  logs,
+  exercises,
+  logsByExercise,
   onChange,
 }: {
   clientId: string;
-  exerciseId: string;
-  logs: WorkoutLogRow[];
+  exercises: { id: string }[];
+  logsByExercise: Record<string, WorkoutLogRow[]>;
   onChange: (change: SetChange<WorkoutLogRow>) => void;
 }) {
   const { run, busy } = useAction();
-  const done = logs.length > 0;
+  if (exercises.length === 0) return null;
+  const done = exercises.every((e) => (logsByExercise[e.id] ?? []).length > 0);
   function toggle() {
     void run(
       async () => {
-        if (done) {
-          for (const l of logs) {
-            await deleteSet(l.id);
-            onChange({ kind: 'deleted', id: l.id });
+        for (const e of exercises) {
+          const logs = logsByExercise[e.id] ?? [];
+          if (done) {
+            for (const l of logs) {
+              await deleteSet(l.id);
+              onChange({ kind: 'deleted', id: l.id });
+            }
+          } else if (logs.length === 0) {
+            const saved = await logSet(clientId, e.id, { set_number: 1, actual_reps: null, actual_load: null, actual_rpe: null, set_type: 'warmup' as SetType });
+            onChange({ kind: 'added', row: saved });
           }
-        } else {
-          const saved = await logSet(clientId, exerciseId, { set_number: 1, actual_reps: null, actual_load: null, actual_rpe: null, set_type: 'warmup' as SetType });
-          onChange({ kind: 'added', row: saved });
         }
       },
       { refresh: false }
     );
   }
   return (
-    <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
+    <label className="mb-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
       <input type="checkbox" checked={done} disabled={busy} onChange={toggle} className="h-6 w-6 shrink-0 accent-[var(--accent)]" />
-      <span className={`text-sm font-semibold ${done ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{done ? 'Done' : 'Tick when done'}</span>
+      <span className={`text-sm font-semibold ${done ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{done ? 'Warm-up done' : 'Tick when your warm-up is done'}</span>
     </label>
   );
 }
@@ -1280,6 +1285,10 @@ export function WorkoutTab({
             onUpdateMany={(ids, fields) => updateExercises(ids, fields)}
             onDelete={(id) => deleteExercise(id)}
             onReorder={reorderExercises}
+            renderBlockExtra={(rows) => {
+              const warmups = rows.filter((r) => r.section === 'warmup' && r.block_type === 'exercise');
+              return !isCoachView && warmups.length > 0 ? <WarmupTick clientId={clientId} exercises={warmups} logsByExercise={logsByExercise} onChange={changeSets} /> : null;
+            }}
             renderExtra={(ex) => {
               const logs = logsByExercise[ex.id] ?? [];
               const last = lastSessionFor(ex.exercise_library_id, ex.name, ex.id);
@@ -1322,7 +1331,6 @@ export function WorkoutTab({
                       </div>
                     </div>
                   )}
-                  {!isCoachView && isWarmup && <WarmupTick clientId={clientId} exerciseId={ex.id} logs={logs} onChange={changeSets} />}
                   {!isCoachView && ex.block_type === 'exercise' && !isWarmup && (
                     <>
                       {logs.length > 0 && (

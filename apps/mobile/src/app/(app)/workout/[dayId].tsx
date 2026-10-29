@@ -11,7 +11,7 @@ import { earlierLogs, lastSessionFor, priorBestLoad } from '@ballistic/shared/ut
 import { finishMessage, workoutSummary } from '@ballistic/shared/utils/workoutSets';
 import { chosenBlockKeys, exerciseIsVisible, slotOptions, usesSections } from '@ballistic/shared/workoutSections';
 
-import { BlockView, ExerciseCard, FeedbackForm, SetEditSheet } from '@/components/workouts';
+import { BlockView, ExerciseCard, FeedbackForm, SetEditSheet, WarmupTick } from '@/components/workouts';
 import { AppText, Button, Card, Chip, Screen, ScrollScreen } from '@/components/ui';
 import { timezoneOf, useClientProfile, useNow } from '@/lib/today';
 import { useChooseBlock, useDeleteSet, useLogSet, useSaveFeedback, useUpdateSet, useWorkoutDay } from '@/lib/workouts';
@@ -83,8 +83,6 @@ export default function WorkoutDay() {
         priorBest={Math.max(priorBestLoad(earlier) ?? 0, d.priorBests[ex.exercise_library_id ?? `n:${ex.name.toLowerCase()}`] ?? 0) || null}
         onLog={(e, setNumber, v) => logSet.mutate({ exercise: e, setNumber, actual_reps: v.reps, actual_load: v.load, actual_rpe: v.rpe })}
         onEditSet={(log, i) => setEditing({ log, index: i })}
-        onTickWarmup={(e) => logSet.mutate({ exercise: e, setNumber: 1, setType: 'warmup', actual_reps: null, actual_load: null, actual_rpe: null })}
-        onUntickWarmup={(rows) => rows.forEach((r) => deleteSet.mutate({ logId: r.id }))}
       />
     );
   };
@@ -128,7 +126,19 @@ export default function WorkoutDay() {
         ) : null}
 
         {exercises.length === 0 ? <Card><AppText color="muted">No exercises in this workout yet.</AppText></Card> : null}
-        {layout.ordered.map((b) => <BlockView key={b.key} block={b} renderExercise={renderExercise} />)}
+        {layout.ordered.map((b) => {
+          const warmups = b.rows.filter((e) => e.section === 'warmup' && e.block_type === 'exercise');
+          const warmupDone = warmups.length > 0 && warmups.every((e) => (logsByExercise.get(e.id) ?? []).length > 0);
+          // One tick for the whole warm-up: it saves a no-numbers warm-up set for each warm-up exercise (or takes them back out).
+          const toggleWarmup = () => {
+            for (const e of warmups) {
+              const rows = logsByExercise.get(e.id) ?? [];
+              if (warmupDone) rows.forEach((r) => deleteSet.mutate({ logId: r.id }));
+              else if (rows.length === 0) logSet.mutate({ exercise: e, setNumber: 1, setType: 'warmup', actual_reps: null, actual_load: null, actual_rpe: null });
+            }
+          };
+          return <BlockView key={b.key} block={b} renderExercise={renderExercise} headerExtra={warmups.length > 0 ? <WarmupTick done={warmupDone} onToggle={toggleWarmup} /> : undefined} />;
+        })}
 
         {layout.choosing ? (
           <View style={{ gap: spacing.md, borderWidth: 1, borderColor: t.accentBorder, backgroundColor: t.accentSoft, borderRadius: 16, padding: spacing.md }}>

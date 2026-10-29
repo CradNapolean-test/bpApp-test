@@ -722,6 +722,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   clientExerciseMaxes,
   showProgression,
   renderExtra,
+  renderBlockExtra,
   memberChoices,
 }: {
   exercises: T[];
@@ -736,6 +737,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   clientExerciseMaxes?: ClientExerciseMaxRow[];
   showProgression?: boolean;
   renderExtra?: (exercise: T) => ReactNode;
+  // Something shown under a block's heading (the member's one tick for the whole warm-up).
+  renderBlockExtra?: (rows: T[]) => ReactNode;
   // A member's Strong / Conditioning (and Upper / Lower) picks for this workout. When given, the member
   // chooses what to do in each 10-minute slot and only the chosen blocks show.
   memberChoices?: {
@@ -1016,6 +1019,7 @@ export function ExerciseEditor<T extends EditableExercise>({
               {description && <p className="text-xs text-zinc-500">{description}</p>}
             </div>
           )}
+          {renderBlockExtra?.(rows)}
           <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             <ul className="space-y-4">
               {groupBySuperset(rows).map((sg, sgIndex) => (

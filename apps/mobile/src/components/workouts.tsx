@@ -164,7 +164,7 @@ function LogSetForm({
 }
 
 export function ExerciseCard({
-  exercise, index, tz, library, resolvedMax, logs, last, priorBest, onLog, onEditSet, onTickWarmup, onUntickWarmup,
+  exercise, index, tz, library, resolvedMax, logs, last, priorBest, onLog, onEditSet,
 }: {
   exercise: WorkoutExerciseRow;
   index: number;
@@ -176,11 +176,9 @@ export function ExerciseCard({
   priorBest: number | null;
   onLog: (exercise: WorkoutExerciseRow, setNumber: number, v: { reps: number | null; load: number | null; rpe: number | null }) => void;
   onEditSet: (log: WorkoutLogRow, index: number) => void;
-  // Warm-up exercises are ticked off instead of logged as sets, reps and weight.
-  onTickWarmup: (exercise: WorkoutExerciseRow) => void;
-  onUntickWarmup: (logs: WorkoutLogRow[]) => void;
 }) {
   const t = useTheme();
+  // Warm-up exercises are not logged one by one: the whole warm-up gets a single tick (WarmupTick).
   const isWarmup = exercise.section === 'warmup' && exercise.block_type === 'exercise';
   const isCircuit = exercise.block_type === 'circuit';
   const isPercent = exercise.prescription_type === 'percent_1rm';
@@ -233,20 +231,6 @@ export function ExerciseCard({
         </View>
       ) : null}
 
-      {isWarmup ? (
-        <Pressable
-          onPress={() => (logs.length > 0 ? onUntickWarmup(logs) : onTickWarmup(exercise))}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: logs.length > 0 }}
-          accessibilityLabel={`${exercise.name} done`}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm, minHeight: 48 }}>
-          <View style={{ width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: logs.length > 0 ? t.success : t.border, backgroundColor: logs.length > 0 ? t.success : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-            {logs.length > 0 ? <AppText style={{ color: '#fff', fontWeight: '800' }}>✓</AppText> : null}
-          </View>
-          <AppText style={{ fontWeight: '700' }}>{logs.length > 0 ? 'Done' : 'Tick when done'}</AppText>
-        </Pressable>
-      ) : null}
-
       {!isCircuit && !isWarmup ? (
         <>
           {logs.length > 0 ? (
@@ -275,7 +259,25 @@ export function ExerciseCard({
 }
 
 // A titled block (Warm-up, Lift, Strong · Block 1 · AMRAP ...) with its exercises, supersets grouped.
-export function BlockView({ block, renderExercise }: { block: DisplayBlock<WorkoutExerciseRow>; renderExercise: (ex: WorkoutExerciseRow, index: number) => React.ReactNode }) {
+// One tick for the whole warm-up (not one per exercise).
+export function WarmupTick({ done, onToggle }: { done: boolean; onToggle: () => void }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: done }}
+      accessibilityLabel="Warm-up done"
+      style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm, minHeight: 48 }}>
+      <View style={{ width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: done ? t.success : t.border, backgroundColor: done ? t.success : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+        {done ? <AppText style={{ color: '#fff', fontWeight: '800' }}>✓</AppText> : null}
+      </View>
+      <AppText style={{ fontWeight: '700' }}>{done ? 'Warm-up done' : 'Tick when your warm-up is done'}</AppText>
+    </Pressable>
+  );
+}
+
+export function BlockView({ block, renderExercise, headerExtra }: { block: DisplayBlock<WorkoutExerciseRow>; renderExercise: (ex: WorkoutExerciseRow, index: number) => React.ReactNode; headerExtra?: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={{ gap: spacing.sm }}>
@@ -285,6 +287,7 @@ export function BlockView({ block, renderExercise }: { block: DisplayBlock<Worko
           {block.description ? <AppText variant="small" color="muted">{block.description}</AppText> : null}
         </View>
       ) : null}
+      {headerExtra}
       {groupBySuperset(block.rows).map((sg, gi) => (
         <View key={gi} style={sg.group ? { gap: spacing.sm, borderLeftWidth: 3, borderLeftColor: t.accent, paddingLeft: spacing.sm } : { gap: spacing.sm }}>
           {sg.group ? (
