@@ -60,3 +60,12 @@ describe('buildFaqs (R16)', () => {
     expect(FAQ_TODO.length).toBeGreaterThan(0);
   });
 });
+
+describe('Email your coach', () => {
+  it('is added with the coach address only when it is known', () => {
+    const withEmail = buildFaqs({ ...base, coachEmail: 'coach@example.com' }).find((f) => f.q === 'Email your coach');
+    expect(withEmail?.email).toBe('coach@example.com');
+    expect(buildFaqs(base).some((f) => f.q === 'Email your coach')).toBe(false);
+    expect(buildFaqs({ ...base, coachEmail: null }).some((f) => f.q === 'Email your coach')).toBe(false);
+  });
+});

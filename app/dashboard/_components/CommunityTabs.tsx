@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, Check, ChevronDown, Copy, ExternalLink, Gift, MapPin, Share2, Star, Users } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
@@ -11,6 +11,7 @@ import { getMemberTimetable } from '@/lib/data/classes';
 import { clubBadges, clubProgress } from '@/lib/clubs';
 import { cancellationPolicyText } from '@/lib/bookingRules';
 import { buildFaqs } from '@/lib/faqContent';
+import { createClient } from '@/lib/supabase/client';
 import { ClubBar } from './ClubBar';
 import type { ClientMembershipRow, EventWithSignup, RewardsForMember } from '@/lib/data/types';
 
@@ -330,6 +331,19 @@ export function FaqTab({
   const [open, setOpen] = useState<number | null>(null);
   // Each session has its own cancel-by time; the sessions are read when this screen opens to say whether the gym has one rule.
   const timetable = useOnDemand(() => getMemberTimetable(clientId), clientId);
+  // The member's coach's address (the narrow get_my_coach_email read, migration 0048); the question is left out until it is known.
+  const [coachEmail, setCoachEmail] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve(createClient().rpc('get_my_coach_email'))
+      .then(({ data }) => {
+        if (!cancelled && typeof data === 'string' && data) setCoachEmail(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const cutoffs = (timetable.data ?? []).map((o) => o.cutoffHours);
   const pkg = membership?.package ?? null;
   const FAQS = buildFaqs({
@@ -338,6 +352,7 @@ export function FaqTab({
     advanceBookingDays: pkg?.advance_booking_days ?? null,
     cancellation: cancellationPolicyText(gymBlackout, cutoffs),
     referralUrl,
+    coachEmail,
   });
   return (
     <div className="space-y-3">
@@ -353,7 +368,16 @@ export function FaqTab({
               <span className="text-sm font-bold text-black dark:text-zinc-50">{f.q}</span>
               <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open === i ? 'rotate-180' : ''}`} />
             </button>
-            {open === i && <p className="px-4 pb-3.5 text-sm text-zinc-600 dark:text-zinc-400">{f.a}</p>}
+            {open === i && (
+              <div className="px-4 pb-3.5 text-sm text-zinc-600 dark:text-zinc-400">
+                <p>{f.a}</p>
+                {f.email && (
+                  <a href={`mailto:${f.email}`} className="mt-1 inline-block break-all font-semibold text-accent underline">
+                    {f.email}
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

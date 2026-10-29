@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 
 import type { EventWithSignup, RewardRow } from '@ballistic/shared/data/types';
 import { eventState, rewardCaption, rewardStatus, spotsText } from '@ballistic/shared/utils/community';
@@ -125,7 +125,7 @@ export function RewardCard({ reward, sessions, months, grantedIds }: { reward: R
 }
 
 // Questions that open to show the answer.
-export function FaqList({ items }: { items: { q: string; a: string }[] }) {
+export function FaqList({ items }: { items: { q: string; a: string; email?: string }[] }) {
   const t = useTheme();
   const [open, setOpen] = useState<number | null>(null);
   return (
@@ -136,7 +136,16 @@ export function FaqList({ items }: { items: { q: string; a: string }[] }) {
             <AppText style={{ flex: 1, fontWeight: '700' }}>{f.q}</AppText>
             <Icon name={open === i ? 'chevronUp' : 'chevronDown'} size={18} color={t.muted} />
           </Pressable>
-          {open === i ? <AppText color="muted" style={{ paddingHorizontal: spacing.md, paddingBottom: 14 }}>{f.a}</AppText> : null}
+          {open === i ? (
+            <View style={{ paddingHorizontal: spacing.md, paddingBottom: 14, gap: 4 }}>
+              <AppText color="muted">{f.a}</AppText>
+              {f.email ? (
+                <Pressable onPress={() => void Linking.openURL(`mailto:${f.email}`).catch(() => {})} accessibilityRole="link">
+                  <AppText color="accent" style={{ fontWeight: '700' }}>{f.email}</AppText>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ))}
     </View>

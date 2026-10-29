@@ -23,6 +23,8 @@ export const FAQ_TODO: readonly string[] = [
 export interface Faq {
   q: string;
   a: string;
+  // An address shown under the answer as a mail link.
+  email?: string;
 }
 
 export interface FaqInputs {
@@ -33,6 +35,8 @@ export interface FaqInputs {
   cancellation: string;
   // The gym's referral page, or null when it has none (then the referral question is left out).
   referralUrl: string | null;
+  // The member's coach's email, when known (then an "Email your coach" question is added).
+  coachEmail?: string | null;
 }
 
 // "100, 250 and 500, then every 500 after that", from the club list the Home screen uses.
@@ -72,6 +76,10 @@ export function buildFaqs(input: FaqInputs): Faq[] {
     { q: 'What are the session clubs?', a: `Clubs mark the sessions you have attended: ${describeClubs()}. Your progress towards the next club is on your Home screen.` },
     { q: 'How do I get my reward?', a: 'When a reward shows Earned on the Rewards screen, ask your coach and they will give it to you.' },
   ];
+  if (input.coachEmail) {
+    const at = faqs.findIndex((f) => f.q === 'How do I get in touch with my coach?');
+    faqs.splice(at + 1, 0, { q: 'Email your coach', a: 'Prefer email? Write to your coach at:', email: input.coachEmail });
+  }
   if (input.referralUrl) {
     faqs.push({ q: 'How do I refer a friend?', a: 'Open Refer a friend, tap Share, and send them your link.' });
   }
