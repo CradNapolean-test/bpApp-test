@@ -171,7 +171,7 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     try {
       let food = await getFoodByBarcode(barcode);
       let servingGrams: number | null = null;
-      if (food && food.source === 'scan' && !food.serving_options?.length) {
+      if (food && (food.source === 'scan' || food.source === 'off') && !food.serving_options?.length) {
         // Scanned before servings existed: take the pack's serving from Open Food Facts now, once, so it is offered from here on.
         const product = await lookupBarcode(barcode).catch(() => null);
         if (product?.serving) {
