@@ -23,6 +23,7 @@ export type Screen =
   | 'Activity'
   | 'Insights'
   | 'Overview'
+  | 'Metrics'
   | 'Progress & Photos'
   | 'Body Scans'
   | 'Strength'
@@ -180,7 +181,7 @@ export function screensForCategory(
         return ['Weekly Log', 'Forms'];
       case 'Progress':
         // Insights (adaptive maintenance / plateau checks) is coach-only for now.
-        return isCoachView ? ['Overview', 'Insights', 'Strength', 'Progress & Photos', 'Body Scans'] : ['Overview', 'Strength', 'Progress & Photos', 'Body Scans'];
+        return isCoachView ? ['Overview', 'Metrics', 'Insights', 'Strength', 'Progress & Photos', 'Body Scans'] : ['Overview', 'Metrics', 'Strength', 'Progress & Photos', 'Body Scans'];
       case 'Learn':
         return ['Education'];
       case 'Achievements':
@@ -200,5 +201,6 @@ export function screensForCategory(
         return isCoachView ? ['Setup', 'Credits', 'Info'] : ['Account', 'Setup', 'Credits', 'Big Dog'];
     }
   })();
-  return screens.filter((s) => !disabledScreens.has(s));
+  // Metrics goes with Overview: a member whose Overview is switched off does not get the charts either.
+  return screens.filter((s) => !disabledScreens.has(s) && !(s === 'Metrics' && disabledScreens.has('Overview')));
 }

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { isoDateInTz } from '@ballistic/shared/utils/dates';
 
+import { MetricsSection } from '@/components/metrics';
 import { OverviewSection } from '@/components/overview';
 import { MeasurementsSection, PhotosSection, ScansSection } from '@/components/progress';
 import { StrengthSection } from '@/components/strength';
@@ -11,7 +12,7 @@ import { useScreenAccess } from '@/lib/screens';
 import { timezoneOf, useClientProfile, useNow } from '@/lib/today';
 import { spacing } from '@/theme';
 
-type Tab = 'overview' | 'strength' | 'photos' | 'measurements' | 'scans';
+type Tab = 'overview' | 'charts' | 'strength' | 'photos' | 'measurements' | 'scans';
 
 // Opened from the Coach hub ("Progress & results"); the header's back arrow returns there.
 export default function Progress() {
@@ -25,7 +26,7 @@ export default function Progress() {
 
   // Only the parts the coach (or the membership tier) leaves on; the first of them opens by default.
   const options: { value: Tab; label: string }[] = [
-    ...(areas.overview ? [{ value: 'overview' as const, label: 'Overview' }] : []),
+    ...(areas.overview ? [{ value: 'overview' as const, label: 'Overview' }, { value: 'charts' as const, label: 'Charts' }] : []),
     ...(areas.strength ? [{ value: 'strength' as const, label: 'Strength' }] : []),
     ...(areas.photos ? [{ value: 'photos' as const, label: 'Photos' }, { value: 'measurements' as const, label: 'Measures' }] : []),
     ...(areas.scans ? [{ value: 'scans' as const, label: 'Scans' }] : []),
@@ -39,6 +40,8 @@ export default function Progress() {
       <View style={{ flex: 1 }}>
         {tab === 'overview' ? (
           <OverviewSection todayIso={todayIso} />
+        ) : tab === 'charts' ? (
+          <MetricsSection todayIso={todayIso} />
         ) : tab === 'strength' ? (
           <StrengthSection todayIso={todayIso} tz={timezoneOf(profileQ.data ?? null)} />
         ) : tab === 'photos' ? (

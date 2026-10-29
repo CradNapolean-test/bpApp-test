@@ -67,7 +67,7 @@ export function coachGroups(disabled: Set<Screen>, nutritionMode: NutritionTrack
       label: 'Progress',
       icon: TrendingUp,
       tabs: [
-        ...tabsFor('Progress', { Overview: 'Summary', Insights: 'Insights', 'Progress & Photos': 'Photos', 'Body Scans': 'Body scans', Strength: 'Strength' }),
+        ...tabsFor('Progress', { Overview: 'Summary', Metrics: 'Charts', Insights: 'Insights', 'Progress & Photos': 'Photos', 'Body Scans': 'Body scans', Strength: 'Strength' }),
         ...tabsFor('Achievements', { 'Big Dog': 'Big Dog' }),
       ],
     },

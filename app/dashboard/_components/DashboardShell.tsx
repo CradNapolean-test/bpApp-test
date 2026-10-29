@@ -30,6 +30,7 @@ import { ClientSideNav } from './ClientSideNav';
 import { SetupTab } from './SetupTab';
 import { WeeklyLogTab } from './WeeklyLogTab';
 import { FoodTrackingTab } from './FoodTrackingTab';
+import { MetricsTab } from './MetricsTab';
 import { PhotoDiaryTab } from './PhotoDiaryTab';
 import { MealPlannerTab } from './MealPlannerTab';
 import { ActivityTab } from './ActivityTab';
@@ -962,6 +963,9 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
           {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
+          {effectiveScreen === 'Metrics' && (
+            <MetricsTab clientId={clientId} historyLogs={historyLogs} profile={profile} programWeek={programWeek} isCoachView={isCoachView} />
+          )}
           {effectiveScreen === 'Strength' && <StrengthTab clientId={clientId} workoutLogs={workoutLogs} programs={programs} profile={profile} />}
           {effectiveScreen === 'Body Scans' && (
             <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} isCoachView={isCoachView} />
