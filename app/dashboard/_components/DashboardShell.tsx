@@ -969,7 +969,7 @@ export function DashboardShell({
           {effectiveScreen === 'Metrics' && (
             <MetricsTab clientId={clientId} historyLogs={historyLogs} profile={profile} programWeek={programWeek} isCoachView={isCoachView} />
           )}
-          {effectiveScreen === 'Strength' && <StrengthTab clientId={clientId} workoutLogs={workoutLogs} programs={programs} profile={profile} />}
+          {effectiveScreen === 'Strength' && <StrengthTab clientId={clientId} workoutLogs={workoutLogs} programs={programs} profile={profile} blockResults={blockResults} />}
           {effectiveScreen === 'Body Scans' && (
             <BodyScansTab clientId={clientId} scans={bodyScans} profile={profile} readOnly={isCoachView && !isOwnClient} isCoachView={isCoachView} />
           )}
