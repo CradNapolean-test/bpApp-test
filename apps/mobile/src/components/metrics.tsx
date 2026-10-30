@@ -15,13 +15,16 @@ import {
   movingAverage,
   needsMoreHistory,
   rangeStart,
+  streakStats,
   summarize,
   weeklyAverages,
+  weeklyTotals,
   type DayPoint,
   type MetricInfo,
   type MetricKey,
   type RangeKey,
 } from '@ballistic/shared/utils/metrics';
+import { hasLoggedData } from '@ballistic/shared/utils/dailyLog';
 import { programWeekFromLogs } from '@ballistic/shared/utils/streak';
 
 import { AppText, Button, Card, Chip, Segmented } from '@/components/ui';
@@ -152,10 +155,20 @@ export function MetricsSection({ todayIso }: { todayIso: string }) {
   const info = METRICS.find((m) => m.key === metric)!;
   const from = rangeStart(todayIso, range);
   const daily = useMemo(() => dailyPoints(logs, metric, from, todayIso), [logs, metric, from, todayIso]);
-  const weekly = useMemo(() => weeklyAverages(daily), [daily]);
-  const points = mode === 'daily' ? daily : weekly;
-  const line = useMemo(() => (mode === 'daily' ? movingAverage(daily) : weekly), [mode, daily, weekly]);
+  // Sessions and days with food logged are counts per week, so they only make sense by week and are added up, not averaged.
+  const totalsOnly = !!info.weeklyTotal;
+  const weekly = useMemo(() => (totalsOnly ? weeklyTotals(daily) : weeklyAverages(daily)), [totalsOnly, daily]);
+  const shownMode = totalsOnly ? 'weekly' : mode;
+  const points = shownMode === 'daily' ? daily : weekly;
+  const line = useMemo(() => (shownMode === 'daily' ? movingAverage(daily) : weekly), [shownMode, daily, weekly]);
   const summary = summarize(points, info.better);
+
+  // Days with anything logged: the streak now, and the longest run inside the chosen range.
+  const streaks = useMemo(() => {
+    const dates = logs.filter(hasLoggedData).map((l) => l.log_date);
+    const inRange = from == null ? dates : dates.filter((d) => d >= from);
+    return { current: streakStats(dates, todayIso).current, best: streakStats(inRange, todayIso).best };
+  }, [logs, from, todayIso]);
 
   const target = useMemo(() => {
     if (metric === 'bodyweight') return profile?.goal_weight ?? null;
@@ -181,12 +194,16 @@ export function MetricsSection({ todayIso }: { todayIso: string }) {
       contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.xl }}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={recentQ.isRefetching} onRefresh={async () => { await recentQ.refetch(); }} tintColor={t.accent} />}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Tile label="Logging streak" value={`${streaks.current} ${streaks.current === 1 ? 'day' : 'days'}`} />
+        <Tile label="Best streak in range" value={`${streaks.best} ${streaks.best === 1 ? 'day' : 'days'}`} />
+      </View>
       <Card style={{ gap: spacing.sm }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {METRICS.map((m) => <Chip key={m.key} label={m.label} active={metric === m.key} onPress={() => setMetric(m.key)} />)}
         </ScrollView>
         <Segmented value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r.key, label: r.key === '4w' ? '4 wk' : r.key === '12w' ? '12 wk' : r.key === '6m' ? '6 mo' : 'All' }))} />
-        <Segmented value={mode} onChange={setMode} options={[{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }]} />
+        {!totalsOnly ? <Segmented value={mode} onChange={setMode} options={[{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }]} /> : null}
       </Card>
 
       {wantsMore && fullQ.isPending ? (
@@ -207,13 +224,13 @@ export function MetricsSection({ todayIso }: { todayIso: string }) {
               value={change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${formatMetricValue(Math.abs(change), info)}`}
               tone={summary.favourable == null ? undefined : summary.favourable ? 'success' : 'danger'}
             />
-            <Tile label="Average" value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
+            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
             <Tile label="Lowest – highest" value={summary.min != null && summary.max != null ? `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}` : '—'} />
           </View>
           <Card style={{ gap: spacing.sm }}>
-            <MetricChart key={`${metric}:${mode}:${range}`} info={info} points={points} line={line} target={target} weekly={mode === 'weekly'} />
+            <MetricChart key={`${metric}:${shownMode}:${range}`} info={info} points={points} line={line} target={target} weekly={shownMode === 'weekly'} />
             <AppText variant="small" color="muted">
-              {mode === 'daily' ? 'Each dot is a day you logged; the line is the 7-day average. Drag along the chart to read any day.' : 'Each dot is the average of the days you logged that week. Drag along the chart to read any week.'}
+              {totalsOnly ? `Each dot is ${info.key === 'sessions' ? 'the sessions you ticked off' : 'the days you logged food'} in that week (Monday to Sunday). The first and current weeks may be part weeks. Drag along the chart to read any week.` : mode === 'daily' ? 'Each dot is a day you logged; the line is the 7-day average. Drag along the chart to read any day.' : 'Each dot is the average of the days you logged that week. Drag along the chart to read any week.'}
             </AppText>
           </Card>
         </>

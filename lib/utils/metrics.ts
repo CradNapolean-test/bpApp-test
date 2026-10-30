@@ -4,7 +4,7 @@ import type { DailyLogRow } from '../data/types';
 import { dayCaloriesOf, hasFoodLogged } from './dailyLog';
 import { isoWeekKey } from './dates';
 
-export type MetricKey = 'bodyweight' | 'calories' | 'protein' | 'steps' | 'sleep' | 'water';
+export type MetricKey = 'bodyweight' | 'calories' | 'protein' | 'steps' | 'sleep' | 'water' | 'hunger' | 'energy' | 'motivation' | 'stress' | 'sessions' | 'foodDays';
 
 export interface MetricInfo {
   key: MetricKey;
@@ -13,6 +13,8 @@ export interface MetricInfo {
   digits: number;
   // Which direction is "better", for colouring the change. Undefined: neither is inherently good or bad.
   better?: 'down' | 'up';
+  // A count of days in each week (sessions, days with food logged) rather than a daily figure: shown by week only, as a total.
+  weeklyTotal?: boolean;
 }
 
 export const METRICS: MetricInfo[] = [
@@ -22,6 +24,13 @@ export const METRICS: MetricInfo[] = [
   { key: 'steps', label: 'Steps', unit: '', digits: 0, better: 'up' },
   { key: 'sleep', label: 'Sleep', unit: 'h', digits: 1, better: 'up' },
   { key: 'water', label: 'Water', unit: 'L', digits: 1, better: 'up' },
+  // The 1 to 5 check-in scales.
+  { key: 'hunger', label: 'Hunger', unit: '', digits: 1 },
+  { key: 'energy', label: 'Energy', unit: '', digits: 1, better: 'up' },
+  { key: 'motivation', label: 'Motivation', unit: '', digits: 1, better: 'up' },
+  { key: 'stress', label: 'Stress', unit: '', digits: 1, better: 'down' },
+  { key: 'sessions', label: 'Sessions per week', unit: '', digits: 0, better: 'up', weeklyTotal: true },
+  { key: 'foodDays', label: 'Days with food logged', unit: '', digits: 0, better: 'up', weeklyTotal: true },
 ];
 
 export type RangeKey = '4w' | '12w' | '6m' | 'all';
@@ -68,6 +77,16 @@ export function metricValue(log: DailyLogRow, key: MetricKey): number | null {
       return log.sleep;
     case 'water':
       return log.water;
+    case 'hunger':
+    case 'energy':
+    case 'motivation':
+    case 'stress':
+      return log[key];
+    // One for each day that counts, summed by week (weeklyTotals).
+    case 'sessions':
+      return log.gym_session ? 1 : null;
+    case 'foodDays':
+      return hasFoodLogged(log) ? 1 : null;
     case 'protein':
       return log.protein;
     case 'calories':
@@ -110,6 +129,42 @@ export function weeklyAverages(points: DayPoint[]): DayPoint[] {
   return [...byWeek.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, values]) => ({ date, value: values.reduce((a, b) => a + b, 0) / values.length }));
+}
+
+// The daily points added up by calendar week (Monday to Sunday), dated by the Monday: sessions and days with food logged per week. Weeks with
+// none are left out, like a week of averages with no readings. The first and the current week may be part weeks.
+export function weeklyTotals(points: DayPoint[]): DayPoint[] {
+  const byWeek = new Map<string, number>();
+  for (const p of points) {
+    const week = isoWeekKey(p.date);
+    byWeek.set(week, (byWeek.get(week) ?? 0) + p.value);
+  }
+  return [...byWeek.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
+}
+
+export interface StreakStats {
+  // Consecutive days logged, counting back from today (or from yesterday while today is still empty).
+  current: number;
+  // The longest run of consecutive logged days.
+  best: number;
+}
+
+export function streakStats(loggedDates: string[], today: string): StreakStats {
+  const days = [...new Set(loggedDates)].map(dayNumber).sort((a, b) => a - b);
+  let best = 0;
+  let run = 0;
+  days.forEach((d, i) => {
+    run = i > 0 && d === days[i - 1] + 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+  });
+  const have = new Set(days);
+  let cursor = have.has(dayNumber(today)) ? dayNumber(today) : dayNumber(today) - 1;
+  let current = 0;
+  while (have.has(cursor)) {
+    current++;
+    cursor--;
+  }
+  return { current, best };
 }
 
 export interface MetricSummary {

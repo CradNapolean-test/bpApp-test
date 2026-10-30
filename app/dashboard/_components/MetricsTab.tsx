@@ -7,6 +7,7 @@ import { Segmented } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { getDailyLogs } from '@/lib/data/dailyLogs';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import {
   METRICS,
@@ -17,8 +18,10 @@ import {
   movingAverage,
   needsMoreHistory,
   rangeStart,
+  streakStats,
   summarize,
   weeklyAverages,
+  weeklyTotals,
   type DayPoint,
   type MetricInfo,
   type MetricKey,
@@ -26,6 +29,13 @@ import {
 } from '@/lib/utils/metrics';
 import { useTodayIso } from './useTodayIso';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
+
+// The measures in three rows, so twelve of them do not sit in one scrolling strip.
+const MEASURE_GROUPS: { label: string; keys: MetricKey[] }[] = [
+  { label: 'Body and food', keys: ['bodyweight', 'calories', 'protein', 'steps', 'sleep', 'water'] },
+  { label: 'How you feel', keys: ['hunger', 'energy', 'motivation', 'stress'] },
+  { label: 'Consistency', keys: ['sessions', 'foodDays'] },
+];
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 
@@ -191,10 +201,20 @@ export function MetricsTab({
   const info = METRICS.find((m) => m.key === metric)!;
   const from = rangeStart(today, range);
   const daily = useMemo(() => dailyPoints(logs, metric, from, today), [logs, metric, from, today]);
-  const weekly = useMemo(() => weeklyAverages(daily), [daily]);
-  const points = mode === 'daily' ? daily : weekly;
-  const line = useMemo(() => (mode === 'daily' ? movingAverage(daily) : weekly), [mode, daily, weekly]);
+  // Sessions and days with food logged are counts per week, so they only make sense by week and are added up, not averaged.
+  const totalsOnly = !!info.weeklyTotal;
+  const weekly = useMemo(() => (totalsOnly ? weeklyTotals(daily) : weeklyAverages(daily)), [totalsOnly, daily]);
+  const shownMode = totalsOnly ? 'weekly' : mode;
+  const points = shownMode === 'daily' ? daily : weekly;
+  const line = useMemo(() => (shownMode === 'daily' ? movingAverage(daily) : weekly), [shownMode, daily, weekly]);
   const summary = summarize(points, info.better);
+
+  // Days with anything logged: the streak now, and the longest run inside the chosen range.
+  const streaks = useMemo(() => {
+    const dates = logs.filter(hasLoggedData).map((l) => l.log_date);
+    const inRange = from == null ? dates : dates.filter((d) => d >= from);
+    return { current: streakStats(dates, today).current, best: streakStats(inRange, today).best };
+  }, [logs, from, today]);
 
   // The goal weight, and today's calorie and protein target (the same one the food diary shows against).
   const target = useMemo(() => {
@@ -210,19 +230,33 @@ export function MetricsTab({
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2">
+        <Tile label="Logging streak" value={`${streaks.current} ${streaks.current === 1 ? 'day' : 'days'}`} />
+        <Tile label="Best streak in range" value={`${streaks.best} ${streaks.best === 1 ? 'day' : 'days'}`} />
+      </div>
       <div className={`${cardCls} space-y-3`}>
-        <Segmented<MetricKey> label="Measure" value={metric} onChange={setMetric} options={METRICS.map((m) => ({ value: m.key, label: m.label }))} />
+        {MEASURE_GROUPS.map((g) => (
+          <Segmented<MetricKey>
+            key={g.label}
+            label={g.label}
+            value={metric}
+            onChange={setMetric}
+            options={g.keys.map((k) => ({ value: k, label: METRICS.find((m) => m.key === k)!.label }))}
+          />
+        ))}
         <div className="flex flex-wrap gap-2">
           <Segmented<RangeKey> label="Time range" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r.key, label: r.label }))} />
-          <Segmented<'daily' | 'weekly'>
-            label="Daily or weekly"
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'daily', label: 'Daily' },
-              { value: 'weekly', label: 'Weekly' },
-            ]}
-          />
+          {!totalsOnly && (
+            <Segmented<'daily' | 'weekly'>
+              label="Daily or weekly"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'daily', label: 'Daily' },
+                { value: 'weekly', label: 'Weekly' },
+              ]}
+            />
+          )}
         </div>
       </div>
 
@@ -243,18 +277,20 @@ export function MetricsTab({
               value={change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${formatMetricValue(Math.abs(change), info)}`}
               tone={changeTone}
             />
-            <Tile label="Average" value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
+            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
             <Tile
               label="Lowest – highest"
               value={summary.min != null && summary.max != null ? `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}` : '—'}
             />
           </div>
           <div className={cardCls}>
-            <MetricChart key={`${metric}:${mode}:${range}`} info={info} points={points} line={line} target={target} weekly={mode === 'weekly'} />
+            <MetricChart key={`${metric}:${shownMode}:${range}`} info={info} points={points} line={line} target={target} weekly={shownMode === 'weekly'} />
             <p className="mt-2 text-xs text-zinc-500">
-              {mode === 'daily'
-                ? 'Each dot is a day you logged; the line is the 7-day average. Touch or hover the chart to read any day.'
-                : 'Each dot is the average of the days you logged that week. Touch or hover the chart to read any week.'}
+              {totalsOnly
+                ? `Each dot is ${info.key === 'sessions' ? 'the sessions you ticked off' : 'the days you logged food'} in that week (Monday to Sunday). The first and current weeks may be part weeks. Touch or hover the chart to read any week.`
+                : mode === 'daily'
+                  ? 'Each dot is a day you logged; the line is the 7-day average. Touch or hover the chart to read any day.'
+                  : 'Each dot is the average of the days you logged that week. Touch or hover the chart to read any week.'}
             </p>
           </div>
         </>

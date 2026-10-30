@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DailyLogRow } from '../data/types';
-import { chartDomain, dailyPoints, formatMetricValue, metricValue, movingAverage, needsMoreHistory, rangeStart, summarize, weeklyAverages } from './metrics';
+import { chartDomain, dailyPoints, formatMetricValue, metricValue, movingAverage, needsMoreHistory, rangeStart, streakStats, summarize, weeklyAverages, weeklyTotals } from './metrics';
 
 const log = (date: string, over: Partial<DailyLogRow> = {}): DailyLogRow => ({
   id: date,
@@ -121,5 +121,42 @@ describe('formatMetricValue / chartDomain', () => {
     expect(d.max).toBeGreaterThan(90);
     expect(d.min).toBeLessThan(80);
     expect(chartDomain([]).max).toBeGreaterThan(chartDomain([]).min);
+  });
+});
+
+describe('wellbeing, sessions and food days', () => {
+  it('reads the 1 to 5 scales and counts sessions and food days as 1 each', () => {
+    expect(metricValue(log('2026-10-01', { energy: 4 }), 'energy')).toBe(4);
+    expect(metricValue(log('2026-10-01'), 'stress')).toBeNull();
+    expect(metricValue(log('2026-10-01', { gym_session: true }), 'sessions')).toBe(1);
+    expect(metricValue(log('2026-10-01'), 'sessions')).toBeNull();
+    expect(metricValue(log('2026-10-01', { protein: 100, carbs: 100, fat: 50 }), 'foodDays')).toBe(1);
+    expect(metricValue(log('2026-10-01', { water: 2 }), 'foodDays')).toBeNull();
+  });
+});
+
+describe('weeklyTotals', () => {
+  it('adds up each Monday-to-Sunday week and dates it by the Monday', () => {
+    expect(
+      weeklyTotals([
+        { date: '2026-10-05', value: 1 },
+        { date: '2026-10-07', value: 1 },
+        { date: '2026-10-11', value: 1 },
+        { date: '2026-10-13', value: 1 },
+      ])
+    ).toEqual([
+      { date: '2026-10-05', value: 3 },
+      { date: '2026-10-12', value: 1 },
+    ]);
+  });
+});
+
+describe('streakStats', () => {
+  it('counts back from today, or from yesterday while today is empty, and finds the longest run', () => {
+    const dates = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-08', '2026-10-09', '2026-10-10'];
+    expect(streakStats(dates, '2026-10-10')).toEqual({ current: 3, best: 4 });
+    expect(streakStats(dates, '2026-10-11')).toEqual({ current: 3, best: 4 });
+    expect(streakStats(dates, '2026-10-12')).toEqual({ current: 0, best: 4 });
+    expect(streakStats([], '2026-10-12')).toEqual({ current: 0, best: 0 });
   });
 });
