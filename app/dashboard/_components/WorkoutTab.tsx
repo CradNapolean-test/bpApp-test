@@ -40,7 +40,7 @@ import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
 import { blockFormatOf, chosenBlockKeys, describeChoices, exerciseBlockKey, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
-import { blockConfigOf, resultSummary } from '@/lib/blockScoring';
+import { blockConfigOf, resultForConfig, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
 import { SetInputsGrid } from './SetInputsGrid';
 import { BlockResultForm } from './BlockResultForm';
@@ -1311,7 +1311,7 @@ export function WorkoutTab({
                   blockKey={key}
                   format={blockFormatOf(rows)}
                   config={config}
-                  result={resultsByBlock.get(`${openDay.id}|${key}`)}
+                  result={resultForConfig(config, resultsByBlock.get(`${openDay.id}|${key}`))}
                 />
               );
             }}
@@ -1319,7 +1319,7 @@ export function WorkoutTab({
               if (!isCoachView) return null;
               const config = blockConfigOf(rows);
               if (config.scoring === 'none') return null;
-              const result = resultsByBlock.get(`${openDay.id}|${key}`);
+              const result = resultForConfig(config, resultsByBlock.get(`${openDay.id}|${key}`));
               return (
                 <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${result ? 'bg-success/10 text-success' : 'bg-black/[.06] text-zinc-500 dark:bg-white/10'}`}>
                   {result ? `Member: ${resultSummary(config, result)}` : 'No result yet'}

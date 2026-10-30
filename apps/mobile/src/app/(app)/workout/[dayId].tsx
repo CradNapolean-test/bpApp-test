@@ -10,7 +10,7 @@ import { blockForDisplay, memberDayBlocks } from '@ballistic/shared/utils/workou
 import { earlierLogs, lastSessionFor, priorBestLoad } from '@ballistic/shared/utils/workoutHistory';
 import { finishMessage, workoutSummary } from '@ballistic/shared/utils/workoutSets';
 import { blockFormatOf, chosenBlockKeys, exerciseIsVisible, slotOptions, usesSections } from '@ballistic/shared/workoutSections';
-import { blockConfigOf } from '@ballistic/shared/blockScoring';
+import { blockConfigOf, resultForConfig } from '@ballistic/shared/blockScoring';
 import { trackingOf } from '@ballistic/shared/workoutTracking';
 
 import { BlockResultForm, BlockView, ExerciseCard, FeedbackForm, SetEditSheet, WarmupTick } from '@/components/workouts';
@@ -95,7 +95,7 @@ export default function WorkoutDay() {
   const resultFooter = (key: string, rows: WorkoutExerciseRow[]) => {
     const config = blockConfigOf(rows);
     if (config.scoring === 'none' || rows.length === 0) return undefined;
-    const result = d.results.find((r) => r.block_key === key);
+    const result = resultForConfig(config, d.results.find((r) => r.block_key === key));
     return (
       <BlockResultForm
         key={`${key}:${result?.id ?? 'new'}`}

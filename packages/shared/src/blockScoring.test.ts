@@ -10,6 +10,7 @@ import {
   isBlankResult,
   readResultInputs,
   resultFields,
+  resultForConfig,
   resultLabel,
   resultSummary,
   sanitiseConfig,
@@ -110,5 +111,16 @@ describe('results', () => {
   it('turns a saved result back into box text', () => {
     expect(inputsFromResult({ rounds: 5, reps: 3, seconds: 750, score: null, done: null })).toEqual({ rounds: '5', reps: '3', time: '12:30', score: '', done: false });
     expect(inputsFromResult(null)).toEqual(BLANK_RESULT_INPUTS);
+  });
+});
+
+describe('resultForConfig', () => {
+  const rounds = { scoring: 'rounds' as const, rounds: 8 };
+  it("keeps a result that was saved under the block's current scoring", () => {
+    expect(resultForConfig({ scoring: 'rounds' }, rounds)).toBe(rounds);
+  });
+  it('ignores a result saved under another scoring, or no result at all', () => {
+    expect(resultForConfig({ scoring: 'time' }, rounds)).toBeUndefined();
+    expect(resultForConfig({ scoring: 'time' }, undefined)).toBeUndefined();
   });
 });

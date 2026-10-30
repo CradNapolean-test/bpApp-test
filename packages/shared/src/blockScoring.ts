@@ -148,6 +148,12 @@ export function readResultInputs(scoring: Scoring, i: ResultInputs): { ok: true;
   };
 }
 
+// A saved result counts for a block only while the block is still scored the way it was saved (a rounds result means nothing once the coach
+// switches the block to a finish time). The old row stays in the history under its own scoring until a new result replaces it.
+export function resultForConfig<R extends { scoring: string }>(config: BlockConfig, result: R | undefined | null): R | undefined {
+  return result && result.scoring === config.scoring ? result : undefined;
+}
+
 // Reps alone (with no rounds) or an unticked "done" say nothing, so there is nothing to save.
 export function isBlankResult(scoring: Scoring, v: ResultValues): boolean {
   if (scoring === 'none') return true;
