@@ -39,6 +39,23 @@ export function isEmptySet(set: { reps: number | '' | null; load: number | '' | 
   return blank(set.reps) && blank(set.load) && blank(set.rpe);
 }
 
+// ---- exercises with no weight ----
+// A conditioning exercise the coach gave no load for, that the member has never put a weight on (jumping jacks, burpees, a bike), does not
+// ask for one: the set form shows reps and RPE only, with "+ Add weight" to bring the box back, and a set can be logged as simply done.
+export function isWeightless(
+  exercise: { section: string; load: number | null; prescription_type: string },
+  priorBestLoad: number | null,
+  loggedLoads: (number | null)[]
+): boolean {
+  return (
+    exercise.section === 'conditioning' &&
+    exercise.load == null &&
+    exercise.prescription_type === 'absolute' &&
+    priorBestLoad == null &&
+    loggedLoads.every((l) => l == null || l <= 0)
+  );
+}
+
 // ---- finishing a workout ----
 export interface WorkoutSummary {
   sets: number;

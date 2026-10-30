@@ -9,7 +9,7 @@ import { percentOfMaxKg, type ResolvedMax } from '@ballistic/shared/utils/oneRep
 import type { DaySummary } from '@ballistic/shared/utils/programOverview';
 import type { DisplayBlock } from '@ballistic/shared/utils/workoutDisplay';
 import { isNewBest, lastSetFor, type LastSession } from '@ballistic/shared/utils/workoutHistory';
-import { isEmptySet, nextSetNumber } from '@ballistic/shared/utils/workoutSets';
+import { isEmptySet, isWeightless, nextSetNumber } from '@ballistic/shared/utils/workoutSets';
 import { parseQuantity } from '@ballistic/shared/utils/foodQuantity';
 
 import { safeHttpUrl } from '@ballistic/shared/utils/education';
@@ -113,10 +113,12 @@ function NumberBox({ label, value, onChange }: { label: string; value: string; o
 }
 
 function LogSetForm({
-  setNumber, totalSets, restSeconds, initialReps, initialLoad, lastSet, priorBest, onLog,
+  setNumber, totalSets, restSeconds, initialReps, initialLoad, lastSet, priorBest, weightless, onLog,
 }: {
   setNumber: number; totalSets: number | null; restSeconds: number | null; initialReps: number | null; initialLoad: number | null;
   lastSet: { reps: number | null; load: number | null } | null; priorBest: number | null;
+  // An exercise with no weight: reps and RPE only, and a set can be logged as simply done.
+  weightless: boolean;
   onLog: (v: { reps: number | null; load: number | null; rpe: number | null }) => void;
 }) {
   const t = useTheme();
@@ -125,13 +127,14 @@ function LogSetForm({
   const [load, setLoad] = useState(initialLoad != null ? String(initialLoad) : '');
   const [rpe, setRpe] = useState('');
   const [timerKey, setTimerKey] = useState(0);
+  const [showLoad, setShowLoad] = useState(!weightless);
   const [message, setMessage] = useState<string | null>(null);
   const n = (s: string) => (s.trim() === '' ? null : parseQuantity(s));
 
   function submit() {
     const loadN = n(load);
     // A set with no reps, no load and no RPE says nothing; it used to be saved and counted as a set done (L4).
-    if (isEmptySet({ reps: n(reps), load: loadN, rpe: n(rpe) })) {
+    if (!weightless && isEmptySet({ reps: n(reps), load: loadN, rpe: n(rpe) })) {
       setMessage('Add the reps, the load or your RPE to log this set.');
       return;
     }
@@ -153,10 +156,11 @@ function LogSetForm({
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <NumberBox label="Reps" value={reps} onChange={setReps} />
-        <NumberBox label="Load (kg)" value={load} onChange={setLoad} />
+        {showLoad ? <NumberBox label="Load (kg)" value={load} onChange={setLoad} /> : null}
         <NumberBox label="RPE" value={rpe} onChange={setRpe} />
       </View>
-      <Button title={`Log set ${setNumber}`} onPress={submit} />
+      {!showLoad ? <Pressable onPress={() => setShowLoad(true)} accessibilityRole="button"><AppText variant="small" color="accent" style={{ fontWeight: '700' }}>+ Add weight</AppText></Pressable> : null}
+      <Button title={weightless && isEmptySet({ reps: n(reps), load: n(load), rpe: n(rpe) }) ? `Done: set ${setNumber}` : `Log set ${setNumber}`} onPress={submit} />
       {message ? <AppText variant="small" color="success" style={{ fontWeight: '600' }}>{message}</AppText> : null}
       {restSeconds != null && timerKey > 0 ? <RestTimer key={timerKey} seconds={restSeconds} /> : null}
     </View>
@@ -181,6 +185,7 @@ export function ExerciseCard({
   // Warm-up exercises are not logged one by one: the whole warm-up gets a single tick (WarmupTick).
   const isWarmup = exercise.section === 'warmup' && exercise.block_type === 'exercise';
   const isCircuit = exercise.block_type === 'circuit';
+  const weightless = isWeightless(exercise, priorBest, logs.map((l) => l.actual_load));
   const isPercent = exercise.prescription_type === 'percent_1rm';
   const kg = isPercent ? percentOfMaxKg(resolvedMax, exercise.percent_1rm) : null;
   const videoUrl = exercise.video_url || library?.video_url || null;
@@ -237,7 +242,7 @@ export function ExerciseCard({
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {logs.map((l, i) => (
                 <Pressable key={l.id} onPress={() => onEditSet(l, i + 1)} accessibilityLabel={`Edit set ${i + 1}`} style={{ backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <AppText variant="small" color="success" style={{ fontWeight: '700' }}>✓ {i + 1} · {l.actual_reps ?? '—'}×{l.actual_load ?? '—'}{isNewBest(l.actual_load, priorBest) ? ' 🏆' : ''}</AppText>
+                  <AppText variant="small" color="success" style={{ fontWeight: '700' }}>✓ {i + 1} · {weightless && l.actual_load == null ? (l.actual_reps ?? 'done') : `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`}{isNewBest(l.actual_load, priorBest) ? ' 🏆' : ''}</AppText>
                 </Pressable>
               ))}
             </View>
@@ -250,6 +255,7 @@ export function ExerciseCard({
             initialLoad={seed?.actual_load ?? null}
             lastSet={last ? lastSetFor(last, setNumber) : null}
             priorBest={priorBest}
+            weightless={weightless}
             onLog={(v) => onLog(exercise, setNumber, v)}
           />
         </>

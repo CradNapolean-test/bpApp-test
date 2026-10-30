@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, workoutSummary, applySetChange, sortedSets } from './workoutSets';
+import { finishMessage, isEmptySet, isWeightless, nextSetNumber, reconcileLocalChoices, workoutSummary, applySetChange, sortedSets } from './workoutSets';
 
 describe('nextSetNumber (L4)', () => {
   it('is 1 for an exercise with nothing logged', () => {
@@ -105,5 +105,20 @@ describe('keeping the screen in step with saves (R13)', () => {
   it('falls back to the time when set numbers are missing or equal', () => {
     const logs = [row('late', null, '2026-10-15T09:10:00Z'), row('early', null, '2026-10-15T09:00:00Z')];
     expect(sortedSets(logs).map((l) => l.id)).toEqual(['early', 'late']);
+  });
+});
+
+describe('isWeightless', () => {
+  const conditioning = { section: 'conditioning', load: null, prescription_type: 'absolute' };
+  it('is true for conditioning with no prescribed load and no weight ever logged', () => {
+    expect(isWeightless(conditioning, null, [])).toBe(true);
+    expect(isWeightless(conditioning, null, [null, 0])).toBe(true);
+  });
+  it('is false once a load is prescribed, logged before or logged now, or outside conditioning', () => {
+    expect(isWeightless({ ...conditioning, load: 20 }, null, [])).toBe(false);
+    expect(isWeightless(conditioning, 16, [])).toBe(false);
+    expect(isWeightless(conditioning, null, [12])).toBe(false);
+    expect(isWeightless({ ...conditioning, section: 'strong' }, null, [])).toBe(false);
+    expect(isWeightless({ ...conditioning, prescription_type: 'percent_1rm' }, null, [])).toBe(false);
   });
 });

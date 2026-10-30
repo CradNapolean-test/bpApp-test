@@ -38,7 +38,7 @@ import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
-import { applySetChange, finishMessage, isEmptySet, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
+import { applySetChange, finishMessage, isEmptySet, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
 import { chosenBlockKeys, describeChoices, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
@@ -296,6 +296,7 @@ function LogSetForm({
   initialLoad,
   lastSet,
   priorBest,
+  weightless,
   onChange,
 }: {
   clientId: string;
@@ -309,6 +310,8 @@ function LogSetForm({
   lastSet: { reps: number | null; load: number | null } | null;
   // Heaviest load from earlier sessions of this exercise; a heavier set is a new best.
   priorBest: number | null;
+  // An exercise with no weight (see isWeightless): reps and RPE only, and a set can be logged as simply done.
+  weightless: boolean;
   // Tells the workout screen what was saved, so it shows the set without reloading the page.
   onChange: (change: SetChange<WorkoutLogRow>) => void;
 }) {
@@ -320,11 +323,12 @@ function LogSetForm({
   const [load, setLoad] = useState<number | ''>(initialLoad ?? '');
   const [rpe, setRpe] = useState<number | ''>('');
   const [timerKey, setTimerKey] = useState(0);
+  const [showLoad, setShowLoad] = useState(!weightless);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     // A set with no reps, no load and no RPE says nothing, and used to be saved and counted as a set done (L4).
-    if (isEmptySet({ reps, load, rpe })) {
+    if (!weightless && isEmptySet({ reps, load, rpe })) {
       toast.error('Enter the reps, the load or both before logging the set.');
       return;
     }
@@ -379,17 +383,22 @@ function LogSetForm({
         )}
       </div>
       <form onSubmit={handleSubmit} className="space-y-2.5">
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${showLoad ? 'grid-cols-3' : 'grid-cols-2'}`}>
           {numberInput('Reps', reps, setReps, 'numeric')}
-          {numberInput('Load', load, setLoad, 'decimal')}
+          {showLoad && numberInput('Load', load, setLoad, 'decimal')}
           {numberInput('RPE', rpe, setRpe, 'decimal')}
         </div>
+        {!showLoad && (
+          <button type="button" onClick={() => setShowLoad(true)} className="text-xs font-semibold text-accent">
+            + Add weight
+          </button>
+        )}
         <button
           type="submit"
           disabled={busy}
           className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
-          {busy ? 'Logging…' : `Log set ${nextSetNumber}`}
+          {busy ? 'Logging…' : weightless && isEmptySet({ reps, load, rpe }) ? `Done — set ${nextSetNumber}` : `Log set ${nextSetNumber}`}
         </button>
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
@@ -1302,6 +1311,7 @@ export function WorkoutTab({
               };
               const seed = logs.length > 0 ? logs[logs.length - 1] : (last?.sets[0] ?? null);
               const isWarmup = ex.section === 'warmup' && ex.block_type === 'exercise';
+              const weightless = isWeightless(ex, priorBest, logs.map((l) => l.actual_load));
               return (
                 <>
                   {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && (
@@ -1324,7 +1334,7 @@ export function WorkoutTab({
                               {i + 1}
                             </span>
                             <span className="whitespace-nowrap font-semibold text-black dark:text-zinc-100">
-                              {l.actual_reps ?? '—'} × {l.actual_load ?? '—'}
+                              {l.actual_load == null && weightless ? (l.actual_reps ?? '✓') : `${l.actual_reps ?? '—'} × ${l.actual_load ?? '—'}`}
                             </span>
                           </span>
                         ))}
@@ -1343,7 +1353,7 @@ export function WorkoutTab({
                               aria-label={`Edit set ${i + 1}`}
                               className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success"
                             >
-                              ✓ {i + 1} · {l.actual_reps ?? '—'}×{l.actual_load ?? '—'}
+                              ✓ {i + 1} · {weightless && l.actual_load == null ? (l.actual_reps ?? 'done') : `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`}
                               {priorBest != null && l.actual_load != null && l.actual_load > priorBest ? ' 🏆' : ''}
                             </button>
                           ))}
@@ -1359,6 +1369,7 @@ export function WorkoutTab({
                         initialLoad={seed?.actual_load ?? null}
                         lastSet={last ? lastFor(nextSetNumber(logs)) : null}
                         priorBest={priorBest}
+                        weightless={weightless}
                         onChange={changeSets}
                       />
                     </>
