@@ -50,6 +50,7 @@ import { NutritionSummary } from './NutritionSummary';
 import { AddFoodButtons, useBarcodeAdd, useFoodPairs, useFoodShortcuts } from './FoodEntryTools';
 import { PairSuggestions } from './PairSuggestions';
 import { useDialog } from '@/app/_components/useDialog';
+import { ServingAmount } from './ServingAmount';
 import { useTodayIso } from './useTodayIso';
 import type { NutritionTrackingMode } from './categories';
 import type {
@@ -192,8 +193,6 @@ function EditEntrySheet({
 }) {
   useBackHandler(true, onClose);
   const [portions, setPortions] = useState(entry.portions);
-  // The box can be emptied while typing (counts as 0) and shows the real number again on blur.
-  const [draft, setDraft] = useState<string | null>(null);
   const isPerGram = entry.food?.portion === '1 gram';
   const unitLabel = isPerGram ? 'Grams' : `× ${entry.food?.portion ?? 'portion'}`;
   const quantityProblem = entry.food && portions > 0 ? checkFoodNumber(portions, isPerGram ? 'grams' : 'portions') : null;
@@ -231,22 +230,7 @@ function EditEntrySheet({
         </h2>
         {entry.food ? (
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Quantity ({unitLabel})</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={0}
-              max={isPerGram ? FOOD_LIMITS.grams : FOOD_LIMITS.portions}
-              step="any"
-              autoFocus
-              value={draft ?? String(portions)}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setPortions(e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)));
-              }}
-              onBlur={() => setDraft(null)}
-              className={boxCls}
-            />
+            <ServingAmount food={entry.food} value={portions} onChange={setPortions} unitLabel={unitLabel} inputClassName={boxCls} autoFocus />
             {quantityProblem && <p className="text-xs font-semibold text-danger">{quantityProblem}</p>}
           </div>
         ) : (

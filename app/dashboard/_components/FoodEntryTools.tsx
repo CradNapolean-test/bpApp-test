@@ -235,10 +235,7 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           title={quantity.food.name}
           unitLabel="grams"
           initial={quantity.initial}
-          serving={(() => {
-            const stated = defaultUnit(unitsFor(quantity.food, []));
-            return stated ? { label: stated.label, grams: stated.grams } : undefined;
-          })()}
+          food={quantity.food}
           onClose={() => setQuantity(null)}
           onSave={async (grams) => {
             const { food, target } = quantity;

@@ -7,7 +7,7 @@ import { dayCalories, type DayTarget } from '@ballistic/shared/calculations';
 import type { FoodDiaryEntryRow, FoodRow, MealPlanEntryRow, MealSectionRow, NutritionFeedbackRow, RecipeWithIngredients } from '@ballistic/shared/data/types';
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@ballistic/shared/onboarding';
 import { parseQuantity, quantityConfig, quantityProblem } from '@ballistic/shared/utils/foodQuantity';
-import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, defaultUnit, parseUnitInput, startingAmount, unitText, unitsFor, type FoodUnit } from '@ballistic/shared/utils/foodUnits';
+import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, defaultUnit, parseUnitInput, startingAmount, unitForAmount, unitText, unitsFor, type FoodUnit } from '@ballistic/shared/utils/foodUnits';
 import { entryMacros, formatQuantity, totalMacros } from '@ballistic/shared/utils/foodTotals';
 import { perServing, scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
 import { quickAddText, readQuickAdd, type QuickAddText } from '@ballistic/shared/utils/quickAdd';
@@ -171,16 +171,53 @@ export function DiarySection({
 
 // ---------- sheets ----------
 // Change how much of a food there is, or remove it.
+// How much of a food, for the sheets that change an amount already chosen (an entry in the diary, the amount asked after a scan, a planned
+// meal, a recipe ingredient). The same way as the Add food list: the food's own servings (and the member's) to pick from, and a number of
+// them. `value` stays grams (or portions, for a food that is not per gram); the box only shows it in the unit chosen.
+function ServingAmount({ food, value, onChange, autoFocus = false }: { food: FoodRow; value: number; onChange: (n: number) => void; autoFocus?: boolean }) {
+  const cfg = quantityConfig(food);
+  const own = useOwnFoodUnits();
+  const units = cfg.perGram ? unitsFor(food, own.units) : [];
+  // Opens on the serving the amount is a neat count of; the member's own choice takes over once they pick.
+  const [opening] = useState(value);
+  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
+  const unit = (chosen === undefined ? unitForAmount(units, opening) : units.find((u) => u.key === chosen)) ?? null;
+  const [text, setText] = useState<string | null>(null);
+  const shown = unit ? countFromGrams(value, unit) : value;
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {units.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          <Chip label="grams" active={unit == null} onPress={() => { setText(null); setChosen(null); }} />
+          {units.map((u) => <Chip key={u.key} label={unitText(u)} active={unit?.key === u.key} onPress={() => { setText(null); setChosen(u.key); }} />)}
+        </View>
+      ) : null}
+      <TextField
+        label={unit ? `How many (${unit.label})` : `Quantity (${cfg.perGram ? 'grams' : food.portion ?? 'units'})`}
+        value={text ?? String(shown)}
+        onChangeText={(v) => {
+          setText(v);
+          const n = parseQuantity(v);
+          onChange(unit ? gramsFromCount(n, unit) : n);
+        }}
+        onBlur={() => setText(null)}
+        keyboardType="decimal-pad"
+        autoFocus={autoFocus}
+      />
+      {unit ? <AppText variant="small" color="muted">= {Math.round(value * 10) / 10} g</AppText> : null}
+    </View>
+  );
+}
+
 export function EditEntrySheet({ entry, sections = [], onSave, onSaveQuick, onRemove, onRefile, onClose }: { entry: FoodDiaryEntryRow; sections?: MealSectionRow[]; onSave: (portions: number) => void; onSaveQuick?: (fields: QuickAddFields) => void; onRemove: () => void; onRefile?: (sectionId: string) => void; onClose: () => void }) {
   const cfg = entry.food ? quantityConfig(entry.food) : null;
-  const [text, setText] = useState(String(entry.portions));
-  const value = parseQuantity(text);
+  const [value, setValue] = useState(entry.portions);
   const problem = cfg ? quantityProblem(cfg.perGram, value) : null;
   return (
     <SheetFrame title={entryName(entry)} onClose={onClose}>
       {cfg ? (
         <View style={{ gap: spacing.md }}>
-          <TextField label={`Quantity (${cfg.perGram ? 'grams' : entry.food?.portion ?? 'units'})`} value={text} onChangeText={setText} keyboardType="decimal-pad" autoFocus />
+          <ServingAmount food={entry.food!} value={value} onChange={setValue} autoFocus />
           <AppText variant="small" color={problem ? 'danger' : 'muted'}>
             {problem ?? `${Math.round(dayCalories(entry.food!.protein * value, entry.food!.carbs * value, entry.food!.fat * value))} kcal · ${Math.round(entry.food!.protein * value)}P / ${Math.round(entry.food!.carbs * value)}C / ${Math.round(entry.food!.fat * value)}F`}
           </AppText>
@@ -511,14 +548,13 @@ export function FoodPickerSheet({
 // Change how much of a food there is (a recipe ingredient or a planned meal), or remove it.
 export function QuantitySheet({ title, food, initial, saveLabel = 'Save', onSave, onRemove, onClose }: { title: string; food: FoodRow | null; initial: number; saveLabel?: string; onSave: (portions: number) => void; onRemove?: () => void; onClose: () => void }) {
   const cfg = food ? quantityConfig(food) : null;
-  const [text, setText] = useState(String(initial));
-  const value = parseQuantity(text);
+  const [value, setValue] = useState(initial);
   const problem = cfg ? quantityProblem(cfg.perGram, value) : validatePortions(value);
   return (
     <SheetFrame title={title} onClose={onClose}>
       {cfg && food ? (
         <View style={{ gap: spacing.md }}>
-          <TextField label={`Quantity (${cfg.perGram ? 'grams' : food.portion ?? 'units'})`} value={text} onChangeText={setText} keyboardType="decimal-pad" autoFocus />
+          <ServingAmount food={food} value={value} onChange={setValue} autoFocus />
           <AppText variant="small" color={problem ? 'danger' : 'muted'}>
             {problem ?? `${Math.round(dayCalories(food.protein * value, food.carbs * value, food.fat * value))} kcal · ${Math.round(food.protein * value)}P / ${Math.round(food.carbs * value)}C / ${Math.round(food.fat * value)}F`}
           </AppText>

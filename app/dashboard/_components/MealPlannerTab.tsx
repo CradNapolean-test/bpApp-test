@@ -64,6 +64,7 @@ function EntryRow({
           limit={entry.food?.portion === '1 gram' ? 'grams' : 'portions'}
           unitLabel={entry.food?.portion === '1 gram' ? 'grams' : `× ${entry.food?.portion ?? 'portion'}`}
           initial={entry.portions}
+          food={entry.food}
           onClose={() => setEditing(false)}
           onSave={(portions) => {
             onUpdatePortions(entry.id, portions);

@@ -316,6 +316,7 @@ export function RecipesTab({
           limit={editingIngredient.food?.portion === '1 gram' ? 'grams' : 'portions'}
           unitLabel={editingIngredient.food?.portion === '1 gram' ? 'grams' : `× ${editingIngredient.food?.portion ?? 'portion'}`}
           initial={editingIngredient.portions}
+          food={editingIngredient.food}
           onClose={() => setEditingIngredient(null)}
           onSave={(portions) => {
             const id = editingIngredient.id;

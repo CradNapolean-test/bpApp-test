@@ -90,6 +90,17 @@ export function startingAmount(food: { id: string; portion: string | null; servi
   return defaultUnit(unitsFor(food, []))?.grams ?? 100;
 }
 
+// Which unit an amount already in grams reads best in, when it is opened to change (the edit sheet, the amount asked after a scan):
+// the food's own serving if the weight is a neat count of it (a quarter or more, in quarters), else another unit it is a neat count of,
+// else null (grams). ml-sized units are not picked for you, so a weight in grams is not suddenly shown as millilitres.
+export function unitForAmount(units: FoodUnit[], grams: number): FoodUnit | null {
+  const neat = (u: FoodUnit) => {
+    const count = grams / u.grams;
+    return count >= 0.25 && Math.abs(count * 4 - Math.round(count * 4)) < 1e-6;
+  };
+  return units.find((u) => u.isDefault && neat(u)) ?? units.find((u) => u.grams >= 5 && neat(u)) ?? null;
+}
+
 export interface ServingDraft {
   label: string;
   grams: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cleanServings, countFromGrams, defaultUnit, gramsFromCount, parseUnitInput, servingFromPack, unitText, unitsFor, type OwnUnitRow } from './foodUnits';
+import { cleanServings, countFromGrams, defaultUnit, gramsFromCount, parseUnitInput, servingFromPack, unitText, unitsFor, type OwnUnitRow, unitForAmount } from './foodUnits';
 
 const bacon = { id: 'f1', portion: '1 gram', serving_options: [{ label: 'rasher', grams: 25, default: true }] };
 const own: OwnUnitRow[] = [
@@ -80,5 +80,23 @@ describe('cleanServings', () => {
   it('refuses a repeated name or a bad row', () => {
     expect(cleanServings([{ label: 'egg', grams: '50', isDefault: false }, { label: 'EGG', grams: '40', isDefault: false }]).ok).toBe(false);
     expect(cleanServings([{ label: '', grams: '50', isDefault: false }]).ok).toBe(false);
+  });
+});
+
+describe('unitForAmount', () => {
+  const egg = { key: 'built-in:egg', label: 'egg', grams: 50, own: false, isDefault: true };
+  const slice = { key: 'u1', label: 'slice', grams: 30, own: true, isDefault: false };
+  const ml = { key: 'built-in:ml', label: 'ml', grams: 1, own: false, isDefault: false };
+  it('uses the food\'s own serving when the weight is a neat count of it', () => {
+    expect(unitForAmount([egg, slice], 100)).toBe(egg);
+    expect(unitForAmount([egg, slice], 75)).toBe(egg);
+  });
+  it('falls back to another unit it is a neat count of, else grams', () => {
+    expect(unitForAmount([egg, slice], 90)).toBe(slice);
+    expect(unitForAmount([egg, slice], 47)).toBeNull();
+    expect(unitForAmount([egg], 10)).toBeNull();
+  });
+  it('never picks an ml-sized unit for you', () => {
+    expect(unitForAmount([ml], 250)).toBeNull();
   });
 });
