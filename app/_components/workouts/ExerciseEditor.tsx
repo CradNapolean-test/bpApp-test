@@ -50,6 +50,20 @@ import {
   slotOptions,
   type WorkoutSection,
 } from '@/lib/workoutSections';
+import {
+  TRACKING,
+  TRACKING_TYPES,
+  durationInput,
+  formatDistance,
+  formatDuration,
+  hasMeasure,
+  parseDistance,
+  parseDuration,
+  parseNumberText,
+  prescriptionParts,
+  trackingOf,
+  type TrackingType,
+} from '@/lib/workoutTracking';
 
 // The fields every exercise row needs regardless of whether it's a live workout_exercises row
 // or a program_template_exercises row.
@@ -73,6 +87,10 @@ export interface EditableExercise {
   block_no: number | null;
   block_format: string | null;
   block_part: BlockPart | null;
+  tracking_type: TrackingType;
+  target_seconds: number | null;
+  target_distance: number | null;
+  target_calories: number | null;
 }
 
 export interface NewExerciseFields {
@@ -94,6 +112,10 @@ export interface NewExerciseFields {
   block_no: number | null;
   block_format: string | null;
   block_part: BlockPart | null;
+  tracking_type: TrackingType;
+  target_seconds: number | null;
+  target_distance: number | null;
+  target_calories: number | null;
   // Template-only -- ignored by live workout_exercises callers.
   progression_load_increment: number | null;
   progression_every_weeks: number;
@@ -153,13 +175,7 @@ function keyLabel(key: string) {
 // One line saying what to do, e.g. "3 × 8-10 · 20kg · RPE 8 · rest 60s".
 function prescriptionSummary(ex: EditableExercise): string {
   if (ex.block_type === 'circuit') return ex.notes ? ex.notes.split('\n')[0] : 'Instructions';
-  const parts: string[] = [];
-  if (ex.sets != null && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
-  else if (ex.sets != null) parts.push(`${ex.sets} sets`);
-  else if (ex.reps) parts.push(ex.reps);
-  if (ex.prescription_type === 'percent_1rm') {
-    if (ex.percent_1rm != null) parts.push(`${ex.percent_1rm}% 1RM`);
-  } else if (ex.load != null) parts.push(`${ex.load}kg`);
+  const parts = prescriptionParts(ex);
   if (ex.rpe != null) parts.push(`RPE ${ex.rpe}`);
   if (ex.rest_seconds != null) parts.push(`rest ${ex.rest_seconds}s`);
   return parts.length > 0 ? parts.join(' · ') : 'Tap to set sets and reps';
@@ -192,6 +208,10 @@ function ExerciseSheet<T extends EditableExercise>({
   const [name, setName] = useState(exercise.name);
   const [sets, setSets] = useState(exercise.sets == null ? '' : String(exercise.sets));
   const [reps, setReps] = useState(exercise.reps ?? '');
+  const [tracking, setTracking] = useState<TrackingType>(trackingOf(exercise.tracking_type));
+  const [targetTime, setTargetTime] = useState(durationInput(exercise.target_seconds));
+  const [targetDistance, setTargetDistance] = useState(exercise.target_distance == null ? '' : String(exercise.target_distance));
+  const [targetCalories, setTargetCalories] = useState(exercise.target_calories == null ? '' : String(exercise.target_calories));
   const [prescription, setPrescription] = useState<PrescriptionType>(exercise.prescription_type);
   const [load, setLoad] = useState(exercise.load == null ? '' : String(exercise.load));
   const [percent, setPercent] = useState(exercise.percent_1rm == null ? '' : String(exercise.percent_1rm));
@@ -208,17 +228,27 @@ function ExerciseSheet<T extends EditableExercise>({
 
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
   const linked = exercise.exercise_library_id != null && library.some((l) => l.id === exercise.exercise_library_id);
-  const percentNeedsLink = !isCircuit && prescription === 'percent_1rm' && !linked;
+  const percentNeedsLink = !isCircuit && hasMeasure(tracking, 'weight') && prescription === 'percent_1rm' && !linked;
 
   async function save() {
     const fields: ExerciseUpdate = { name: name.trim() || exercise.name, notes: notes.trim() || null };
     if (!isCircuit) {
-      const isPercent = prescription === 'percent_1rm';
+      const seconds = parseDuration(targetTime);
+      const distance = parseDistance(targetDistance);
+      const calories = parseNumberText(targetCalories);
+      if (hasMeasure(tracking, 'time') && targetTime.trim() !== '' && (seconds == null || seconds <= 0)) throw new Error('Target time can be seconds (45) or minutes and seconds (1:30).');
+      if (hasMeasure(tracking, 'distance') && targetDistance.trim() !== '' && (distance == null || distance <= 0)) throw new Error('Target distance can be metres (400) or kilometres (5 km).');
+      if (hasMeasure(tracking, 'calories') && targetCalories.trim() !== '' && (calories == null || calories <= 0)) throw new Error('Target calories need to be a number above zero.');
+      const isPercent = hasMeasure(tracking, 'weight') && prescription === 'percent_1rm';
       Object.assign(fields, {
         sets: num(sets),
-        reps: reps.trim() || null,
-        prescription_type: prescription,
-        load: isPercent ? null : num(load),
+        reps: hasMeasure(tracking, 'reps') ? reps.trim() || null : null,
+        tracking_type: tracking,
+        target_seconds: hasMeasure(tracking, 'time') ? seconds : null,
+        target_distance: hasMeasure(tracking, 'distance') ? distance : null,
+        target_calories: hasMeasure(tracking, 'calories') ? calories : null,
+        prescription_type: hasMeasure(tracking, 'weight') ? prescription : 'absolute',
+        load: hasMeasure(tracking, 'weight') && !isPercent ? num(load) : null,
         percent_1rm: isPercent ? num(percent) : null,
         rpe: num(rpe),
         rest_seconds: num(rest),
@@ -226,7 +256,7 @@ function ExerciseSheet<T extends EditableExercise>({
         video_url: video.trim() || null,
       });
       if (showProgression) {
-        fields.progression_load_increment = isPercent ? null : num(incr);
+        fields.progression_load_increment = isPercent || !hasMeasure(tracking, 'weight') ? null : num(incr);
         fields.progression_every_weeks = Number(every) > 0 ? Number(every) : 1;
       }
     }
@@ -259,15 +289,43 @@ function ExerciseSheet<T extends EditableExercise>({
           </>
         ) : (
           <>
+            <Field label="What gets recorded">
+              <select className={fieldCls} value={tracking} onChange={(e) => setTracking(e.target.value as TrackingType)}>
+                {TRACKING_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {TRACKING[t].label} ({TRACKING[t].hint})
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Sets">
                 <input type="number" inputMode="numeric" className={fieldCls} value={sets} onChange={(e) => setSets(e.target.value)} />
               </Field>
-              <Field label="Reps">
-                <input className={fieldCls} value={reps} placeholder="8-10" onChange={(e) => setReps(e.target.value)} />
-              </Field>
+              {hasMeasure(tracking, 'reps') && (
+                <Field label="Reps">
+                  <input className={fieldCls} value={reps} placeholder="8-10" onChange={(e) => setReps(e.target.value)} />
+                </Field>
+              )}
+              {hasMeasure(tracking, 'time') && (
+                <Field label="Target time">
+                  <input className={fieldCls} value={targetTime} placeholder="45 or 1:30" onChange={(e) => setTargetTime(e.target.value)} />
+                </Field>
+              )}
+              {hasMeasure(tracking, 'distance') && (
+                <Field label="Target distance (m)">
+                  <input className={fieldCls} value={targetDistance} placeholder="400 or 5 km" onChange={(e) => setTargetDistance(e.target.value)} />
+                </Field>
+              )}
+              {hasMeasure(tracking, 'calories') && (
+                <Field label="Target calories">
+                  <input type="number" inputMode="decimal" className={fieldCls} value={targetCalories} onChange={(e) => setTargetCalories(e.target.value)} />
+                </Field>
+              )}
             </div>
 
+            {hasMeasure(tracking, 'weight') && (
             <div className="space-y-2">
               <div className="flex gap-2">
                 {(['absolute', 'percent_1rm'] as const).map((p) => (
@@ -298,6 +356,7 @@ function ExerciseSheet<T extends EditableExercise>({
                 </p>
               )}
             </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="RPE">
@@ -324,7 +383,7 @@ function ExerciseSheet<T extends EditableExercise>({
               <input className={fieldCls} value={superset} maxLength={3} placeholder="A" onChange={(e) => setSuperset(e.target.value)} />
             </Field>
 
-            {showProgression && prescription === 'absolute' && (
+            {showProgression && hasMeasure(tracking, 'weight') && prescription === 'absolute' && (
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Add (kg)">
                   <input type="number" inputMode="decimal" className={fieldCls} value={incr} placeholder="0" onChange={(e) => setIncr(e.target.value)} />
@@ -634,6 +693,7 @@ function MemberExerciseRow<T extends EditableExercise>({
   const { setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id, disabled: true });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const isCircuit = exercise.block_type === 'circuit';
+  const tracking = trackingOf(exercise.tracking_type);
   const isPercent = exercise.prescription_type === 'percent_1rm';
   const resolvedMax = isPercent ? latestMax(clientExerciseMaxes, exercise.exercise_library_id) : null;
   const libraryEntry = exercise.exercise_library_id ? library.find((e) => e.id === exercise.exercise_library_id) : undefined;
@@ -654,22 +714,38 @@ function MemberExerciseRow<T extends EditableExercise>({
                   <span className="font-extrabold text-black dark:text-zinc-50">{exercise.sets}</span> sets
                 </span>
               )}
-              {exercise.reps != null && (
+              {hasMeasure(tracking, 'reps') && exercise.reps != null && (
                 <span className={pill}>
                   <span className="font-extrabold text-black dark:text-zinc-50">{exercise.reps}</span> reps
                 </span>
               )}
-              {isPercent
-                ? exercise.percent_1rm != null && (
-                    <span className={pill}>
-                      <span className="font-extrabold text-black dark:text-zinc-50">{exercise.percent_1rm}%</span> 1RM
-                    </span>
-                  )
-                : exercise.load != null && (
-                    <span className={pill}>
-                      <span className="font-extrabold text-black dark:text-zinc-50">{exercise.load}</span> kg
-                    </span>
-                  )}
+              {hasMeasure(tracking, 'time') && exercise.target_seconds != null && (
+                <span className={pill}>
+                  <span className="font-extrabold text-black dark:text-zinc-50">{formatDuration(exercise.target_seconds)}</span>
+                </span>
+              )}
+              {hasMeasure(tracking, 'distance') && exercise.target_distance != null && (
+                <span className={pill}>
+                  <span className="font-extrabold text-black dark:text-zinc-50">{formatDistance(exercise.target_distance)}</span>
+                </span>
+              )}
+              {hasMeasure(tracking, 'calories') && exercise.target_calories != null && (
+                <span className={pill}>
+                  <span className="font-extrabold text-black dark:text-zinc-50">{exercise.target_calories}</span> cal
+                </span>
+              )}
+              {hasMeasure(tracking, 'weight') &&
+                (isPercent
+                  ? exercise.percent_1rm != null && (
+                      <span className={pill}>
+                        <span className="font-extrabold text-black dark:text-zinc-50">{exercise.percent_1rm}%</span> 1RM
+                      </span>
+                    )
+                  : exercise.load != null && (
+                      <span className={pill}>
+                        <span className="font-extrabold text-black dark:text-zinc-50">{exercise.load}</span> kg
+                      </span>
+                    ))}
               {exercise.rpe != null && (
                 <span className={pill}>
                   RPE <span className="font-extrabold text-black dark:text-zinc-50">{exercise.rpe}</span>
@@ -826,6 +902,10 @@ export function ExerciseEditor<T extends EditableExercise>({
       sort_order: nextSort,
       prescription_type: 'absolute',
       percent_1rm: null,
+      tracking_type: 'weight_reps',
+      target_seconds: null,
+      target_distance: null,
+      target_calories: null,
       progression_load_increment: null,
       progression_every_weeks: 1,
       section,
@@ -845,10 +925,11 @@ export function ExerciseEditor<T extends EditableExercise>({
       exercise_library_id: entry.id,
       name: entry.name,
       sets: setsAndReps ? (entry.default_sets ?? 3) : null,
-      reps: setsAndReps ? (entry.default_reps ?? '8-10') : (entry.default_reps ?? null),
+      reps: !hasMeasure(trackingOf(entry.tracking_type), 'reps') ? null : setsAndReps ? (entry.default_reps ?? '8-10') : (entry.default_reps ?? null),
       rpe: entry.default_rpe ?? null,
       rest_seconds: entry.default_rest_seconds ?? null,
       video_url: entry.video_url ?? null,
+      tracking_type: trackingOf(entry.tracking_type),
     });
   }
 
@@ -899,6 +980,10 @@ export function ExerciseEditor<T extends EditableExercise>({
           block_no: rest.block_no ?? null,
           block_format: rest.block_format ?? null,
           block_part: rest.block_part ?? null,
+          tracking_type: trackingOf(rest.tracking_type),
+          target_seconds: rest.target_seconds ?? null,
+          target_distance: rest.target_distance ?? null,
+          target_calories: rest.target_calories ?? null,
           progression_load_increment: null,
           progression_every_weeks: 1,
         }),

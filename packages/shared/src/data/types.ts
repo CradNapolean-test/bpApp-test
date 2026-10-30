@@ -1,4 +1,5 @@
 import type { BlockPart, WorkoutSection } from '../workoutSections';
+import type { TrackingType } from '../workoutTracking';
 export interface ClientProfileRow {
   client_id: string;
   name: string;
@@ -287,6 +288,11 @@ export interface ExerciseCoreFields {
   block_type: BlockType;
   prescription_type: PrescriptionType;
   percent_1rm: number | null;
+  // What is recorded for it (migration 0151) and, for the types that are not weight x reps, the target the coach set.
+  tracking_type: TrackingType;
+  target_seconds: number | null;
+  target_distance: number | null;
+  target_calories: number | null;
 }
 
 export interface WorkoutExerciseRow extends ExerciseCoreFields {
@@ -352,6 +358,10 @@ export interface WorkoutLogRow {
   actual_reps: number | null;
   actual_load: number | null;
   actual_rpe: number | null;
+  // Time in seconds, distance in metres (migration 0151); null for a set that did not record them.
+  actual_seconds: number | null;
+  actual_distance: number | null;
+  actual_calories: number | null;
   set_type: SetType;
   logged_at: string;
 }
@@ -393,6 +403,8 @@ export interface ExerciseLibraryRow {
   instructions: string | null;
   image_url: string | null;
   default_rest_seconds: number | null;
+  // What is recorded when this exercise is added to a workout (migration 0151).
+  tracking_type: TrackingType;
   created_by: string | null;
   created_at: string;
   // False once an entry was retired instead of deleted (migration 0130): it stays in programmes that use it but is not offered for new ones.

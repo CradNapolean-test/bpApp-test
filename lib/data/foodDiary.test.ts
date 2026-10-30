@@ -146,9 +146,9 @@ describe('copyDiaryBetweenDates', () => {
     expect(result).toEqual({ ok: false, error: 'Nothing is logged in that meal on that day.' });
   });
 
-  it('only copies into today and the last two weeks', async () => {
+  it('only copies into tomorrow, today and the last two weeks', async () => {
     const { tables } = fakeClient([profile]);
-    expect(await copyDiaryBetweenDates('c1', '2026-10-21', '2026-10-23')).toEqual({ ok: false, error: 'Food can only be copied into today or the last 2 weeks.' });
+    expect(await copyDiaryBetweenDates('c1', '2026-10-21', '2026-10-24')).toEqual({ ok: false, error: 'Food can only be copied into tomorrow, today or the last 2 weeks.' });
     expect(await copyDiaryBetweenDates('c1', '2026-10-21', '2026-10-07')).toMatchObject({ ok: false });
     // Not a single food query was made for either.
     expect(tables.filter((t) => t === 'food_diary_entries')).toEqual([]);

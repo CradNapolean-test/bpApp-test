@@ -1,4 +1,5 @@
 import type { BlockType, PrescriptionType } from '../data/types';
+import { prescriptionParts } from '../workoutTracking';
 import {
   PART_TITLE,
   SECTIONS,
@@ -41,18 +42,17 @@ export interface PrescriptionFields {
   load: number | null;
   rpe: number | null;
   rest_seconds: number | null;
+  // What is recorded and the targets for the types that are not weight x reps (migration 0151); absent means weight x reps.
+  tracking_type?: string | null;
+  target_seconds?: number | null;
+  target_distance?: number | null;
+  target_calories?: number | null;
 }
 
 // One line saying what to do, e.g. "3 × 8-10 · 20kg · RPE 8 · rest 60s".
 export function prescriptionSummary(ex: PrescriptionFields): string {
   if (ex.block_type === 'circuit') return ex.notes ? ex.notes.split('\n')[0] : 'Instructions';
-  const parts: string[] = [];
-  if (ex.sets != null && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
-  else if (ex.sets != null) parts.push(`${ex.sets} sets`);
-  else if (ex.reps) parts.push(ex.reps);
-  if (ex.prescription_type === 'percent_1rm') {
-    if (ex.percent_1rm != null) parts.push(`${ex.percent_1rm}% 1RM`);
-  } else if (ex.load != null) parts.push(`${ex.load}kg`);
+  const parts = prescriptionParts(ex);
   if (ex.rpe != null) parts.push(`RPE ${ex.rpe}`);
   if (ex.rest_seconds != null) parts.push(`rest ${ex.rest_seconds}s`);
   return parts.length > 0 ? parts.join(' · ') : 'Tap to set sets and reps';

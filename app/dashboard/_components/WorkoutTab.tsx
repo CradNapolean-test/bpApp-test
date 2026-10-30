@@ -38,8 +38,10 @@ import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
-import { applySetChange, finishMessage, isEmptySet, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
+import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
 import { chosenBlockKeys, describeChoices, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
+import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
+import { SetInputsGrid } from './SetInputsGrid';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
@@ -289,11 +291,11 @@ function WarmupTick({
 function LogSetForm({
   clientId,
   exerciseId,
+  tracking,
   nextSetNumber,
   totalSets,
   restSeconds,
-  initialReps,
-  initialLoad,
+  seed,
   lastSet,
   priorBest,
   weightless,
@@ -301,13 +303,15 @@ function LogSetForm({
 }: {
   clientId: string;
   exerciseId: string;
+  // What the exercise records (reps and weight, a time, a distance, calories, or just done).
+  tracking: TrackingType;
   nextSetNumber: number;
   totalSets: number | null;
   restSeconds: number | null;
-  initialReps: number | null;
-  initialLoad: number | null;
+  // The set the boxes start from: the last one logged today, else the first of last time.
+  seed: LogValues | null;
   // What the member did for this same set number last time.
-  lastSet: { reps: number | null; load: number | null } | null;
+  lastSet: LogValues | null;
   // Heaviest load from earlier sessions of this exercise; a heavier set is a new best.
   priorBest: number | null;
   // An exercise with no weight (see isWeightless): reps and RPE only, and a set can be logged as simply done.
@@ -317,28 +321,37 @@ function LogSetForm({
 }) {
   const { run, busy } = useAction();
   const toast = useToast();
-  // Reps and load carry over between sets (they're usually the same), so after logging only the
+  // The numbers carry over between sets (they're usually the same), so after logging only the
   // RPE is cleared. First set starts from what was done last time, if anything.
-  const [reps, setReps] = useState<number | ''>(initialReps ?? '');
-  const [load, setLoad] = useState<number | ''>(initialLoad ?? '');
-  const [rpe, setRpe] = useState<number | ''>('');
+  const [inputs, setInputs] = useState<SetInputs>(() => inputsFromLog(tracking, seed));
   const [timerKey, setTimerKey] = useState(0);
   const [showLoad, setShowLoad] = useState(!weightless);
 
+  const draft = readSetInputs(tracking, inputs);
+  const blank = draft.ok && isBlankSet(tracking, draft.values);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // A set with no reps, no load and no RPE says nothing, and used to be saved and counted as a set done (L4).
-    if (!weightless && isEmptySet({ reps, load, rpe })) {
-      toast.error('Enter the reps, the load or both before logging the set.');
+    if (!draft.ok) {
+      toast.error(draft.error);
+      return;
+    }
+    const v = draft.values;
+    // A set with nothing recorded says nothing, and used to be saved and counted as a set done (L4).
+    if (!weightless && isBlankSet(tracking, v)) {
+      toast.error(blankSetMessage(tracking));
       return;
     }
     await run(
       async () => {
         const saved = await logSet(clientId, exerciseId, {
           set_number: nextSetNumber,
-          actual_reps: reps === '' ? null : reps,
-          actual_load: load === '' ? null : load,
-          actual_rpe: rpe === '' ? null : rpe,
+          actual_reps: v.reps,
+          actual_load: v.load,
+          actual_rpe: v.rpe,
+          actual_seconds: v.seconds,
+          actual_distance: v.distance,
+          actual_calories: v.calories,
           set_type: 'working' as SetType,
         });
         onChange({ kind: 'added', row: saved });
@@ -346,28 +359,14 @@ function LogSetForm({
       {
         refresh: false,
         success:
-          load !== '' && priorBest != null && load > priorBest ? `Set ${nextSetNumber} logged — new best! 🏆` : `Set ${nextSetNumber} logged`,
+          v.load != null && priorBest != null && v.load > priorBest ? `Set ${nextSetNumber} logged — new best! 🏆` : `Set ${nextSetNumber} logged`,
         onDone: () => {
-          setRpe('');
+          setInputs((p) => ({ ...p, rpe: '' }));
           if (restSeconds != null) setTimerKey((k) => k + 1);
         },
       }
     );
   }
-
-  const numberInput = (label: string, value: number | '', set: (v: number | '') => void, inputMode: 'numeric' | 'decimal') => (
-    <label className="block">
-      <span className="mb-1 block text-center text-[11px] font-medium text-zinc-500">{label}</span>
-      <input
-        type="number"
-        inputMode={inputMode}
-        step="any"
-        className="h-11 w-full min-w-0 rounded-xl border border-black/10 bg-card px-2 text-center text-base font-semibold dark:border-white/10"
-        value={value}
-        onChange={(e) => set(e.target.value === '' ? '' : Number(e.target.value))}
-      />
-    </label>
-  );
 
   return (
     <div className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
@@ -376,18 +375,14 @@ function LogSetForm({
           Set {nextSetNumber}
           {totalSets ? <span className="font-medium text-zinc-500"> of {totalSets}</span> : null}
         </span>
-        {lastSet && (lastSet.reps != null || lastSet.load != null) && (
+        {lastSet && tracking !== 'tick' && hasRecordedValue(tracking, lastSet) && (
           <span className="whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
-            Last: {lastSet.reps ?? '—'} × {lastSet.load ?? '—'}
+            Last: {setSummary(tracking, lastSet)}
           </span>
         )}
       </div>
       <form onSubmit={handleSubmit} className="space-y-2.5">
-        <div className={`grid gap-2 ${showLoad ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {numberInput('Reps', reps, setReps, 'numeric')}
-          {showLoad && numberInput('Load', load, setLoad, 'decimal')}
-          {numberInput('RPE', rpe, setRpe, 'decimal')}
-        </div>
+        <SetInputsGrid tracking={tracking} inputs={inputs} onChange={setInputs} showLoad={showLoad} />
         {!showLoad && (
           <button type="button" onClick={() => setShowLoad(true)} className="text-xs font-semibold text-accent">
             + Add weight
@@ -398,7 +393,7 @@ function LogSetForm({
           disabled={busy}
           className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
-          {busy ? 'Logging…' : weightless && isEmptySet({ reps, load, rpe }) ? `Done — set ${nextSetNumber}` : `Log set ${nextSetNumber}`}
+          {busy ? 'Logging…' : tracking === 'tick' || (weightless && blank) ? `Done — set ${nextSetNumber}` : `Log set ${nextSetNumber}`}
         </button>
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
@@ -406,36 +401,30 @@ function LogSetForm({
   );
 }
 
-function SetEditSheet({ log, index, onClose, onChange }: { log: WorkoutLogRow; index: number; onClose: () => void; onChange: (change: SetChange<WorkoutLogRow>) => void }) {
+function SetEditSheet({ log, index, tracking, onClose, onChange }: { log: WorkoutLogRow; index: number; tracking: TrackingType; onClose: () => void; onChange: (change: SetChange<WorkoutLogRow>) => void }) {
   const { run, busy } = useAction();
-  const [reps, setReps] = useState<number | ''>(log.actual_reps ?? '');
-  const [load, setLoad] = useState<number | ''>(log.actual_load ?? '');
-  const [rpe, setRpe] = useState<number | ''>(log.actual_rpe ?? '');
+  const toast = useToast();
+  const [inputs, setInputs] = useState<SetInputs>(() => ({ ...inputsFromLog(tracking, log), rpe: log.actual_rpe == null ? '' : String(log.actual_rpe) }));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-
-  const field = (label: string, value: number | '', set: (v: number | '') => void) => (
-    <label className="block">
-      <span className="mb-1 block text-center text-[11px] font-medium text-zinc-500">{label}</span>
-      <input
-        type="number"
-        inputMode="decimal"
-        step="any"
-        className="h-11 w-full min-w-0 rounded-xl border border-black/10 bg-card px-2 text-center text-base font-semibold dark:border-white/10"
-        value={value}
-        onChange={(e) => set(e.target.value === '' ? '' : Number(e.target.value))}
-      />
-    </label>
-  );
 
   return (
     <BottomSheet title={`Edit set ${index}`} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          const read = readSetInputs(tracking, inputs);
+          if (!read.ok) {
+            toast.error(read.error);
+            return;
+          }
+          const v = read.values;
           const fields = {
-            actual_reps: reps === '' ? null : reps,
-            actual_load: load === '' ? null : load,
-            actual_rpe: rpe === '' ? null : rpe,
+            actual_reps: v.reps,
+            actual_load: v.load,
+            actual_rpe: v.rpe,
+            actual_seconds: v.seconds,
+            actual_distance: v.distance,
+            actual_calories: v.calories,
           };
           void run(
             async () => {
@@ -447,11 +436,7 @@ function SetEditSheet({ log, index, onClose, onChange }: { log: WorkoutLogRow; i
         }}
         className="space-y-3"
       >
-        <div className="grid grid-cols-3 gap-2">
-          {field('Reps', reps, setReps)}
-          {field('Load', load, setLoad)}
-          {field('RPE', rpe, setRpe)}
-        </div>
+        <SetInputsGrid tracking={tracking} inputs={inputs} onChange={setInputs} />
         <button type="submit" disabled={busy} className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : 'Save changes'}
         </button>
@@ -1210,7 +1195,15 @@ export function WorkoutTab({
         </details>
       )}
 
-      {editingSet && <SetEditSheet log={editingSet.log} index={editingSet.index} onClose={() => setEditingSet(null)} onChange={changeSets} />}
+      {editingSet && (
+        <SetEditSheet
+          log={editingSet.log}
+          index={editingSet.index}
+          tracking={trackingOf(openDay?.workout_exercises.find((e) => e.id === editingSet.log.exercise_id)?.tracking_type)}
+          onClose={() => setEditingSet(null)}
+          onChange={changeSets}
+        />
+      )}
 
       {openDay && (
         <FocusOverlay
@@ -1288,6 +1281,10 @@ export function WorkoutTab({
                 block_no: fields.block_no,
                 block_format: fields.block_format,
                 block_part: fields.block_part,
+                tracking_type: fields.tracking_type,
+                target_seconds: fields.target_seconds,
+                target_distance: fields.target_distance,
+                target_calories: fields.target_calories,
               })
             }
             onUpdate={(id, fields) => updateExercise(id, fields)}
@@ -1305,13 +1302,16 @@ export function WorkoutTab({
               const priorBest = loads.length > 0 && Math.max(...loads) > 0 ? Math.max(...loads) : null;
               // Use the exercise's own video link, else the one on its library entry.
               const videoUrl = ex.video_url || libraryVideo(ex.exercise_library_id);
-              const lastFor = (setNumber: number) => {
-                const l = last?.sets[setNumber - 1] ?? last?.sets[last.sets.length - 1];
-                return l ? { reps: l.actual_reps, load: l.actual_load } : null;
-              };
+              const lastFor = (setNumber: number) => last?.sets[setNumber - 1] ?? last?.sets[last.sets.length - 1] ?? null;
               const seed = logs.length > 0 ? logs[logs.length - 1] : (last?.sets[0] ?? null);
               const isWarmup = ex.section === 'warmup' && ex.block_type === 'exercise';
-              const weightless = isWeightless(ex, priorBest, logs.map((l) => l.actual_load));
+              const tracking = trackingOf(ex.tracking_type);
+              const weightless = tracking === 'weight_reps' && isWeightless(ex, priorBest, logs.map((l) => l.actual_load));
+              // A set on one line. Weight x reps keeps its look; a no-weight exercise shows just the reps (or a tick).
+              const setText = (l: WorkoutLogRow, compact: boolean) =>
+                tracking === 'weight_reps' && weightless && l.actual_load == null
+                  ? (l.actual_reps ?? (compact ? 'done' : '✓'))
+                  : setSummary(tracking, l, compact);
               return (
                 <>
                   {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && (
@@ -1334,7 +1334,7 @@ export function WorkoutTab({
                               {i + 1}
                             </span>
                             <span className="whitespace-nowrap font-semibold text-black dark:text-zinc-100">
-                              {l.actual_load == null && weightless ? (l.actual_reps ?? '✓') : `${l.actual_reps ?? '—'} × ${l.actual_load ?? '—'}`}
+                              {setText(l, false)}
                             </span>
                           </span>
                         ))}
@@ -1353,7 +1353,7 @@ export function WorkoutTab({
                               aria-label={`Edit set ${i + 1}`}
                               className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success"
                             >
-                              ✓ {i + 1} · {weightless && l.actual_load == null ? (l.actual_reps ?? 'done') : `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`}
+                              ✓ {i + 1} · {setText(l, true)}
                               {priorBest != null && l.actual_load != null && l.actual_load > priorBest ? ' 🏆' : ''}
                             </button>
                           ))}
@@ -1362,11 +1362,11 @@ export function WorkoutTab({
                       <LogSetForm
                         clientId={clientId}
                         exerciseId={ex.id}
+                        tracking={tracking}
                         nextSetNumber={nextSetNumber(logs)}
                         totalSets={Number(ex.sets) > 0 ? Number(ex.sets) : null}
                         restSeconds={ex.rest_seconds}
-                        initialReps={seed?.actual_reps ?? null}
-                        initialLoad={seed?.actual_load ?? null}
+                        seed={seed}
                         lastSet={last ? lastFor(nextSetNumber(logs)) : null}
                         priorBest={priorBest}
                         weightless={weightless}

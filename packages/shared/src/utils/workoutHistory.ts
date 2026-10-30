@@ -54,6 +54,12 @@ export function priorBestLoad(earlier: Pick<LogLike, 'actual_load'>[]): number |
 
 export const isNewBest = (load: number | null | undefined, priorBest: number | null) => load != null && priorBest != null && load > priorBest;
 
+// The set the member did for this same set number last time, as the logged row (the last set if they did fewer sets then). Unlike
+// lastSetFor it keeps every recorded value (time, distance, calories), for exercises that are not weight x reps.
+export function lastLogFor<L>(last: { sets: L[] } | null, setNumber: number): L | null {
+  return last?.sets[setNumber - 1] ?? last?.sets[last.sets.length - 1] ?? null;
+}
+
 // What the member did for this same set number last time (the last set if they did fewer sets then).
 export function lastSetFor<L extends Pick<LogLike, 'actual_reps' | 'actual_load'>>(last: { sets: L[] } | null, setNumber: number): { reps: number | null; load: number | null } | null {
   const l = last?.sets[setNumber - 1] ?? last?.sets[last.sets.length - 1];

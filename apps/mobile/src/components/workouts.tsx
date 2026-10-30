@@ -8,8 +8,24 @@ import { groupBySuperset } from '@ballistic/shared/utils/exerciseGrouping';
 import { percentOfMaxKg, type ResolvedMax } from '@ballistic/shared/utils/oneRepMax';
 import type { DaySummary } from '@ballistic/shared/utils/programOverview';
 import type { DisplayBlock } from '@ballistic/shared/utils/workoutDisplay';
-import { isNewBest, lastSetFor, type LastSession } from '@ballistic/shared/utils/workoutHistory';
-import { isEmptySet, isWeightless, nextSetNumber } from '@ballistic/shared/utils/workoutSets';
+import { isNewBest, lastLogFor, type LastSession } from '@ballistic/shared/utils/workoutHistory';
+import { isWeightless, nextSetNumber } from '@ballistic/shared/utils/workoutSets';
+import {
+  blankSetMessage,
+  formatDistance,
+  formatDuration,
+  hasMeasure,
+  hasRecordedValue,
+  inputsFromLog,
+  isBlankSet,
+  readSetInputs,
+  setSummary,
+  trackingOf,
+  type LogValues,
+  type SetInputs,
+  type SetValues,
+  type TrackingType,
+} from '@ballistic/shared/workoutTracking';
 import { parseQuantity } from '@ballistic/shared/utils/foodQuantity';
 
 import { safeHttpUrl } from '@ballistic/shared/utils/education';
@@ -104,43 +120,67 @@ function RestTimer({ seconds }: { seconds: number }) {
   return <AppText variant="small" color="accent" style={{ fontWeight: '600' }}>Rest: {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}</AppText>;
 }
 
-function NumberBox({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function NumberBox({ label, value, onChange, keyboard = 'decimal-pad', placeholder }: { label: string; value: string; onChange: (v: string) => void; keyboard?: 'decimal-pad' | 'numbers-and-punctuation'; placeholder?: string }) {
   return (
     <View style={{ flex: 1 }}>
-      <TextField label={label} value={value} onChangeText={onChange} keyboardType="decimal-pad" selectTextOnFocus />
+      <TextField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} placeholder={placeholder} selectTextOnFocus />
+    </View>
+  );
+}
+
+// The boxes for one set: whatever the exercise records (reps, weight, time, distance, calories) and then RPE. Used by the form that logs a
+// set and by the sheet that corrects one. `showLoad` is false for a no-weight exercise that has not had a weight added.
+function SetBoxes({ tracking, inputs, onChange, showLoad = true }: { tracking: TrackingType; inputs: SetInputs; onChange: (next: SetInputs) => void; showLoad?: boolean }) {
+  const set = (key: keyof SetInputs) => (v: string) => onChange({ ...inputs, [key]: v });
+  return (
+    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+      {hasMeasure(tracking, 'reps') ? <NumberBox label="Reps" value={inputs.reps} onChange={set('reps')} /> : null}
+      {hasMeasure(tracking, 'weight') && showLoad ? <NumberBox label="Load (kg)" value={inputs.load} onChange={set('load')} /> : null}
+      {hasMeasure(tracking, 'time') ? <NumberBox label="Time" value={inputs.time} onChange={set('time')} keyboard="numbers-and-punctuation" placeholder="m:ss" /> : null}
+      {hasMeasure(tracking, 'distance') ? <NumberBox label="Distance (m)" value={inputs.distance} onChange={set('distance')} keyboard="numbers-and-punctuation" placeholder="m or km" /> : null}
+      {hasMeasure(tracking, 'calories') ? <NumberBox label="Calories" value={inputs.calories} onChange={set('calories')} /> : null}
+      <NumberBox label="RPE" value={inputs.rpe} onChange={set('rpe')} />
     </View>
   );
 }
 
 function LogSetForm({
-  setNumber, totalSets, restSeconds, initialReps, initialLoad, lastSet, priorBest, weightless, onLog,
+  tracking, setNumber, totalSets, restSeconds, seed, lastSet, priorBest, weightless, onLog,
 }: {
-  setNumber: number; totalSets: number | null; restSeconds: number | null; initialReps: number | null; initialLoad: number | null;
-  lastSet: { reps: number | null; load: number | null } | null; priorBest: number | null;
+  // What the exercise records (reps and weight, a time, a distance, calories, or just done).
+  tracking: TrackingType;
+  setNumber: number; totalSets: number | null; restSeconds: number | null;
+  // The set the boxes start from: the last one logged today, else the first of last time.
+  seed: LogValues | null;
+  lastSet: LogValues | null; priorBest: number | null;
   // An exercise with no weight: reps and RPE only, and a set can be logged as simply done.
   weightless: boolean;
-  onLog: (v: { reps: number | null; load: number | null; rpe: number | null }) => void;
+  onLog: (v: SetValues) => void;
 }) {
   const t = useTheme();
-  // Reps and load carry over between sets (they are usually the same), so after logging only RPE is cleared.
-  const [reps, setReps] = useState(initialReps != null ? String(initialReps) : '');
-  const [load, setLoad] = useState(initialLoad != null ? String(initialLoad) : '');
-  const [rpe, setRpe] = useState('');
+  // The numbers carry over between sets (they are usually the same), so after logging only RPE is cleared.
+  const [inputs, setInputs] = useState<SetInputs>(() => inputsFromLog(tracking, seed));
   const [timerKey, setTimerKey] = useState(0);
   const [showLoad, setShowLoad] = useState(!weightless);
   const [message, setMessage] = useState<string | null>(null);
-  const n = (s: string) => (s.trim() === '' ? null : parseQuantity(s));
+
+  const draft = readSetInputs(tracking, inputs);
+  const blank = draft.ok && isBlankSet(tracking, draft.values);
 
   function submit() {
-    const loadN = n(load);
-    // A set with no reps, no load and no RPE says nothing; it used to be saved and counted as a set done (L4).
-    if (!weightless && isEmptySet({ reps: n(reps), load: loadN, rpe: n(rpe) })) {
-      setMessage('Add the reps, the load or your RPE to log this set.');
+    if (!draft.ok) {
+      setMessage(draft.error);
       return;
     }
-    onLog({ reps: n(reps), load: loadN, rpe: n(rpe) });
-    setMessage(isNewBest(loadN, priorBest) ? `Set ${setNumber} logged. New best! 🏆` : `Set ${setNumber} logged`);
-    setRpe('');
+    const v = draft.values;
+    // A set with nothing recorded says nothing; it used to be saved anyway and counted as a set done (L4).
+    if (!weightless && isBlankSet(tracking, v)) {
+      setMessage(blankSetMessage(tracking));
+      return;
+    }
+    onLog(v);
+    setMessage(isNewBest(v.load, priorBest) ? `Set ${setNumber} logged. New best! 🏆` : `Set ${setNumber} logged`);
+    setInputs((p) => ({ ...p, rpe: '' }));
     if (restSeconds != null) setTimerKey((k) => k + 1);
   }
 
@@ -148,19 +188,15 @@ function LogSetForm({
     <View style={{ backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm, gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <AppText style={{ fontWeight: '700' }}>Set {setNumber}{totalSets ? <AppText color="muted"> of {totalSets}</AppText> : null}</AppText>
-        {lastSet && (lastSet.reps != null || lastSet.load != null) ? (
+        {lastSet && tracking !== 'tick' && hasRecordedValue(tracking, lastSet) ? (
           <View style={{ backgroundColor: t.accentSoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 }}>
-            <AppText variant="small" color="accent" style={{ fontWeight: '600' }}>Last: {lastSet.reps ?? '—'} × {lastSet.load ?? '—'}</AppText>
+            <AppText variant="small" color="accent" style={{ fontWeight: '600' }}>Last: {setSummary(tracking, lastSet)}</AppText>
           </View>
         ) : null}
       </View>
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-        <NumberBox label="Reps" value={reps} onChange={setReps} />
-        {showLoad ? <NumberBox label="Load (kg)" value={load} onChange={setLoad} /> : null}
-        <NumberBox label="RPE" value={rpe} onChange={setRpe} />
-      </View>
+      <SetBoxes tracking={tracking} inputs={inputs} onChange={setInputs} showLoad={showLoad} />
       {!showLoad ? <Pressable onPress={() => setShowLoad(true)} accessibilityRole="button"><AppText variant="small" color="accent" style={{ fontWeight: '700' }}>+ Add weight</AppText></Pressable> : null}
-      <Button title={weightless && isEmptySet({ reps: n(reps), load: n(load), rpe: n(rpe) }) ? `Done: set ${setNumber}` : `Log set ${setNumber}`} onPress={submit} />
+      <Button title={tracking === 'tick' || (weightless && blank) ? `Done: set ${setNumber}` : `Log set ${setNumber}`} onPress={submit} />
       {message ? <AppText variant="small" color="success" style={{ fontWeight: '600' }}>{message}</AppText> : null}
       {restSeconds != null && timerKey > 0 ? <RestTimer key={timerKey} seconds={restSeconds} /> : null}
     </View>
@@ -178,14 +214,15 @@ export function ExerciseCard({
   logs: WorkoutLogRow[];
   last: LastSession<WorkoutLogRow> | null;
   priorBest: number | null;
-  onLog: (exercise: WorkoutExerciseRow, setNumber: number, v: { reps: number | null; load: number | null; rpe: number | null }) => void;
+  onLog: (exercise: WorkoutExerciseRow, setNumber: number, v: SetValues) => void;
   onEditSet: (log: WorkoutLogRow, index: number) => void;
 }) {
   const t = useTheme();
   // Warm-up exercises are not logged one by one: the whole warm-up gets a single tick (WarmupTick).
   const isWarmup = exercise.section === 'warmup' && exercise.block_type === 'exercise';
   const isCircuit = exercise.block_type === 'circuit';
-  const weightless = isWeightless(exercise, priorBest, logs.map((l) => l.actual_load));
+  const tracking = trackingOf(exercise.tracking_type);
+  const weightless = tracking === 'weight_reps' && isWeightless(exercise, priorBest, logs.map((l) => l.actual_load));
   const isPercent = exercise.prescription_type === 'percent_1rm';
   const kg = isPercent ? percentOfMaxKg(resolvedMax, exercise.percent_1rm) : null;
   const videoUrl = exercise.video_url || library?.video_url || null;
@@ -207,8 +244,11 @@ export function ExerciseCard({
           {!isCircuit ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {exercise.sets != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.sets}</AppText> sets</AppText></Pill> : null}
-              {exercise.reps != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.reps}</AppText> reps</AppText></Pill> : null}
-              {isPercent ? (exercise.percent_1rm != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.percent_1rm}%</AppText> 1RM</AppText></Pill> : null) : exercise.load != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.load}</AppText> kg</AppText></Pill> : null}
+              {hasMeasure(tracking, 'reps') && exercise.reps != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.reps}</AppText> reps</AppText></Pill> : null}
+              {hasMeasure(tracking, 'time') && exercise.target_seconds != null ? <Pill><AppText variant="small" style={{ fontWeight: '800' }}>{formatDuration(exercise.target_seconds)}</AppText></Pill> : null}
+              {hasMeasure(tracking, 'distance') && exercise.target_distance != null ? <Pill><AppText variant="small" style={{ fontWeight: '800' }}>{formatDistance(exercise.target_distance)}</AppText></Pill> : null}
+              {hasMeasure(tracking, 'calories') && exercise.target_calories != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.target_calories}</AppText> cal</AppText></Pill> : null}
+              {hasMeasure(tracking, 'weight') ? (isPercent ? (exercise.percent_1rm != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.percent_1rm}%</AppText> 1RM</AppText></Pill> : null) : exercise.load != null ? <Pill><AppText variant="small"><AppText variant="small" style={{ fontWeight: '800' }}>{exercise.load}</AppText> kg</AppText></Pill> : null) : null}
               {exercise.rpe != null ? <Pill><AppText variant="small">RPE <AppText variant="small" style={{ fontWeight: '800' }}>{exercise.rpe}</AppText></AppText></Pill> : null}
             </View>
           ) : null}
@@ -229,7 +269,7 @@ export function ExerciseCard({
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {last.sets.map((l, i) => (
               <View key={l.id} style={{ borderWidth: 1, borderColor: i === logs.length ? t.accent : t.border, backgroundColor: i === logs.length ? t.accentSoft : 'transparent', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                <AppText variant="small" style={{ fontWeight: '600' }}>{i + 1} · {l.actual_reps ?? '—'} × {l.actual_load ?? '—'}</AppText>
+                <AppText variant="small" style={{ fontWeight: '600' }}>{i + 1} · {setSummary(tracking, l)}</AppText>
               </View>
             ))}
           </View>
@@ -242,18 +282,18 @@ export function ExerciseCard({
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {logs.map((l, i) => (
                 <Pressable key={l.id} onPress={() => onEditSet(l, i + 1)} accessibilityLabel={`Edit set ${i + 1}`} style={{ backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <AppText variant="small" color="success" style={{ fontWeight: '700' }}>✓ {i + 1} · {weightless && l.actual_load == null ? (l.actual_reps ?? 'done') : `${l.actual_reps ?? '—'}×${l.actual_load ?? '—'}`}{isNewBest(l.actual_load, priorBest) ? ' 🏆' : ''}</AppText>
+                  <AppText variant="small" color="success" style={{ fontWeight: '700' }}>✓ {i + 1} · {weightless && l.actual_load == null ? (l.actual_reps ?? 'done') : setSummary(tracking, l, true)}{isNewBest(l.actual_load, priorBest) ? ' 🏆' : ''}</AppText>
                 </Pressable>
               ))}
             </View>
           ) : null}
           <LogSetForm
+            tracking={tracking}
             setNumber={setNumber}
             totalSets={Number(exercise.sets) > 0 ? Number(exercise.sets) : null}
             restSeconds={exercise.rest_seconds}
-            initialReps={seed?.actual_reps ?? null}
-            initialLoad={seed?.actual_load ?? null}
-            lastSet={last ? lastSetFor(last, setNumber) : null}
+            seed={seed}
+            lastSet={last ? lastLogFor(last, setNumber) : null}
             priorBest={priorBest}
             weightless={weightless}
             onLog={(v) => onLog(exercise, setNumber, v)}
@@ -313,20 +353,22 @@ export function BlockView({ block, renderExercise, headerExtra }: { block: Displ
 }
 
 // ---------- editing a logged set ----------
-export function SetEditSheet({ log, index, onSave, onDelete, onClose }: { log: WorkoutLogRow; index: number; onSave: (v: { reps: number | null; load: number | null; rpe: number | null }) => void; onDelete: () => void; onClose: () => void }) {
-  const [reps, setReps] = useState(log.actual_reps != null ? String(log.actual_reps) : '');
-  const [load, setLoad] = useState(log.actual_load != null ? String(log.actual_load) : '');
-  const [rpe, setRpe] = useState(log.actual_rpe != null ? String(log.actual_rpe) : '');
+export function SetEditSheet({ log, index, tracking, onSave, onDelete, onClose }: { log: WorkoutLogRow; index: number; tracking: TrackingType; onSave: (v: SetValues) => void; onDelete: () => void; onClose: () => void }) {
+  const [inputs, setInputs] = useState<SetInputs>(() => ({ ...inputsFromLog(tracking, log), rpe: log.actual_rpe != null ? String(log.actual_rpe) : '' }));
   const [confirming, setConfirming] = useState(false);
-  const n = (s: string) => (s.trim() === '' ? null : parseQuantity(s));
+  const [error, setError] = useState<string | null>(null);
   return (
     <SheetFrame title={`Edit set ${index}`} onClose={onClose}>
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-        <NumberBox label="Reps" value={reps} onChange={setReps} />
-        <NumberBox label="Load (kg)" value={load} onChange={setLoad} />
-        <NumberBox label="RPE" value={rpe} onChange={setRpe} />
-      </View>
-      <Button title="Save changes" onPress={() => onSave({ reps: n(reps), load: n(load), rpe: n(rpe) })} />
+      <SetBoxes tracking={tracking} inputs={inputs} onChange={setInputs} />
+      {error ? <AppText color="danger">{error}</AppText> : null}
+      <Button
+        title="Save changes"
+        onPress={() => {
+          const read = readSetInputs(tracking, inputs);
+          if (!read.ok) setError(read.error);
+          else onSave(read.values);
+        }}
+      />
       <Button title={confirming ? 'Tap again to delete this set' : 'Delete this set'} variant="secondary" onPress={() => (confirming ? onDelete() : setConfirming(true))} />
     </SheetFrame>
   );

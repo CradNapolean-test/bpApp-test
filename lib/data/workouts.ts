@@ -176,6 +176,10 @@ export async function duplicateProgramDay(dayId: string, weekNum: number, dayLab
       block_no: ex.block_no,
       block_format: ex.block_format,
       block_part: ex.block_part,
+      tracking_type: ex.tracking_type,
+      target_seconds: ex.target_seconds,
+      target_distance: ex.target_distance,
+      target_calories: ex.target_calories,
     }));
     const { error: insertExercisesError } = await supabase.from('workout_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);
@@ -229,6 +233,10 @@ export async function logSet(
     actual_reps: number | null;
     actual_load: number | null;
     actual_rpe: number | null;
+    // What the exercise records beyond reps and weight: seconds, metres, calories (migration 0151).
+    actual_seconds?: number | null;
+    actual_distance?: number | null;
+    actual_calories?: number | null;
     set_type: SetType;
   }
 ): Promise<WorkoutLogRow> {
@@ -261,7 +269,14 @@ export async function logSet(
 // Fix a mistyped set. RLS limits this to the member's own rows.
 export async function updateSet(
   logId: string,
-  fields: { actual_reps: number | null; actual_load: number | null; actual_rpe: number | null }
+  fields: {
+    actual_reps: number | null;
+    actual_load: number | null;
+    actual_rpe: number | null;
+    actual_seconds?: number | null;
+    actual_distance?: number | null;
+    actual_calories?: number | null;
+  }
 ): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('workout_logs').update(fields).eq('id', logId);

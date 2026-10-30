@@ -179,14 +179,22 @@ const workoutRefresh = (userId: string, dayId: string) => [
   { key: ['today-workout', userId] },
 ];
 
-export type SetFields = { actual_reps: number | null; actual_load: number | null; actual_rpe: number | null };
+// Seconds, metres and calories are for exercises that record more than reps and weight (migration 0151); a set queued by an older build lacks them.
+export type SetFields = {
+  actual_reps: number | null;
+  actual_load: number | null;
+  actual_rpe: number | null;
+  actual_seconds?: number | null;
+  actual_distance?: number | null;
+  actual_calories?: number | null;
+};
 
 // exercise_library_id is denormalised onto the log row so history survives a coach later restructuring the programme.
 // logged_at is when the set was done (not when it reached the server): "logged today" and the history depend on it.
 export type SetLogVars = {
   userId: string;
   dayId: string;
-  row: SetFields & {
+  row: Required<SetFields> & {
     id: string;
     logged_at: string;
     exercise_id: string;
@@ -202,8 +210,11 @@ export const WRITE_SET_LOG = defineWrite<SetLogVars>('set-log', {
 
 export type SetUpdateVars = { userId: string; dayId: string; logId: string } & SetFields;
 export const WRITE_SET_UPDATE = defineWrite<SetUpdateVars>('set-update', {
-  run: async ({ logId, actual_reps, actual_load, actual_rpe }) => {
-    const { error } = await supabase.from('workout_logs').update({ actual_reps, actual_load, actual_rpe }).eq('id', logId);
+  run: async ({ logId, actual_reps, actual_load, actual_rpe, actual_seconds, actual_distance, actual_calories }) => {
+    const { error } = await supabase
+      .from('workout_logs')
+      .update({ actual_reps, actual_load, actual_rpe, actual_seconds, actual_distance, actual_calories })
+      .eq('id', logId);
     if (error) throw error;
   },
   invalidate: ({ userId, dayId }) => workoutRefresh(userId, dayId),

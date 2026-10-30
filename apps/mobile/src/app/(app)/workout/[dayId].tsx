@@ -10,6 +10,7 @@ import { blockForDisplay, memberDayBlocks } from '@ballistic/shared/utils/workou
 import { earlierLogs, lastSessionFor, priorBestLoad } from '@ballistic/shared/utils/workoutHistory';
 import { finishMessage, workoutSummary } from '@ballistic/shared/utils/workoutSets';
 import { chosenBlockKeys, exerciseIsVisible, slotOptions, usesSections } from '@ballistic/shared/workoutSections';
+import { trackingOf } from '@ballistic/shared/workoutTracking';
 
 import { BlockView, ExerciseCard, FeedbackForm, SetEditSheet, WarmupTick } from '@/components/workouts';
 import { AppText, Button, Card, Chip, Screen, ScrollScreen } from '@/components/ui';
@@ -81,7 +82,7 @@ export default function WorkoutDay() {
         logs={logs}
         last={lastSessionFor(earlier, tz, todayIso)}
         priorBest={Math.max(priorBestLoad(earlier) ?? 0, d.priorBests[ex.exercise_library_id ?? `n:${ex.name.toLowerCase()}`] ?? 0) || null}
-        onLog={(e, setNumber, v) => logSet.mutate({ exercise: e, setNumber, actual_reps: v.reps, actual_load: v.load, actual_rpe: v.rpe })}
+        onLog={(e, setNumber, v) => logSet.mutate({ exercise: e, setNumber, actual_reps: v.reps, actual_load: v.load, actual_rpe: v.rpe, actual_seconds: v.seconds, actual_distance: v.distance, actual_calories: v.calories })}
         onEditSet={(log, i) => setEditing({ log, index: i })}
       />
     );
@@ -174,8 +175,9 @@ export default function WorkoutDay() {
         <SetEditSheet
           log={editing.log}
           index={editing.index}
+          tracking={trackingOf(exercises.find((e) => e.id === editing.log.exercise_id)?.tracking_type)}
           onClose={() => setEditing(null)}
-          onSave={(v) => { updateSet.mutate({ logId: editing.log.id, actual_reps: v.reps, actual_load: v.load, actual_rpe: v.rpe }); setEditing(null); }}
+          onSave={(v) => { updateSet.mutate({ logId: editing.log.id, actual_reps: v.reps, actual_load: v.load, actual_rpe: v.rpe, actual_seconds: v.seconds, actual_distance: v.distance, actual_calories: v.calories }); setEditing(null); }}
           onDelete={() => { deleteSet.mutate({ logId: editing.log.id }); setEditing(null); }}
         />
       ) : null}

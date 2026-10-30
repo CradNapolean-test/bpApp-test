@@ -237,6 +237,9 @@ export function useLogSet(dayId: string) {
         actual_reps: v.actual_reps,
         actual_load: v.actual_load,
         actual_rpe: v.actual_rpe,
+        actual_seconds: v.actual_seconds ?? null,
+        actual_distance: v.actual_distance ?? null,
+        actual_calories: v.actual_calories ?? null,
       },
     }),
     [userId, dayId],
@@ -254,7 +257,7 @@ export function useUpdateSet(dayId: string) {
   const toVars = useCallback((v: { logId: string } & SetFields): SetUpdateVars => ({ userId, dayId, ...v }), [userId, dayId]);
   const apply = useCallback(
     (v: { logId: string } & SetFields) =>
-      updateDay((old) => ({ ...old, logs: old.logs.map((l) => (l.id === v.logId ? { ...l, actual_reps: v.actual_reps, actual_load: v.actual_load, actual_rpe: v.actual_rpe } : l)) })),
+      updateDay((old) => ({ ...old, logs: old.logs.map((l) => (l.id === v.logId ? { ...l, actual_reps: v.actual_reps, actual_load: v.actual_load, actual_rpe: v.actual_rpe, actual_seconds: v.actual_seconds ?? null, actual_distance: v.actual_distance ?? null, actual_calories: v.actual_calories ?? null } : l)) })),
     [updateDay],
   );
   return useQueuedWrite({ key: WRITE_SET_UPDATE, toVars, apply });

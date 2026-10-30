@@ -21,6 +21,7 @@ import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv'
 import { describeImport, prepareExerciseImport } from '@/lib/exerciseImport';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
+import { TRACKING, TRACKING_TYPES, trackingOf, type TrackingType } from '@/lib/workoutTracking';
 
 const EXPORT_COLUMNS = [
   'name',
@@ -30,6 +31,7 @@ const EXPORT_COLUMNS = [
   'default_reps',
   'default_rpe',
   'default_rest_seconds',
+  'tracking_type',
   'video_url',
   'image_url',
   'instructions',
@@ -74,6 +76,7 @@ function parseExerciseCsv(text: string): Omit<ExerciseLibraryRow, 'id' | 'create
       default_reps: strCol(r, 'default_reps'),
       default_rpe: numCol(r, 'default_rpe'),
       default_rest_seconds: numCol(r, 'default_rest_seconds'),
+      tracking_type: trackingOf(strCol(r, 'tracking_type')),
       video_url: strCol(r, 'video_url'),
       image_url: strCol(r, 'image_url'),
       instructions: strCol(r, 'instructions'),
@@ -114,6 +117,7 @@ function ExerciseFormSheet({
   const [reps, setReps] = useState(exercise ? (exercise.default_reps ?? '') : '8-10');
   const [rpe, setRpe] = useState(exercise?.default_rpe == null ? '' : String(exercise.default_rpe));
   const [rest, setRest] = useState(exercise?.default_rest_seconds == null ? '' : String(exercise.default_rest_seconds));
+  const [tracking, setTracking] = useState<TrackingType>(trackingOf(exercise?.tracking_type));
   const [imageUrl, setImageUrl] = useState(exercise?.image_url ?? '');
   const [instructions, setInstructions] = useState(exercise?.instructions ?? '');
   const [notes, setNotes] = useState(exercise?.notes ?? '');
@@ -138,6 +142,7 @@ function ExerciseFormSheet({
       default_reps: reps.trim() || null,
       default_rpe: num(rpe),
       default_rest_seconds: num(rest),
+      tracking_type: tracking,
       image_url: image.url,
       instructions: instructions.trim() || null,
       notes: notes.trim() || null,
@@ -172,6 +177,16 @@ function ExerciseFormSheet({
             <input className={sheetField} value={equipment} placeholder="e.g. Barbell" onChange={(e) => setEquipment(e.target.value)} />
           </Labeled>
         </div>
+
+        <Labeled label="What gets recorded">
+          <select className={sheetField} value={tracking} onChange={(e) => setTracking(e.target.value as TrackingType)}>
+            {TRACKING_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {TRACKING[t].label} ({TRACKING[t].hint})
+              </option>
+            ))}
+          </select>
+        </Labeled>
 
         <details open={!!exercise && !!(exercise.instructions || exercise.notes || exercise.image_url)} className="group rounded-xl border border-black/10 dark:border-white/10">
           <summary className="cursor-pointer list-none px-3.5 py-2.5 text-sm font-bold text-black dark:text-zinc-50">

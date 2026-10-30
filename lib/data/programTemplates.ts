@@ -257,6 +257,10 @@ export async function duplicateTemplateDay(dayId: string, weekNum: number, dayLa
       block_no: ex.block_no,
       block_format: ex.block_format,
       block_part: ex.block_part,
+      tracking_type: ex.tracking_type,
+      target_seconds: ex.target_seconds,
+      target_distance: ex.target_distance,
+      target_calories: ex.target_calories,
     }));
     const { error: insertExercisesError } = await supabase.from('program_template_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);

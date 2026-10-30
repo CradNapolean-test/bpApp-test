@@ -3,6 +3,7 @@
 // called directly from the client component (ProgramTemplateManager) on data it already has,
 // and a 'use server' file requires every export to be async (Next.js Server Actions rule).
 import type { BlockPart, WorkoutSection } from '@/lib/workoutSections';
+import type { TrackingType } from '@/lib/workoutTracking';
 import type {
   BlockType,
   PrescriptionType,
@@ -33,6 +34,10 @@ export interface TemplateExportExercise {
   block_no: number | null;
   block_format: string | null;
   block_part: BlockPart | null;
+  tracking_type: TrackingType;
+  target_seconds: number | null;
+  target_distance: number | null;
+  target_calories: number | null;
 }
 
 export interface TemplateExportDay {
@@ -82,6 +87,10 @@ export function toTemplateExport(template: ProgramTemplateWithDays): TemplateExp
         block_no: ex.block_no,
         block_format: ex.block_format,
         block_part: ex.block_part,
+        tracking_type: ex.tracking_type,
+        target_seconds: ex.target_seconds,
+        target_distance: ex.target_distance,
+        target_calories: ex.target_calories,
       })),
     })),
   };
