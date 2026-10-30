@@ -174,24 +174,24 @@ function LogSetForm({
   const [inputs, setInputs] = useState<SetInputs>(() => inputsFromLog(tracking, seed));
   const [timerKey, setTimerKey] = useState(0);
   const [showLoad, setShowLoad] = useState(!weightless);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; problem?: boolean } | null>(null);
 
   const draft = readSetInputs(tracking, inputs);
   const blank = draft.ok && isBlankSet(tracking, draft.values);
 
   function submit() {
     if (!draft.ok) {
-      setMessage(draft.error);
+      setMessage({ text: draft.error, problem: true });
       return;
     }
     const v = draft.values;
     // A set with nothing recorded says nothing; it used to be saved anyway and counted as a set done (L4).
     if (!weightless && isBlankSet(tracking, v)) {
-      setMessage(blankSetMessage(tracking));
+      setMessage({ text: blankSetMessage(tracking), problem: true });
       return;
     }
     onLog(v);
-    setMessage(isNewBest(v.load, priorBest) ? `Set ${setNumber} logged. New best! 🏆` : `Set ${setNumber} logged`);
+    setMessage({ text: isNewBest(v.load, priorBest) ? `Set ${setNumber} logged. New best! 🏆` : `Set ${setNumber} logged` });
     setInputs((p) => ({ ...p, rpe: '' }));
     if (restSeconds != null) setTimerKey((k) => k + 1);
   }
@@ -209,7 +209,7 @@ function LogSetForm({
       <SetBoxes tracking={tracking} inputs={inputs} onChange={setInputs} showLoad={showLoad} />
       {!showLoad ? <Pressable onPress={() => setShowLoad(true)} accessibilityRole="button"><AppText variant="small" color="accent" style={{ fontWeight: '700' }}>+ Add weight</AppText></Pressable> : null}
       <Button title={tracking === 'tick' || (weightless && blank) ? `Done: set ${setNumber}` : `Log set ${setNumber}`} onPress={submit} />
-      {message ? <AppText variant="small" color="success" style={{ fontWeight: '600' }}>{message}</AppText> : null}
+      {message ? <AppText variant="small" color={message.problem ? 'danger' : 'success'} style={{ fontWeight: '600' }}>{message.text}</AppText> : null}
       {restSeconds != null && timerKey > 0 ? <RestTimer key={timerKey} seconds={restSeconds} /> : null}
     </View>
   );
@@ -370,22 +370,22 @@ export function BlockView({ block, renderExercise, headerExtra, footer }: { bloc
 export function BlockResultForm({ config, result, onSave, onClear }: { config: BlockConfig; result: WorkoutBlockResultRow | undefined; onSave: (v: ResultValues) => void; onClear: () => void }) {
   const t = useTheme();
   const [inputs, setInputs] = useState<ResultInputs>(() => inputsFromResult(result));
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; problem?: boolean } | null>(null);
   if (config.scoring === 'none') return null;
   const scoring = config.scoring;
 
   function save() {
     const read = readResultInputs(scoring, inputs);
     if (!read.ok) {
-      setMessage(read.error);
+      setMessage({ text: read.error, problem: true });
       return;
     }
     if (isBlankResult(scoring, read.values)) {
-      setMessage('Add your result before saving it.');
+      setMessage({ text: 'Add your result before saving it.', problem: true });
       return;
     }
     onSave(read.values);
-    setMessage('Result saved');
+    setMessage({ text: 'Result saved' });
   }
 
   const box = (f: ResultField) =>
@@ -425,7 +425,7 @@ export function BlockResultForm({ config, result, onSave, onClear }: { config: B
       </View>
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>{resultFields(scoring).map(box)}</View>
       <Button title={result ? 'Update result' : 'Save result'} onPress={save} />
-      {message ? <AppText variant="small" color="success" style={{ fontWeight: '600' }}>{message}</AppText> : null}
+      {message ? <AppText variant="small" color={message.problem ? 'danger' : 'success'} style={{ fontWeight: '600' }}>{message.text}</AppText> : null}
       {result ? (
         <Pressable onPress={() => { onClear(); setInputs(inputsFromResult(undefined)); setMessage(null); }} accessibilityRole="button">
           <AppText variant="small" color="danger" style={{ fontWeight: '700' }}>Remove result</AppText>
