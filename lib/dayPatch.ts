@@ -41,6 +41,14 @@ export function canEditDay(date: string, todayIso: string): boolean {
   return age >= 0 && age <= EDIT_DAYS;
 }
 
+// Food (not the check-in) can also be planned or logged for tomorrow: a member weighing up tomorrow's meals, or prepping them tonight. It is the
+// only day ahead; the check-in, photos and everything else still stop at today. Tomorrow's food stays out of the weekly averages until it is today.
+export const FOOD_AHEAD_DAYS = 1;
+export function canEditFoodDay(date: string, todayIso: string): boolean {
+  const age = dayOffset(date, todayIso);
+  return age >= -FOOD_AHEAD_DAYS && age <= EDIT_DAYS;
+}
+
 // Whether a member can open the week starting on this Monday: its last day is still inside the browse window.
 export function canBrowseWeek(weekStart: string, todayIso: string): boolean {
   const lastDay = toIsoDate(addDays(new Date(`${weekStart}T00:00:00Z`), 6));

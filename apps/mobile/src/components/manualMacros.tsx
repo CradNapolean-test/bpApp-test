@@ -115,7 +115,7 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
   return (
     <ScrollScreen refreshing={manualQ.isRefetching} onRefresh={() => manualQ.refetch()}>
       <NutritionTabs current="food" />
-      <DateNav date={date} today={today} onChange={(d) => setPicked(d === today ? null : d)} />
+      <DateNav date={date} today={today} ahead={1} onChange={(d) => setPicked(d === today ? null : d)} />
       <TotalsCard totals={manualTotals(entries)} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
       <MyTargetsRow profile={profile} />
       <CoachFeedbackCard items={feedbackQ.data ?? []} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSE_DAYS, EDIT_DAYS, canBrowseDate, canBrowseWeek, canEditDay, changedFields } from './dayPatch';
+import { BROWSE_DAYS, EDIT_DAYS, canBrowseDate, canBrowseWeek, canEditDay, canEditFoodDay, changedFields } from './dayPatch';
 
 // A stored day, as the form holds it.
 const stored = {
@@ -76,5 +76,18 @@ describe('canBrowseDate (FT1, D20)', () => {
     expect(canBrowseDate('2026-09-15', today)).toBe(true); // exactly 30 days
     expect(canBrowseDate('2026-09-14', today)).toBe(false);
     expect(canBrowseDate('2026-10-16', today)).toBe(false);
+  });
+});
+
+describe('canEditFoodDay', () => {
+  const today = '2026-10-16';
+  it('is the normal edit window plus tomorrow', () => {
+    expect(canEditFoodDay('2026-10-16', today)).toBe(true);
+    expect(canEditFoodDay('2026-10-17', today)).toBe(true);
+    expect(canEditFoodDay('2026-10-02', today)).toBe(true);
+    expect(canEditFoodDay('2026-10-01', today)).toBe(false);
+  });
+  it('stops at tomorrow', () => {
+    expect(canEditFoodDay('2026-10-18', today)).toBe(false);
   });
 });

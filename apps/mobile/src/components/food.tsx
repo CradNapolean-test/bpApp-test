@@ -43,7 +43,8 @@ export function CoachFeedbackCard({ items }: { items: NutritionFeedbackRow[] }) 
 }
 
 // ---------- date navigation + totals ----------
-export function DateNav({ date, today, onChange }: { date: string; today: string; onChange: (d: string) => void }) {
+// `ahead` is how many days past today food can be planned (1 = tomorrow).
+export function DateNav({ date, today, ahead = 0, onChange }: { date: string; today: string; ahead?: number; onChange: (d: string) => void }) {
   const t = useTheme();
   const shift = (n: number) => {
     const d = new Date(date + 'T00:00:00Z');
@@ -51,7 +52,8 @@ export function DateNav({ date, today, onChange }: { date: string; today: string
     onChange(d.toISOString().slice(0, 10));
   };
   const yesterday = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
-  const label = date === today ? 'Today' : date === yesterday ? 'Yesterday' : new Date(date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const last = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + ahead); return d.toISOString().slice(0, 10); })();
+  const label = date === today ? 'Today' : date === yesterday ? 'Yesterday' : ahead > 0 && date === last ? 'Tomorrow' : new Date(date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   // As on the web: plain chevrons either side of the day, no tiles.
   const arrow = { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' } as const;
   return (
@@ -61,7 +63,7 @@ export function DateNav({ date, today, onChange }: { date: string; today: string
         <AppText variant="heading">{label}</AppText>
         {date !== today ? <AppText variant="small" color="accent">Back to today</AppText> : null}
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Next day" onPress={() => date < today && shift(1)} style={[arrow, { opacity: date < today ? 1 : 0.3 }]} disabled={date >= today}><Icon name="chevronRight" size={20} color={t.muted} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Next day" onPress={() => date < last && shift(1)} style={[arrow, { opacity: date < last ? 1 : 0.3 }]} disabled={date >= last}><Icon name="chevronRight" size={20} color={t.muted} /></Pressable>
     </View>
   );
 }

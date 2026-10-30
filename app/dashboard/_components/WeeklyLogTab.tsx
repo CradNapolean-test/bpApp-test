@@ -234,7 +234,8 @@ function WeekLog({
     return present.length ? present.reduce((a, v) => a + v, 0) / present.length : null;
   };
   // Calories include Quick Adds with no macros (R11), and a day whose food was all deleted is not a food day (M2).
-  const foodDays = weekValues.filter(hasFoodLogged);
+  // Food planned for tomorrow is not eaten yet, so it is left out until it is today.
+  const foodDays = weekValues.filter((d, i) => weekDates[i] <= todayIso && hasFoodLogged(d));
   const avgCalories = avg(foodDays.map(dayCaloriesOf));
   const avgProtein = avg(foodDays.map((d) => d.protein));
   const avgCarbs = avg(foodDays.map((d) => d.carbs));

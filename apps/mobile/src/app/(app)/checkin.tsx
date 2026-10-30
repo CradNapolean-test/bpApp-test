@@ -84,7 +84,8 @@ function CheckinContent() {
   const calories = dayCaloriesOf(row); // includes Quick Adds with no macros (R11)
   const periodDates = [...(periodQ.data ?? []), ...logs.filter((l) => l.period_started).map((l) => l.log_date)];
   const cycleDay = female ? cycleDayFor(periodDates, focused) : null;
-  const avgs = weekAverages(dates.map((d) => logs.find((l) => l.log_date === d) ?? blankDailyLog('', d)));
+  // Food planned for tomorrow is not eaten yet, so it is left out of the averages until it is today.
+  const avgs = weekAverages(dates.map((d) => (d > todayIso ? blankDailyLog('', d) : logs.find((l) => l.log_date === d) ?? blankDailyLog('', d))));
 
   const [problem, setProblem] = useState<string | null>(null);
 

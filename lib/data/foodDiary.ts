@@ -4,7 +4,7 @@ import { raise } from './errors';
 import { fail } from './result';
 import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
-import { canBrowseDate, canEditDay } from '@/lib/dayPatch';
+import { canBrowseDate, canEditFoodDay } from '@/lib/dayPatch';
 import { rowsToCopy } from '@/lib/diaryCopy';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayFieldsFromDiary } from '@/lib/utils/foodTotals';
@@ -134,7 +134,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // success, and the target day's row is only made once there is something to put on it (FT1). Returns the target day's entries so the
 // screen can show them without another trip (FT3).
 //
-// A member changes today and the last 14 days and looks back 30 (dayPatch.ts), but that rule only lived in the screens; it is checked
+// A member changes tomorrow, today and the last 14 days and looks back 30 (dayPatch.ts), but that rule only lived in the screens; it is checked
 // here too so a copy cannot reach a day the screen would have locked.
 export async function copyDiaryBetweenDates(
   clientId: string,
@@ -151,7 +151,7 @@ export async function copyDiaryBetweenDates(
   const supabase = await createClient();
   const { data: tzRow } = await supabase.from('client_profiles').select('timezone').eq('client_id', clientId).maybeSingle();
   const todayIso = todayIsoInTz(tzRow?.timezone ?? DEFAULT_TIMEZONE);
-  if (!canEditDay(toDate, todayIso)) return fail(null, 'Food can only be copied into today or the last 2 weeks.') as DiaryCopyResult;
+  if (!canEditFoodDay(toDate, todayIso)) return fail(null, 'Food can only be copied into tomorrow, today or the last 2 weeks.') as DiaryCopyResult;
   if (!canBrowseDate(fromDate, todayIso)) return fail(null, 'That day is too far back to copy from.') as DiaryCopyResult;
 
   // Both meals have to be this member's own.

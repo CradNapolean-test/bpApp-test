@@ -33,7 +33,7 @@ import {
 } from '@/lib/data/mealSections';
 import { logRecipeToDiary } from '@/lib/data/recipes';
 import { ok } from '@/lib/data/result';
-import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
+import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditFoodDay } from '@/lib/dayPatch';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
@@ -476,7 +476,9 @@ export function FoodTrackingTab({
     if (viewingDate === todayIso) setManualEntries(initialManualMacroEntries);
   }
   // Members change the last two weeks of food and look back a month (D20, FT1); a coach sees any day and changes none.
-  const dayLocked = !readOnly && !canEditDay(viewingDate, todayIso);
+  const dayLocked = !readOnly && !canEditFoodDay(viewingDate, todayIso);
+  const tomorrowIso = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), 1));
+  const isTomorrow = viewingDate === tomorrowIso;
   const entryReadOnly = readOnly || dayLocked;
   const previousDay = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
   const atBrowseLimit = !readOnly && !canBrowseDate(previousDay, todayIso);
@@ -763,7 +765,7 @@ export function FoodTrackingTab({
         <Button variant="icon" aria-label="Previous day" onClick={() => loadDate(previousDay)} disabled={dateLoading || atBrowseLimit}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="text-sm font-medium">{isToday ? 'Today' : dateLabel}</div>
+        <div className="text-sm font-medium">{isToday ? 'Today' : isTomorrow ? 'Tomorrow' : dateLabel}</div>
         <div className="flex items-center gap-1">
           {!isToday && (
             <Button variant="ghost" size="sm" onClick={() => loadDate(todayIso)} disabled={dateLoading}>
@@ -774,13 +776,18 @@ export function FoodTrackingTab({
             variant="icon"
             aria-label="Next day"
             onClick={() => loadDate(toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), 1)))}
-            disabled={dateLoading || isToday}
+            disabled={dateLoading || viewingDate >= (readOnly ? todayIso : tomorrowIso)}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
+      {isTomorrow && !readOnly && (
+        <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
+          Planning tomorrow. This food counts towards tomorrow, and stays out of this week&apos;s averages until then.
+        </p>
+      )}
       {dayLocked && <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{LOCKED_DAY_MESSAGE}</p>}
 
       {readOnly && recentDays && (() => {
