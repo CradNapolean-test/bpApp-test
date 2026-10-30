@@ -76,6 +76,8 @@ export interface SectionedExercise {
   block_no: number | null;
   block_part?: BlockPart | null;
   block_format: string | null;
+  // How the block is scored (migration 0152); read with blockConfigOf.
+  block_config?: unknown;
   sort_order: number;
 }
 

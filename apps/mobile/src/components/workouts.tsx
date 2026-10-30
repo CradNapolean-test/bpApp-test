@@ -2,7 +2,19 @@ import { Link } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 
-import type { ExerciseLibraryRow, WorkoutExerciseRow, WorkoutLogRow } from '@ballistic/shared/data/types';
+import {
+  inputsFromResult,
+  isBlankResult,
+  readResultInputs,
+  resultFields,
+  resultLabel,
+  resultSummary,
+  type BlockConfig,
+  type ResultField,
+  type ResultInputs,
+  type ResultValues,
+} from '@ballistic/shared/blockScoring';
+import type { ExerciseLibraryRow, WorkoutBlockResultRow, WorkoutExerciseRow, WorkoutLogRow } from '@ballistic/shared/data/types';
 import { WEEKDAY_SHORT } from '@ballistic/shared/utils/dates';
 import { groupBySuperset } from '@ballistic/shared/utils/exerciseGrouping';
 import { percentOfMaxKg, type ResolvedMax } from '@ballistic/shared/utils/oneRepMax';
@@ -323,7 +335,7 @@ export function WarmupTick({ done, onToggle }: { done: boolean; onToggle: () => 
   );
 }
 
-export function BlockView({ block, renderExercise, headerExtra }: { block: DisplayBlock<WorkoutExerciseRow>; renderExercise: (ex: WorkoutExerciseRow, index: number) => React.ReactNode; headerExtra?: React.ReactNode }) {
+export function BlockView({ block, renderExercise, headerExtra, footer }: { block: DisplayBlock<WorkoutExerciseRow>; renderExercise: (ex: WorkoutExerciseRow, index: number) => React.ReactNode; headerExtra?: React.ReactNode; footer?: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={{ gap: spacing.sm }}>
@@ -348,6 +360,77 @@ export function BlockView({ block, renderExercise, headerExtra }: { block: Displ
           {sg.exercises.map((ex) => renderExercise(ex, block.rows.findIndex((e) => e.id === ex.id)))}
         </View>
       ))}
+      {footer}
+    </View>
+  );
+}
+
+// ---------- what the member scored on a block ----------
+// Rounds and reps, a finish time, a score or a tick, saved once for the block and shown under its exercises.
+export function BlockResultForm({ config, result, onSave, onClear }: { config: BlockConfig; result: WorkoutBlockResultRow | undefined; onSave: (v: ResultValues) => void; onClear: () => void }) {
+  const t = useTheme();
+  const [inputs, setInputs] = useState<ResultInputs>(() => inputsFromResult(result));
+  const [message, setMessage] = useState<string | null>(null);
+  if (config.scoring === 'none') return null;
+  const scoring = config.scoring;
+
+  function save() {
+    const read = readResultInputs(scoring, inputs);
+    if (!read.ok) {
+      setMessage(read.error);
+      return;
+    }
+    if (isBlankResult(scoring, read.values)) {
+      setMessage('Add your result before saving it.');
+      return;
+    }
+    onSave(read.values);
+    setMessage('Result saved');
+  }
+
+  const box = (f: ResultField) =>
+    f === 'done' ? (
+      <Pressable
+        key={f}
+        onPress={() => setInputs((p) => ({ ...p, done: !p.done }))}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: inputs.done }}
+        accessibilityLabel={resultLabel('done', config)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 }}>
+        <View style={{ width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: inputs.done ? t.success : t.border, backgroundColor: inputs.done ? t.success : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          {inputs.done ? <AppText style={{ color: '#fff', fontWeight: '800' }}>✓</AppText> : null}
+        </View>
+        <AppText style={{ fontWeight: '700' }}>{resultLabel('done', config)}</AppText>
+      </Pressable>
+    ) : (
+      <NumberBox
+        key={f}
+        label={resultLabel(f, config)}
+        value={inputs[f]}
+        onChange={(v) => setInputs((p) => ({ ...p, [f]: v }))}
+        keyboard={f === 'time' ? 'numbers-and-punctuation' : 'decimal-pad'}
+        placeholder={f === 'time' ? 'm:ss' : undefined}
+      />
+    );
+
+  return (
+    <View style={{ backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm, gap: spacing.sm }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <AppText style={{ fontWeight: '700' }}>Block result</AppText>
+        {result ? (
+          <View style={{ backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 }}>
+            <AppText variant="small" color="success" style={{ fontWeight: '700' }}>✓ {resultSummary(config, result)}</AppText>
+          </View>
+        ) : null}
+      </View>
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>{resultFields(scoring).map(box)}</View>
+      <Button title={result ? 'Update result' : 'Save result'} onPress={save} />
+      {message ? <AppText variant="small" color="success" style={{ fontWeight: '600' }}>{message}</AppText> : null}
+      {result ? (
+        <Pressable onPress={() => { onClear(); setInputs(inputsFromResult(undefined)); setMessage(null); }} accessibilityRole="button">
+          <AppText variant="small" color="danger" style={{ fontWeight: '700' }}>Remove result</AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

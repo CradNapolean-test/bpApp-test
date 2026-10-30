@@ -51,6 +51,17 @@ import {
   type WorkoutSection,
 } from '@/lib/workoutSections';
 import {
+  SCORING,
+  SCORINGS,
+  blockConfigOf,
+  configForStorage,
+  configSummary,
+  defaultConfigFor,
+  sanitiseConfig,
+  type BlockConfig,
+  type Scoring,
+} from '@/lib/blockScoring';
+import {
   TRACKING,
   TRACKING_TYPES,
   durationInput,
@@ -86,6 +97,7 @@ export interface EditableExercise {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  block_config: BlockConfig | null;
   block_part: BlockPart | null;
   tracking_type: TrackingType;
   target_seconds: number | null;
@@ -111,6 +123,7 @@ export interface NewExerciseFields {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  block_config: BlockConfig | null;
   block_part: BlockPart | null;
   tracking_type: TrackingType;
   target_seconds: number | null;
@@ -583,37 +596,118 @@ function InstructionsSheet({
   );
 }
 
+// Pick a block's format and how it is scored: the format name, what the member records for the block, and the numbers that go with it.
 function FormatSheet({
   title,
   current,
-  onPick,
+  config,
+  defaultCapSeconds,
+  onSave,
   onClose,
 }: {
   title: string;
   current: string | null;
-  onPick: (format: string | null) => Promise<unknown>;
+  config: BlockConfig | null;
+  // The length of the block, offered as the time cap for formats that run against the clock.
+  defaultCapSeconds: number;
+  onSave: (format: string | null, config: BlockConfig | null) => Promise<unknown>;
   onClose: () => void;
 }) {
-  const { run } = useAction();
-  const row = (name: string | null, description?: string) => (
-    <button
-      key={name ?? 'none'}
-      type="button"
-      onClick={() => run(() => onPick(name), { onDone: onClose })}
-      className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-black dark:text-zinc-50">{name ?? 'No format'}</span>
-        {description && <span className="text-xs text-zinc-500">{description}</span>}
-      </span>
-      {current === name && <span className="text-sm font-bold text-accent">✓</span>}
-    </button>
-  );
+  const { run, busy } = useAction();
+  const start = sanitiseConfig(config);
+  const [format, setFormat] = useState<string | null>(current);
+  const [scoring, setScoring] = useState<Scoring>(start.scoring);
+  const [capMinutes, setCapMinutes] = useState(start.cap_seconds == null ? '' : String(Math.round((start.cap_seconds / 60) * 100) / 100));
+  const [rounds, setRounds] = useState(start.rounds == null ? '' : String(start.rounds));
+  const [work, setWork] = useState(start.work_seconds == null ? '' : String(start.work_seconds));
+  const [rest, setRest] = useState(start.rest_seconds == null ? '' : String(start.rest_seconds));
+  const [unit, setUnit] = useState(start.unit ?? '');
+
+  // Choosing a format fills in what usually goes with it; each box can still be changed.
+  function choose(name: string | null) {
+    setFormat(name);
+    const d = defaultConfigFor(name);
+    setScoring(d.scoring);
+    setCapMinutes(d.scoring === 'rounds_reps' || d.scoring === 'done' ? String(defaultCapSeconds / 60) : '');
+    setRounds(d.rounds == null ? '' : String(d.rounds));
+    setWork(d.work_seconds == null ? '' : String(d.work_seconds));
+    setRest(d.rest_seconds == null ? '' : String(d.rest_seconds));
+  }
+
+  function save() {
+    const num = (label: string, text: string): number | undefined => {
+      if (text.trim() === '') return undefined;
+      const n = Number(text.replace(',', '.'));
+      if (!Number.isFinite(n) || n <= 0) throw new Error(`${label} needs to be a number above zero.`);
+      return n;
+    };
+    const cap = num('The time cap', capMinutes);
+    const next: BlockConfig = { scoring };
+    if (cap != null) next.cap_seconds = Math.round(cap * 60);
+    const r = num('Rounds', rounds);
+    if (r != null) next.rounds = Math.round(r);
+    const w = num('Work seconds', work);
+    if (w != null) next.work_seconds = w;
+    const rs = num('Rest seconds', rest);
+    if (rs != null) next.rest_seconds = rs;
+    if (scoring === 'score' && unit.trim()) next.unit = unit.trim();
+    return run(() => onSave(format, configForStorage(next)), { onDone: onClose });
+  }
+
   return (
     <BottomSheet title={title} onClose={onClose}>
-      <div className="max-h-[60vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-        {row(null, 'Plain sets and reps')}
-        {BLOCK_FORMATS.map((f) => row(f.name, f.description))}
+      <div className="space-y-4">
+        <div className="max-h-[32vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+          {[{ name: null as string | null, description: 'Plain sets and reps' }, ...BLOCK_FORMATS.map((f) => ({ name: f.name as string | null, description: f.description }))].map((f) => (
+            <button key={f.name ?? 'none'} type="button" onClick={() => choose(f.name)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-black dark:text-zinc-50">{f.name ?? 'No format'}</span>
+                {f.description && <span className="text-xs text-zinc-500">{f.description}</span>}
+              </span>
+              {format === f.name && <span className="text-sm font-bold text-accent">✓</span>}
+            </button>
+          ))}
+        </div>
+
+        <Field label="What the member records for the block">
+          <select className={fieldCls} value={scoring} onChange={(e) => setScoring(e.target.value as Scoring)}>
+            {SCORINGS.map((k) => (
+              <option key={k} value={k}>
+                {SCORING[k].label}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-zinc-500">{SCORING[scoring].hint}</span>
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Time cap (minutes)">
+            <input type="number" inputMode="decimal" className={fieldCls} value={capMinutes} placeholder={String(defaultCapSeconds / 60)} onChange={(e) => setCapMinutes(e.target.value)} />
+          </Field>
+          <Field label="Rounds">
+            <input type="number" inputMode="numeric" className={fieldCls} value={rounds} onChange={(e) => setRounds(e.target.value)} />
+          </Field>
+          <Field label="Work (seconds)">
+            <input type="number" inputMode="numeric" className={fieldCls} value={work} onChange={(e) => setWork(e.target.value)} />
+          </Field>
+          <Field label="Rest (seconds)">
+            <input type="number" inputMode="numeric" className={fieldCls} value={rest} onChange={(e) => setRest(e.target.value)} />
+          </Field>
+        </div>
+        {scoring === 'score' && (
+          <Field label="Score is counted in">
+            <input className={fieldCls} value={unit} maxLength={20} placeholder="calories, metres, reps" onChange={(e) => setUnit(e.target.value)} />
+          </Field>
+        )}
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={save}
+          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
       </div>
     </BottomSheet>
   );
@@ -799,6 +893,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   showProgression,
   renderExtra,
   renderBlockExtra,
+  renderBlockFooter,
+  blockBadge,
   memberChoices,
 }: {
   exercises: T[];
@@ -815,6 +911,10 @@ export function ExerciseEditor<T extends EditableExercise>({
   renderExtra?: (exercise: T) => ReactNode;
   // Something shown under a block's heading (the member's one tick for the whole warm-up).
   renderBlockExtra?: (rows: T[]) => ReactNode;
+  // Something shown under a block's exercises (the member's result for the block).
+  renderBlockFooter?: (rows: T[]) => ReactNode;
+  // Something shown beside a block's heading in the coach's builder (what the member scored).
+  blockBadge?: (key: string, rows: T[]) => ReactNode;
   // A member's Strong / Conditioning (and Upper / Lower) picks for this workout. When given, the member
   // chooses what to do in each 10-minute slot and only the chosen blocks show.
   memberChoices?: {
@@ -832,7 +932,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   const prevIdsKey = useRef(idsKey);
   const [sheet, setSheet] = useState<SheetState>(null);
   // A format chosen for a block that has no exercises yet; it is stamped on the first one added.
-  const [pendingFormats, setPendingFormats] = useState<Record<string, string | null>>({});
+  const [pendingFormats, setPendingFormats] = useState<Record<string, { format: string | null; config: BlockConfig | null }>>({});
   // Conditioning as one 20-minute block, chosen before any exercise is in it.
   const [pendingSingle, setPendingSingle] = useState(false);
   // Strong block 2 as Upper / Lower, chosen before any exercise is in it.
@@ -884,7 +984,14 @@ export function ExerciseEditor<T extends EditableExercise>({
   const nextSort = (sorted.length === 0 ? -1 : Math.max(...sorted.map((e) => e.sort_order))) + 1;
 
   function formatFor(key: string): string | null {
-    return blockFormatOf(blocks.get(key)) ?? pendingFormats[key] ?? null;
+    return blockFormatOf(blocks.get(key)) ?? pendingFormats[key]?.format ?? null;
+  }
+
+  // The block's scoring and numbers: from its exercises, else what was chosen before it had any.
+  function configFor(key: string): BlockConfig | null {
+    const rows = blocks.get(key);
+    if (rows?.some((r) => r.block_config)) return configForStorage(blockConfigOf(rows));
+    return pendingFormats[key]?.config ?? null;
   }
 
   async function addRow(key: string, partial: Partial<NewExerciseFields> & Pick<NewExerciseFields, 'name' | 'block_type'>) {
@@ -912,6 +1019,7 @@ export function ExerciseEditor<T extends EditableExercise>({
       block_no: blockNo,
       block_part: part,
       block_format: formatFor(key),
+      block_config: configFor(key),
       ...partial,
     });
   }
@@ -936,13 +1044,13 @@ export function ExerciseEditor<T extends EditableExercise>({
   const updateMany = (ids: string[], fields: ExerciseUpdate) =>
     onUpdateMany ? onUpdateMany(ids, fields) : Promise.all(ids.map((id) => onUpdate(id, fields)));
 
-  async function setFormat(key: string, format: string | null) {
+  async function setFormat(key: string, format: string | null, config: BlockConfig | null) {
     const rows = blocks.get(key) ?? [];
     if (rows.length === 0) {
-      setPendingFormats((p) => ({ ...p, [key]: format }));
+      setPendingFormats((p) => ({ ...p, [key]: { format, config } }));
       return;
     }
-    await updateMany(rows.map((r) => r.id), { block_format: format });
+    await updateMany(rows.map((r) => r.id), { block_format: format, block_config: config });
   }
 
   function moveWithinBlock(ex: T, direction: -1 | 1) {
@@ -979,6 +1087,7 @@ export function ExerciseEditor<T extends EditableExercise>({
           section: rest.section ?? 'lift',
           block_no: rest.block_no ?? null,
           block_format: rest.block_format ?? null,
+          block_config: rest.block_config ?? null,
           block_part: rest.block_part ?? null,
           tracking_type: trackingOf(rest.tracking_type),
           target_seconds: rest.target_seconds ?? null,
@@ -1095,7 +1204,7 @@ export function ExerciseEditor<T extends EditableExercise>({
     }
 
     const renderBlock = (key: string, title: string | null, rows: T[]) => {
-      const description = title ? formatDescription(blockFormatOf(rows)) : undefined;
+      const description = title ? [formatDescription(blockFormatOf(rows)), configSummary(blockConfigOf(rows))].filter(Boolean).join(' · ') || undefined : undefined;
       return (
         <section key={key}>
           {title && (
@@ -1134,6 +1243,7 @@ export function ExerciseEditor<T extends EditableExercise>({
               ))}
             </ul>
           </SortableContext>
+          {renderBlockFooter?.(rows)}
         </section>
       );
     };
@@ -1260,6 +1370,8 @@ export function ExerciseEditor<T extends EditableExercise>({
               {slotsFor(section).map(({ key, blockNo, part }) => {
                 const rows = blocks.get(key) ?? [];
                 const format = formatFor(key);
+                const cfg = sanitiseConfig(configFor(key));
+                const cfgText = [configSummary(cfg), cfg.scoring !== 'none' ? `Result: ${SCORING[cfg.scoring].label}` : ''].filter(Boolean).join(' · ');
                 return (
                   <div key={key}>
                     {(blockNo != null || rows.length > 0) && (
@@ -1280,6 +1392,8 @@ export function ExerciseEditor<T extends EditableExercise>({
                             {format ?? 'Set format'}
                           </button>
                         )}
+                        {blockNo != null && cfgText && <span className="text-[11px] text-zinc-500">{cfgText}</span>}
+                        {blockBadge?.(key, rows)}
                       </div>
                     )}
                     <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
@@ -1356,6 +1470,7 @@ export function ExerciseEditor<T extends EditableExercise>({
               // Moving to another block: take on that block's format.
               const dest = blockKey(fields.section, fields.block_no ?? null, fields.block_part ?? null);
               fields.block_format = blockFormatOf(blocks.get(dest)) ?? null;
+              fields.block_config = configFor(dest);
             }
             await onUpdate(editing.id, fields);
           }}
@@ -1387,9 +1502,12 @@ export function ExerciseEditor<T extends EditableExercise>({
 
       {sheet?.kind === 'format' && (
         <FormatSheet
+          key={sheet.key}
           title={`Format · ${keyLabel(sheet.key)}`}
           current={formatFor(sheet.key)}
-          onPick={(format) => setFormat(sheet.key, format)}
+          config={configFor(sheet.key)}
+          defaultCapSeconds={parseBlockKey(sheet.key).blockNo === 0 ? 1200 : 600}
+          onSave={(format, config) => setFormat(sheet.key, format, config)}
           onClose={() => setSheet(null)}
         />
       )}

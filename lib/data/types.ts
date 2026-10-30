@@ -1,4 +1,5 @@
 import type { BlockPart, WorkoutSection } from '@/lib/workoutSections';
+import type { BlockConfig, Scoring } from '@/lib/blockScoring';
 import type { TrackingType } from '@/lib/workoutTracking';
 export interface ClientProfileRow {
   client_id: string;
@@ -272,6 +273,8 @@ export interface ExerciseCoreFields {
   section: WorkoutSection;
   block_no: number | null;
   block_format: string | null;
+  // How the block is scored and what the coach set for it (migration 0152); the same on every row of the block, null for a plain block.
+  block_config: BlockConfig | null;
   // 'upper' / 'lower' when Strong block 2 is split (migration 0093).
   block_part: BlockPart | null;
   exercise_library_id: string | null;
@@ -337,6 +340,22 @@ export interface WorkoutBlockChoiceRow {
   slot: 1 | 2;
   block_key: string;
   chosen_at: string;
+}
+
+// What a member scored on one block of a workout (migration 0152). `block_key` is e.g. 'conditioning:1'.
+export interface WorkoutBlockResultRow {
+  id: string;
+  client_id: string;
+  program_day_id: string;
+  block_key: string;
+  format: string | null;
+  scoring: Exclude<Scoring, 'none'>;
+  rounds: number | null;
+  reps: number | null;
+  seconds: number | null;
+  score: number | null;
+  done: boolean | null;
+  logged_at: string;
 }
 
 // A member's best set for one exercise (member_strength_bests, migration 0137). `exercise_key` is the library id, else "n:<name>".

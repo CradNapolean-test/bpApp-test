@@ -9,13 +9,14 @@ import { dayProgress } from '@ballistic/shared/utils/programOverview';
 import { blockForDisplay, memberDayBlocks } from '@ballistic/shared/utils/workoutDisplay';
 import { earlierLogs, lastSessionFor, priorBestLoad } from '@ballistic/shared/utils/workoutHistory';
 import { finishMessage, workoutSummary } from '@ballistic/shared/utils/workoutSets';
-import { chosenBlockKeys, exerciseIsVisible, slotOptions, usesSections } from '@ballistic/shared/workoutSections';
+import { blockFormatOf, chosenBlockKeys, exerciseIsVisible, slotOptions, usesSections } from '@ballistic/shared/workoutSections';
+import { blockConfigOf } from '@ballistic/shared/blockScoring';
 import { trackingOf } from '@ballistic/shared/workoutTracking';
 
-import { BlockView, ExerciseCard, FeedbackForm, SetEditSheet, WarmupTick } from '@/components/workouts';
+import { BlockResultForm, BlockView, ExerciseCard, FeedbackForm, SetEditSheet, WarmupTick } from '@/components/workouts';
 import { AppText, Button, Card, Chip, Screen, ScrollScreen } from '@/components/ui';
 import { timezoneOf, useClientProfile, useNow } from '@/lib/today';
-import { useChooseBlock, useDeleteSet, useLogSet, useSaveFeedback, useUpdateSet, useWorkoutDay } from '@/lib/workouts';
+import { useChooseBlock, useDeleteBlockResult, useDeleteSet, useLogSet, useSaveBlockResult, useSaveFeedback, useUpdateSet, useWorkoutDay } from '@/lib/workouts';
 import { spacing, useTheme } from '@/theme';
 
 export default function WorkoutDay() {
@@ -33,6 +34,8 @@ export default function WorkoutDay() {
   const deleteSet = useDeleteSet(dayId);
   const choose = useChooseBlock(dayId);
   const feedback = useSaveFeedback(dayId);
+  const saveResult = useSaveBlockResult(dayId);
+  const clearResult = useDeleteBlockResult(dayId);
   const [editing, setEditing] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   // What the workout came to, shown when the member finishes it (L4): sets and exercises, or that nothing was logged.
   const [summary, setSummary] = useState<string | null>(null);
@@ -88,6 +91,24 @@ export default function WorkoutDay() {
     );
   };
 
+  // The block's result form, for a block the coach scored (rounds and reps, a finish time, a score or a tick).
+  const resultFooter = (key: string, rows: WorkoutExerciseRow[]) => {
+    const config = blockConfigOf(rows);
+    if (config.scoring === 'none' || rows.length === 0) return undefined;
+    const result = d.results.find((r) => r.block_key === key);
+    return (
+      <BlockResultForm
+        key={`${key}:${result?.id ?? 'new'}`}
+        config={config}
+        result={result}
+        onSave={(v) =>
+          saveResult.mutate({ blockKey: key, format: blockFormatOf(rows), scoring: config.scoring as Exclude<typeof config.scoring, 'none'>, rounds: v.rounds, reps: v.reps, seconds: v.seconds, score: v.score, done: v.done })
+        }
+        onClear={() => clearResult.mutate({ blockKey: key })}
+      />
+    );
+  };
+
   const slotView = (slot: 1 | 2) => {
     const { options, locked } = slotOptions(layout.present, slot, d.choices.slot1);
     if (locked || options.length === 0) return null; // one long conditioning block covers both slots
@@ -100,7 +121,7 @@ export default function WorkoutDay() {
           {options.map((o) => <Chip key={o.key} label={o.label} active={pick === o.key} onPress={() => choose.mutate({ slot, blockKey: o.key })} />)}
         </View>
         {!pick ? <AppText variant="small" color="muted">{slot === 1 ? 'Pick what you are doing for the first 10 minutes.' : 'Pick again for the second 10 minutes. You can switch.'}</AppText> : null}
-        {pick && rows.length ? <BlockView block={blockForDisplay(pick, rows)} renderExercise={renderExercise} /> : null}
+        {pick && rows.length ? <BlockView block={blockForDisplay(pick, rows)} renderExercise={renderExercise} footer={resultFooter(pick, rows)} /> : null}
       </View>
     );
   };
@@ -138,7 +159,7 @@ export default function WorkoutDay() {
               else if (rows.length === 0) logSet.mutate({ exercise: e, setNumber: 1, setType: 'warmup', actual_reps: null, actual_load: null, actual_rpe: null });
             }
           };
-          return <BlockView key={b.key} block={b} renderExercise={renderExercise} headerExtra={warmups.length > 0 ? <WarmupTick done={warmupDone} onToggle={toggleWarmup} /> : undefined} />;
+          return <BlockView key={b.key} block={b} renderExercise={renderExercise} headerExtra={warmups.length > 0 ? <WarmupTick done={warmupDone} onToggle={toggleWarmup} /> : undefined} footer={resultFooter(b.key, b.rows)} />;
         })}
 
         {layout.choosing ? (

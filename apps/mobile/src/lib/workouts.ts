@@ -7,6 +7,7 @@ import type {
   ExerciseLibraryRow,
   SetType,
   WorkoutBlockChoiceRow,
+  WorkoutBlockResultRow,
   WorkoutDayFeedbackRow,
   WorkoutExerciseRow,
   WorkoutLogRow,
@@ -21,11 +22,15 @@ import type { ExerciseRef } from '@ballistic/shared/utils/workoutHistory';
 import { workoutDayKey } from '@/lib/queryKeys';
 import {
   WRITE_BLOCK_CHOICE,
+  WRITE_BLOCK_RESULT,
+  WRITE_BLOCK_RESULT_DELETE,
   WRITE_SESSION_FEEDBACK,
   WRITE_SET_DELETE,
   WRITE_SET_LOG,
   WRITE_SET_UPDATE,
   type BlockChoiceVars,
+  type BlockResultDeleteVars,
+  type BlockResultVars,
   type SessionFeedbackVars,
   type SetDeleteVars,
   type SetFields,
@@ -125,6 +130,8 @@ export type WorkoutDayData = {
   priorBests: Record<string, number>;
   feedback: WorkoutDayFeedbackRow | null;
   choices: { slot1: string | null; slot2: string | null };
+  // What the member scored on each block of this workout (migration 0152).
+  results: WorkoutBlockResultRow[];
 };
 
 export function useWorkoutDay(dayId: string) {
@@ -134,11 +141,12 @@ export function useWorkoutDay(dayId: string) {
     staleTime: 60_000,
     queryFn: async (): Promise<WorkoutDayData> => {
       // Stage 1: the day, its exercises, the member's rating and block picks.
-      const [dayRes, exRes, fbRes, choiceRes] = await Promise.all([
+      const [dayRes, exRes, fbRes, choiceRes, resultRes] = await Promise.all([
         supabase.from('workout_program_days').select('*').eq('id', dayId).single(),
         supabase.from('workout_exercises').select('*').eq('program_day_id', dayId).order('sort_order', { ascending: true }),
         supabase.from('workout_day_feedback').select('*').eq('client_id', userId).eq('program_day_id', dayId).maybeSingle(),
         supabase.from('workout_block_choices').select('slot, block_key').eq('client_id', userId).eq('program_day_id', dayId),
+        supabase.from('workout_block_results').select('*').eq('client_id', userId).eq('program_day_id', dayId),
       ]);
       if (dayRes.error) throw dayRes.error;
       if (exRes.error) throw exRes.error;
@@ -195,6 +203,8 @@ export function useWorkoutDay(dayId: string) {
         priorBests,
         feedback: (fbRes.data as WorkoutDayFeedbackRow | null) ?? null,
         choices: { slot1: picks.find((p) => p.slot === 1)?.block_key ?? null, slot2: picks.find((p) => p.slot === 2)?.block_key ?? null },
+        // If the results cannot be read the workout still works; the block just shows no saved result.
+        results: (resultRes.data ?? []) as WorkoutBlockResultRow[],
       };
     },
   });
@@ -290,6 +300,45 @@ export function useChooseBlock(dayId: string) {
     [updateDay],
   );
   return useQueuedWrite({ key: WRITE_BLOCK_CHOICE, toVars, apply });
+}
+
+// Saves (or changes) what the member scored on a block. The saved result shows at once and the write waits for a connection if there
+// is none.
+type BlockResultInput = Omit<BlockResultVars, 'userId' | 'dayId' | 'loggedAt'>;
+export function useSaveBlockResult(dayId: string) {
+  const userId = useUserId();
+  const updateDay = useDayCacheUpdate(dayId);
+  const toVars = useCallback((v: BlockResultInput): BlockResultVars => ({ userId, dayId, ...v, loggedAt: new Date().toISOString() }), [userId, dayId]);
+  const apply = useCallback(
+    (_v: BlockResultInput, vars: BlockResultVars) =>
+      updateDay((old) => {
+        const row: WorkoutBlockResultRow = {
+          id: old.results.find((r) => r.block_key === vars.blockKey)?.id ?? randomUUID(),
+          client_id: userId,
+          program_day_id: dayId,
+          block_key: vars.blockKey,
+          format: vars.format,
+          scoring: vars.scoring,
+          rounds: vars.rounds,
+          reps: vars.reps,
+          seconds: vars.seconds,
+          score: vars.score,
+          done: vars.done,
+          logged_at: vars.loggedAt,
+        };
+        return { ...old, results: [...old.results.filter((r) => r.block_key !== vars.blockKey), row] };
+      }),
+    [updateDay, userId, dayId],
+  );
+  return useQueuedWrite({ key: WRITE_BLOCK_RESULT, toVars, apply });
+}
+
+export function useDeleteBlockResult(dayId: string) {
+  const userId = useUserId();
+  const updateDay = useDayCacheUpdate(dayId);
+  const toVars = useCallback((v: { blockKey: string }): BlockResultDeleteVars => ({ userId, dayId, blockKey: v.blockKey }), [userId, dayId]);
+  const apply = useCallback((v: { blockKey: string }) => updateDay((old) => ({ ...old, results: old.results.filter((r) => r.block_key !== v.blockKey) })), [updateDay]);
+  return useQueuedWrite({ key: WRITE_BLOCK_RESULT_DELETE, toVars, apply });
 }
 
 // "Rate this session": one row per member and day (upsert). The form keeps showing what was typed, so nothing is changed on

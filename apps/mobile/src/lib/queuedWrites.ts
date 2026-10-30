@@ -1,4 +1,4 @@
-import type { FoodDiaryEntryRow, SetType } from '@ballistic/shared/data/types';
+import type { FoodDiaryEntryRow, SetType, WorkoutBlockResultRow } from '@ballistic/shared/data/types';
 import { dayFieldsFromDiary, dayFieldsFromManual } from '@ballistic/shared/utils/foodTotals';
 import { validateDayPatch, type DayPatch } from '@ballistic/shared/utils/weeklyLog';
 
@@ -253,6 +253,42 @@ export const WRITE_SESSION_FEEDBACK = defineWrite<SessionFeedbackVars>('session-
     const { error } = await supabase
       .from('workout_day_feedback')
       .upsert({ client_id: userId, program_day_id: dayId, session_rpe: sessionRpe, notes }, { onConflict: 'client_id,program_day_id' });
+    if (error) throw error;
+  },
+  invalidate: ({ userId, dayId }) => [{ key: workoutDayKey(userId, dayId) }],
+});
+
+// What the member scored on one block (rounds and reps, a time, a score, a tick): one row per member, workout and block (upsert).
+export type BlockResultVars = {
+  userId: string;
+  dayId: string;
+  blockKey: string;
+  format: string | null;
+  scoring: WorkoutBlockResultRow['scoring'];
+  rounds: number | null;
+  reps: number | null;
+  seconds: number | null;
+  score: number | null;
+  done: boolean | null;
+  loggedAt: string;
+};
+export const WRITE_BLOCK_RESULT = defineWrite<BlockResultVars>('block-result', {
+  run: async ({ userId, dayId, blockKey, format, scoring, rounds, reps, seconds, score, done, loggedAt }) => {
+    const { error } = await supabase
+      .from('workout_block_results')
+      .upsert(
+        { client_id: userId, program_day_id: dayId, block_key: blockKey, format, scoring, rounds, reps, seconds, score, done, logged_at: loggedAt },
+        { onConflict: 'client_id,program_day_id,block_key' },
+      );
+    if (error) throw error;
+  },
+  invalidate: ({ userId, dayId }) => [{ key: workoutDayKey(userId, dayId) }],
+});
+
+export type BlockResultDeleteVars = { userId: string; dayId: string; blockKey: string };
+export const WRITE_BLOCK_RESULT_DELETE = defineWrite<BlockResultDeleteVars>('block-result-delete', {
+  run: async ({ userId, dayId, blockKey }) => {
+    const { error } = await supabase.from('workout_block_results').delete().eq('client_id', userId).eq('program_day_id', dayId).eq('block_key', blockKey);
     if (error) throw error;
   },
   invalidate: ({ userId, dayId }) => [{ key: workoutDayKey(userId, dayId) }],

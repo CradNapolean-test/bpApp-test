@@ -1,4 +1,5 @@
 import type { BlockType, PrescriptionType } from '../data/types';
+import { blockConfigOf, configSummary } from '../blockScoring';
 import { prescriptionParts } from '../workoutTracking';
 import {
   PART_TITLE,
@@ -98,7 +99,9 @@ export function memberDayBlocks<T extends SectionedExercise>(exercises: T[], wit
 }
 
 // A titled block: "Strong · Block 1 · AMRAP" with the format's one-line explanation when it has one.
-export function blockForDisplay<T extends Pick<SectionedExercise, 'block_format'>>(key: string, rows: T[]): DisplayBlock<T> {
+export function blockForDisplay<T extends Pick<SectionedExercise, 'block_format' | 'block_config'>>(key: string, rows: T[]): DisplayBlock<T> {
   const format = blockFormatOf(rows);
-  return { key, title: `${keyLabel(key)}${format ? ` · ${format}` : ''}`, description: formatDescription(format), rows };
+  // What the format means, then the numbers the coach set for it ("10 min cap").
+  const description = [formatDescription(format), configSummary(blockConfigOf(rows))].filter(Boolean).join(' · ') || undefined;
+  return { key, title: `${keyLabel(key)}${format ? ` · ${format}` : ''}`, description, rows };
 }

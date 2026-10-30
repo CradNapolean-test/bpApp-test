@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutSection } from '../workoutSections';
-import { blockLabel, keyLabel, memberDayBlocks, prescriptionSummary, type PrescriptionFields } from './workoutDisplay';
+import { blockForDisplay, blockLabel, keyLabel, memberDayBlocks, prescriptionSummary, type PrescriptionFields } from './workoutDisplay';
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
 
 const px = (over: Partial<PrescriptionFields> = {}): PrescriptionFields => ({
@@ -85,5 +85,17 @@ describe('groupBySuperset', () => {
   it('picks the next unused superset letter', () => {
     expect(nextSupersetLetter([{ superset_group: 'A' }, { superset_group: 'B' }, { superset_group: null }])).toBe('C');
     expect(nextSupersetLetter([])).toBe('A');
+  });
+});
+
+describe('block headings and tracking types', () => {
+  it('adds the numbers the coach set to the format description', () => {
+    const rows = [{ block_format: 'AMRAP', block_config: { scoring: 'rounds_reps', cap_seconds: 600 } }];
+    expect(blockForDisplay('conditioning:1', rows).description).toBe('As many rounds as possible in the block · 10 min cap');
+    expect(blockForDisplay('conditioning:1', [{ block_format: 'Horse Power', block_config: null }]).description).toBeUndefined();
+  });
+  it('reads a time or distance exercise as its target', () => {
+    expect(prescriptionSummary(px({ tracking_type: 'time', sets: 3, target_seconds: 45, rest_seconds: 30 }))).toBe('3 × 45s · rest 30s');
+    expect(prescriptionSummary(px({ tracking_type: 'distance', sets: 4, target_distance: 400 }))).toBe('4 × 400 m');
   });
 });

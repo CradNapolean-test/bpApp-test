@@ -39,9 +39,11 @@ import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
-import { chosenBlockKeys, describeChoices, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
+import { blockFormatOf, chosenBlockKeys, describeChoices, exerciseBlockKey, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
+import { blockConfigOf, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
 import { SetInputsGrid } from './SetInputsGrid';
+import { BlockResultForm } from './BlockResultForm';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
@@ -50,6 +52,7 @@ import type {
   ProgramTemplateRow,
   SetType,
   WorkoutBlockChoiceRow,
+  WorkoutBlockResultRow,
   WorkoutDayFeedbackRow,
   WorkoutLogRow,
   WorkoutProgramRow,
@@ -687,6 +690,7 @@ export function WorkoutTab({
   clientExerciseMaxes,
   workoutDayFeedback,
   blockChoices = [],
+  blockResults = [],
   exerciseLibrary,
   programTemplates,
   focusDay = null,
@@ -700,6 +704,8 @@ export function WorkoutTab({
   workoutDayFeedback: WorkoutDayFeedbackRow[];
   // What the member chose for each 10-minute slot of their workouts (Strong / Conditioning, Upper / Lower).
   blockChoices?: WorkoutBlockChoiceRow[];
+  // What the member scored on each block (rounds and reps, a time, a score).
+  blockResults?: WorkoutBlockResultRow[];
   exerciseLibrary: ExerciseLibraryRow[];
   programTemplates: ProgramTemplateRow[];
   // Set by DashboardShell when the client arrives here via a classes check-in -- expands and
@@ -920,6 +926,7 @@ export function WorkoutTab({
     serverChoicesByDay.set(c.program_day_id, cur);
   }
   // What the server holds, with the taps whose save has not landed yet laid over it.
+  const resultsByBlock = new Map(blockResults.map((r) => [`${r.program_day_id}|${r.block_key}`, r]));
   const choicesByDay = new Map<string, BlockChoice>(serverChoicesByDay);
   for (const [dayId, choice] of reconcileLocalChoices(localChoices, serverChoicesByDay)) choicesByDay.set(dayId, choice);
   function handleChoose(dayId: string, slot: 1 | 2, key: string) {
@@ -1280,6 +1287,7 @@ export function WorkoutTab({
                 section: fields.section,
                 block_no: fields.block_no,
                 block_format: fields.block_format,
+                block_config: fields.block_config,
                 block_part: fields.block_part,
                 tracking_type: fields.tracking_type,
                 target_seconds: fields.target_seconds,
@@ -1291,6 +1299,33 @@ export function WorkoutTab({
             onUpdateMany={(ids, fields) => updateExercises(ids, fields)}
             onDelete={(id) => deleteExercise(id)}
             onReorder={reorderExercises}
+            renderBlockFooter={(rows) => {
+              if (isCoachView || rows.length === 0) return null;
+              const config = blockConfigOf(rows);
+              if (config.scoring === 'none') return null;
+              const key = exerciseBlockKey(rows[0]);
+              return (
+                <BlockResultForm
+                  key={`${openDay.id}|${key}`}
+                  programDayId={openDay.id}
+                  blockKey={key}
+                  format={blockFormatOf(rows)}
+                  config={config}
+                  result={resultsByBlock.get(`${openDay.id}|${key}`)}
+                />
+              );
+            }}
+            blockBadge={(key, rows) => {
+              if (!isCoachView) return null;
+              const config = blockConfigOf(rows);
+              if (config.scoring === 'none') return null;
+              const result = resultsByBlock.get(`${openDay.id}|${key}`);
+              return (
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${result ? 'bg-success/10 text-success' : 'bg-black/[.06] text-zinc-500 dark:bg-white/10'}`}>
+                  {result ? `Member: ${resultSummary(config, result)}` : 'No result yet'}
+                </span>
+              );
+            }}
             renderBlockExtra={(rows) => {
               const warmups = rows.filter((r) => r.section === 'warmup' && r.block_type === 'exercise');
               return !isCoachView && warmups.length > 0 ? <WarmupTick clientId={clientId} exercises={warmups} logsByExercise={logsByExercise} onChange={changeSets} /> : null;

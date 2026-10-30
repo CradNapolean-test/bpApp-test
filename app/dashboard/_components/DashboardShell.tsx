@@ -88,6 +88,7 @@ import type {
   ProgressPhoto,
   RecipeWithIngredients,
   WorkoutBlockChoiceRow,
+  WorkoutBlockResultRow,
   WorkoutDayFeedbackRow,
   WorkoutLogRow,
   WorkoutProgramRow,
@@ -124,6 +125,7 @@ export function DashboardShell({
   clientExerciseMaxes,
   workoutDayFeedback,
   blockChoices = [],
+  blockResults = [],
   membership,
   packages,
   creditPacks,
@@ -182,6 +184,7 @@ export function DashboardShell({
   clientExerciseMaxes: ClientExerciseMaxRow[];
   workoutDayFeedback: WorkoutDayFeedbackRow[];
   blockChoices?: WorkoutBlockChoiceRow[];
+  blockResults?: WorkoutBlockResultRow[];
   membership: ClientMembershipRow | null;
   packages: MembershipPackageRow[];
   creditPacks: CreditPackRow[];
@@ -988,6 +991,7 @@ export function DashboardShell({
               clientExerciseMaxes={clientExerciseMaxes}
               workoutDayFeedback={workoutDayFeedback}
               blockChoices={blockChoices}
+              blockResults={blockResults}
               exerciseLibrary={exerciseLibrary}
               programTemplates={programTemplates}
               focusDay={focusDay}

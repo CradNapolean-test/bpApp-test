@@ -175,6 +175,7 @@ export async function duplicateProgramDay(dayId: string, weekNum: number, dayLab
       section: ex.section,
       block_no: ex.block_no,
       block_format: ex.block_format,
+      block_config: ex.block_config,
       block_part: ex.block_part,
       tracking_type: ex.tracking_type,
       target_seconds: ex.target_seconds,

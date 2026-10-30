@@ -19,6 +19,7 @@ import { getUpcomingEvents } from './community';
 import { getRewardsForMember } from './rewards';
 import { getWorkoutDayFeedback } from './workoutDayFeedback';
 import { getBlockChoices } from './blockChoices';
+import { getBlockResults } from './blockResults';
 import { getGymBookingRules, getGymReferralUrl } from './gym';
 import { getClientGymId, getCreditPacks, getCreditPacksForGym, getMyMembership, getPackages, getPackagesForGym } from './memberships';
 import { getPhotos, getMeasurementLogs } from './progress';
@@ -73,6 +74,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     clientExerciseMaxes,
     workoutDayFeedback,
     blockChoices,
+    blockResults,
     membership,
     packages,
     creditPacks,
@@ -112,6 +114,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getClientExerciseMaxes(clientId),
     getWorkoutDayFeedback(clientId),
     getBlockChoices(clientId),
+    getBlockResults(clientId),
     getMyMembership(clientId),
     canWrite ? Promise.resolve([] as MembershipPackageRow[]) : gymId ? getPackagesForGym(gymId) : getPackages(),
     canWrite ? Promise.resolve([] as CreditPackRow[]) : gymId ? getCreditPacksForGym(gymId) : getCreditPacks(),
@@ -173,6 +176,7 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     clientExerciseMaxes,
     workoutDayFeedback,
     blockChoices,
+    blockResults,
     membership,
     packages,
     creditPacks,
