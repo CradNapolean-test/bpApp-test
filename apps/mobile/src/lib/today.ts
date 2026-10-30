@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 import type {
   BookingRow,
@@ -28,12 +29,20 @@ function useUserId() {
   return id;
 }
 
-// Re-render on an interval so "today" and the check-in window stay right without leaving the screen.
+// Re-render on an interval so "today" and the check-in window stay right without leaving the screen. It also moves on the moment the app
+// comes back to the foreground: a phone's timers pause while it sleeps, so a member opening the app the next morning saw yesterday as
+// "Today" (with yesterday's food) until the next tick, and anything added in that gap went on yesterday.
 export function useNow(everyMs = 15_000) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), everyMs);
-    return () => clearInterval(id);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setNow(new Date());
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
   }, [everyMs]);
   return now;
 }
