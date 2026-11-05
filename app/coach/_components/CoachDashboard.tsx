@@ -23,6 +23,7 @@ import { Card, SectionLabel } from '@/app/_components/ui';
 import { useAction } from '@/app/_components/useAction';
 import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
+import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from '@/lib/checkinQueue';
 import { formatClassTime } from '@/lib/utils/dates';
 import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
 import type { CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
@@ -65,6 +66,10 @@ interface TodoGroup {
   count?: number;
   // Single row, no expansion (e.g. one deletion request).
   direct?: boolean;
+  // A second, quieter list under the main one (weeks with only a day or two logged), with one button to mark them all reviewed.
+  extra?: { label: string; items: TodoItem[]; markAll?: () => Promise<{ ok: boolean }> };
+  // Runs as one of the group's rows is opened (the check-ins save their order for the week page's "next" link).
+  onOpen?: () => void;
 }
 
 function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; onToggle: () => void }) {
@@ -72,6 +77,27 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
   const tone = TONE[group.tone];
   const { run, busy } = useAction();
   const single = group.direct && group.items.length === 1;
+  const renderItem = (item: TodoItem) => (
+    <li key={item.key} className="flex items-center gap-2 rounded-xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
+      <Link href={item.href} onClick={group.onOpen} className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{item.title}</span>
+        <span className="block truncate text-xs text-zinc-500">{item.hint}</span>
+      </Link>
+      {item.review && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run(async () => item.review!(), { success: 'Marked as reviewed' })}
+          className="shrink-0 rounded-full bg-accent/15 px-3 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
+        >
+          Reviewed
+        </button>
+      )}
+      <Link href={item.href} onClick={group.onOpen} aria-label="Open" className="shrink-0 text-zinc-400">
+        <ChevronRight className="h-4 w-4" />
+      </Link>
+    </li>
+  );
   const header = (
     <>
       <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.chip}`}>
@@ -96,30 +122,24 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
           {header}
         </button>
       )}
-      {open && !single && (
-        <ul className="mb-2 ml-[52px] space-y-1.5">
-          {group.items.map((item) => (
-            <li key={item.key} className="flex items-center gap-2 rounded-xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
-              <Link href={item.href} className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{item.title}</span>
-                <span className="block truncate text-xs text-zinc-500">{item.hint}</span>
-              </Link>
-              {item.review && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => run(async () => item.review!(), { success: 'Marked as reviewed' })}
-                  className="shrink-0 rounded-full bg-accent/15 px-3 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
-                >
-                  Reviewed
-                </button>
-              )}
-              <Link href={item.href} aria-label="Open" className="shrink-0 text-zinc-400">
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </li>
-          ))}
-        </ul>
+      {open && !single && group.items.length > 0 && <ul className="mb-2 ml-[52px] space-y-1.5">{group.items.map(renderItem)}</ul>}
+      {open && !single && group.extra && (
+        <div className="mb-2 ml-[52px]">
+          <div className="flex items-center justify-between gap-2 px-1 pb-1.5 pt-1">
+            <p className="text-xs font-bold text-zinc-500">{group.extra.label}</p>
+            {group.extra.markAll && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => run(async () => group.extra!.markAll!(), { success: 'Marked as reviewed' })}
+                className="shrink-0 rounded-full px-2 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
+              >
+                Mark all reviewed
+              </button>
+            )}
+          </div>
+          <ul className="space-y-1.5">{group.extra.items.map(renderItem)}</ul>
+        </div>
       )}
     </div>
   );
@@ -175,7 +195,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
           clientId: '',
           title: 'Red flags',
           hint: 'Open the weekly red flag list',
-          href: '/coach/classes?tab=reports',
+          href: '/coach/classes?tab=reports&section=red-flags',
         },
       ],
     });
@@ -218,20 +238,51 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   }
 
   if (data.checkins.length > 0) {
+    // Newest week first, then by name; weeks with only a day or two logged go in their own list underneath (UX5).
+    const sorted = [...data.checkins].sort((a, b) => b.weekStart.localeCompare(a.weekStart) || a.name.localeCompare(b.name));
+    const full = sorted.filter((c) => c.days > THIN_WEEK_DAYS);
+    const thin = sorted.filter((c) => c.days <= THIN_WEEK_DAYS);
+    const toItem = (c: (typeof sorted)[number]): TodoItem => ({
+      key: `${c.clientId}|${c.weekStart}`,
+      clientId: c.clientId,
+      title: c.name,
+      hint: checkinHint(c),
+      href: `/coach/clients/${c.clientId}?open=checkin&week=${c.weekStart}`,
+      review: own(c.mine) ? () => markReviewed('week', c.clientId, c.weekStart) : undefined,
+    });
+    // The order the week page's "Next check-in" link follows: the same order as on screen.
+    const queue = [...full, ...thin].map((c) => ({ clientId: c.clientId, weekStart: c.weekStart, name: c.name, hint: checkinHint(c), href: toItem(c).href }));
+    const ownThin = thin.filter((c) => own(c.mine));
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
     groups.push({
       key: 'checkins',
       icon: Check,
       tone: 'green',
       title: 'Weekly check-ins to review',
-      summary: `${new Set(data.checkins.map((c) => c.clientId)).size} member${new Set(data.checkins.map((c) => c.clientId)).size === 1 ? '' : 's'} with a week to look at`,
-      items: data.checkins.map((c) => ({
-        key: `${c.clientId}|${c.weekStart}`,
-        clientId: c.clientId,
-        title: c.name,
-        hint: `Week of ${weekShort(c.weekStart)} · ${c.days} day${c.days === 1 ? '' : 's'} logged`,
-        href: `/coach/clients/${c.clientId}?open=checkin&week=${c.weekStart}`,
-        review: own(c.mine) ? () => markReviewed('week', c.clientId, c.weekStart) : undefined,
-      })),
+      summary:
+        full.length > 0
+          ? `${plural(full.length, 'week', 'weeks')} to read${thin.length > 0 ? ` · ${thin.length} with only 1 or 2 days logged` : ''}`
+          : `${plural(thin.length, 'week', 'weeks')} with only 1 or 2 days logged`,
+      count: data.checkins.length,
+      items: full.map(toItem),
+      extra:
+        thin.length > 0
+          ? {
+              label: 'Only 1 or 2 days logged',
+              items: thin.map(toItem),
+              markAll:
+                ownThin.length > 0
+                  ? async () => {
+                      for (const c of ownThin) {
+                        const res = await markReviewed('week', c.clientId, c.weekStart);
+                        if (!res.ok) return res;
+                      }
+                      return { ok: true };
+                    }
+                  : undefined,
+            }
+          : undefined,
+      onOpen: () => saveCheckinQueue(queue),
     });
   }
 
@@ -306,8 +357,10 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   const scopeHref = (s: DashboardScope, coachId?: string) => `/coach?scope=${s}${coachId ? `&coach=${coachId}` : ''}`;
   const scopeLabel = scope === 'gym' ? 'the whole gym' : scope === 'coach' ? coaches.find((c) => c.id === selectedCoachId)?.name ?? 'this coach' : 'your members';
 
-  const deltaLast = stats.sessionsAttended - stats.sessionsAttendedLastWeek;
+  const deltaLast = stats.sessionsAttended - stats.sessionsAttendedSameTimeLastWeek;
   const checkinPct = stats.checkinsOf > 0 ? Math.round((stats.checkinsIn / stats.checkinsOf) * 100) : 0;
+  // "7 / 12 checked in" next to "14 members in total": the 12 leaves out members still setting up, so say so (UX2).
+  const notSetUp = Math.max(0, stats.membersTotal - stats.checkinsOf);
 
   return (
     <div className="space-y-5 pb-20 lg:pb-0">
@@ -478,13 +531,14 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
           <Link href="/coach/classes?tab=sessions" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.sessionsAttended}</p>
             <p className="text-xs text-zinc-500">sessions attended</p>
-            {stats.sessionsAttendedLastWeek > 0 || stats.sessionsAttended > 0 ? (
-              <p className={`mt-0.5 text-[11px] font-bold ${deltaLast >= 0 ? 'text-success' : 'text-danger'}`}>
-                {deltaLast >= 0 ? '▲' : '▼'} {Math.abs(deltaLast)} vs last week
+            {stats.sessionsAttendedSameTimeLastWeek > 0 || stats.sessionsAttended > 0 ? (
+              <p className={`mt-0.5 text-[11px] font-bold ${deltaLast === 0 ? 'text-zinc-500' : deltaLast > 0 ? 'text-success' : 'text-danger'}`}>
+                {deltaLast === 0 ? 'Same as' : `${deltaLast > 0 ? '▲' : '▼'} ${Math.abs(deltaLast)} vs`} this time last week
               </p>
             ) : null}
           </Link>
-          <Link href="/coach/classes?tab=reports" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+          {/* Fill is about which sessions are full or empty: the Busiest report, not the Red flags list it used to open on (UX3). */}
+          <Link href="/coach/classes?tab=reports&section=busiest" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.avgFillPct != null ? `${stats.avgFillPct}%` : '—'}</p>
             <p className="text-xs text-zinc-500">
               average class fill, all classes
@@ -503,10 +557,12 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
             <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-accent" style={{ width: `${checkinPct}%` }} />
             </div>
+            {notSetUp > 0 && <p className="mt-1 text-[11px] font-semibold text-zinc-500">{notSetUp} not set up yet</p>}
           </Link>
           <Link href="/coach/clients" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
             <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.newMembers}</p>
-            <p className="text-xs text-zinc-500">new member{stats.newMembers === 1 ? '' : 's'}</p>
+            {/* "Joined", so it can't be read against "New members to review", which counts members waiting for a look (UX2). */}
+            <p className="text-xs text-zinc-500">joined this week</p>
             <p className="mt-0.5 text-[11px] font-semibold text-zinc-500">{stats.membersTotal} members in total</p>
           </Link>
         </div>

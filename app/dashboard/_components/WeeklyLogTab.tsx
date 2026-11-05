@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Checkbox } from '@/app/_components/Checkbox';
 import { Check, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
 import { useToast } from '@/app/_components/ToastProvider';
@@ -21,6 +22,7 @@ import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 import { getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
 import { sendMessage } from '@/lib/data/chat';
 import { checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
+import { isQueuedCheckin, nextQueuedCheckin } from '@/lib/checkinQueue';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
@@ -778,10 +780,38 @@ export function WeeklyLogTab(
               onReviewed={() => setReviewed((prev) => new Set(prev).add(weekStart))}
             />
           )}
+          {rest.isCoachView && canReview && reviewed.has(weekStart) && <NextCheckin key={`next-${weekStart}`} clientId={rest.clientId} weekStart={weekStart} />}
         </>
       )}
     </div>
   );
+}
+
+// Once a week is reviewed, the next one on the dashboard's list, so the coach can work through them without going back each time
+// (UX6). Only when the coach came from that list: the order is kept for this browser tab (lib/checkinQueue.ts). Shown after the week
+// has loaded, so it is never rendered on the server.
+function NextCheckin({ clientId, weekStart }: { clientId: string; weekStart: string }) {
+  const [queued] = useState(() => ({ next: nextQueuedCheckin(clientId, weekStart), onList: isQueuedCheckin(clientId, weekStart) }));
+  if (queued.next) {
+    return (
+      <Link href={queued.next.href} className={`${cardCls} flex items-center gap-3`}>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-bold uppercase tracking-wide text-accent">Next check-in</span>
+          <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{queued.next.name}</span>
+          <span className="block truncate text-xs text-zinc-500">{queued.next.hint}</span>
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-accent" />
+      </Link>
+    );
+  }
+  if (queued.onList) {
+    return (
+      <Link href="/coach" className="block px-1 text-sm font-bold text-accent">
+        That was the last check-in on your list. Back to the dashboard
+      </Link>
+    );
+  }
+  return null;
 }
 
 // The end of a coach's read-through of a week: write back to the member (it goes into their chat, headed with the week) and mark the

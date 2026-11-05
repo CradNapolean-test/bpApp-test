@@ -15,6 +15,10 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 
 type Section = 'Red flags' | 'Overview' | 'No-shows' | 'Busiest';
 const SECTIONS: Section[] = ['Red flags', 'Overview', 'No-shows', 'Busiest'];
+
+// What each section is called in a link (?tab=reports&section=...), so the dashboard can open the one it is about (UX3).
+const SECTION_PARAM: Record<string, Section> = { 'red-flags': 'Red flags', overview: 'Overview', 'no-shows': 'No-shows', busiest: 'Busiest' };
+export const reportSectionFromParam = (value: string | null): Section | undefined => (value ? SECTION_PARAM[value] : undefined);
 const RANGES = [7, 30, 90] as const;
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card dark:border-white/10';
@@ -39,8 +43,16 @@ function Delta({ now, before, unit = '', goodWhen = 'up' }: { now: number | null
 // Classes and attendance across the gym. The first view is the weekly Red Flag list; the others look at a chosen
 // period (7, 30 or 90 days) and compare it with the period before. `onOpenAttendance` jumps to the Attendance tab,
 // where sessions get marked.
-export function ReportsPane({ report: initialReport, onOpenAttendance }: { report: CoachReport; onOpenAttendance?: () => void }) {
-  const [section, setSection] = useState<Section>('Red flags');
+export function ReportsPane({
+  report: initialReport,
+  onOpenAttendance,
+  initialSection = 'Red flags',
+}: {
+  report: CoachReport;
+  onOpenAttendance?: () => void;
+  initialSection?: Section;
+}) {
+  const [section, setSection] = useState<Section>(initialSection);
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
   const [current, setCurrent] = useState<CoachReport>(initialReport);
   const [previous, setPrevious] = useState<CoachReport | null>(null);

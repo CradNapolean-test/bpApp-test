@@ -4,8 +4,9 @@ import { createClient } from '@/lib/supabase/server';
 import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
 import { isPlateaued } from '@/lib/calculations';
-import { hasLoggedData } from '@/lib/utils/dailyLog';
+import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { minuteOfDayIn, toMinutes } from '@/lib/todaySessions';
 import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
@@ -25,6 +26,8 @@ export interface WeekCheckin {
   name: string;
   weekStart: string;
   days: number;
+  // Days of that week with food on them (meal photos for a photo diary member), so "7 days logged" can't hide a week with no food.
+  foodDays: number;
   mine: boolean;
 }
 export interface PhotoReview {
@@ -103,7 +106,8 @@ export interface CoachDashboardData {
   toCheck: MemberToCheck[];
   stats: {
     sessionsAttended: number;
-    sessionsAttendedLastWeek: number;
+    // Last week up to the same day and time as now, so the comparison is fair on any day of the week.
+    sessionsAttendedSameTimeLastWeek: number;
     avgFillPct: number | null;
     checkinsIn: number;
     checkinsOf: number;
@@ -142,7 +146,7 @@ interface MemberRow {
   nutrition_feedback: { log_date: string; photo_id: string | null }[] | null;
   coach_reviews: { kind: string; ref: string }[] | null;
   form_assignments: { id: string; completed_at: string | null; form_templates: ProfileRel<{ name: string }> }[] | null;
-  bookings: { booking_date: string; attended: boolean | null; status: string }[] | null;
+  bookings: { booking_date: string; attended: boolean | null; status: string; class: ProfileRel<{ start_time: string | null }> }[] | null;
   big_dog_results: { exercise_key: string; self_reported: boolean | null; result_text: string | null; created_at: string }[] | null;
 }
 
@@ -150,11 +154,11 @@ const SELECT = `
   id, email, coach_id, created_at,
   client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, checkin_reminder_days),
   client_memberships!client_id(id, started_at, scheduled_end, ended_at, membership_packages(credits_per_week, duration_weeks, name)),
-  daily_logs(id, log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(id, created_at)),
+  daily_logs(id, log_date, calories, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(id, created_at)),
   nutrition_feedback!client_id(log_date, photo_id),
   coach_reviews!client_id(kind, ref),
   form_assignments!client_id(id, completed_at, form_templates(name)),
-  bookings!client_id(booking_date, attended, status),
+  bookings!client_id(booking_date, attended, status, class:classes(start_time)),
   big_dog_results!client_id(exercise_key, self_reported, result_text, created_at)
 `;
 
@@ -194,6 +198,9 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const since28 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -28));
   const since7 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
   const since30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
+  // "This time last week": the same weekday last week, and on that day only the sessions that had started by now.
+  const sameDayLastWeek = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
+  const nowMinute = minuteOfDayIn(timezone, new Date());
 
   const buildQuery = (select: string) => {
     let q = supabase
@@ -247,7 +254,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const scores: ScoreToVerify[] = [];
   const toCheck: MemberToCheck[] = [];
   let sessionsAttended = 0;
-  let sessionsAttendedLastWeek = 0;
+  let sessionsAttendedSameTimeLastWeek = 0;
   let checkinsIn = 0;
   let checkinsOf = 0;
   let newThisWeek = 0;
@@ -263,13 +270,19 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     if (m.created_at.slice(0, 10) >= thisWeek) newThisWeek += 1;
 
     // Weekly check-ins: the previous two completed weeks with anything logged, not yet reviewed.
-    const daysIn = (weekStart: string) => {
+    const inWeek = (weekStart: string) => {
       const end = toIsoDate(addDays(new Date(weekStart + 'T00:00:00Z'), 6));
-      return logs.filter((l) => l.log_date >= weekStart && l.log_date <= end).length;
+      return (l: { log_date: string }) => l.log_date >= weekStart && l.log_date <= end;
     };
+    const daysIn = (weekStart: string) => logs.filter(inWeek(weekStart)).length;
+    const isPhotoDiary = cp?.nutrition_tracking_mode === 'photo_diary';
+    const foodDaysIn = (weekStart: string) =>
+      (m.daily_logs ?? []).filter(inWeek(weekStart)).filter((l) => (isPhotoDiary ? (l.food_photo_entries?.length ?? 0) > 0 : hasFoodLogged(l))).length;
     for (const weekStart of [prevWeek, prev2Week]) {
       const days = daysIn(weekStart);
-      if (days > 0 && !reviewed.has(`week|${weekStart}`)) checkins.push({ clientId: m.id, name, weekStart, days, mine: mine(m) });
+      if (days > 0 && !reviewed.has(`week|${weekStart}`)) {
+        checkins.push({ clientId: m.id, name, weekStart, days, foodDays: foodDaysIn(weekStart), mine: mine(m) });
+      }
     }
 
     // Week 3 and final-week prompts for members on a fixed-length plan (the 6 week challenge).
@@ -320,10 +333,12 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       }
     }
 
+    // This week against the same point last week: comparing a part week with a whole one showed a fall almost every day (UX1).
     for (const b of m.bookings ?? []) {
       if (!b.attended) continue;
       if (b.booking_date >= thisWeek) sessionsAttended += 1;
-      else sessionsAttendedLastWeek += 1;
+      else if (b.booking_date < sameDayLastWeek) sessionsAttendedSameTimeLastWeek += 1;
+      else if (b.booking_date === sameDayLastWeek && toMinutes(one(b.class)?.start_time ?? null) <= nowMinute) sessionsAttendedSameTimeLastWeek += 1;
     }
 
     // Members worth a conversation, and why.
@@ -391,7 +406,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     toCheck,
     stats: {
       sessionsAttended,
-      sessionsAttendedLastWeek,
+      sessionsAttendedSameTimeLastWeek,
       avgFillPct: capacity > 0 ? Math.round((booked / capacity) * 100) : null,
       checkinsIn,
       checkinsOf,

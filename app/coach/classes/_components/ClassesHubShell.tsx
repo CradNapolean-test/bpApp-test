@@ -15,7 +15,7 @@ import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { TimetableView } from './TimetableView';
 import { SessionsView } from './SessionsView';
-import { ReportsPane } from './ReportsPane';
+import { ReportsPane, reportSectionFromParam } from './ReportsPane';
 import type { ClassRow, CoachReport, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
@@ -82,7 +82,9 @@ export function ClassesHubShell({
         />
       )}
       {tab === 'Timetable' && <TimetableView classes={initialClasses} occurrences={occurrences} timezone={timezone} />}
-      {tab === 'Reports' && <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} />}
+      {tab === 'Reports' && (
+        <ReportsPane report={report} onOpenAttendance={() => setTab('Sessions')} initialSection={reportSectionFromParam(searchParams.get('section'))} />
+      )}
     </AppShell>
     </ClientOnly>
   );
