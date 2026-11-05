@@ -47,4 +47,24 @@ describe('search_foods after every migration', () => {
   it('is still callable by signed-in members', () => {
     expect(read(latest)).toMatch(/grant execute on function public\.search_foods\(text, int\) to authenticated/);
   });
+
+  // Postgres keeps only 32 compiled regular expressions. 0154 tested every food against each unusual word as its own pattern
+  // (~40 patterns per food), so each was recompiled for every food and "chicken" hit the 8 s timeout. The list must be joined
+  // into one pattern, worked out once per search.
+  it('tests each food against the unusual words as one pattern, not one pattern per word', () => {
+    expect(body).toMatch(/string_agg\(u\.word, '\|'\)/);
+    expect(body).not.toMatch(/f\.name\)? ~ \('\\m' \|\| u\.word/);
+    const list = body.slice(body.indexOf('unnest(array['), body.indexOf(') as odd'));
+    expect(list.length).toBeGreaterThan(0);
+    expect(list).not.toMatch(/\bf\./);
+  });
+
+  it('keeps the unusual words 0154 used, so the order is unchanged', () => {
+    const words = (sql: string) => {
+      const start = sql.indexOf('unnest(array[');
+      return [...sql.slice(start, sql.indexOf(']', start)).matchAll(/'([a-z]+)'/g)].map((m) => m[1]).sort();
+    };
+    expect(words(body)).toEqual(words(everydaySql));
+    expect(words(body)).toHaveLength(35);
+  });
 });

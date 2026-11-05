@@ -1,13 +1,14 @@
-// Checks the live food search order after migration 0154 (everyday foods first). READ-ONLY: it only calls search_foods and
-// counts rows, so it is safe on the real project.
+// Checks the live food search order after migration 0154 (everyday foods first) and its speed after 0155. READ-ONLY: it only
+// calls search_foods and counts rows, so it is safe on the real project.
 //   node supabase/tests/food-search-check.cjs
-// Exit code 1 if any search puts the wrong food first.
+// Exit code 1 if any search puts the wrong food first, errors, or is slow.
 const path = require('path');
 const root = path.resolve(__dirname, '../..');
 require(root + '/node_modules/dotenv').config({ path: root + '/.env.local', quiet: true });
 const { createClient } = require(root + '/node_modules/@supabase/supabase-js');
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const SLOW_MS = 1500;
 
 // [search, what the first result must be (exact name, or a pattern), words that must NOT be in the top five]
 const cases = [
@@ -53,6 +54,17 @@ const cases = [
   const { count } = await db.from('foods').select('id', { count: 'exact', head: true }).not('everyday_rank', 'is', null);
   if (count !== 88) failures.push(`expected 88 everyday foods, found ${count}`);
   else console.log('  ok: 88 everyday foods marked');
+
+  // Speed (0155): short words match the most foods ("ch" about 17,000). After 0154 these took 2-8 s or timed out, and a
+  // member typing "chicken" waited at every letter. Times include the trip to the database.
+  for (const query of ['ch', 'chi', 'chic', 'chicken', 'cheese', 'chocolate', 'beef']) {
+    const started = Date.now();
+    const { error } = await db.rpc('search_foods', { p_query: query, p_limit: 25 });
+    const ms = Date.now() - started;
+    if (error) failures.push(`"${query}" errors: ${error.message} (${ms} ms)`);
+    else if (ms > SLOW_MS) failures.push(`"${query}" took ${ms} ms (limit ${SLOW_MS} ms)`);
+    else console.log(`  ok: "${query}" in ${ms} ms`);
+  }
 
   if (failures.length) {
     console.error('\nFAILED:\n  ' + failures.join('\n  '));
