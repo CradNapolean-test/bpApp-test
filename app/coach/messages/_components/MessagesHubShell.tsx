@@ -19,6 +19,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { ChatTab } from '@/app/dashboard/_components/ChatTab';
 import { useCoachMessages } from '@/app/coach/_components/useCoachMessages';
 import { ConversationList } from '@/app/coach/_components/ConversationList';
+import { useFitToWindow } from '@/app/coach/_components/useFitToWindow';
 import { BroadcastsPane } from './BroadcastsPane';
 import type { ChatOverviewRow, ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
 
@@ -57,6 +58,9 @@ export function MessagesHubShell({
   const [threadOpen, setThreadOpen] = useState(false);
   const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =
     useCoachMessages(overview, currentUserId);
+  // On a wide screen the open conversation fills the rest of the window (the page's own 40px padding under it), so the reply box is
+  // always on screen and switching conversations does not change the page's height (it used to shrink to "Loading…" and jump).
+  const [threadRef, threadHeight] = useFitToWindow({ bottomGap: 40, min: 360, enabled: tab === 'inbox' });
 
   // Nothing is opened on arrival: opening a thread marks it read, so auto-selecting the newest one on a wide screen cleared its unread
   // badge without the coach ever looking at it (R29). The coach picks a conversation.
@@ -101,9 +105,18 @@ export function MessagesHubShell({
         headerAction={headerExtras}
         banner={header}
         mobileHeader={<CoachMobileBrand />}
+        wideSidebar
         sidebar={
           tab === 'inbox' ? (
-            <ConversationList overview={localOverview} selected={selected} onSelect={pick} onMarkRead={markRead} onMarkUnread={markUnread} />
+            <ConversationList
+              overview={localOverview}
+              selected={selected}
+              onSelect={pick}
+              onMarkRead={markRead}
+              onMarkUnread={markUnread}
+              currentUserId={currentUserId}
+              fitToWindow
+            />
           ) : undefined
         }
       >
@@ -114,9 +127,20 @@ export function MessagesHubShell({
             {/* Phone: a conversation list first, then the thread with a back arrow. The sidebar
                 list is desktop-only, so the list is repeated here for small screens. */}
             <div className={threadOpen ? 'hidden' : 'md:hidden'}>
-              <ConversationList overview={localOverview} selected={selected} onSelect={pick} onMarkRead={markRead} onMarkUnread={markUnread} />
+              <ConversationList
+                overview={localOverview}
+                selected={selected}
+                onSelect={pick}
+                onMarkRead={markRead}
+                onMarkUnread={markUnread}
+                currentUserId={currentUserId}
+              />
             </div>
-            <div className={threadOpen ? '' : 'hidden md:block'}>
+            <div
+              ref={threadRef}
+              className={threadOpen ? '' : 'hidden md:block'}
+              style={threadHeight != null ? { height: threadHeight } : undefined}
+            >
               {selected && (
                 <button
                   type="button"
@@ -152,6 +176,9 @@ export function MessagesHubShell({
                   initialMessages={messages}
                   currentUserId={currentUserId}
                   otherPartyName={selectedClient?.client_name ?? 'Client'}
+                  fill={threadHeight != null}
+                  // The same key as the chat on the member's page, so a half-written reply follows the coach between the two.
+                  draftKey={`coach-${selected}`}
                   memberHref={`/coach/clients/${selected}`}
                   onMarkUnread={() => {
                     markUnread(selected);

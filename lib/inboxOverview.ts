@@ -43,6 +43,22 @@ export function mergeOverview<T extends OverviewRowLike>(onScreen: T[], fresh: T
   return sortOverview(merged);
 }
 
+// Who wrote the newest message in a conversation, as the coach's list shows it: the member, the coach looking at the list, or someone
+// else in the team (a gym-wide broadcast from another coach lands in every member's thread). Null when there is no message.
+export type LastSender = 'member' | 'me' | 'team' | null;
+
+export function lastSender(row: { client_id: string; last_message_at: string | null; last_sender_id: string | null }, me: string): LastSender {
+  if (!row.last_message_at || !row.last_sender_id) return null;
+  if (row.last_sender_id === row.client_id) return 'member';
+  if (row.last_sender_id === me) return 'me';
+  return 'team';
+}
+
+// The member wrote last, so the ball is in the coach's court. Opening the thread does not change this (unread does); replying does.
+export function needsReply(row: { client_id: string; last_message_at: string | null; last_sender_id: string | null }): boolean {
+  return row.last_message_at != null && row.last_sender_id === row.client_id;
+}
+
 // Which conversations get a live connection: the most recent ones that have a message, plus the open one. Supabase limits how many
 // channels one connection can hold (about 100), so a coach with hundreds of conversations cannot have one for each; the list is
 // refetched on a timer and on focus for the rest. Returned sorted, so the same set always gives the same list.

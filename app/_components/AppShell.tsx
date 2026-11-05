@@ -22,6 +22,7 @@ export function AppShell({
   mobileHeader,
   signOutOnMobile,
   pageTitle,
+  wideSidebar,
   children,
 }: {
   title: ReactNode;
@@ -52,6 +53,8 @@ export function AppShell({
   // The page's name for screen readers, as a visually hidden <h1>. The brand wordmark in the header is not a heading (SH4), so a screen with
   // no visible <h1> of its own passes this. A screen that draws its own <h1> must not.
   pageTitle?: string;
+  // A wider left column, for a sidebar that is a list to read (the coach's conversations) rather than a short menu.
+  wideSidebar?: boolean;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -107,7 +110,10 @@ export function AppShell({
 
       <div className="mt-6 flex gap-6">
         {sidebar && (
-          <aside aria-label="Section menu" className="hidden w-52 shrink-0 space-y-1 rounded-2xl bg-black/[.02] p-3 md:block dark:bg-white/[.03]">
+          <aside
+            aria-label="Section menu"
+            className={`hidden shrink-0 space-y-1 rounded-2xl bg-black/[.02] p-3 md:block dark:bg-white/[.03] ${wideSidebar ? 'w-72 lg:w-80' : 'w-52'}`}
+          >
             {sidebar}
           </aside>
         )}

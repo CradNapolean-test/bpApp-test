@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeOverview, pickChannelClients, sortOverview } from './inboxOverview';
+import { lastSender, mergeOverview, needsReply, pickChannelClients, sortOverview } from './inboxOverview';
 
 const row = (client_id: string, last_message_at: string | null, unread_count = 0, extra: Record<string, unknown> = {}) => ({
   client_id,
@@ -87,5 +87,31 @@ describe('pickChannelClients (R29)', () => {
   it('gives the same list however the rows are ordered, so a reorder does not reconnect', () => {
     const rows = [row('a', '2026-10-01T10:00:00Z'), row('b', '2026-10-02T10:00:00Z'), row('c', '2026-10-03T10:00:00Z')];
     expect(pickChannelClients(rows, null)).toEqual(pickChannelClients([...rows].reverse(), null));
+  });
+});
+
+describe('lastSender and needsReply', () => {
+  const me = 'coach-1';
+  const convo = (last_sender_id: string | null, last_message_at: string | null = '2026-11-05T10:00:00Z') => ({
+    client_id: 'member-1',
+    last_message_at,
+    last_sender_id,
+  });
+
+  it('says the member wrote last, and that it needs a reply', () => {
+    expect(lastSender(convo('member-1'), me)).toBe('member');
+    expect(needsReply(convo('member-1'))).toBe(true);
+  });
+  it('says the coach wrote last, and that it does not need a reply', () => {
+    expect(lastSender(convo(me), me)).toBe('me');
+    expect(needsReply(convo(me))).toBe(false);
+  });
+  it('says someone else in the team wrote last (another coach, a gym-wide broadcast), which does not need a reply', () => {
+    expect(lastSender(convo('coach-2'), me)).toBe('team');
+    expect(needsReply(convo('coach-2'))).toBe(false);
+  });
+  it('has no sender and needs no reply when there is no message yet', () => {
+    expect(lastSender(convo(null, null), me)).toBeNull();
+    expect(needsReply(convo(null, null))).toBe(false);
   });
 });

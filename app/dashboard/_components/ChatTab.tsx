@@ -241,6 +241,7 @@ export function ChatTab({
   onClose,
   memberHref,
   onMarkUnread,
+  narrow = false,
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -263,6 +264,8 @@ export function ChatTab({
   memberHref?: string;
   // Shows a "Mark unread" button in the header (the coach's inbox).
   onMarkUnread?: () => void;
+  // The chat sits in a narrow panel (the coach's Messages drawer): the header's buttons are icons only at every screen width.
+  narrow?: boolean;
 }) {
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   // A first page that came back full may have older messages behind it (H5); "Load earlier" fetches the page before the oldest shown.
@@ -294,6 +297,35 @@ export function ChatTab({
       // storage can be blocked; the draft still lives in memory
     }
   }
+  // The coach's Messages page, the drawer and the chat on the member's page share one draft per member. The member-page chat stays mounted
+  // while hidden, so when it is shown again it takes the saved draft (which may have been written, or sent and cleared, somewhere else).
+  useEffect(() => {
+    if (!active || !draftKey) return;
+    let saved = '';
+    try {
+      saved = window.sessionStorage.getItem(`chat-draft:${draftKey}`) ?? '';
+    } catch {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading the shared draft back in when this chat is shown again
+    setText(saved);
+  }, [active, draftKey]);
+  // The reply box grows with what is typed, up to about eight lines, then scrolls.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    // Empty, it is one line (a long "Message …" hint wraps in a narrow chat and would otherwise make the empty box two lines tall).
+    if (!text) {
+      el.style.height = '';
+      el.style.overflowY = 'hidden';
+      return;
+    }
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+    // A scrollbar only once it is taller than the box can grow.
+    el.style.overflowY = el.scrollHeight > 168 ? 'auto' : 'hidden';
+  }, [text]);
   // Photos and voice notes block the attach buttons while they upload; a text message does not (it shows at once, see handleSend).
   const [sending, setSending] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
@@ -460,6 +492,15 @@ export function ChatTab({
     }
   }
 
+  // Enter sends and Shift+Enter starts a new line, with a keyboard and mouse. On a touch screen Enter is a new line and the send button
+  // sends, as in most phone messaging apps (a phone keyboard has no Shift+Enter). Not while an input method is still composing a word.
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
+  }
+
   function handleSend(e: React.FormEvent) {
     e.preventDefault();
     const body = text.trim();
@@ -558,23 +599,29 @@ export function ChatTab({
         <Avatar name={otherPartyName} size="md" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-extrabold text-black dark:text-zinc-50">{otherPartyName}</p>
-          <p className="text-[11px] text-zinc-500">{readOnly ? 'Read-only' : 'Messages, photos and voice notes'}</p>
+          {/* Only said when it means something; "Messages, photos and voice notes" was always there and wrapped over five lines in
+              the narrow drawer. The reply box's own buttons already show photos and voice notes. */}
+          {readOnly && <p className="text-[11px] text-zinc-500">Read-only</p>}
         </div>
+        {/* In a narrow chat (the drawer, or below the lg width) the two buttons are icons only (their words stay for screen readers and
+            show as a tooltip), so the name keeps its room; they used to squeeze it down to "G." and sit on top of the line below it. */}
         {onMarkUnread && (
           <button
             type="button"
             onClick={onMarkUnread}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+            title="Mark unread"
+            className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-2.5 text-xs font-bold text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5 ${narrow ? '' : 'lg:px-3'}`}
           >
-            <MailOpen className="h-3.5 w-3.5" /> Mark unread
+            <MailOpen className="h-3.5 w-3.5" /> <span className={narrow ? 'sr-only' : 'sr-only lg:not-sr-only'}>Mark unread</span>
           </button>
         )}
         {memberHref && (
           <Link
             href={memberHref}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/10 dark:border-white/15"
+            title="View member"
+            className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-2.5 text-xs font-bold text-accent hover:bg-accent/10 dark:border-white/15 ${narrow ? '' : 'lg:px-3'}`}
           >
-            <UserRound className="h-3.5 w-3.5" /> View member
+            <UserRound className="h-3.5 w-3.5" /> <span className={narrow ? 'sr-only' : 'sr-only lg:not-sr-only'}>View member</span>
           </Link>
         )}
         {onClose && (
@@ -663,8 +710,9 @@ export function ChatTab({
         </p>
       )}
       {!readOnly && (
-        <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-black/[.05] p-2.5 dark:border-white/10">
-          <div className="flex min-w-0 flex-1 items-center gap-1 rounded-full border border-black/[.08] bg-black/[.02] pl-1.5 pr-1 dark:border-white/10 dark:bg-white/[.03]">
+        <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-black/[.05] p-2.5 dark:border-white/10">
+          {/* The rounded box shows the focus (its border turns the accent colour); the global focus outline drew a square inside it. */}
+          <div className="flex min-w-0 flex-1 items-end gap-1 rounded-3xl border border-black/[.08] bg-black/[.02] pl-1.5 pr-1 focus-within:border-accent dark:border-white/10 dark:bg-white/[.03] dark:focus-within:border-accent">
             <button
               type="button"
               aria-label="Attach a photo"
@@ -675,13 +723,18 @@ export function ChatTab({
               <ImageIcon className="h-[18px] w-[18px]" />
             </button>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
-            <input
-              type="text"
+            <textarea
+              ref={inputRef}
+              rows={1}
               maxLength={4000}
               value={text}
               onChange={(e) => changeText(e.target.value)}
-              placeholder={`Message ${otherPartyName}…`}
-              className="min-w-0 flex-1 bg-transparent py-2.5 text-base outline-none placeholder:text-zinc-400 sm:text-sm"
+              onKeyDown={handleKeyDown}
+              // A short hint in the narrow drawer, where "Message a long member name…" wrapped (the name is in the header above).
+              placeholder={narrow ? 'Write a message…' : `Message ${otherPartyName}…`}
+              aria-label={`Message ${otherPartyName}`}
+              style={{ outline: 'none' }}
+              className="min-w-0 flex-1 resize-none bg-transparent py-2.5 text-base leading-5 outline-none placeholder:text-zinc-400 sm:text-sm sm:leading-5"
             />
             <VoiceRecorder onRecorded={handleVoiceNote} disabled={sending} />
           </div>

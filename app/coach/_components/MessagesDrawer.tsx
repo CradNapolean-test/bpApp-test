@@ -63,8 +63,9 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
               onClick={clearSelection}
               className="flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
             >
+              {/* The member's name is in the chat's own header just below; saying it here too printed it twice. */}
               <ArrowLeft className="h-4 w-4" />
-              {selectedClient?.client_name ?? 'Back'}
+              All conversations
             </button>
           ) : (
             <h2 className="text-base font-semibold text-black dark:text-zinc-50">Messages</h2>
@@ -99,7 +100,14 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
               >
                 Broadcasts and the full Messages page
               </Link>
-              <ConversationList overview={localOverview} selected={selected} onSelect={selectClient} onMarkRead={markRead} onMarkUnread={markUnread} />
+              <ConversationList
+                overview={localOverview}
+                selected={selected}
+                onSelect={selectClient}
+                onMarkRead={markRead}
+                onMarkUnread={markUnread}
+                currentUserId={currentUserId}
+              />
             </div>
           ) : loadError ? (
             <div className="p-4 text-sm text-zinc-500">
@@ -111,13 +119,17 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
           ) : loading ? (
             <p className="p-4 text-sm text-zinc-500">Loading messages…</p>
           ) : (
-            <div className="p-2">
+            // The chat takes the drawer's full height (it used to stop short, leaving a gap under the reply box).
+            <div className="h-full p-2">
               <ChatTab
                 key={`${selected}:${loadId}`}
                 clientId={selected}
                 initialMessages={messages}
                 currentUserId={currentUserId}
                 otherPartyName={selectedClient?.client_name ?? 'Client'}
+                fill
+                narrow
+                draftKey={`coach-${selected}`}
                 memberHref={`/coach/clients/${selected}`}
                 onMarkUnread={() => markUnread(selected)}
               />
