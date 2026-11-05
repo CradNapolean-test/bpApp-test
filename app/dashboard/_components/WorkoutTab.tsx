@@ -58,6 +58,13 @@ import type {
   WorkoutProgramRow,
 } from '@/lib/data/types';
 
+// One logged set as the coach reads it: "8 × 60kg", "8 reps" when no weight was used (or 0kg), "done" when only ticked off.
+function coachSetText(tracking: TrackingType, l: WorkoutLogRow): string {
+  if (!hasRecordedValue(tracking, l)) return 'done';
+  if (tracking === 'weight_reps') return !l.actual_load ? `${l.actual_reps ?? '—'} reps` : `${l.actual_reps ?? '—'} × ${l.actual_load}kg`;
+  return setSummary(tracking, l);
+}
+
 // Starting a programme for this member: from a template, or a blank one to build by hand. The new
 // programme becomes theirs once its start date arrives; the old one and its logged weights stay on file.
 function StartProgrammeSheet({
@@ -1258,6 +1265,40 @@ export function WorkoutTab({
             exercises={openDay.workout_exercises}
             library={exerciseLibrary}
             canEdit={isCoachView}
+            // A coach opening a day sees the plan as a builder; what the member actually lifted goes under each exercise (CR2).
+            renderBuilderExtra={
+              isCoachView
+                ? (ex) => {
+                    const logs = logsByExercise[ex.id] ?? [];
+                    if (logs.length === 0) return null;
+                    const tracking = trackingOf(ex.tracking_type);
+                    const day = new Date(logs[0].logged_at).toLocaleDateString('en-GB', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      timeZone: profile?.timezone ?? DEFAULT_TIMEZONE,
+                    });
+                    // A warm-up is ticked off as a whole by the member, so it reads as one "Done".
+                    if (ex.section === 'warmup') {
+                      return (
+                        <div className="-mt-1 ml-9 px-1 pb-1">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-success">✓ Done {day}</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="-mt-1 ml-9 flex flex-wrap items-center gap-1.5 px-1 pb-1">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-success">Logged {day}</span>
+                        {logs.map((l, i) => (
+                          <span key={l.id} className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success">
+                            {i + 1} · {coachSetText(tracking, l)}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  }
+                : undefined
+            }
             memberChoices={
               !isCoachView
                 ? {

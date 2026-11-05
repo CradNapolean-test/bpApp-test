@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { GripVertical } from 'lucide-react';
 import {
@@ -892,6 +892,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   clientExerciseMaxes,
   showProgression,
   renderExtra,
+  renderBuilderExtra,
   renderBlockExtra,
   renderBlockFooter,
   blockBadge,
@@ -909,6 +910,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   clientExerciseMaxes?: ClientExerciseMaxRow[];
   showProgression?: boolean;
   renderExtra?: (exercise: T) => ReactNode;
+  // Something shown under an exercise in the coach's builder (what the member logged for it), read-only.
+  renderBuilderExtra?: (exercise: T) => ReactNode;
   // Something shown under a block's heading (the member's one tick for the whole warm-up).
   renderBlockExtra?: (rows: T[]) => ReactNode;
   // Something shown under a block's exercises (the member's result for the block).
@@ -1412,14 +1415,16 @@ export function ExerciseEditor<T extends EditableExercise>({
                               </div>
                             )}
                             {sg.exercises.map((ex) => (
-                              <BuilderRow
-                                key={ex.id}
-                                exercise={ex}
-                                index={rows.findIndex((r) => r.id === ex.id)}
-                                library={library}
-                                menuItems={menuFor(ex, rows)}
-                                onOpen={() => setSheet({ kind: 'edit', id: ex.id })}
-                              />
+                              <Fragment key={ex.id}>
+                                <BuilderRow
+                                  exercise={ex}
+                                  index={rows.findIndex((r) => r.id === ex.id)}
+                                  library={library}
+                                  menuItems={menuFor(ex, rows)}
+                                  onOpen={() => setSheet({ kind: 'edit', id: ex.id })}
+                                />
+                                {renderBuilderExtra?.(ex)}
+                              </Fragment>
                             ))}
                           </li>
                         ))}

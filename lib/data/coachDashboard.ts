@@ -131,7 +131,6 @@ interface MemberRow {
     review_reasons: string[] | null;
     checkin_reminder_days: number | null;
   }>;
-  credits_balance: ProfileRel<{ balance: number }>;
   client_memberships: {
     id: string;
     started_at: string;
@@ -150,7 +149,6 @@ interface MemberRow {
 const SELECT = `
   id, email, coach_id, created_at,
   client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, checkin_reminder_days),
-  credits_balance(balance),
   client_memberships!client_id(id, started_at, scheduled_end, ended_at, membership_packages(credits_per_week, duration_weeks, name)),
   daily_logs(id, log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(id, created_at)),
   nutrition_feedback!client_id(log_date, photo_id),
@@ -344,12 +342,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       reasons.push({ kind: 'missed', label: 'Missed last week' });
       detail = detail || 'No check-in days last week';
     }
-    const balance = one(m.credits_balance)?.balance ?? 0;
-    const activeMembership = (m.client_memberships ?? []).find((c) => c.ended_at === null);
-    if (activeMembership && (one(activeMembership.membership_packages)?.credits_per_week ?? 0) > 0 && balance <= 1) {
-      reasons.push({ kind: 'credits', label: balance <= 0 ? 'Out of credits' : '1 credit left' });
-      detail = detail || 'Weekly allowance used up';
-    }
+    // No credits reason any more: it only fired for members on a weekly plan who had used their allowance, which means they are booking
+    // and turning up, not that they need a call (CR3). The Clients page's "Low credits" filter still lists them for anyone who wants it.
     const weights = logs.filter((l) => l.bodyweight != null).sort((a, b) => (a.log_date < b.log_date ? -1 : 1)).map((l) => l.bodyweight as number);
     if (weights.length >= 6 && isPlateaued(weights)) {
       reasons.push({ kind: 'stalled', label: 'Weight stalled' });

@@ -19,6 +19,8 @@ import { enabledTrackers, toDisabledMetricSet, weekStats } from '@/lib/checkinMe
 import type { CheckinMetric } from '@/lib/checkinMetrics';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 import { getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
+import { sendMessage } from '@/lib/data/chat';
+import { checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
@@ -243,6 +245,8 @@ function WeekLog({
   const avgSteps = avg(weekValues.map((d) => d.steps));
   const avgBodyweight = avg(weekValues.map((d) => d.bodyweight));
   const loggedDays = foodDays;
+  // Days of this week that have happened (a whole past week is 7).
+  const daysSoFar = weekDates.filter((d) => d <= todayIso).length;
   const fmt = (v: number | null, digits = 0) => (v == null ? '—' : digits ? v.toFixed(digits) : Math.round(v).toLocaleString());
 
   const inputCls =
@@ -287,18 +291,30 @@ function WeekLog({
             <div className={cardCls}>
               <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgCalories)}</p>
               <p className="mt-0.5 text-xs text-zinc-500">avg kcal</p>
+              {/* A coach reads an average against the target, and needs to know how many days it is built from (CR3). */}
+              {isCoachView && weekTarget?.dailyFlat && <p className="text-[11px] text-zinc-500">of {Math.round(weekTarget.dailyFlat.calories).toLocaleString()}</p>}
             </div>
             <div className={cardCls}>
               <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgProtein)}{avgProtein != null && 'g'}</p>
               <p className="mt-0.5 text-xs text-zinc-500">avg protein</p>
+              {isCoachView && weekTarget?.dailyFlat && <p className="text-[11px] text-zinc-500">of {Math.round(weekTarget.dailyFlat.protein)}g</p>}
             </div>
             <div className={cardCls}>
               <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgSteps)}</p>
               <p className="mt-0.5 text-xs text-zinc-500">avg steps</p>
             </div>
           </div>
+          {isCoachView && daysSoFar > 0 && loggedDays.length < daysSoFar && (
+            <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${loggedDays.length === 0 ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'}`}>
+              {loggedDays.length === 0
+                ? `No food logged on any of the ${daysSoFar} days${daysSoFar < 7 ? ' so far' : ''}.`
+                : `Food logged on ${loggedDays.length} of ${daysSoFar} days, so the averages above come from ${loggedDays.length === 1 ? 'one day' : `those ${loggedDays.length} days`}.`}
+            </p>
+          )}
           <p className="text-xs text-zinc-500">
-            {loggedDays.length} day{loggedDays.length === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgCarbs)}
+            {/* The warning above already gives a coach the day count. */}
+            {isCoachView && daysSoFar > 0 && loggedDays.length < daysSoFar ? '' : `${loggedDays.length} day${loggedDays.length === 1 ? '' : 's'} of food logged this week · `}
+            avg carbs {fmt(avgCarbs)}
             {avgCarbs != null && 'g'} · avg fat {fmt(avgFat)}
             {avgFat != null && 'g'} · avg bodyweight {fmt(avgBodyweight, 1)}
             {avgBodyweight != null && 'kg'}
@@ -318,7 +334,13 @@ function WeekLog({
               <span className="text-right">High</span>
             </div>
             {stats.map((m) => {
-              const fmtV = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1)) + (m.unit === '/5' || m.unit === '' ? '' : m.unit);
+              // Steps are whole numbers with a thousands comma ("9,929", not "9928.6"); everything else keeps one decimal.
+              const fmtV = (v: number) =>
+                m.key === 'steps'
+                  ? Math.round(v).toLocaleString()
+                  : (Number.isInteger(v) ? String(v) : v.toFixed(1)) + (m.unit === '/5' || m.unit === '' ? '' : m.unit);
+              // The lowest and highest columns are narrow: steps there read "11.5k" so the day still fits beside them.
+              const fmtEnd = (v: number) => (m.key === 'steps' && v >= 1000 ? `${(Math.round(v / 100) / 10).toLocaleString()}k` : fmtV(v));
               const dayName = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
               return (
                 <div key={m.key} className="grid grid-cols-[1fr_3.5rem_4.5rem_4.5rem] items-center gap-2 py-1.5 text-sm">
@@ -326,8 +348,8 @@ function WeekLog({
                     {m.label} <span className="text-[11px] text-zinc-400">{m.days}/7 days</span>
                   </span>
                   <span className="text-right font-semibold text-black dark:text-zinc-50">{m.avg == null ? '-' : fmtV(Math.round(m.avg * 10) / 10)}</span>
-                  <span className="text-right text-zinc-500">{m.low ? `${fmtV(m.low.value)} ${dayName(m.low.date)}` : '-'}</span>
-                  <span className="text-right text-zinc-500">{m.high ? `${fmtV(m.high.value)} ${dayName(m.high.date)}` : '-'}</span>
+                  <span className="text-right text-zinc-500">{m.low ? `${fmtEnd(m.low.value)} ${dayName(m.low.date)}` : '-'}</span>
+                  <span className="text-right text-zinc-500">{m.high ? `${fmtEnd(m.high.value)} ${dayName(m.high.date)}` : '-'}</span>
                 </div>
               );
             })}
@@ -368,6 +390,12 @@ function WeekLog({
                     : logged ? (isFocused ? 'bg-accent-foreground' : 'bg-zinc-400') : 'bg-transparent'
                 }`}
               />
+              {/* The dot is sleep, steps and water only, so a coach could see a green week with no food in it (CR3). Calories go under it. */}
+              {isCoachView && !isPhoto && date <= todayIso && (
+                <span className={`text-[10px] font-bold leading-none ${isFocused ? '' : logged ? 'text-zinc-500' : 'text-danger'}`}>
+                  {logged ? Math.round(dayCaloriesOf(dayData)).toLocaleString() : 'no food'}
+                </span>
+              )}
             </button>
           );
         })}
@@ -708,20 +736,16 @@ export function WeeklyLogTab(
         </button>
       </div>
 
-      {rest.isCoachView && canReview && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={toggleReviewed}
-          className={`flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-extrabold disabled:opacity-60 ${
-            reviewed.has(weekStart)
-              ? 'bg-success/15 text-success'
-              : 'bg-accent text-accent-foreground'
-          }`}
-        >
-          <Check className="h-4 w-4" />
-          {reviewed.has(weekStart) ? 'Week reviewed (tap to undo)' : 'Mark this week as reviewed'}
-        </button>
+      {/* Whether this week has been looked at, up top. Reviewing it happens at the bottom, after the coach has read the week. */}
+      {rest.isCoachView && canReview && reviewed.has(weekStart) && (
+        <div className="flex items-center justify-between gap-2 rounded-full bg-success/15 px-4 py-2 text-sm font-bold text-success">
+          <span className="flex items-center gap-1.5">
+            <Check className="h-4 w-4" /> Week reviewed
+          </span>
+          <button type="button" disabled={busy} onClick={toggleReviewed} className="min-h-8 px-1 text-xs font-bold underline disabled:opacity-60">
+            Undo
+          </button>
+        </div>
       )}
 
       {logs === 'loading' ? (
@@ -734,16 +758,122 @@ export function WeeklyLogTab(
           </button>
         </div>
       ) : (
-        <WeekLog
-          key={weekStart}
-          {...rest}
-          weekDates={dates}
-          initialLogs={logs}
-          onSaved={() => {
-            savedSomething.current = true;
-          }}
-        />
+        <>
+          <WeekLog
+            key={weekStart}
+            {...rest}
+            weekDates={dates}
+            initialLogs={logs}
+            onSaved={() => {
+              savedSomething.current = true;
+            }}
+          />
+          {rest.isCoachView && canReview && (
+            <CheckinReply
+              key={`reply-${weekStart}`}
+              clientId={rest.clientId}
+              memberName={rest.profile?.name ?? null}
+              weekStart={weekStart}
+              reviewed={reviewed.has(weekStart)}
+              onReviewed={() => setReviewed((prev) => new Set(prev).add(weekStart))}
+            />
+          )}
+        </>
       )}
+    </div>
+  );
+}
+
+// The end of a coach's read-through of a week: write back to the member (it goes into their chat, headed with the week) and mark the
+// week reviewed in one go, or just mark it reviewed. Only shown once the week has loaded, so nothing is marked before it was read.
+function CheckinReply({
+  clientId,
+  memberName,
+  weekStart,
+  reviewed,
+  onReviewed,
+}: {
+  clientId: string;
+  memberName: string | null;
+  weekStart: string;
+  reviewed: boolean;
+  onReviewed: () => void;
+}) {
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const firstName = memberName?.trim().split(/\s+/)[0] || 'them';
+  const max = checkinReplyMax(weekStart);
+
+  async function send() {
+    const body = text.trim();
+    if (!body) return;
+    setBusy(true);
+    try {
+      await sendMessage(clientId, checkinReplyText(weekStart, body));
+    } catch (err) {
+      setBusy(false);
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not send that. Please try again.');
+      return;
+    }
+    setText('');
+    if (reviewed) {
+      setBusy(false);
+      toast.success(`Sent to ${firstName}`);
+      return;
+    }
+    const res = await markReviewed('week', clientId, weekStart);
+    setBusy(false);
+    if (res.ok) {
+      onReviewed();
+      toast.success(`Sent to ${firstName} and marked reviewed`);
+    } else {
+      toast.error(`Sent to ${firstName}, but the week could not be marked reviewed. Please try again.`);
+    }
+  }
+
+  async function markOnly() {
+    setBusy(true);
+    const res = await markReviewed('week', clientId, weekStart);
+    setBusy(false);
+    if (res.ok) {
+      onReviewed();
+      toast.success('Marked as reviewed');
+    } else {
+      toast.error(res.error ?? 'Could not mark that as reviewed');
+    }
+  }
+
+  return (
+    <div className={cardCls}>
+      <h4 className="text-sm font-bold text-black dark:text-zinc-50">{reviewed ? `Message ${firstName} about this week` : `Reply to ${firstName}`}</h4>
+      <p className="mt-0.5 text-xs text-zinc-500">
+        Goes to their chat, headed &ldquo;{checkinReplyHeading(weekStart)}&rdquo;{reviewed ? '.' : ', and marks the week reviewed.'}
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={max}
+        rows={4}
+        aria-label={`Reply to ${firstName} about the week of ${weekLabel(weekStart)}`}
+        placeholder="What went well, what to focus on next week"
+        className="mt-3 w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || text.trim() === ''}
+          onClick={send}
+          className="rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+        >
+          {busy ? 'Sending…' : reviewed ? 'Send' : 'Send and mark reviewed'}
+        </button>
+        {!reviewed && (
+          <button type="button" disabled={busy} onClick={markOnly} className="rounded-full px-3 py-2.5 text-sm font-bold text-zinc-600 disabled:opacity-50 dark:text-zinc-300">
+            Mark reviewed without a reply
+          </button>
+        )}
+      </div>
     </div>
   );
 }

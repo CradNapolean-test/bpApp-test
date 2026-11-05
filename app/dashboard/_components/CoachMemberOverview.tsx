@@ -31,6 +31,7 @@ import { toEngineProfile } from '@/lib/utils/clientProfile';
 import { dayCaloriesOf, hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
 import { lastActiveLabel } from '@/lib/healthStatus';
+import { weightGoalProgress } from '@/lib/weightGoal';
 import { olderUnreviewed, olderUnreviewedLine } from '@/lib/memberReview';
 import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
@@ -79,7 +80,7 @@ function Tile({
   icon: typeof Check;
   label: string;
   value: string;
-  hint?: string;
+  hint?: React.ReactNode;
   tone?: TrafficLight | null;
   onClick?: () => void;
 }) {
@@ -172,6 +173,15 @@ export function CoachMemberOverview({
   // Calories include Quick Adds with no macros (R11), and a day whose food was all deleted is not a food day (M2).
   const foodDays = weekDays.filter(hasFoodLogged);
   const kcalAvg = avg(foodDays.map(dayCaloriesOf));
+  // Each average says how many of this week's days it comes from: one day of food read as a whole week's average (CR3).
+  const daysSoFar = Math.min(7, Math.round((new Date(todayIso + 'T00:00:00Z').getTime() - new Date(thisWeek + 'T00:00:00Z').getTime()) / 86400000) + 1);
+  const stepsDays = weekDays.filter((l) => l.steps != null).length;
+  const sleepDays = weekDays.filter((l) => l.sleep != null).length;
+  const fromDays = (n: number) => (
+    <span className={n < daysSoFar ? 'font-semibold text-warning' : undefined}>
+      {n} of {daysSoFar} day{daysSoFar === 1 ? '' : 's'}
+    </span>
+  );
   const dayTarget = useMemo(() => {
     const engine = toEngineProfile(profile);
     return engine ? weeklyTarget(engine, programWeek)?.dailyFlat ?? null : null;
@@ -191,10 +201,10 @@ export function CoachMemberOverview({
   const nowWeightDate = weights.at(-1)?.log_date ?? latestWeighIn?.date ?? null;
   const start = profile?.start_weight ?? null;
   const goal = profile?.goal_weight ?? null;
-  const pct =
-    start != null && goal != null && start !== goal && nowWeight != null
-      ? Math.max(0, Math.min(100, Math.round((((start - nowWeight) * (start > goal ? 1 : -1)) / Math.abs(start - goal)) * 100)))
-      : null;
+  const progress = start != null && goal != null && nowWeight != null ? weightGoalProgress(start, goal, nowWeight) : null;
+  const pct = progress?.pct ?? null;
+  // Further from the goal than when they started: either a real change or a wrong start weight, and worth a look either way (CR3).
+  const movingAway = progress?.movingAway ?? false;
   const weekly = new Map<string, number[]>();
   for (const w of weights) {
     const key = isoWeekKey(w.log_date);
@@ -416,21 +426,38 @@ export function CoachMemberOverview({
             label="Steps (avg)"
             value={stepsAvg != null ? Math.round(stepsAvg).toLocaleString() : '—'}
             tone={stepsAvg != null ? trafficLight('steps', stepsAvg) : null}
-            hint={`Green is ${TRACKER_THRESHOLDS.steps.green.toLocaleString()}+`}
+            hint={
+              <>
+                {stepsAvg != null && <>{fromDays(stepsDays)} · </>}
+                green is {TRACKER_THRESHOLDS.steps.green.toLocaleString()}+
+              </>
+            }
           />
           <Tile
             icon={Moon}
             label="Sleep (avg)"
             value={sleepAvg != null ? `${sleepAvg.toFixed(1)}h` : '—'}
             tone={sleepAvg != null ? trafficLight('sleep', sleepAvg) : null}
-            hint={`Green is ${TRACKER_THRESHOLDS.sleep.green}h+`}
+            hint={
+              <>
+                {sleepAvg != null && <>{fromDays(sleepDays)} · </>}
+                green is {TRACKER_THRESHOLDS.sleep.green}h+
+              </>
+            }
           />
           {!isPhoto && (
             <Tile
               icon={Utensils}
               label="Calories (avg)"
               value={kcalAvg != null ? Math.round(kcalAvg).toLocaleString() : '—'}
-              hint={dayTarget ? `Target ${Math.round(dayTarget.calories).toLocaleString()}` : undefined}
+              hint={
+                kcalAvg != null || dayTarget ? (
+                  <>
+                    {kcalAvg != null ? fromDays(foodDays.length) : <span className="font-semibold text-warning">No food logged</span>}
+                    {dayTarget && <> · target {Math.round(dayTarget.calories).toLocaleString()}</>}
+                  </>
+                ) : undefined
+              }
             />
           )}
           <Tile
@@ -453,7 +480,12 @@ export function CoachMemberOverview({
               <Scale className="h-5 w-5 text-accent" />
               {nowWeight != null ? `${nowWeight.toFixed(1)}kg` : '—'}
             </p>
-            {pct != null && <span className="text-sm font-bold text-accent">{pct}% to goal</span>}
+            {pct != null &&
+              (movingAway ? (
+                <span className="text-sm font-bold text-danger">Moving away from goal</span>
+              ) : (
+                <span className="text-sm font-bold text-accent">{pct}% to goal</span>
+              ))}
           </div>
           {start != null && goal != null && (
             <>
@@ -462,9 +494,19 @@ export function CoachMemberOverview({
               </div>
               <div className="mt-1.5 flex justify-between text-xs text-zinc-500">
                 <span>Start {start}kg</span>
-                {nowWeight != null && <span>{nowWeight - start > 0 ? '+' : ''}{(nowWeight - start).toFixed(1)}kg since start</span>}
+                {nowWeight != null && (
+                  <span className={movingAway ? 'font-bold text-danger' : undefined}>
+                    {nowWeight - start > 0 ? '+' : ''}
+                    {(nowWeight - start).toFixed(1)}kg since start
+                  </span>
+                )}
                 <span>Goal {goal}kg</span>
               </div>
+              {movingAway && progress && (
+                <p className="mt-2 rounded-xl bg-danger/10 px-3 py-2 text-xs text-black dark:text-zinc-100">
+                  <b className="text-danger">{progress.awayKg.toFixed(1)}kg further from the goal than at the start.</b> Check the start weight is right, then talk it through with them.
+                </p>
+              )}
             </>
           )}
           {weeklyPoints.length >= 2 && (

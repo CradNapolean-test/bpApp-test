@@ -5,6 +5,7 @@ import { TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Segmented } from '@/app/_components/ui';
 import { WEEKLY_METRICS, buildWeeklyAverages, formatMetric, weekChange } from '@/lib/weeklyAverages';
+import { weightGoalProgress } from '@/lib/weightGoal';
 import type { WeekAverages, WeeklyMetric } from '@/lib/weeklyAverages';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
@@ -155,11 +156,17 @@ function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfile
   const done = Math.max(0, Math.min(total, (start - now) * (start > goal ? 1 : -1)));
   const pct = Math.round((done / total) * 100);
   const toGo = Math.max(0, Math.abs(now - goal) * (((now - goal) * (start - goal)) > 0 ? 1 : 0));
+  // The coach is told when the member is further from the goal than at the start, instead of a quiet "0% there" (CR3).
+  const away = coachView && latest != null ? weightGoalProgress(start, goal, latest) : null;
   return (
     <div className={cardCls}>
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="font-bold text-black dark:text-zinc-50">{coachView ? 'Goal' : 'Your goal'}</h3>
-        <span className="text-sm font-bold text-accent">{pct}% there</span>
+        {away?.movingAway ? (
+          <span className="text-sm font-bold text-danger">Moving away from goal</span>
+        ) : (
+          <span className="text-sm font-bold text-accent">{pct}% there</span>
+        )}
       </div>
       <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/10">
         <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
@@ -178,9 +185,15 @@ function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfile
           <p className="font-bold text-black dark:text-zinc-50">{goal}kg</p>
         </div>
       </div>
-      <p className="mt-2 text-xs text-zinc-500">
-        {toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : coachView ? 'Goal weight reached.' : 'Goal weight reached — nice work.'}
-      </p>
+      {away?.movingAway ? (
+        <p className="mt-2 text-xs font-semibold text-danger">
+          {away.awayKg.toFixed(1)}kg further from the goal than at the start, {toGo.toFixed(1)}kg from the goal. Check the start weight is right.
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-zinc-500">
+          {toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : coachView ? 'Goal weight reached.' : 'Goal weight reached — nice work.'}
+        </p>
+      )}
     </div>
   );
 }
