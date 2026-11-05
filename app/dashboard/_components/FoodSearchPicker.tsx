@@ -115,7 +115,9 @@ function FoodResultRow({
             </button>
           )}
           <div className="min-w-0">
-            <p className="truncate font-medium text-black dark:text-zinc-50">{food.name}</p>
+            {/* Two lines, like the phone: UK table names put what matters last ("Chicken, breast, grilled without skin, meat
+                only"), so one cut-off line hid whether a food was raw or cooked. */}
+            <p className="line-clamp-2 break-words font-medium text-black dark:text-zinc-50">{food.name}</p>
             <p className="text-xs text-zinc-500">
               {unit && !small
                 ? `per ${unitText(unit)} · ${Math.round(dayCalories(food.protein * unit.grams, food.carbs * unit.grams, food.fat * unit.grams))} kcal`
