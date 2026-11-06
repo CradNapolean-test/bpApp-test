@@ -27,6 +27,7 @@ import { DefaultMuscleGroupIcon, MUSCLE_GROUP_ICONS } from './muscleGroups';
 import { allowedImageHosts, isAllowedImage } from '@/lib/imageHosts';
 import type { BlockType, ClientExerciseMaxRow, ExerciseLibraryRow, PrescriptionType } from '@/lib/data/types';
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
+import { guessTrackingType } from '@/lib/trackingGuess';
 
 // An exercise's picture is a link a coach pasted. It loads only from the gym's own storage and the hosts named in NEXT_PUBLIC_IMAGE_HOSTS
 // (comma separated), never sends a referrer, and otherwise the muscle-group icon shows instead (R23).
@@ -1044,6 +1045,21 @@ export function ExerciseEditor<T extends EditableExercise>({
     });
   }
 
+  // An exercise typed by name: what it records is read from the name (a bike is calories, a plank is time), and like a library
+  // exercise it only starts with sets and reps in Lift and Strong.
+  function addCustom(key: string, name: string) {
+    const { section } = parseBlockKey(key);
+    const setsAndReps = section === 'lift' || section === 'strong';
+    const tracking = guessTrackingType(name) ?? 'weight_reps';
+    return addRow(key, {
+      block_type: 'exercise',
+      name,
+      sets: setsAndReps ? 3 : null,
+      reps: setsAndReps && hasMeasure(tracking, 'reps') ? '8-10' : null,
+      tracking_type: tracking,
+    });
+  }
+
   const updateMany = (ids: string[], fields: ExerciseUpdate) =>
     onUpdateMany ? onUpdateMany(ids, fields) : Promise.all(ids.map((id) => onUpdate(id, fields)));
 
@@ -1491,7 +1507,7 @@ export function ExerciseEditor<T extends EditableExercise>({
           library={library}
           title={`Add to ${keyLabel(sheet.key)}`}
           onPick={(entry) => addFromLibrary(sheet.key, entry)}
-          onCustom={(name) => addRow(sheet.key, { block_type: 'exercise', name, sets: 3, reps: '8-10' })}
+          onCustom={(name) => addCustom(sheet.key, name)}
           onClose={() => setSheet(null)}
         />
       )}

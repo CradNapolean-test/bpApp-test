@@ -21,7 +21,8 @@ import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv'
 import { describeImport, prepareExerciseImport } from '@/lib/exerciseImport';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
-import { TRACKING, TRACKING_TYPES, trackingOf, type TrackingType } from '@/lib/workoutTracking';
+import { TRACKING, TRACKING_TYPES, isTrackingType, trackingOf, type TrackingType } from '@/lib/workoutTracking';
+import { guessTrackingType } from '@/lib/trackingGuess';
 
 const EXPORT_COLUMNS = [
   'name',
@@ -68,20 +69,24 @@ function parseExerciseCsv(text: string): Omit<ExerciseLibraryRow, 'id' | 'create
   return rows
     .slice(1)
     .filter((r) => r[nameIdx]?.trim())
-    .map((r) => ({
-      name: r[nameIdx].trim(),
-      muscle_group: strCol(r, 'muscle_group'),
-      equipment: strCol(r, 'equipment'),
-      default_sets: numCol(r, 'default_sets'),
-      default_reps: strCol(r, 'default_reps'),
-      default_rpe: numCol(r, 'default_rpe'),
-      default_rest_seconds: numCol(r, 'default_rest_seconds'),
-      tracking_type: trackingOf(strCol(r, 'tracking_type')),
-      video_url: strCol(r, 'video_url'),
-      image_url: strCol(r, 'image_url'),
-      instructions: strCol(r, 'instructions'),
-      notes: strCol(r, 'notes'),
-    }));
+    .map((r) => {
+      // A file with no tracking column (or a blank cell) gets what the name suggests, as when typing one in.
+      const tracking = strCol(r, 'tracking_type');
+      return {
+        name: r[nameIdx].trim(),
+        muscle_group: strCol(r, 'muscle_group'),
+        equipment: strCol(r, 'equipment'),
+        default_sets: numCol(r, 'default_sets'),
+        default_reps: strCol(r, 'default_reps'),
+        default_rpe: numCol(r, 'default_rpe'),
+        default_rest_seconds: numCol(r, 'default_rest_seconds'),
+        tracking_type: isTrackingType(tracking) ? tracking : (guessTrackingType(r[nameIdx]) ?? 'weight_reps'),
+        video_url: strCol(r, 'video_url'),
+        image_url: strCol(r, 'image_url'),
+        instructions: strCol(r, 'instructions'),
+        notes: strCol(r, 'notes'),
+      };
+    });
 }
 
 
@@ -118,6 +123,12 @@ function ExerciseFormSheet({
   const [rpe, setRpe] = useState(exercise?.default_rpe == null ? '' : String(exercise.default_rpe));
   const [rest, setRest] = useState(exercise?.default_rest_seconds == null ? '' : String(exercise.default_rest_seconds));
   const [tracking, setTracking] = useState<TrackingType>(trackingOf(exercise?.tracking_type));
+  // A new exercise's "What gets recorded" follows its name (a bike is calories) until the coach picks one.
+  const [trackingPicked, setTrackingPicked] = useState(exercise != null);
+  function changeName(value: string) {
+    setName(value);
+    if (!trackingPicked) setTracking(guessTrackingType(value) ?? 'weight_reps');
+  }
   const [imageUrl, setImageUrl] = useState(exercise?.image_url ?? '');
   const [instructions, setInstructions] = useState(exercise?.instructions ?? '');
   const [notes, setNotes] = useState(exercise?.notes ?? '');
@@ -157,7 +168,7 @@ function ExerciseFormSheet({
     <BottomSheet title={exercise ? 'Edit exercise' : 'Add an exercise'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Labeled label="Exercise name">
-          <input required autoFocus={!exercise} className={sheetField} value={name} onChange={(e) => setName(e.target.value)} />
+          <input required autoFocus={!exercise} className={sheetField} value={name} onChange={(e) => changeName(e.target.value)} />
         </Labeled>
         <Labeled label="Video link">
           <input className={sheetField} value={videoUrl} placeholder="https://" onChange={(e) => setVideoUrl(e.target.value)} />
@@ -179,7 +190,14 @@ function ExerciseFormSheet({
         </div>
 
         <Labeled label="What gets recorded">
-          <select className={sheetField} value={tracking} onChange={(e) => setTracking(e.target.value as TrackingType)}>
+          <select
+            className={sheetField}
+            value={tracking}
+            onChange={(e) => {
+              setTracking(e.target.value as TrackingType);
+              setTrackingPicked(true);
+            }}
+          >
             {TRACKING_TYPES.map((t) => (
               <option key={t} value={t}>
                 {TRACKING[t].label} ({TRACKING[t].hint})
