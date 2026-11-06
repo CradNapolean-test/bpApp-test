@@ -7,6 +7,7 @@ import { manualEntryKcal, manualTotals, validateManualEntry } from '@ballistic/s
 
 import { Pressable } from '@/components/press';
 import { MyTargetsRow } from '@/components/customTargets';
+import { HighDayRow } from '@/components/highDay';
 import { CoachFeedbackCard, DateNav, shortDate, TotalsCard } from '@/components/food';
 import { NutritionTabs } from '@/components/pagetabs';
 import { Icon } from '@/components/icons';
@@ -117,6 +118,7 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
       <NutritionTabs current="food" />
       <DateNav date={date} today={today} ahead={1} onChange={(d) => setPicked(d === today ? null : d)} />
       <TotalsCard totals={manualTotals(entries)} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
+      <HighDayRow profile={profile} today={today} date={date} />
       <MyTargetsRow profile={profile} />
       <CoachFeedbackCard items={feedbackQ.data ?? []} />
       {manualQ.isError ? <AppText color="danger">Could not load this day: {manualQ.error.message}</AppText> : null}

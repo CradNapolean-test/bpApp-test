@@ -11,6 +11,7 @@ import { addMealPlanEntry, logPlanToDiary, removeMealPlanEntry, updateMealPlanEn
 import { addRecipeToMealPlan } from '@/lib/data/recipes';
 import { weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { dayTargetFor, HIGH_DAYS_PER_WEEK, isCyclingTarget } from '@/lib/utils/dayTarget';
 import { targetsHeldBack } from '@/lib/onboarding';
 import { entryMacros, totalMacros } from '@/lib/utils/foodTotals';
 import { AddFoodSheet } from './AddFoodSheet';
@@ -107,10 +108,13 @@ export function MealPlannerTab({
   const { favorites, recentlyLogged, favoriteIds, toggleFavorite } = useFoodShortcuts(clientId, !readOnly);
   const [addFoodSection, setAddFoodSection] = useState<{ key: MealPlanSection; label: string } | null>(null);
 
-  const dayTarget = useMemo(() => {
+  const weekTarget = useMemo(() => {
     const engineProfile = toMemberEngineProfile(profile, readOnly);
-    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
+    return engineProfile ? weeklyTarget(engineProfile, programWeek) : null;
   }, [profile, programWeek, readOnly]);
+  // A typical day. For a calorie-cycling member that is a normal (low) day, and a line under the rings gives the high days.
+  const dayTarget = dayTargetFor(weekTarget, null);
+  const highDay = isCyclingTarget(weekTarget) ? weekTarget?.dailyHigh ?? null : null;
 
   // Returns whether it worked, so the Add food sheet stays open (keeping what was typed) when it did not (FS5).
   async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
@@ -159,7 +163,21 @@ export function MealPlannerTab({
 
   return (
     <div className="space-y-4">
-      <NutritionSummary totals={dayTotals} target={dayTarget} title={readOnly ? "Their typical day" : "Your typical day"} dateLabel={readOnly ? "vs their daily target" : "vs your daily target"} held={targetsHeldBack(profile, readOnly)} />
+      <NutritionSummary
+        totals={dayTotals}
+        target={dayTarget}
+        title={readOnly ? "Their typical day" : "Your typical day"}
+        dateLabel={readOnly ? "vs their daily target" : "vs your daily target"}
+        held={targetsHeldBack(profile, readOnly)}
+        footer={
+          highDay && !targetsHeldBack(profile, readOnly) ? (
+            <p className="text-center text-xs text-zinc-500">
+              Calorie cycling: this plan is for a normal day. High days (up to {HIGH_DAYS_PER_WEEK} a week, marked in the food diary) are{' '}
+              {Math.round(highDay.calories).toLocaleString()} kcal.
+            </p>
+          ) : undefined
+        }
+      />
 
       {canLog && initialEntries.length > 0 && (
         <button

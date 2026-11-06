@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { weeklyTarget } from '@/lib/calculations';
+import { dayTargetFor } from '@/lib/utils/dayTarget';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { dayCaloriesOf } from '@/lib/utils/dailyLog';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
@@ -31,7 +32,8 @@ export function OfflineSnapshot({
       const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
       // The offline copy of the targets follows the same hold-back as the screens (M8).
       const engine = toMemberEngineProfile(profile, false);
-      const target = engine ? weeklyTarget(engine, programWeek)?.dailyFlat ?? null : null;
+      const todayLog = weekLogs.find((l) => l.log_date === todayIso);
+      const target = dayTargetFor(engine ? weeklyTarget(engine, programWeek) : null, todayLog?.day_type);
 
       const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
       const active = resolveActiveProgram(programs, todayIso);
@@ -46,7 +48,6 @@ export function OfflineSnapshot({
           }
         : null;
 
-      const todayLog = weekLogs.find((l) => l.log_date === todayIso);
       // Includes Quick Adds with no macros (R11).
       const eaten = todayLog ? Math.round(dayCaloriesOf(todayLog)) : 0;
 

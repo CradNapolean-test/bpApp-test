@@ -7,6 +7,7 @@ import { Segmented } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { getDailyLogs } from '@/lib/data/dailyLogs';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { averageDayTarget } from '@/lib/utils/dayTarget';
 import { hasLoggedData } from '@/lib/utils/dailyLog';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import {
@@ -216,11 +217,12 @@ export function MetricsTab({
     return { current: streakStats(dates, today).current, best: streakStats(inRange, today).best };
   }, [logs, from, today]);
 
-  // The goal weight, and today's calorie and protein target (the same one the food diary shows against).
+  // The goal weight, and the daily calorie and protein target. A line across many days, so a calorie-cycling member's is the
+  // planned average day (their low and high days average to it).
   const target = useMemo(() => {
     if (metric === 'bodyweight') return profile?.goal_weight ?? null;
     const engine = toMemberEngineProfile(profile, isCoachView);
-    const day = engine ? weeklyTarget(engine, programWeek)?.dailyFlat : null;
+    const day = averageDayTarget(engine ? weeklyTarget(engine, programWeek) : null);
     if (!day) return null;
     return metric === 'calories' ? day.calories : metric === 'protein' ? day.protein : null;
   }, [metric, profile, programWeek, isCoachView]);

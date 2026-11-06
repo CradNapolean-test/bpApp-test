@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { ProgressRing } from '@/app/_components/ProgressRing';
 import { Card } from '@/app/_components/ui';
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@/lib/onboarding';
@@ -44,8 +45,25 @@ export function TargetRings({ totals, target, held = false, memberView = false }
   );
 }
 
-// The top of Food Tracking: the same "targets" card as the My coaching overview.
-export function NutritionSummary({ totals, target, title, dateLabel, held = false, memberView = false }: { totals: Macros; target: Macros | null; title: string; dateLabel: string; held?: boolean; memberView?: boolean }) {
+// The top of Food Tracking: the same "targets" card as the My coaching overview. `footer` sits under the rings (the calorie-cycling
+// high day control in the diary, a line about high days in the Meal Planner).
+export function NutritionSummary({
+  totals,
+  target,
+  title,
+  dateLabel,
+  held = false,
+  memberView = false,
+  footer,
+}: {
+  totals: Macros;
+  target: Macros | null;
+  title: string;
+  dateLabel: string;
+  held?: boolean;
+  memberView?: boolean;
+  footer?: ReactNode;
+}) {
   return (
     <Card>
       <div className="mb-3 flex items-baseline justify-between">
@@ -53,6 +71,7 @@ export function NutritionSummary({ totals, target, title, dateLabel, held = fals
         <p className="text-xs text-zinc-500">{dateLabel}</p>
       </div>
       <TargetRings totals={totals} target={target} held={held} memberView={memberView} />
+      {footer && <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/10">{footer}</div>}
     </Card>
   );
 }

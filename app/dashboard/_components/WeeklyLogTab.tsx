@@ -13,6 +13,7 @@ import { LOCKED_DAY_MESSAGE, canBrowseWeek, canEditDay, changedFields } from '@/
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { BODYWEIGHT_KG, bodyweightMessage, isValidBodyweight } from '@/lib/limits';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { averageDayTarget, dayTargetFor } from '@/lib/utils/dayTarget';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
@@ -164,12 +165,10 @@ function WeekLog({
     return engineProfile ? weeklyTarget(engineProfile, programWeek) : null;
   }, [profile, programWeek, isCoachView]);
 
-  function targetForDayType(dayType: DailyLogRow['day_type']): DayTarget | null {
-    if (!weekTarget) return null;
-    if (dayType === 'low') return weekTarget.dailyLow ?? weekTarget.dailyFlat ?? null;
-    if (dayType === 'high') return weekTarget.dailyHigh ?? weekTarget.dailyFlat ?? null;
-    return weekTarget.dailyFlat ?? null;
-  }
+  // A day's own target (a calorie-cycling member's high day has the high one), and the planned average day the week's averages
+  // are read against.
+  const targetForDayType = (dayType: DailyLogRow['day_type']): DayTarget | null => dayTargetFor(weekTarget, dayType);
+  const averageTarget = averageDayTarget(weekTarget);
 
   // Saves what changed on a day since it was loaded or last saved, and nothing else. `from` says what asked: a field name (a slider, a
   // toggle, the weight box) or 'flush' (leaving the form). Saves run one after another, so a slow one can never land after a newer one.
@@ -294,12 +293,12 @@ function WeekLog({
               <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgCalories)}</p>
               <p className="mt-0.5 text-xs text-zinc-500">avg kcal</p>
               {/* A coach reads an average against the target, and needs to know how many days it is built from (CR3). */}
-              {isCoachView && weekTarget?.dailyFlat && <p className="text-[11px] text-zinc-500">of {Math.round(weekTarget.dailyFlat.calories).toLocaleString()}</p>}
+              {isCoachView && averageTarget && <p className="text-[11px] text-zinc-500">of {Math.round(averageTarget.calories).toLocaleString()}</p>}
             </div>
             <div className={cardCls}>
               <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgProtein)}{avgProtein != null && 'g'}</p>
               <p className="mt-0.5 text-xs text-zinc-500">avg protein</p>
-              {isCoachView && weekTarget?.dailyFlat && <p className="text-[11px] text-zinc-500">of {Math.round(weekTarget.dailyFlat.protein)}g</p>}
+              {isCoachView && averageTarget && <p className="text-[11px] text-zinc-500">of {Math.round(averageTarget.protein)}g</p>}
             </div>
             <div className={cardCls}>
               <p className="text-2xl font-bold text-black dark:text-zinc-50">{fmt(avgSteps)}</p>

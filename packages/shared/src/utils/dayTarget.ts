@@ -1,13 +1,41 @@
 import type { DayTarget, WeeklyTarget } from '../calculations';
 import type { DailyLogRow } from '../data/types';
 
-// Picks which already-computed daily target applies to a day. This is only a selection, no new maths: the numbers
-// all come from calculations.ts (validated against the real spreadsheet). Same rule as the web Weekly Log tab:
-// a low/high day uses that target (falling back to the flat one), anything else uses the flat target.
-// For a calorie-cycling member on a "flat" day there is no flat target, so this returns null (as the web does).
-export function dayTargetFor(weekTarget: WeeklyTarget | null, dayType: DailyLogRow['day_type'] | null | undefined): DayTarget | null {
+// Which daily target applies to a day. Only a selection: every number comes from calculations.ts (validated against the real
+// spreadsheet). The web has the same rule in lib/utils/dayTarget.ts.
+//
+// Calorie cycling (Nov 2026 decision): every day is a low day unless the member marked it a high day in their food diary, up to
+// HIGH_DAYS_PER_WEEK a week (Monday to Sunday). Before, an unmarked day had no target at all and nothing ever marked a day, so a
+// cycling member saw no targets anywhere. A member who is not cycling gets the flat target whatever the day says.
+export const HIGH_DAYS_PER_WEEK = 2;
+
+export type DayType = DailyLogRow['day_type'];
+
+export function isCyclingTarget(weekTarget: WeeklyTarget | null | undefined): boolean {
+  return !!weekTarget?.dailyLow && !!weekTarget?.dailyHigh;
+}
+
+export function dayTargetFor(weekTarget: WeeklyTarget | null | undefined, dayType: DayType | null | undefined): DayTarget | null {
   if (!weekTarget) return null;
-  if (dayType === 'low') return weekTarget.dailyLow ?? weekTarget.dailyFlat ?? null;
-  if (dayType === 'high') return weekTarget.dailyHigh ?? weekTarget.dailyFlat ?? null;
-  return weekTarget.dailyFlat ?? null;
+  if (!isCyclingTarget(weekTarget)) return weekTarget.dailyFlat ?? null;
+  return dayType === 'high' ? weekTarget.dailyHigh! : weekTarget.dailyLow!;
+}
+
+// The planned average day (the week's total over 7): what a week's average intake is read against. For a member who is not
+// cycling this is just the flat target.
+export function averageDayTarget(weekTarget: WeeklyTarget | null | undefined): DayTarget | null {
+  if (!weekTarget) return null;
+  if (!isCyclingTarget(weekTarget)) return weekTarget.dailyFlat ?? null;
+  return {
+    calories: weekTarget.calories / 7,
+    protein: weekTarget.protein / 7,
+    carbs: weekTarget.carbs / 7,
+    fat: weekTarget.fat / 7,
+    floorApplied: weekTarget.floorApplied,
+  };
+}
+
+// How many high days a member has left in a week, from that week's day types (the day being changed left out by the caller).
+export function highDaysLeft(dayTypes: (DayType | null | undefined)[]): number {
+  return Math.max(0, HIGH_DAYS_PER_WEEK - dayTypes.filter((t) => t === 'high').length);
 }

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { CalendarDays, Camera, CheckSquare, ChevronRight, Flame, Heart } from 'lucide-react';
 import { weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { dayTargetFor } from '@/lib/utils/dayTarget';
 import { PLAN_BEING_SET_UP, targetsHeldBack } from '@/lib/onboarding';
 import { dayCaloriesOf, hasLoggedData } from '@/lib/utils/dailyLog';
 import { formatClassTime, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
@@ -106,10 +107,12 @@ export function TodayTab({
   // Includes Quick Adds with no macros (R11): the ring used to show 0 for a 300 kcal Quick Add.
   const todayCalories = todayLog ? dayCaloriesOf(todayLog) : 0;
 
+  // Today's own target: a calorie-cycling member's high day has the high target, any other day the low one.
+  const todayType = todayLog?.day_type;
   const dayTarget = useMemo(() => {
     const engineProfile = toMemberEngineProfile(profile, isCoachView);
-    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
-  }, [profile, programWeek, isCoachView]);
+    return dayTargetFor(engineProfile ? weeklyTarget(engineProfile, programWeek) : null, todayType);
+  }, [profile, programWeek, isCoachView, todayType]);
   // A member whose plan is waiting for their coach sees a message where the target would be (M8).
   const planHeld = targetsHeldBack(profile, isCoachView);
 

@@ -6,6 +6,7 @@ import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-sv
 import { weeklyTarget } from '@ballistic/shared/calculations';
 import type { DailyLogRow } from '@ballistic/shared/data/types';
 import { toMemberEngineProfile } from '@ballistic/shared/utils/clientProfile';
+import { averageDayTarget } from '@ballistic/shared/utils/dayTarget';
 import {
   METRICS,
   RANGES,
@@ -173,7 +174,8 @@ export function MetricsSection({ todayIso }: { todayIso: string }) {
   const target = useMemo(() => {
     if (metric === 'bodyweight') return profile?.goal_weight ?? null;
     const engine = toMemberEngineProfile(profile, false);
-    const day = engine ? weeklyTarget(engine, programWeekFromLogs(recent, todayIso))?.dailyFlat : null;
+    // A line across many days, so a calorie-cycling member's is the planned average day (low and high days together).
+    const day = averageDayTarget(engine ? weeklyTarget(engine, programWeekFromLogs(recent, todayIso)) : null);
     if (!day) return null;
     return metric === 'calories' ? day.calories : metric === 'protein' ? day.protein : null;
   }, [metric, profile, recent, todayIso]);

@@ -55,7 +55,7 @@ export function CustomTargetsSheet({
     );
   }
 
-  async function useCalculated() {
+  async function resetToCalculated() {
     await run(
       async () => {
         const cleared = await saveCustomTargets(clientId, null);
@@ -114,7 +114,7 @@ export function CustomTargetsSheet({
           <button
             type="button"
             disabled={busy || memberBlocked}
-            onClick={() => void useCalculated()}
+            onClick={() => void resetToCalculated()}
             className="w-full rounded-xl border border-black/10 py-2.5 text-sm font-bold text-zinc-600 disabled:opacity-50 dark:border-white/15 dark:text-zinc-300"
           >
             Use the calculated targets instead

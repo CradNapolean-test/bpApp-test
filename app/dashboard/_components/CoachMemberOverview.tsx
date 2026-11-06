@@ -28,6 +28,7 @@ import { clearReviewFlag } from '@/lib/data/onboarding';
 import { trafficLight, TRACKER_THRESHOLDS, type TrafficLight } from '@/lib/utils/accountability';
 import { useAction } from '@/app/_components/useAction';
 import { toEngineProfile } from '@/lib/utils/clientProfile';
+import { averageDayTarget } from '@/lib/utils/dayTarget';
 import { dayCaloriesOf, hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
 import { lastActiveLabel } from '@/lib/healthStatus';
@@ -182,9 +183,10 @@ export function CoachMemberOverview({
       {n} of {daysSoFar} day{daysSoFar === 1 ? '' : 's'}
     </span>
   );
+  // Read against the week's average, so a calorie-cycling member's is the planned average day (low and high days together).
   const dayTarget = useMemo(() => {
     const engine = toEngineProfile(profile);
-    return engine ? weeklyTarget(engine, programWeek)?.dailyFlat ?? null : null;
+    return averageDayTarget(engine ? weeklyTarget(engine, programWeek) : null);
   }, [profile, programWeek]);
   const attendedThisWeek = bookings.filter((b) => b.attended && b.booking_date >= thisWeek).length;
   const perWeek = membership?.package?.credits_per_week ?? null;

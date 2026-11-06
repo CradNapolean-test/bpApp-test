@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { BookOpen, ChevronRight, ClipboardList, Dumbbell, LineChart, MessageCircle, NotebookPen, Trophy } from 'lucide-react';
 import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
 import type { CheckinMetric } from '@/lib/checkinMetrics';
@@ -6,6 +5,7 @@ import { TargetRings } from './NutritionSummary';
 import { Badge, Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { dayTargetFor } from '@/lib/utils/dayTarget';
 import { targetsHeldBack } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/dates';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
@@ -66,11 +66,10 @@ export function CoachingHub({
   const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const todayLog = weekLogs.find((l) => l.log_date === todayIso);
 
-  const dayTarget = useMemo(() => {
-    // This hub is the member's own: no target while their plan waits for their coach (M8).
-    const engineProfile = toMemberEngineProfile(profile, false);
-    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
-  }, [profile, programWeek]);
+  // Today's own target (a calorie-cycling member's high day has the high one). This hub is the member's own: no target while
+  // their plan waits for their coach (M8).
+  const engineProfile = toMemberEngineProfile(profile, false);
+  const dayTarget = dayTargetFor(engineProfile ? weeklyTarget(engineProfile, programWeek) : null, todayLog?.day_type);
 
   const protein = todayLog?.protein ?? 0;
   const carbs = todayLog?.carbs ?? 0;

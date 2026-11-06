@@ -19,7 +19,7 @@ import {
   updateFoodDiaryEntrySection,
   updateQuickAddEntry,
 } from '@/lib/data/foodDiary';
-import { getOrCreateDailyLog } from '@/lib/data/dailyLogs';
+import { getHighDaysInWeek, getOrCreateDailyLog, setHighDay } from '@/lib/data/dailyLogs';
 import {
   addManualMacroEntry,
   getManualMacrosForDate,
@@ -37,9 +37,11 @@ import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditFoodDay } from '@/lib/dayPatc
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { averageDayTarget, dayTargetFor, highDaysLeft, isCyclingTarget } from '@/lib/utils/dayTarget';
 import { targetsHeldBack } from '@/lib/onboarding';
 import { CustomTargetsSheet } from './CustomTargetsSheet';
-import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
+import { HighDayControl } from './HighDayControl';
+import { addDays, DEFAULT_TIMEZONE, startOfWeek, toIsoDate } from '@/lib/utils/dates';
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
 import { suggestPairs, type PairSuggestion } from '@/lib/foodPairs';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
@@ -488,14 +490,36 @@ export function FoodTrackingTab({
   const totals = isManual
     ? { calories: manualDay.calories ?? 0, protein: manualDay.protein ?? 0, carbs: manualDay.carbs ?? 0, fat: manualDay.fat ?? 0 }
     : totalMacros(entries);
-  // Uses the flat (non-cycling-aware) daily target -- this tab has no per-day day_type
-  // context the way Weekly Log does, and threading that through here would be
-  // disproportionate to a simple live comparison line.
   const [targetsOpen, setTargetsOpen] = useState(false);
-  const dayTarget = useMemo(() => {
+  const weekTarget = useMemo(() => {
     const engineProfile = toMemberEngineProfile(profile, readOnly);
-    return engineProfile ? weeklyTarget(engineProfile, programWeek)?.dailyFlat ?? null : null;
+    return engineProfile ? weeklyTarget(engineProfile, programWeek) : null;
   }, [profile, programWeek, readOnly]);
+
+  // Calorie cycling: every day is a normal (low) day unless the member made it a high day here, up to HIGH_DAYS_PER_WEEK a week.
+  // The week's high days are loaded for the week being looked at; until they arrive the day shows as a normal day.
+  const cycling = isCyclingTarget(weekTarget);
+  const viewingWeek = toIsoDate(startOfWeek(new Date(viewingDate + 'T00:00:00Z')));
+  const [highDays, setHighDays] = useState<{ week: string; dates: string[] } | null>(null);
+  useEffect(() => {
+    if (!cycling) return;
+    let live = true;
+    getHighDaysInWeek(clientId, viewingWeek)
+      .then((dates) => {
+        if (live) setHighDays({ week: viewingWeek, dates });
+      })
+      .catch(() => {
+        /* shown as a normal day; the toggle says if saving fails */
+      });
+    return () => {
+      live = false;
+    };
+  }, [clientId, viewingWeek, cycling]);
+  const weekHighDays = highDays?.week === viewingWeek ? highDays.dates : null;
+  const isHighDay = !!weekHighDays?.includes(viewingDate);
+  const highLeft = weekHighDays ? highDaysLeft(weekHighDays.filter((d) => d !== viewingDate).map(() => 'high' as const)) : 0;
+  const dayTarget = dayTargetFor(weekTarget, isHighDay ? 'high' : 'flat');
+  const { run: runHighDay, busy: savingHighDay } = useAction();
 
   // Reads a day (never creates it: browsing back used to leave a blank row for every day looked at). A slow answer for a day the member
   // has already moved off is dropped.
@@ -542,6 +566,20 @@ export function FoodTrackingTab({
       changed.current = true;
     },
   } as const;
+
+  // Calorie cycling: make the day being looked at a high day, or back to a normal day.
+  async function handleToggleHighDay() {
+    const date = viewingDate;
+    const week = viewingWeek;
+    const makeHigh = !isHighDay;
+    await runHighDay(
+      async () => {
+        const dates = await setHighDay(clientId, date, makeHigh);
+        setHighDays({ week, dates });
+      },
+      { success: makeHigh ? 'Made this a high day' : 'Back to a normal day', ...quiet }
+    );
+  }
 
   async function handleAddManual(
     sectionId: string | null,
@@ -777,14 +815,16 @@ export function FoodTrackingTab({
       {readOnly && recentDays && (() => {
         const logged = recentDays.filter((d) => d.calories != null);
         const avg = logged.length ? Math.round(logged.reduce((a, d) => a + (d.calories ?? 0), 0) / logged.length) : null;
-        const top = Math.max(dayTarget?.calories ?? 0, ...logged.map((d) => d.calories ?? 0), 1);
+        // An average over the week, so it is read against the planned average day (a cycling member's low and high days together).
+        const weekAverageTarget = averageDayTarget(weekTarget);
+        const top = Math.max(weekAverageTarget?.calories ?? 0, ...logged.map((d) => d.calories ?? 0), 1);
         return (
           <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Last 7 days</p>
               <p className="text-xs text-zinc-500">
                 {logged.length} of 7 days logged{avg != null ? ` · avg ${avg.toLocaleString()} kcal` : ''}
-                {dayTarget ? ` · target ${Math.round(dayTarget.calories).toLocaleString()}` : ''}
+                {weekAverageTarget ? ` · ${cycling ? 'average target' : 'target'} ${Math.round(weekAverageTarget.calories).toLocaleString()}` : ''}
               </p>
             </div>
             <div className="mt-3 grid grid-cols-7 gap-1.5">
@@ -821,7 +861,28 @@ export function FoodTrackingTab({
         buttonLabel="Leave feedback on this day"
       />
 
-      <NutritionSummary totals={totals} target={dayTarget} title={isToday ? "Today's targets" : 'Targets'} dateLabel={dateLabel} held={targetsHeldBack(profile, readOnly)} memberView={!readOnly} />
+      <NutritionSummary
+        totals={totals}
+        target={dayTarget}
+        title={isToday ? "Today's targets" : 'Targets'}
+        dateLabel={dateLabel}
+        held={targetsHeldBack(profile, readOnly)}
+        memberView={!readOnly}
+        footer={
+          cycling && !targetsHeldBack(profile, readOnly) ? (
+            <HighDayControl
+              isHigh={isHighDay}
+              left={highLeft}
+              loaded={weekHighDays != null}
+              extraCalories={weekTarget?.dailyHigh && weekTarget.dailyLow ? weekTarget.dailyHigh.calories - weekTarget.dailyLow.calories : 0}
+              canChange={!entryReadOnly}
+              coachView={readOnly}
+              busy={savingHighDay}
+              onToggle={handleToggleHighDay}
+            />
+          ) : undefined
+        }
+      />
       {!readOnly && (
         <div className="-mt-2 flex items-center justify-between gap-3 px-1">
           <p className="text-xs text-zinc-500">

@@ -6,6 +6,7 @@ import { targetsHeldBack } from '@ballistic/shared/onboarding';
 import { addDays, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
 
 import { MyTargetsRow } from '@/components/customTargets';
+import { HighDayRow } from '@/components/highDay';
 import { AddFoodSheet, CoachFeedbackCard, CompleteScanSheet, DateNav, DiarySection, EditEntrySheet, ScanAmountSheet, ScannerSheet, shortDate, TotalsCard } from '@/components/food';
 import { ManualDiaryScreen } from '@/components/manualMacros';
 import { NutritionTabs } from '@/components/pagetabs';
@@ -113,6 +114,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
         <NutritionTabs current="food" />
         <DateNav date={date} today={today} ahead={1} onChange={(d) => { setNote(null); scan.clearStatus(); setPicked(d === today ? null : d); }} />
         <TotalsCard entries={entries} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
+        <HighDayRow profile={profile} today={today} date={date} />
         <MyTargetsRow profile={profile} />
         <CoachFeedbackCard items={feedbackQ.data ?? []} />
         {date > today ? <AppText variant="small" color="muted">Planning tomorrow. This food counts towards tomorrow, and stays out of this week's averages until then.</AppText> : null}
