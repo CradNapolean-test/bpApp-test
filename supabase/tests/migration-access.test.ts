@@ -72,3 +72,34 @@ describe('row-level security rules after every migration', () => {
     expect(writes).toEqual(['authenticated users cache scanned foods', 'coaches correct scanned foods', 'coaches delete scanned foods']);
   });
 });
+
+// Decision D3 (4 Nov 2026): chat is between a member and their own coach. 0053 opened chat_messages and chat_threads to every coach
+// in the gym through a loop (dynamic SQL, which replayPolicies cannot see), and 0153 closes them again.
+describe('chat is readable by the member and their own coach only (D3, 0153)', () => {
+  const migrationsDir = path.resolve(__dirname, '../migrations');
+  const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  const read = (f: string) => fs.readFileSync(path.join(migrationsDir, f), 'utf8');
+
+  it('0153 drops both gym-wide chat read rules', () => {
+    const sql = read('0153_chat_own_coach_only.sql');
+    expect(sql).toMatch(/drop\s+policy\s+if\s+exists\s+"same-gym coach reads chat_messages"\s+on\s+public\.chat_messages/i);
+    expect(sql).toMatch(/drop\s+policy\s+if\s+exists\s+"same-gym coach reads chat_threads"\s+on\s+public\.chat_threads/i);
+  });
+
+  it('only the own-or-assigned-coach rules are left on the chat tables', () => {
+    const policies = replayPolicies();
+    expect([...(policies.get('chat_messages') ?? new Map()).entries()].sort()).toEqual([
+      ['client or coach posts into owned thread', 'insert'],
+      ['select own or coached chat_messages', 'select'],
+    ]);
+    expect([...(policies.get('chat_threads') ?? new Map()).entries()]).toEqual([['select own or coached chat_threads', 'select']]);
+  });
+
+  it('no later migration opens chat to the whole gym again, directly or through a table loop', () => {
+    for (const f of files.filter((name) => name > '0153')) {
+      const sql = read(f).replace(/--.*$/gm, '');
+      expect(sql, f).not.toMatch(/create\s+policy\s+"[^"]*"\s+on\s+(?:public\.)?chat_(?:messages|threads)\b[^;]*(?:is_same_gym_as_client|is_coach_in_gym)/i);
+      expect(sql, f).not.toMatch(/array\s*\[[^\]]*'chat_(?:messages|threads)'/i);
+    }
+  });
+});

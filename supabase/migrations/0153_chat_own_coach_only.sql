@@ -1,0 +1,31 @@
+-- Chat is private between a member and their own coach (decision D3, chosen by the owner on 4 Nov 2026).
+--
+-- 0053 gave every coach whose active gym is the member's gym read access to that member's rows in a list of tables, chat_messages and
+-- chat_threads among them. The screens only ever showed a conversation to the member's assigned coach, but any coach in the gym could read
+-- every member's messages (and the read markers) through the database API with their own login. This drops those two gym-wide read rules,
+-- so only the member and their assigned coach can read them (the "select own or coached ..." rules, owns_client). The rest of 0053
+-- (logs, bookings, workouts and so on) is unchanged.
+--
+-- Already own-coach only, so untouched: chat photos and voice notes (their storage rules use owns_client), and posting a message (the
+-- insert rule uses owns_client). Not affected: server functions that run as security definer, such as the coach inbox overview and unread
+-- totals (get_coach_chat_overview, coach_unread_total), notifications, the member's "Download my data" and the owner reports.
+--
+-- What changes for coaches: a colleague covering for a coach no longer sees the conversation; on a colleague's member page the unread count
+-- is 0. To hand a member over, move them to the other coach (Gym team, "Move members"), which gives the new coach the whole thread.
+--
+-- PRE-FLIGHT (read-only):
+--   select tablename, policyname, cmd, roles from pg_policies
+--   where schemaname = 'public' and tablename in ('chat_messages', 'chat_threads') order by 1, 2;
+-- Before: "select own or coached ..." and "same-gym coach reads ..." on each table, plus the insert rule on chat_messages.
+-- After: the same without the two "same-gym coach reads ..." rows.
+--
+-- REVERSE (puts 0053's rules back; 0128 had moved them to the authenticated role):
+--   create policy "same-gym coach reads chat_messages" on public.chat_messages
+--     for select to authenticated using (public.is_same_gym_as_client(client_id));
+--   create policy "same-gym coach reads chat_threads" on public.chat_threads
+--     for select to authenticated using (public.is_same_gym_as_client(client_id));
+--
+-- Safe to run again.
+
+drop policy if exists "same-gym coach reads chat_messages" on public.chat_messages;
+drop policy if exists "same-gym coach reads chat_threads" on public.chat_threads;

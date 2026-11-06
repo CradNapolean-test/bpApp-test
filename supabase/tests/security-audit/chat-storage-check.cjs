@@ -6,7 +6,8 @@
 // overwrite or delete another member's messages or files; post a message as someone else; change or delete a sent
 // message; touch another member's read mark; or write outside a member folder (no folder, a non-uuid folder, `..`).
 // Unauthenticated callers get nothing. Controls prove the legitimate paths still work (own thread, own files, the
-// coach reading and posting into an assigned member's thread).
+// coach reading and posting into an assigned member's thread). A colleague coach in the same gym must not read the thread either
+// (migration 0153); that check runs when coach2.sandbox@example.com is in the credentials file.
 // The last group needs migration 0108 (text length, file size and type limits). Exit code 1 on any failure.
 require('./_safety.cjs');
 const fs = require('fs');
@@ -154,6 +155,24 @@ const BUCKETS = [
     check("control: the member's coach reads their thread", !cr.error && (cr.data ?? []).length === 1, cr.error?.message);
   } else {
     console.log("  (skipped coach controls: coach.sandbox is not member A's coach)");
+  }
+
+  // ---- a colleague in the same gym (migration 0153, decision D3: chat is between a member and their own coach) ----
+  // Needs a second sandbox coach, coach2.sandbox@example.com, whose active gym is member A's gym and who is not A's coach.
+  if (creds['coach2.sandbox@example.com']) {
+    const colleague = await login('coach2.sandbox@example.com');
+    const gymOf = async (id) => must(await admin.from('profiles').select('gym_id').eq('id', id).single(), 'gym of ' + id).gym_id;
+    const sameGym = (await gymOf(colleague.id)) === (await gymOf(coachOfA));
+    if (sameGym && colleague.id !== coachOfA) {
+      const seen = await colleague.c.from('chat_messages').select('id').eq('client_id', A.id);
+      check("a colleague coach in the same gym cannot read the member's messages", !seen.error && (seen.data ?? []).length === 0, 'saw ' + (seen.data ?? []).length);
+      const thread = await colleague.c.from('chat_threads').select('client_id').eq('client_id', A.id);
+      check("a colleague coach in the same gym cannot read the member's read markers", !thread.error && (thread.data ?? []).length === 0, 'saw ' + (thread.data ?? []).length);
+    } else {
+      console.log("  (skipped colleague check: coach2.sandbox is A's coach or its active gym is not A's gym)");
+    }
+  } else {
+    console.log('  (skipped colleague check: add coach2.sandbox@example.com to sandbox-credentials.local.txt)');
   }
 
   // ---- limits (migration 0108) ----

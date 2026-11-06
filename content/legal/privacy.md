@@ -30,7 +30,7 @@ To run your coaching: set your targets, plan your training, take bookings, let y
 ## Who can see it
 
 - **Your coach** sees your profile, check-ins, food, training, photos, forms and messages.
-- **Other coaches at your gym** can see some of it too: meal photos, forms, and notes about you. (Say here exactly what your gym allows.)
+- **Other coaches at your gym** can see some of it too: meal photos, forms, and notes about you. Your messages with your coach are seen only by you and your coach. (Say here exactly what your gym allows.)
 - **The gym owner and administrators** can see membership and attendance figures and lists of members; health details are not shown to owners in the app.
 - **No one outside the gym** sees it, except the services below that run the app for us.
 
