@@ -425,6 +425,7 @@ export function DashboardShell({
         } else if (open === 'nutrition') handleCategoryClick('Nutrition');
         else if (open === 'forms') handleNavigate('Accountability', 'Forms');
         else if (open === 'bigdog') handleCategoryClick('Achievements');
+        else if (open === 'training') handleCategoryClick('Training');
         else if (open === 'profile') handleCategoryClick('Account Settings');
         else if (open === 'messages') handleCategoryClick('Messages');
       } else if (open === 'messages') handleCategoryClick('Messages');

@@ -7,6 +7,7 @@ import { isPlateaued } from '@/lib/calculations';
 import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { minuteOfDayIn, toMinutes } from '@/lib/todaySessions';
+import { coachProgrammeEndLine, needsNextProgramme, programmeEnd, programmeEndStage } from '@/lib/utils/programEnding';
 import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
@@ -69,12 +70,24 @@ export interface ChallengeDue {
   daysLeft: number | null;
   mine: boolean;
 }
+// A member whose workout programme ends within 7 days, or has finished, with nothing scheduled after it (TR3, CV16, D2).
+export interface ProgrammeEnding {
+  clientId: string;
+  name: string;
+  programName: string;
+  lastDay: string;
+  // 0 = today is the last day, negative once it has finished.
+  daysLeft: number;
+  // "Last day Sun 8 Nov, nothing scheduled next".
+  line: string;
+  mine: boolean;
+}
 export interface UnreadThread {
   clientId: string;
   name: string;
   unread: number;
 }
-export type CheckReason = 'quiet' | 'missed' | 'credits' | 'stalled';
+export type CheckReason = 'quiet' | 'missed' | 'credits' | 'stalled' | 'programme';
 export interface MemberToCheck {
   clientId: string;
   name: string;
@@ -100,6 +113,7 @@ export interface CoachDashboardData {
   newMembers: NewMember[];
   checkins: WeekCheckin[];
   challengeDue: ChallengeDue[];
+  programmesEnding: ProgrammeEnding[];
   photoReviews: PhotoReview[];
   forms: FormReview[];
   scores: ScoreToVerify[];
@@ -148,7 +162,12 @@ interface MemberRow {
   form_assignments: { id: string; completed_at: string | null; form_templates: ProfileRel<{ name: string }> }[] | null;
   bookings: { booking_date: string; attended: boolean | null; status: string; class: ProfileRel<{ start_time: string | null }> }[] | null;
   big_dog_results: { exercise_key: string; self_reported: boolean | null; result_text: string | null; created_at: string }[] | null;
+  // Programmes started in the last year, each with only its highest week number (see buildQuery).
+  workout_programs: { id: string; name: string; start_date: string | null; workout_program_days: { week_num: number }[] | null }[] | null;
 }
+
+const shortDay = (iso: string) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 const SELECT = `
   id, email, coach_id, created_at,
@@ -159,7 +178,8 @@ const SELECT = `
   coach_reviews!client_id(kind, ref),
   form_assignments!client_id(id, completed_at, form_templates(name)),
   bookings!client_id(booking_date, attended, status, class:classes(start_time)),
-  big_dog_results!client_id(exercise_key, self_reported, result_text, created_at)
+  big_dog_results!client_id(exercise_key, self_reported, result_text, created_at),
+  workout_programs(id, name, start_date, workout_program_days(week_num))
 `;
 
 // Everything the coach dashboard needs in one go. `scope` narrows it to the coach's own members
@@ -198,6 +218,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const since28 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -28));
   const since7 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
   const since30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
+  const since365 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -365));
   // "This time last week": the same weekday last week, and on that day only the sessions that had started by now.
   const sameDayLastWeek = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
   const nowMinute = minuteOfDayIn(timezone, new Date());
@@ -210,7 +231,13 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       .gte('daily_logs.log_date', since28)
       .gte('nutrition_feedback.log_date', since7)
       .gte('bookings.booking_date', prevWeek)
-      .eq('bookings.status', 'booked');
+      .eq('bookings.status', 'booked')
+      // Programmes for "Programmes ending": only those started in the last year, and only each one's highest week number (one
+      // day row per programme, not every day), so the end can be worked out without loading whole programmes (DB21 / CW10).
+      .not('workout_programs.start_date', 'is', null)
+      .gte('workout_programs.start_date', since365)
+      .order('week_num', { referencedTable: 'workout_programs.workout_program_days', ascending: false })
+      .limit(1, { referencedTable: 'workout_programs.workout_program_days' });
     if (scope === 'mine') q = q.eq('coach_id', user.id);
     else if (scope === 'coach' && selectedCoachId) q = q.eq('coach_id', selectedCoachId);
     else if (me?.gym_id) q = q.eq('gym_id', me.gym_id);
@@ -249,6 +276,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const newMembers: NewMember[] = [];
   const checkins: WeekCheckin[] = [];
   const challengeDue: ChallengeDue[] = [];
+  const programmesEnding: ProgrammeEnding[] = [];
   const photoReviews: PhotoReview[] = [];
   const forms: FormReview[] = [];
   const scores: ScoreToVerify[] = [];
@@ -292,6 +320,25 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       if (prompt) {
         challengeDue.push({ clientId: m.id, name, membershipId: ms.id, planName: pkg?.name ?? 'Challenge', mine: mine(m), ...prompt });
       }
+    }
+
+    // Programme ending within 7 days, or finished, with nothing scheduled next (D2): a To do until the coach schedules the next one.
+    const programmeEnds = programmeEnd(
+      (m.workout_programs ?? []).map((p) => ({ ...p, workout_program_days: p.workout_program_days ?? [] })),
+      todayIso
+    );
+    const programmeDue = needsNextProgramme(programmeEnds) ? programmeEnds : null;
+    const programmeLine = programmeDue ? coachProgrammeEndLine(programmeDue, shortDay) : '';
+    if (programmeDue) {
+      programmesEnding.push({
+        clientId: m.id,
+        name,
+        programName: programmeDue.programName,
+        lastDay: programmeDue.lastDay,
+        daysLeft: programmeDue.daysLeft,
+        line: programmeLine,
+        mine: mine(m),
+      });
     }
 
     // Check-ins submitted this week (progress through the week) out of members who've onboarded.
@@ -364,6 +411,10 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       reasons.push({ kind: 'stalled', label: 'Weight stalled' });
       detail = detail || `${weights.length} weigh-ins, no change`;
     }
+    if (programmeDue) {
+      reasons.push({ kind: 'programme', label: programmeEndStage(programmeDue) === 'ended' ? 'Programme finished' : 'Programme ending' });
+      detail = detail || programmeLine;
+    }
     if (reasons.length > 0) toCheck.push({ clientId: m.id, name, reasons, detail });
   }
 
@@ -400,6 +451,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     newMembers,
     checkins,
     challengeDue,
+    // Finished longest ago first, then the soonest to end.
+    programmesEnding: programmesEnding.sort((a, b) => a.lastDay.localeCompare(b.lastDay) || a.name.localeCompare(b.name)),
     photoReviews,
     forms,
     scores,

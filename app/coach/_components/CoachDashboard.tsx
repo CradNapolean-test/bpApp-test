@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  Dumbbell,
   FileText,
   Flag,
   MessageSquare,
@@ -233,6 +234,27 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
         hint: `${c.milestone === 'final' ? 'Final week' : `Week ${c.week}`} of ${c.totalWeeks} · ${c.planName}${c.daysLeft != null ? ` · ${c.daysLeft === 0 ? 'last day today' : `${c.daysLeft} day${c.daysLeft === 1 ? '' : 's'} left`}` : ''}`,
         href: `/coach/clients/${c.clientId}?open=messages`,
         review: own(c.mine) ? () => markReviewed(challengeReviewKind(c.milestone), c.clientId, c.membershipId) : undefined,
+      })),
+    });
+  }
+
+  // Programmes ending within 7 days, or already finished, with nothing scheduled next (D2). It clears itself once the next
+  // programme is scheduled, so there is no Reviewed button.
+  if (data.programmesEnding.length > 0) {
+    const finished = data.programmesEnding.filter((p) => p.daysLeft < 0).length;
+    const ending = data.programmesEnding.length - finished;
+    groups.push({
+      key: 'programmes',
+      icon: Dumbbell,
+      tone: 'amber',
+      title: 'Programmes ending',
+      summary: [finished > 0 ? `${finished} finished` : '', ending > 0 ? `${ending} ending within 7 days` : ''].filter(Boolean).join(' · '),
+      items: data.programmesEnding.map((p) => ({
+        key: p.clientId,
+        clientId: p.clientId,
+        title: p.name,
+        hint: `${p.programName} · ${p.line}`,
+        href: `/coach/clients/${p.clientId}?open=training`,
       })),
     });
   }
