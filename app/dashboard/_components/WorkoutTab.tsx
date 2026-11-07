@@ -38,13 +38,14 @@ import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
+import { coachProgrammeEndLine, memberProgrammeNotice, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
 import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
 import { blockFormatOf, chosenBlockKeys, describeChoices, exerciseBlockKey, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
 import { blockConfigOf, resultForConfig, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
 import { SetInputsGrid } from './SetInputsGrid';
 import { BlockResultForm } from './BlockResultForm';
-import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, daysBetween, isoDateInTz, todayIsoInTz } from '@/lib/utils/dates';
+import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, addDays, daysBetween, isoDateInTz, toIsoDate, todayIsoInTz } from '@/lib/utils/dates';
 import type {
   ClientExerciseMaxRow,
   ClientProfileRow,
@@ -70,17 +71,20 @@ function coachSetText(tracking: TrackingType, l: WorkoutLogRow): string {
 function StartProgrammeSheet({
   clientId,
   templates,
+  initialStart,
   onClose,
 }: {
   clientId: string;
   templates: ProgramTemplateRow[];
+  // The day after the current programme ends, when started from the "nothing scheduled next" notice.
+  initialStart?: string;
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
   const [mode, setMode] = useState<'template' | 'blank'>(templates.length > 0 ? 'template' : 'blank');
   const [templateId, setTemplateId] = useState('');
   const [name, setName] = useState('');
-  const [startDate, setStartDate] = useState(() => todayIsoInTz(DEFAULT_TIMEZONE));
+  const [startDate, setStartDate] = useState(() => initialStart ?? todayIsoInTz(DEFAULT_TIMEZONE));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -683,7 +687,7 @@ const prettyDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 type Sheet =
-  | { kind: 'start' }
+  | { kind: 'start'; startDate?: string }
   | { kind: 'max' }
   | { kind: 'rename'; programId: string; name: string }
   | { kind: 'renameDay'; dayId: string; name: string; position: number | null }
@@ -959,6 +963,13 @@ export function WorkoutTab({
       ? day.workout_exercises.filter((ex) => exerciseIsVisible(ex, true, chosenFor(day.id)))
       : day.workout_exercises;
   const { current, upcoming, past } = pickCurrentProgram(programs, todayIsoLocal);
+  // The programme's last week, or its end with nothing next (D2). The member is told their coach is setting up the next one;
+  // the coach sees when it ends and can start the next one from the day after.
+  const programmeEnds = programmeEnd(programs, todayIsoLocal);
+  const memberNotice = isCoachView ? null : memberProgrammeNotice(programmeEnds, prettyDate);
+  const coachEndLine = isCoachView && needsNextProgramme(programmeEnds) ? coachProgrammeEndLine(programmeEnds, prettyDate) : null;
+  const dayAfterEnd = programmeEnds ? toIsoDate(addDays(new Date(`${programmeEnds.lastDay}T00:00:00Z`), 1)) : todayIsoLocal;
+  const nextStartDefault = dayAfterEnd > todayIsoLocal ? dayAfterEnd : todayIsoLocal;
   const shownPrograms = current ? [current] : [];
   const progressLine = (program: WorkoutProgramRow) => {
     const total = Math.max(0, ...program.workout_program_days.map((d) => d.week_num));
@@ -999,6 +1010,25 @@ export function WorkoutTab({
             className="rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground"
           >
             Start a programme
+          </button>
+        </div>
+      )}
+
+      {current && memberNotice && (
+        <div className="rounded-2xl bg-accent-soft px-4 py-3 text-sm">
+          <p className="font-semibold text-accent">{memberNotice.text}</p>
+          {memberNotice.detail && <p className="mt-0.5 text-xs text-zinc-500">{memberNotice.detail}</p>}
+        </div>
+      )}
+      {current && coachEndLine && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-warning/10 px-4 py-3 text-sm">
+          <p className="font-semibold text-warning">{coachEndLine}</p>
+          <button
+            type="button"
+            onClick={() => setSheet({ kind: 'start', startDate: nextStartDefault })}
+            className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-extrabold text-accent-foreground"
+          >
+            Start the next programme
           </button>
         </div>
       )}
@@ -1159,7 +1189,7 @@ export function WorkoutTab({
       )}
 
       {isCoachView && sheet?.kind === 'start' && (
-        <StartProgrammeSheet clientId={clientId} templates={programTemplates} onClose={() => setSheet(null)} />
+        <StartProgrammeSheet clientId={clientId} templates={programTemplates} initialStart={sheet.startDate} onClose={() => setSheet(null)} />
       )}
       {isCoachView && sheet?.kind === 'max' && (
         <BottomSheet title="Record a tested max" onClose={() => setSheet(null)}>

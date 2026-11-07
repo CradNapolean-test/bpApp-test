@@ -10,6 +10,7 @@ import { targetsHeldBack } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/dates';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
+import { memberProgrammeNotice, programmeEnd } from '@/lib/utils/programEnding';
 import { dayCaloriesOf } from '@/lib/utils/dailyLog';
 import { trafficLight } from '@/lib/utils/accountability';
 import type { TrafficLight } from '@/lib/utils/accountability';
@@ -91,6 +92,10 @@ export function CoachingHub({
         .slice(0, 2)
         .map((e) => e.name)
     : [];
+  // The last week, or the end with nothing next (D2): "Last week of this programme: your coach is setting up the next one".
+  const programmeNotice = memberProgrammeNotice(programmeEnd(programs, todayIso), (iso) =>
+    new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+  );
   const sleep = todayLog?.sleep ?? null;
   const steps = todayLog?.steps ?? null;
   const water = todayLog?.water ?? null;
@@ -191,13 +196,14 @@ export function CoachingHub({
                         ? `${program.name} · no start date yet — ask your coach`
                         : program.start_date > todayIso
                           ? `${program.name} · starts ${new Date(program.start_date + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`
-                          : `${program.name} · this block has finished`
+                          : programmeNotice?.text ?? `${program.name} · this programme has finished`
                       : 'No program assigned yet'
                 }
                 onClick={() => onNavigate('Training', 'Workout')}
               />
             )}
           </ListGroup>
+          {programmeNotice?.stage === 'last_week' && <p className="mt-2 px-1 text-xs font-semibold text-accent">{programmeNotice.text}</p>}
         </div>
       )}
 
