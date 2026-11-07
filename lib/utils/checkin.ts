@@ -23,18 +23,29 @@ export type CheckinResolution =
   | { status: 'no_active_program' }
   | { status: 'no_matching_day' };
 
+// The programme the member is on: the latest start date that has arrived. A programme with no start date never counts here.
+// Shared with lib/utils/programEnding.ts, so the "ends soon" warning reads the end from the same programme and the same weeks.
+export function latestStartedProgram<P extends { start_date: string | null }>(programs: P[], todayIso: string): (P & { start_date: string }) | null {
+  const candidates = programs
+    .filter((p): p is P & { start_date: string } => p.start_date != null && p.start_date <= todayIso)
+    .sort((a, b) => (a.start_date < b.start_date ? 1 : a.start_date > b.start_date ? -1 : 0));
+  return candidates[0] ?? null;
+}
+
+// How many weeks a programme runs: its highest week number (0 when it has no days yet).
+export function programWeekCount(program: { workout_program_days: { week_num: number }[] }): number {
+  return Math.max(0, ...program.workout_program_days.map((d) => d.week_num));
+}
+
 export function resolveActiveProgram(
   programs: WorkoutProgramRow[],
   todayIso: string
 ): { program: WorkoutProgramRow; weekNum: number } | null {
-  const candidates = programs
-    .filter((p): p is WorkoutProgramRow & { start_date: string } => p.start_date != null && p.start_date <= todayIso)
-    .sort((a, b) => (a.start_date < b.start_date ? 1 : a.start_date > b.start_date ? -1 : 0));
-  const program = candidates[0];
-  if (!program || !program.start_date) return null;
+  const program = latestStartedProgram(programs, todayIso);
+  if (!program) return null;
 
   const weekNum = Math.floor(daysBetween(program.start_date, todayIso) / 7) + 1;
-  const maxWeek = Math.max(0, ...program.workout_program_days.map((d) => d.week_num));
+  const maxWeek = programWeekCount(program);
   if (weekNum > maxWeek) return null; // block has ended, nothing new assigned -- empty
 
   return { program, weekNum };
