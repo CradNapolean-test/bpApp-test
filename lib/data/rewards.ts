@@ -2,7 +2,7 @@
 
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
-import { checkActiveGym } from './gymGuard';
+import { businessWriteFailed, businessWriteGym, onlyAdminMessage } from './businessAccess';
 import { createClient } from '@/lib/supabase/server';
 import type { RewardOverview, RewardRow, RewardsForMember } from './types';
 
@@ -70,7 +70,19 @@ export async function getRewardOverview(): Promise<RewardOverview[]> {
   });
 }
 
-// expectedGymId: the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+// The rewards of one gym, without anyone's progress: for the owner, who sets rewards up but does not hand them out.
+export async function getRewardsForGym(gymId: string): Promise<RewardRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('rewards').select('*').eq('gym_id', gymId).order('threshold');
+  if (error) {
+    if (MISSING.includes(error.code ?? '')) return [];
+    raise(error);
+  }
+  return (data ?? []) as RewardRow[];
+}
+
+// expectedGymId: the gym the page was drawn for; see lib/data/gymGuard.ts (R28). For the owner, the gym they opened. Rewards are set up
+// by a gym admin or the owner only (D3, lib/data/businessAccess.ts); handing one out (markRewardGiven) is for every coach at the gym.
 export async function createReward(
   fields: {
     name: string;
@@ -81,21 +93,20 @@ export async function createReward(
   expectedGymId?: string | null
 ): Promise<ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
-  const { data: gymId, error: gymError } = await supabase.rpc('my_gym_id');
-  if (gymError || !gymId) return fail(gymError, 'Could not work out your gym');
-  const { error } = await supabase.from('rewards').insert({ ...fields, gym_id: gymId });
-  if (error) return fail(error, 'Could not create the reward');
+  const gate = await businessWriteGym(supabase, expectedGymId, 'rewards');
+  if (!gate.ok) return gate.refusal;
+  const { error } = await supabase.from('rewards').insert({ ...fields, gym_id: gate.gymId });
+  if (error) return businessWriteFailed(error, 'rewards', 'Could not create the reward');
   return ok();
 }
 
 export async function deleteReward(rewardId: string, expectedGymId?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
-  const { error } = await supabase.from('rewards').delete().eq('id', rewardId);
-  if (error) return fail(error, 'Could not delete the reward');
+  const gate = await businessWriteGym(supabase, expectedGymId, 'rewards');
+  if (!gate.ok) return gate.refusal;
+  const { data, error } = await supabase.from('rewards').delete().eq('id', rewardId).select('id');
+  if (error) return businessWriteFailed(error, 'rewards', 'Could not delete the reward');
+  if (!data || data.length === 0) return fail(null, onlyAdminMessage('rewards'));
   return ok();
 }
 

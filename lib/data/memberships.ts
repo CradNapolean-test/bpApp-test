@@ -3,7 +3,7 @@
 import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
-import { checkActiveGym } from './gymGuard';
+import { businessWriteFailed, businessWriteGym, onlyAdminMessage } from './businessAccess';
 import { createClient } from '@/lib/supabase/server';
 import { HISTORY_PAGE, type CreditFilter } from '@/lib/creditsForm';
 import type { ClientMembershipRow, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from './types';
@@ -40,34 +40,36 @@ export async function getPackages(): Promise<MembershipPackageRow[]> {
   return data ?? [];
 }
 
-// expectedGymId (on every write here): the gym the page was drawn for; see lib/data/gymGuard.ts (R28).
+// expectedGymId (on every write here): the gym the page was drawn for; see lib/data/gymGuard.ts (R28). For the owner, who has no active
+// gym, it is the gym they opened. Plans, packs and rewards are changed by a gym admin or the owner only (D3, lib/data/businessAccess.ts).
 export async function createPackage(
   fields: Omit<MembershipPackageRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>,
   expectedGymId?: string | null
 ): Promise<void | ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
+  const gate = await businessWriteGym(supabase, expectedGymId, 'plans');
+  if (!gate.ok) return gate.refusal;
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
-  const gymId = await resolveScopingGymId(supabase);
 
-  const { error } = await supabase.from('membership_packages').insert({ ...fields, coach_id: user.id, gym_id: gymId });
-  if (error) raise(error);
+  const { error } = await supabase.from('membership_packages').insert({ ...fields, coach_id: user.id, gym_id: gate.gymId });
+  if (error) return businessWriteFailed(error, 'plans', 'Could not add the plan');
 }
 
 export async function updatePackage(
   packageId: string,
-  fields: Partial<Omit<MembershipPackageRow, 'id' | 'coach_id' | 'created_at'>>,
+  fields: Partial<Omit<MembershipPackageRow, 'id' | 'coach_id' | 'gym_id' | 'created_at'>>,
   expectedGymId?: string | null
 ): Promise<void | ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
-  const { error } = await supabase.from('membership_packages').update(fields).eq('id', packageId);
-  if (error) raise(error);
+  const gate = await businessWriteGym(supabase, expectedGymId, 'plans');
+  if (!gate.ok) return gate.refusal;
+  // .select() so a change the database refused (a plan at a gym where the caller is not an admin) is not reported as saved.
+  const { data, error } = await supabase.from('membership_packages').update(fields).eq('id', packageId).select('id');
+  if (error) return businessWriteFailed(error, 'plans', 'Could not save the plan');
+  if (!data || data.length === 0) return fail(null, onlyAdminMessage('plans'));
 }
 
 // Members on each plan right now, by plan id, for every coach at the gym (migration 0101). Null when the function
@@ -89,17 +91,29 @@ export async function getPackUsage(): Promise<Record<string, { times: number; la
   );
 }
 
-export async function deletePackage(packageId: string, expectedGymId?: string | null): Promise<void | ActionResult> {
-  const stale = await checkActiveGym(await createClient(), expectedGymId);
-  if (stale) return stale;
-  // A plan with members on it cannot be deleted from here, whichever screen asks.
-  const counts = await getPlanMemberCounts();
-  if (counts && (counts[packageId] ?? 0) > 0) {
-    throw new Error(`${counts[packageId]} member${counts[packageId] === 1 ? ' is' : 's are'} still on this plan. Move them to another plan first.`);
-  }
+// Members on each plan at one gym, for the owner (who has no active gym), through owner_plan_member_counts (migration 0161). Null when
+// it cannot be read, like getPlanMemberCounts.
+export async function getOwnerPlanMemberCounts(gymId: string): Promise<Record<string, number> | null> {
   const supabase = await createClient();
-  const { error } = await supabase.from('membership_packages').delete().eq('id', packageId);
-  if (error) raise(error);
+  const { data, error } = await supabase.rpc('owner_plan_member_counts', { p_gym: gymId });
+  if (error) return null;
+  return Object.fromEntries((data ?? []).map((r: { package_id: string; member_count: number }) => [r.package_id, Number(r.member_count)]));
+}
+
+export async function deletePackage(packageId: string, expectedGymId?: string | null): Promise<void | ActionResult> {
+  const supabase = await createClient();
+  const gate = await businessWriteGym(supabase, expectedGymId, 'plans');
+  if (!gate.ok) return gate.refusal;
+  // A plan with members on it cannot be deleted from here, whichever screen asks.
+  const counts = gate.asOwner ? await getOwnerPlanMemberCounts(gate.gymId) : await getPlanMemberCounts();
+  if (counts && (counts[packageId] ?? 0) > 0) {
+    return fail({ message: `${counts[packageId]} member${counts[packageId] === 1 ? ' is' : 's are'} still on this plan. Move them to another plan first.` });
+  }
+  const { data, error } = await supabase.from('membership_packages').delete().eq('id', packageId).select('id');
+  // Every plan a member has ever been on is kept for their plan history (client_memberships points at it).
+  if (error?.code === '23503') return fail(null, 'Members have been on this plan before, so it is kept for their plan history and cannot be deleted.');
+  if (error) return businessWriteFailed(error, 'plans', 'Could not delete the plan');
+  if (!data || data.length === 0) return fail(null, onlyAdminMessage('plans'));
 }
 
 export async function getMyMembership(clientId: string): Promise<ClientMembershipRow | null> {
@@ -151,16 +165,15 @@ export async function createCreditPack(
   expectedGymId?: string | null
 ): Promise<void | ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
+  const gate = await businessWriteGym(supabase, expectedGymId, 'credit packs');
+  if (!gate.ok) return gate.refusal;
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
-  const gymId = await resolveScopingGymId(supabase);
 
-  const { error } = await supabase.from('credit_packs').insert({ ...fields, coach_id: user.id, gym_id: gymId });
-  if (error) raise(error);
+  const { error } = await supabase.from('credit_packs').insert({ ...fields, coach_id: user.id, gym_id: gate.gymId });
+  if (error) return businessWriteFailed(error, 'credit packs', 'Could not add the pack');
 }
 
 export async function updateCreditPack(
@@ -169,18 +182,20 @@ export async function updateCreditPack(
   expectedGymId?: string | null
 ): Promise<void | ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
-  const { error } = await supabase.from('credit_packs').update(fields).eq('id', packId);
-  if (error) raise(error);
+  const gate = await businessWriteGym(supabase, expectedGymId, 'credit packs');
+  if (!gate.ok) return gate.refusal;
+  const { data, error } = await supabase.from('credit_packs').update(fields).eq('id', packId).select('id');
+  if (error) return businessWriteFailed(error, 'credit packs', 'Could not save the pack');
+  if (!data || data.length === 0) return fail(null, onlyAdminMessage('credit packs'));
 }
 
 export async function deleteCreditPack(packId: string, expectedGymId?: string | null): Promise<void | ActionResult> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
-  const { error } = await supabase.from('credit_packs').delete().eq('id', packId);
-  if (error) raise(error);
+  const gate = await businessWriteGym(supabase, expectedGymId, 'credit packs');
+  if (!gate.ok) return gate.refusal;
+  const { data, error } = await supabase.from('credit_packs').delete().eq('id', packId).select('id');
+  if (error) return businessWriteFailed(error, 'credit packs', 'Could not delete the pack');
+  if (!data || data.length === 0) return fail(null, onlyAdminMessage('credit packs'));
 }
 
 // Grants a one-off pack as a 'bonus'-bucket credit through grant_credit_pack (migration 0133): the database reads the pack itself (so the
