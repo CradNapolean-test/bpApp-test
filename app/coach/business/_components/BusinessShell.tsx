@@ -50,6 +50,10 @@ const TAB_PARAM: Record<string, Tab> = {
   feedback: 'Feedback',
 };
 
+// Plans, credit packs and rewards are set by a gym admin or the owner (D3); other coaches see them read-only.
+const ADMIN_ONLY_TABS: Tab[] = ['Plans', 'Credit packs', 'Rewards'];
+const READ_ONLY_NOTE = 'Only a gym admin or the owner can change plans, credit packs and rewards. Ask one of them if something needs changing.';
+
 const BLURB: Record<Tab, string> = {
   Overview: 'How the gym is doing: members, plans, and how each coach\'s members are getting on.',
   Plans: 'Recurring plans: weekly credits, how far ahead members can book, and which screens they get.',
@@ -70,6 +74,7 @@ export function BusinessShell({
   rewards,
   shirts,
   overview,
+  canEdit,
   unreadCount,
   email,
 }: {
@@ -85,6 +90,8 @@ export function BusinessShell({
   shirts: ShirtRow[];
   // Gym owners and managers only; null hides the Overview tab.
   overview: BusinessOverview | null;
+  // An admin of this gym (or the owner): may add, edit and delete plans, credit packs and rewards.
+  canEdit: boolean;
   unreadCount: number;
   email: string;
 }) {
@@ -114,14 +121,15 @@ export function BusinessShell({
           Business
           <ActiveGymTag />
         </h1>
-        <p className="mb-4 text-sm text-zinc-500">{BLURB[tab]}</p>
+        <p className={`${!canEdit && ADMIN_ONLY_TABS.includes(tab) ? 'mb-1' : 'mb-4'} text-sm text-zinc-500`}>{BLURB[tab]}</p>
+        {!canEdit && ADMIN_ONLY_TABS.includes(tab) && <p className="mb-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">{READ_ONLY_NOTE}</p>}
         <HubTabBar label="Business sections" tabs={tabs} active={tab} onSelect={setTab} />
 
         {tab === 'Overview' && overview && <OverviewPane data={overview} />}
-        {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} />}
-        {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} usage={packUsage} />}
+        {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} canEdit={canEdit} />}
+        {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} usage={packUsage} canEdit={canEdit} />}
         {tab === 'Events' && <EventsPane events={events} past={pastEvents} />}
-        {tab === 'Rewards' && <RewardsPane rewards={rewards} shirts={shirts} />}
+        {tab === 'Rewards' && <RewardsPane rewards={rewards} shirts={shirts} canEdit={canEdit} />}
         {tab === 'Feedback' && <FeedbackPane feedback={feedback} />}
       </AppShell>
     </ClientOnly>

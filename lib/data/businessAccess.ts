@@ -16,9 +16,6 @@ export function onlyAdminMessage(thing: BusinessThing): string {
   return `Only a gym admin can change ${thing}. The owner can switch Admin on for you on the gym's Team tab.`;
 }
 
-// Shown on Business to a coach who is not an admin of the gym they are looking at.
-export const BUSINESS_READ_ONLY_NOTE = 'Only a gym admin or the owner can change plans, credit packs and rewards. Ask one of them if something needs changing.';
-
 // What the function is called in the database, and the codes PostgREST and Postgres use when it is not there (0161 not run yet).
 const FUNCTION_MISSING = ['PGRST202', '42883'];
 

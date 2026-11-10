@@ -157,7 +157,16 @@ function AddPackCard({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function CreditPackManager({ initialPacks, usage = null }: { initialPacks: CreditPackRow[]; usage?: Record<string, { times: number; last: string | null }> | null }) {
+export function CreditPackManager({
+  initialPacks,
+  usage = null,
+  canEdit = true,
+}: {
+  initialPacks: CreditPackRow[];
+  usage?: Record<string, { times: number; last: string | null }> | null;
+  // Gym admins and the owner only (D3); everyone else sees the packs without Add, Edit or Delete. The database refuses them too (0161).
+  canEdit?: boolean;
+}) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
   const gymId = useActiveGymId();
@@ -176,17 +185,19 @@ export function CreditPackManager({ initialPacks, usage = null }: { initialPacks
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setAddingPack(true)}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
-        >
-          + Add pack
-        </button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setAddingPack(true)}
+            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          >
+            + Add pack
+          </button>
+        </div>
+      )}
 
-      {addingPack && <AddPackCard onDone={() => setAddingPack(false)} />}
+      {canEdit && addingPack && <AddPackCard onDone={() => setAddingPack(false)} />}
 
       {initialPacks.length === 0 ? (
         <EmptyState
@@ -197,7 +208,7 @@ export function CreditPackManager({ initialPacks, usage = null }: { initialPacks
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {initialPacks.map((p) =>
-            editingId === p.id ? (
+            canEdit && editingId === p.id ? (
               <EditPackCard key={p.id} pack={p} onClose={() => setEditingId(null)} onDelete={handleDelete} />
             ) : (
               <div
@@ -206,15 +217,17 @@ export function CreditPackManager({ initialPacks, usage = null }: { initialPacks
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-black dark:text-zinc-50">{p.name}</p>
-                  <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
-                    <button type="button" onClick={() => setEditingId(p.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
-                      Edit
-                    </button>
-                    <DropdownMenu
-                      triggerLabel={`More actions for ${p.name}`}
-                      items={[{ label: 'Delete credit pack', destructive: true, onSelect: () => handleDelete(p.id, p.name) }]}
-                    />
-                  </div>
+                  {canEdit && (
+                    <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
+                      <button type="button" onClick={() => setEditingId(p.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
+                        Edit
+                      </button>
+                      <DropdownMenu
+                        triggerLabel={`More actions for ${p.name}`}
+                        items={[{ label: 'Delete credit pack', destructive: true, onSelect: () => handleDelete(p.id, p.name) }]}
+                      />
+                    </div>
+                  )}
                 </div>
                 <p className="mt-2 text-2xl font-extrabold text-accent">
                   {p.credits} <span className="text-sm font-medium text-zinc-500">credits</span>

@@ -6,6 +6,8 @@ import { getPastEvents, getRecentFeedback, getUpcomingEvents } from '@/lib/data/
 import { getRewardOverview } from '@/lib/data/rewards';
 import { getBigDogShirts } from '@/lib/data/bigDog';
 import { getBusinessOverview } from '@/lib/data/coachDashboard';
+import { resolveScopingGymId } from '@/lib/data/coach';
+import { mayManageGymBusiness } from '@/lib/data/businessAccess';
 import { BusinessShell } from './_components/BusinessShell';
 
 // The gym's commercial side in one place: membership plans, credit packs, events, rewards and
@@ -20,7 +22,7 @@ export default async function CoachBusinessPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [packages, creditPacks, events, pastEvents, feedback, rewards, unreadCount, overview, planCountsById, packUsage, shirts] = await Promise.all([
+  const [packages, creditPacks, events, pastEvents, feedback, rewards, unreadCount, overview, planCountsById, packUsage, shirts, canEdit] = await Promise.all([
     getPackages(),
     getCreditPacks(),
     getUpcomingEvents(null),
@@ -32,6 +34,8 @@ export default async function CoachBusinessPage() {
     getPlanMemberCounts(),
     getPackUsage(),
     getBigDogShirts(),
+    // Plans, credit packs and rewards are changed by an admin of this gym (or the owner) only: decision D3, migration 0161.
+    resolveScopingGymId(supabase).then((gymId) => mayManageGymBusiness(supabase, gymId)).catch(() => false),
   ]);
 
   return (
@@ -46,6 +50,7 @@ export default async function CoachBusinessPage() {
       rewards={rewards}
       shirts={shirts}
       overview={overview}
+      canEdit={canEdit}
       unreadCount={unreadCount}
       email={user.email ?? 'Coach'}
     />

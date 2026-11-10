@@ -205,7 +205,7 @@ function NewRewardForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function RewardCard({ reward }: { reward: RewardOverview }) {
+function RewardCard({ reward, canEdit, handOut }: { reward: RewardOverview; canEdit: boolean; handOut: boolean }) {
   const { run } = useAction();
   const gymId = useActiveGymId();
   const confirm = useConfirm();
@@ -240,15 +240,18 @@ function RewardCard({ reward }: { reward: RewardOverview }) {
         <div className="min-w-0">
           <p className="font-semibold text-black dark:text-zinc-50">{reward.name}</p>
           <p className="text-xs text-zinc-500">
-            {reward.threshold} {unit} · {reward.grantedCount} given
+            {reward.threshold} {unit}
+            {handOut && ` · ${reward.grantedCount} given`}
           </p>
           {reward.description && <p className="mt-0.5 text-xs text-zinc-500">{reward.description}</p>}
         </div>
-        <button onClick={remove} aria-label="Delete reward" className="rounded-full p-2 text-zinc-400 hover:text-danger">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {canEdit && (
+          <button onClick={remove} aria-label="Delete reward" className="rounded-full p-2 text-zinc-400 hover:text-danger">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
-      {reward.eligible.length > 0 ? (
+      {!handOut ? null : reward.eligible.length > 0 ? (
         <div className="mt-2 space-y-1">
           <p className="text-[11px] font-bold uppercase tracking-wide text-accent">Ready to hand out · {reward.eligible.length}</p>
           {reward.eligible.map((m) => (
@@ -265,7 +268,7 @@ function RewardCard({ reward }: { reward: RewardOverview }) {
       ) : (
         <p className="mt-2 text-xs text-zinc-500">Nobody is waiting on this one.</p>
       )}
-      {reward.given.length > 0 && (
+      {handOut && reward.given.length > 0 && (
         <div className="mt-2">
           <button type="button" onClick={() => setShowGiven((v) => !v)} className="py-1 text-xs font-medium text-accent">
             {showGiven ? 'Hide' : 'Show'} who has it ({reward.given.length})
@@ -411,13 +414,25 @@ function ShirtsCard({ shirts }: { shirts: ShirtRow[] }) {
   );
 }
 
-export function RewardsPane({ rewards, shirts = [] }: { rewards: RewardOverview[]; shirts?: ShirtRow[] }) {
+export function RewardsPane({
+  rewards,
+  shirts = [],
+  canEdit = true,
+  handOut = true,
+}: {
+  rewards: RewardOverview[];
+  shirts?: ShirtRow[];
+  // Setting rewards up is for gym admins and the owner (D3, migration 0161); handing them out is for every coach at the gym.
+  canEdit?: boolean;
+  // false on the owner's gym page: the rewards themselves, without the shirts, the scores export and who is waiting for what.
+  handOut?: boolean;
+}) {
   const [adding, setAdding] = useState(false);
   return (
     <section className="max-w-2xl space-y-3">
-      <ShirtsCard shirts={shirts} />
-      <ScoresExportCard />
-      {adding ? (
+      {handOut && <ShirtsCard shirts={shirts} />}
+      {handOut && <ScoresExportCard />}
+      {!canEdit ? null : adding ? (
         <NewRewardForm onDone={() => setAdding(false)} />
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={`${primaryBtn} flex items-center gap-1.5`}>
@@ -432,7 +447,7 @@ export function RewardsPane({ rewards, shirts = [] }: { rewards: RewardOverview[
           compact
         />
       ) : (
-        rewards.map((r) => <RewardCard key={r.id} reward={r} />)
+        rewards.map((r) => <RewardCard key={r.id} reward={r} canEdit={canEdit} handOut={handOut} />)
       )}
     </section>
   );

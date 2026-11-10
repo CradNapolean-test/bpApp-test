@@ -287,12 +287,18 @@ export function PackageManager({
   initialPackages,
   memberCounts = {},
   countsById = null,
+  canEdit = true,
+  linkMembers = true,
 }: {
   initialPackages: MembershipPackageRow[];
   // By plan name, from the admin overview (fallback only).
   memberCounts?: Record<string, number>;
   // By plan id, for every coach (needs migration 0101).
   countsById?: Record<string, number> | null;
+  // Gym admins and the owner only (D3); everyone else sees the plans without Add, Edit or Delete. The database refuses them too (0161).
+  canEdit?: boolean;
+  // The member count links to the coach Clients list; off where that list cannot be opened (the owner's gym page).
+  linkMembers?: boolean;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -320,17 +326,19 @@ export function PackageManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setAddingPackage(true)}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
-        >
-          + Add package
-        </button>
-      </div>
+      {canEdit && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setAddingPackage(true)}
+            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          >
+            + Add package
+          </button>
+        </div>
+      )}
 
-      {addingPackage && <AddPackageCard onDone={() => setAddingPackage(false)} />}
+      {canEdit && addingPackage && <AddPackageCard onDone={() => setAddingPackage(false)} />}
 
       {initialPackages.length === 0 ? (
         <EmptyState
@@ -341,7 +349,7 @@ export function PackageManager({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {initialPackages.map((p) =>
-            editingId === p.id ? (
+            canEdit && editingId === p.id ? (
               <EditPackageCard key={p.id} pkg={p} inUse={countOf(p) ?? 0} onClose={() => setEditingId(null)} onDelete={handleDelete} />
             ) : (
               <div
@@ -350,15 +358,17 @@ export function PackageManager({
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-bold text-black dark:text-zinc-50">{p.name}</p>
-                  <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
-                    <button type="button" onClick={() => setEditingId(p.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
-                      Edit
-                    </button>
-                    <DropdownMenu
-                      triggerLabel={`More actions for ${p.name}`}
-                      items={[{ label: 'Delete plan', destructive: true, onSelect: () => handleDelete(p.id, p.name) }]}
-                    />
-                  </div>
+                  {canEdit && (
+                    <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
+                      <button type="button" onClick={() => setEditingId(p.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
+                        Edit
+                      </button>
+                      <DropdownMenu
+                        triggerLabel={`More actions for ${p.name}`}
+                        items={[{ label: 'Delete plan', destructive: true, onSelect: () => handleDelete(p.id, p.name) }]}
+                      />
+                    </div>
+                  )}
                 </div>
                 <p className="mt-2 text-2xl font-extrabold text-accent">
                   {p.credits_per_week} <span className="text-sm font-medium text-zinc-500">credits / week</span>
@@ -374,7 +384,9 @@ export function PackageManager({
                   {countOf(p) != null && (
                     <>
                       {' · '}
-                      {countOf(p)! > 0 ? (
+                      {countOf(p)! > 0 && !linkMembers ? (
+                        `${countOf(p)} member${countOf(p) === 1 ? '' : 's'}`
+                      ) : countOf(p)! > 0 ? (
                         <Link href={`/coach/clients?plan=${encodeURIComponent(p.name)}&scope=gym`} className="font-semibold text-accent">
                           {countOf(p)} member{countOf(p) === 1 ? '' : 's'}
                         </Link>
