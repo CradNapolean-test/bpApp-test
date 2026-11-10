@@ -632,14 +632,15 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                 ))}
               </datalist>
             </Field>
-            <div className="grid grid-cols-3 gap-2">
+            {/* The labels say what each number is (CS12); a two-line label keeps the boxes level. */}
+            <div className="grid grid-cols-3 items-end gap-2">
               <Field label="Capacity">
                 <input type="number" min={1} className={inputCls} value={draft.capacity} onChange={(e) => set('capacity', Number(e.target.value))} />
               </Field>
-              <Field label="Credits">
+              <Field label="Credits per booking">
                 <input type="number" min={0} className={inputCls} value={draft.creditCost} onChange={(e) => set('creditCost', Number(e.target.value))} />
               </Field>
-              <Field label="Cancel (h)">
+              <Field label="Cancel cut-off (hours)">
                 <input type="number" min={0} className={inputCls} value={draft.cutoffHours} onChange={(e) => set('cutoffHours', Number(e.target.value))} />
               </Field>
             </div>

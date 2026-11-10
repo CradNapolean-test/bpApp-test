@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getCoachReports } from '@/lib/data/reports';
+import { fillPercent } from '@/lib/slotPopularity';
 import type { CoachReport } from '@/lib/data/types';
 import { RedFlagsView } from './RedFlagsView';
 import { handleTabListKeys } from '@/app/_components/tabKeys';
@@ -98,11 +99,12 @@ export function ReportsPane({
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name));
   }, [report.noShows]);
 
+  // Ordered by how full each slot gets, not by raw bookings, so a big class doesn't always beat a small one (CS15).
   const slots = useMemo(() => {
-    const sorted = [...report.classPopularity].sort((a, b) => (slotOrder === 'busiest' ? b.bookingCount - a.bookingCount : a.bookingCount - b.bookingCount));
+    const byFill = (a: CoachReport['classPopularity'][number], b: CoachReport['classPopularity'][number]) => fillPercent(a) - fillPercent(b) || a.bookingCount - b.bookingCount;
+    const sorted = [...report.classPopularity].sort((a, b) => (slotOrder === 'busiest' ? byFill(b, a) : byFill(a, b)));
     return showAllSlots ? sorted : sorted.slice(0, 10);
   }, [report.classPopularity, slotOrder, showAllSlots]);
-  const maxBookings = Math.max(1, ...report.classPopularity.map((c) => c.bookingCount));
 
   function exportNoShows() {
     downloadCsv('no-shows.csv', [
@@ -113,8 +115,8 @@ export function ReportsPane({
 
   function exportPopularity() {
     downloadCsv('class-popularity.csv', [
-      ['Session', `Bookings (${days}d)`, 'Marked attended'],
-      ...report.classPopularity.map((c) => [c.className, c.bookingCount, c.attended]),
+      ['Session', `Sessions run (${days}d)`, 'Places', 'Booked', 'Fill %', 'Marked', 'Attended'],
+      ...report.classPopularity.map((c) => [c.className, c.sessions, c.places, c.bookingCount, fillPercent(c), c.marked, c.attended]),
     ]);
   }
 
@@ -293,23 +295,27 @@ export function ReportsPane({
               </button>
             )}
           </div>
+          <p className="mt-2 text-xs text-zinc-500">How full each session gets: places booked out of places offered, over the sessions that have happened (up to yesterday). Upcoming bookings aren&apos;t counted.</p>
           <ul className="mt-3 space-y-3 text-sm">
             {slots.map((c) => {
-              const rate = c.bookingCount > 0 ? Math.round((c.attended / c.bookingCount) * 100) : 0;
+              const fill = fillPercent(c);
+              // Out of the bookings the coach has marked, as Overview counts it (CS28): an unmarked booking isn't a no-show.
+              const rate = c.marked > 0 ? Math.round((c.attended / c.marked) * 100) : null;
               return (
                 <li key={c.className}>
                   <p className="font-semibold text-black dark:text-zinc-50">{c.className}</p>
                   <p className="text-xs text-zinc-500">
-                    {c.bookingCount} booking{c.bookingCount === 1 ? '' : 's'}
-                    {c.attended > 0 && ` · ${rate}% came`}
+                    <span className="font-bold text-black dark:text-zinc-50">{fill}% full</span>
+                    {` · ${c.bookingCount} of ${c.places} places over ${c.sessions} session${c.sessions === 1 ? '' : 's'}`}
+                    {rate != null && ` · ${rate}% came`}
                   </p>
                   <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                    <div className="h-full rounded-full bg-accent" style={{ width: `${(c.bookingCount / maxBookings) * 100}%` }} />
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, fill)}%` }} />
                   </div>
                 </li>
               );
             })}
-            {report.classPopularity.length === 0 && <li className="text-zinc-500">No bookings in the last {days} days yet.</li>}
+            {report.classPopularity.length === 0 && <li className="text-zinc-500">No sessions in the last {days} days yet.</li>}
           </ul>
           {report.classPopularity.length > 10 && (
             <button type="button" onClick={() => setShowAllSlots((v) => !v)} className="mt-3 rounded-full border border-black/10 px-4 py-1.5 text-sm font-semibold text-accent dark:border-white/15">

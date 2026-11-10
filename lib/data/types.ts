@@ -612,8 +612,9 @@ export interface CoachReport {
   avgClassesPerClient: number | null; // per unique client, over the report window
   activeBookings: number; // currently booked, today or later (not time-windowed)
   noShows: { clientId: string; clientName: string; className: string; date: string }[];
-  // attended = how many of those bookings were marked attended (for the attendance rate of each slot).
-  classPopularity: { className: string; bookingCount: number; attended: number }[];
+  // Busiest (Reports): each slot over the sessions that have happened (up to yesterday): sessions run, places they offered (capacity ×
+  // sessions), places taken, and how many of those were marked attended or no-show and attended. See lib/slotPopularity.ts.
+  classPopularity: { className: string; sessions: number; places: number; bookingCount: number; marked: number; attended: number }[];
 }
 
 export interface MembershipPackageRow {

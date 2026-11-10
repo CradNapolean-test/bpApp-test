@@ -3,6 +3,7 @@
 import { raise } from './errors';
 import { resolveScopingGymId } from './coach';
 import { createClient } from '@/lib/supabase/server';
+import { slotPopularity } from '@/lib/slotPopularity';
 import { formatClassTime, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import type { CoachReport } from './types';
 
@@ -20,7 +21,7 @@ export async function getCoachReport(windowDays = DEFAULT_WINDOW_DAYS, offsetDay
 
   const { data: classes, error: classesError } = await supabase
     .from('classes')
-    .select('id, name, day_of_week, start_time, specific_date')
+    .select('id, name, day_of_week, start_time, specific_date, capacity, retired_at')
     .eq('gym_id', gymId);
   if (classesError) raise(classesError);
   if (!classes || classes.length === 0) {
@@ -118,16 +119,21 @@ export async function getCoachReport(windowDays = DEFAULT_WINDOW_DAYS, offsetDay
     date: b.booking_date,
   }));
 
-  const popularityMap = new Map<string, { count: number; attended: number }>();
-  for (const b of rows) {
-    const cur = popularityMap.get(b.class_id) ?? { count: 0, attended: 0 };
-    cur.count += 1;
-    if (b.attended) cur.attended += 1;
-    popularityMap.set(b.class_id, cur);
-  }
-  const classPopularity = [...popularityMap.entries()]
-    .map(([classId, v]) => ({ className: slotLabel.get(classId) ?? 'Unknown class', bookingCount: v.count, attended: v.attended }))
-    .sort((a, b) => b.bookingCount - a.bookingCount);
+  // Busiest: sessions that have happened only, up to yesterday, as a share of the places they offered (CS15, CS28; see slotPopularity).
+  const yesterday = new Date();
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const lastDay = offsetDays > 0 ? untilIso : yesterday.toISOString().slice(0, 10);
+  const { data: exceptions } = await supabase
+    .from('class_exceptions')
+    .select('class_id, occurrence_date')
+    .in(
+      'class_id',
+      classes.map((c) => c.id)
+    )
+    .gte('occurrence_date', sinceIso)
+    .lte('occurrence_date', lastDay);
+  const cancelled = new Set((exceptions ?? []).map((e) => `${e.class_id}|${e.occurrence_date}`));
+  const classPopularity = slotPopularity(classes, rows, cancelled, sinceIso, lastDay, (id) => slotLabel.get(id) ?? 'Unknown class');
 
   return {
     attendanceRate,
