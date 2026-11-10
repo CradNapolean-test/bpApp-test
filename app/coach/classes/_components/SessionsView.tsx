@@ -10,6 +10,7 @@ import { useToast } from '@/app/_components/ToastProvider';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
+import { AddToSessionPanel } from './AddToSessionPanel';
 import { bookClassForClient, cancelClassOccurrence, getRoster, markAttendanceStatus, removeFromSession, restoreClassOccurrence } from '@/lib/data/classes';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
@@ -70,8 +71,6 @@ export function SessionsView({
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [loading, setLoading] = useState(!!initialTarget);
   const [adding, setAdding] = useState(false);
-  const [clientId, setClientId] = useState('');
-  const [search, setSearch] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const { run: runRestore, busy: restoring } = useAction();
@@ -86,8 +85,6 @@ export function SessionsView({
     setOpenKey(occKey(occ));
     setRoster(null);
     setAdding(false);
-    setClientId('');
-    setSearch('');
     setLoading(true);
     try {
       setRoster(await getRoster(occ.classId, occ.date));
@@ -143,15 +140,13 @@ export function SessionsView({
     }
   }
 
-  async function addClient() {
-    if (!open || !clientId) return;
+  async function addClient(clientId: string) {
+    if (!open) return;
     await runBook(
       async () => {
         const result = await bookClassForClient(open.classId, clientId, open.date);
         if (result.ok) {
           setAdding(false);
-          setClientId('');
-          setSearch('');
           await openSession(open);
         }
         return result;
@@ -205,15 +200,9 @@ export function SessionsView({
   // Only today's and earlier sessions can be marked attended in bulk -- a future class has not happened yet.
   const canMarkAll = !!open && open.date <= todayIso;
   const bookedIds = new Set(active.map((r) => r.clientId));
-  const addable = clients.filter((c) => !bookedIds.has(c.id));
-  const chosenClient = addable.find((c) => c.id === clientId) ?? null;
-  const term = search.trim().toLowerCase();
-  const matches = addable
-    .filter((c) => !term || (c.name ?? '').toLowerCase().includes(term) || c.email.toLowerCase().includes(term))
-    .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
-    .slice(0, 20);
-  const sessionFull = !!open && open.bookedCount >= open.capacity;
-  const noCredits = !!open && !!chosenClient && chosenClient.balance < open.creditCost;
+  // From the roster once it has loaded, so a place just filled from this pop-up counts.
+  const bookedNow = roster ? active.filter((r) => r.status === 'booked').length : (open?.bookedCount ?? 0);
+  const sessionFull = !!open && bookedNow >= open.capacity;
   // Once a session has started it can't be cancelled: that would refund everyone, including the people who came (BK27; the database
   // refuses it too, migration 0158). Compared at the gym's wall clock.
   const hasStarted = (o: ScheduleOccurrence) => startMs(o.date, o.startTime) <= nowLocalMs(timezone ?? DEFAULT_TIMEZONE);
@@ -440,64 +429,7 @@ export function SessionsView({
           {!loading && roster && !open.cancelled && (
             <div className="mt-4 space-y-3">
               {adding ? (
-                <div className="space-y-2">
-                  <input
-                    autoFocus
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setClientId('');
-                    }}
-                    placeholder="Search members…"
-                    className={inputCls}
-                  />
-                  {!chosenClient &&
-                    (matches.length === 0 ? (
-                      <p className="px-1 text-sm text-zinc-500">{addable.length === 0 ? 'Every member is already booked or waitlisted.' : 'No member matches.'}</p>
-                    ) : (
-                      <div className="max-h-52 space-y-1 overflow-y-auto">
-                        {matches.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              setClientId(c.id);
-                              setSearch(c.name ?? c.email);
-                            }}
-                            className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
-                          >
-                            <span className="truncate font-semibold text-black dark:text-zinc-50">{c.name ?? c.email}</span>
-                            <span className={`shrink-0 text-xs font-bold ${c.balance < open.creditCost ? 'text-danger' : 'text-zinc-500'}`}>
-                              {c.balance} credit{c.balance === 1 ? '' : 's'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  {chosenClient && (
-                    <>
-                      {sessionFull ? (
-                        <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">This session is full, so {chosenClient.name ?? 'they'} will join the waitlist (no credit is taken until a place opens).</p>
-                      ) : noCredits ? (
-                        <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
-                          {chosenClient.name ?? 'They'} only {chosenClient.balance === 1 ? 'has 1 credit' : `has ${chosenClient.balance} credits`} and this session costs {open.creditCost}. Add credits from their profile first.
-                        </p>
-                      ) : (
-                        <p className="px-1 text-xs text-zinc-500">
-                          Takes {open.creditCost} credit{open.creditCost === 1 ? '' : 's'} ({chosenClient.balance} available).
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        disabled={booking || (noCredits && !sessionFull)}
-                        onClick={addClient}
-                        className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
-                      >
-                        {booking ? 'Adding…' : sessionFull ? 'Add to waitlist' : 'Add to session'}
-                      </button>
-                    </>
-                  )}
-                </div>
+                <AddToSessionPanel clients={clients} excludeIds={bookedIds} full={sessionFull} creditCost={open.creditCost} busy={booking} onAdd={addClient} />
               ) : (
                 <button
                   type="button"

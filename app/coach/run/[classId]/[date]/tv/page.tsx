@@ -3,6 +3,8 @@ import { Montserrat } from 'next/font/google';
 import { createClient } from '@/lib/supabase/server';
 import { getRunClassData } from '@/lib/data/runClass';
 import { blockFormatOf, groupIntoBlocks, parseBlockKey, type WorkoutSection } from '@/lib/workoutSections';
+import { blockConfigOf } from '@/lib/blockScoring';
+import { tvBlockLabel } from '@/lib/tvBlockLabel';
 import { TvExit } from './TvExit';
 import type { WorkoutExerciseRow } from '@/lib/data/types';
 
@@ -10,14 +12,6 @@ const montserrat = Montserrat({ subsets: ['latin'], weight: ['500', '700', '800'
 
 // The workout for a class, laid out like the gym's printed workout card, to be read from across the room.
 // View only: Warm up, Lift, Strong and Conditioning in a 2 x 2 grid, each a white title bar over a black panel.
-
-const TIMED = ['AMRAP', 'EMOM', 'Partner AMRAP'];
-
-function formatLabel(format: string | null, blockNo: 0 | 1 | 2 | null): string {
-  if (!format) return '';
-  const minutes = blockNo === 0 ? 20 : 10;
-  return TIMED.includes(format) ? `${format.toUpperCase()} ${minutes}'` : format.toUpperCase();
-}
 
 // What goes in the right-hand column: the reps, or the load, or the note for rows with neither.
 function amount(e: WorkoutExerciseRow): string {
@@ -39,7 +33,8 @@ function Panel({ title, emoji, children }: { title: string; emoji?: string; chil
 // One block: numbered rows with the format on the left and the amount on the right. `label` is the small
 // sideways text (Upper / Lower) beside the rows.
 function Block({ rows, label, blockNo, showSets }: { rows: WorkoutExerciseRow[]; label?: string; blockNo: 0 | 1 | 2 | null; showSets?: boolean }) {
-  const format = formatLabel(blockFormatOf(rows), blockNo);
+  // The block's own time cap, rounds and work/rest (CS17); a whole-session block fills 20 minutes, the others 10.
+  const format = tvBlockLabel(blockFormatOf(rows), blockConfigOf(rows), blockNo === 0 ? 20 : 10);
   return (
     <div className="flex gap-3 py-2">
       {label && (

@@ -79,6 +79,7 @@ export function ClassesHubShell({
           clients={clients}
           timezone={timezone}
           initialTarget={searchParams.get('date') && searchParams.get('class') ? { date: searchParams.get('date')!, classId: searchParams.get('class')! } : null}
+          initialDate={searchParams.get('date')}
         />
       )}
       {tab === 'Timetable' && <TimetableView classes={initialClasses} occurrences={occurrences} timezone={timezone} />}

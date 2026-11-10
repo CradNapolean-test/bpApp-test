@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { getRoster } from './classes';
+import { getMyClients, type CoachClientRow } from './coach';
 import { raise } from './errors';
 import { describeChoices } from '@/lib/workoutSections';
 import { daysBetween } from '@/lib/utils/dates';
@@ -28,6 +29,9 @@ export interface RunClassData {
   className: string;
   date: string;
   startTime: string | null;
+  // For adding a walk-in (CS2): whether a place is free, and what it costs.
+  capacity: number;
+  creditCost: number;
   workout: { programName: string; dayLabel: string; weekNum: number; exercises: WorkoutExerciseRow[] } | null;
   members: RunClassMember[];
 }
@@ -51,7 +55,7 @@ function resolveDay(programs: WorkoutProgramRow[], date: string, weekday: number
 
 export async function getRunClassData(classId: string, date: string): Promise<RunClassData> {
   const supabase = await createClient();
-  const { data: cls, error: classError } = await supabase.from('classes').select('name, start_time').eq('id', classId).single();
+  const { data: cls, error: classError } = await supabase.from('classes').select('name, start_time, capacity, credit_cost').eq('id', classId).single();
   if (classError || !cls) raise(classError ?? new Error('Class not found'));
 
   const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
@@ -148,6 +152,8 @@ export async function getRunClassData(classId: string, date: string): Promise<Ru
     className: cls.name,
     date,
     startTime: cls.start_time,
+    capacity: cls.capacity,
+    creditCost: cls.credit_cost,
     workout: shown
       ? {
           programName: shown.program.name,
@@ -158,4 +164,15 @@ export async function getRunClassData(classId: string, date: string): Promise<Ru
       : null,
     members,
   };
+}
+
+// The members a coach can add to a session from Run this class (a walk-in, CS2), with their credit balances. Read when the coach opens
+// the add panel, so the page itself stays as quick to load as before. The same list the Sessions pop-up uses.
+export async function getWalkInCandidates(): Promise<CoachClientRow[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  return getMyClients(supabase, user.id);
 }
