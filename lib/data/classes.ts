@@ -9,6 +9,7 @@ import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { affectedMembers, type AffectedBooking } from '@/lib/classCancelPush';
 import { notifyClassCancelled } from '@/lib/classCancelNotify';
+import { notifyWaitlistPromotion, waitlistBeforeCancel } from '@/lib/waitlistPromotionNotify';
 import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type {
   AttendanceStatus,
@@ -173,8 +174,12 @@ export async function bookClass(classId: string, bookingDate: string): Promise<A
 
 export async function cancelBooking(bookingId: string): Promise<ActionResult> {
   const supabase = await createClient();
+  // Who is waiting is read before the cancel; whoever the database moves in gets a push after the response (BK9, migration 0158).
+  const waiting = await waitlistBeforeCancel(bookingId);
   const { error } = await supabase.rpc('cancel_booking', { p_booking_id: bookingId });
-  return error ? fail(error, 'Could not cancel that booking') : ok();
+  if (error) return fail(error, 'Could not cancel that booking');
+  if (waiting) after(() => notifyWaitlistPromotion(waiting));
+  return ok();
 }
 
 // A member checking in to their own booking on the day: marks it attended (migration 0071).
@@ -443,8 +448,11 @@ export async function restoreClassOccurrence(classId: string, date: string): Pro
 // A coach takes one member off a session; `refund` says whether their credit goes back.
 export async function removeFromSession(bookingId: string, refund: boolean): Promise<ActionResult> {
   const supabase = await createClient();
+  const waiting = await waitlistBeforeCancel(bookingId); // as in cancelBooking (BK9)
   const { error } = await supabase.rpc('coach_cancel_booking', { p_booking_id: bookingId, p_refund: refund });
-  return error ? fail(error, 'Could not remove them from the session') : ok();
+  if (error) return fail(error, 'Could not remove them from the session');
+  if (waiting) after(() => notifyWaitlistPromotion(waiting));
+  return ok();
 }
 
 // Roster for one specific occurrence (class + date), with each booked client's name and
