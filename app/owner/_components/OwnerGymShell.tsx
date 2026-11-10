@@ -11,12 +11,26 @@ import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { Segmented } from '@/app/_components/ui';
 import { AddCoachForm, BookingRulesForm, GymNameForm, ReferralLinkForm, TeamList, type TeamMember } from '@/app/coach/settings/_components/GymAdminSection';
 import { RosterPane } from './RosterPane';
+import { CoachGymsProvider } from '@/app/coach/_components/CoachGymsContext';
+import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
+import { CreditPackManager } from '@/app/coach/classes/_components/CreditPackManager';
+import { RewardsPane } from '@/app/coach/community/_components/CommunityShell';
 import { brandParts, shortGymName } from '@/lib/gymNames';
 import { LOAD_FAILED } from '@/lib/ownerReport';
 import type { RosterFilter } from '@/lib/ownerRoster';
 import type { OwnerGym, OwnerGymSettings } from '@/lib/data/owner';
+import type { CreditPackRow, MembershipPackageRow, RewardRow } from '@/lib/data/types';
 
-type Section = 'members' | 'team' | 'settings';
+// The gym's plans, credit packs and rewards, which the owner (and the gym's admins) can change: RO21, decision D3, migration 0161.
+export interface OwnerGymBusiness {
+  packages: MembershipPackageRow[];
+  creditPacks: CreditPackRow[];
+  rewards: RewardRow[];
+  // Members on each plan by plan id; null when it cannot be read.
+  planCounts: Record<string, number> | null;
+}
+
+type Section = 'members' | 'team' | 'business' | 'settings';
 
 const card = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
 const h2 = 'mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300';
@@ -27,6 +41,7 @@ export function OwnerGymShell({
   gym,
   siblingNames,
   settings,
+  business,
   orgName,
   email,
   ownerId,
@@ -37,6 +52,8 @@ export function OwnerGymShell({
   gym: OwnerGym | null;
   siblingNames: string[];
   settings: OwnerGymSettings | null;
+  // null when it could not be loaded.
+  business: OwnerGymBusiness | null;
   orgName: string | null;
   email: string;
   ownerId: string;
@@ -108,6 +125,7 @@ export function OwnerGymShell({
               options={[
                 { value: 'members', label: 'Members' },
                 { value: 'team', label: 'Team' },
+                { value: 'business', label: 'Business' },
                 { value: 'settings', label: 'Settings' },
               ]}
             />
@@ -126,6 +144,38 @@ export function OwnerGymShell({
                 </section>
               </div>
             )}
+
+            {section === 'business' &&
+              (business ? (
+                // The plan, pack and reward screens send "the gym this page was drawn for" with every change (useActiveGymId). An owner
+                // has no active gym, so this page provides the gym it shows; the server checks the owner owns it (businessWriteGym).
+                <CoachGymsProvider gyms={[{ gymId, gymName, timezone: settings?.timezone ?? '', isGymAdmin: false, isActive: true }]}>
+                  <div className="space-y-6">
+                    <section>
+                      <h2 className={h2}>Plans</h2>
+                      <p className="mb-3 text-sm text-zinc-500">Weekly credits, how far ahead members can book, and which screens they get. You and this gym&apos;s admins can change them.</p>
+                      <PackageManager initialPackages={business.packages} countsById={business.planCounts} linkMembers={false} />
+                    </section>
+                    <section>
+                      <h2 className={h2}>Credit packs</h2>
+                      <p className="mb-3 text-sm text-zinc-500">One-off credit bundles a coach can give a member, optionally expiring.</p>
+                      <CreditPackManager initialPacks={business.creditPacks} />
+                    </section>
+                    <section>
+                      <h2 className={h2}>Rewards</h2>
+                      <p className="mb-3 text-sm text-zinc-500">Loyalty gifts members earn by sessions attended or time as a member. Coaches hand them out from Business, Rewards.</p>
+                      <RewardsPane rewards={business.rewards.map((r) => ({ ...r, grantedCount: 0, eligible: [], given: [] }))} handOut={false} />
+                    </section>
+                  </div>
+                </CoachGymsProvider>
+              ) : (
+                <div className="rounded-lg border border-dashed border-black/10 p-6 text-center dark:border-white/15" role="alert">
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{LOAD_FAILED}</p>
+                  <button type="button" onClick={() => router.refresh()} className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground">
+                    Try again
+                  </button>
+                </div>
+              ))}
 
             {section === 'settings' &&
               (settings ? (

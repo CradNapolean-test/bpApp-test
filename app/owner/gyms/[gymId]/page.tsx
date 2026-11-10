@@ -2,9 +2,12 @@ import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getOwnerGymSettings, getOwnerGyms, getOwnerOrganisationName } from '@/lib/data/owner';
 import { parseRosterFilter } from '@/lib/ownerRoster';
+import { getCreditPacksForGym, getOwnerPlanMemberCounts, getPackagesForGym } from '@/lib/data/memberships';
+import { getRewardsForGym } from '@/lib/data/rewards';
 import { OwnerGymShell } from '../../_components/OwnerGymShell';
 
-// One gym in the owner's organisation: its members (read only), its coaches and its settings (R37). The page checks the signed-in person is
+// One gym in the owner's organisation: its members (read only), its coaches, its plans, credit packs and rewards (RO21, decision D3: the
+// owner and the gym's admins change those) and its settings (R37). The page checks the signed-in person is
 // the owner and the gym is one of the organisation's; the database functions behind every action check it again.
 export default async function OwnerGymPage({
   params,
@@ -25,7 +28,15 @@ export default async function OwnerGymPage({
   const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
   if (!profile || profile.role !== 'owner') redirect('/');
 
-  const [gyms, settings, orgName] = await Promise.all([getOwnerGyms(), getOwnerGymSettings(gymId), getOwnerOrganisationName()]);
+  const [gyms, settings, orgName, business] = await Promise.all([
+    getOwnerGyms(),
+    getOwnerGymSettings(gymId),
+    getOwnerOrganisationName(),
+    // null when it cannot be read; the Business section then says so instead of showing an empty gym (needs migration 0161).
+    Promise.all([getPackagesForGym(gymId), getCreditPacksForGym(gymId), getRewardsForGym(gymId), getOwnerPlanMemberCounts(gymId)])
+      .then(([packages, creditPacks, rewards, planCounts]) => ({ packages, creditPacks, rewards, planCounts }))
+      .catch(() => null),
+  ]);
 
   // A gym that is not in this organisation's list is not found, whatever the address says.
   const gym = gyms.ok ? gyms.data.find((g) => g.id === gymId) : undefined;
@@ -37,6 +48,7 @@ export default async function OwnerGymPage({
       gym={gym ?? null}
       siblingNames={gyms.ok ? gyms.data.map((g) => g.name) : []}
       settings={settings}
+      business={business}
       orgName={orgName}
       email={profile.email ?? user.email ?? 'Owner'}
       ownerId={user.id}
