@@ -24,6 +24,7 @@ import { Card, SectionLabel } from '@/app/_components/ui';
 import { useAction } from '@/app/_components/useAction';
 import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
+import { markAllReviewed } from '@/lib/data/coachDashboard';
 import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from '@/lib/checkinQueue';
 import { formatClassTime } from '@/lib/utils/dates';
 import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
@@ -34,6 +35,7 @@ import { AddClientForm } from './AddClientForm';
 import { JoinLinkCard } from './JoinLinkCard';
 
 const sessionHref = (o: ScheduleOccurrence) => `/coach/classes?tab=sessions&date=${o.date}&class=${o.classId}`;
+const runHref = (o: ScheduleOccurrence) => `/coach/run/${o.classId}/${o.date}`;
 const dayShort = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const weekShort = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -82,7 +84,8 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
     <li key={item.key} className="flex items-center gap-2 rounded-xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
       <Link href={item.href} onClick={group.onOpen} className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{item.title}</span>
-        <span className="block truncate text-xs text-zinc-500">{item.hint}</span>
+        {/* Two lines, not one cut short: on a phone "Week of 26 Oct · 7 days logged · no food" lost the "no food" (DB22, CW18). */}
+        <span className="line-clamp-2 text-xs text-zinc-500">{item.hint}</span>
       </Link>
       {item.review && (
         <button
@@ -292,16 +295,8 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
           ? {
               label: 'Only 1 or 2 days logged',
               items: thin.map(toItem),
-              markAll:
-                ownThin.length > 0
-                  ? async () => {
-                      for (const c of ownThin) {
-                        const res = await markReviewed('week', c.clientId, c.weekStart);
-                        if (!res.ok) return res;
-                      }
-                      return { ok: true };
-                    }
-                  : undefined,
+              // One database call for the lot, not one per week.
+              markAll: ownThin.length > 0 ? () => markAllReviewed('week', ownThin.map((c) => ({ clientId: c.clientId, ref: c.weekStart }))) : undefined,
             }
           : undefined,
       onOpen: () => saveCheckinQueue(queue),
@@ -321,13 +316,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
         title: p.name,
         hint: `${p.photos} photo${p.photos === 1 ? '' : 's'} · ${p.dates.map(dayShort).join(', ')}`,
         href: `/coach/clients/${p.clientId}?open=nutrition`,
-        review: own(p.mine)
-          ? async () => {
-              let last: { ok: boolean } = { ok: true };
-              for (const d of p.dates) last = await markReviewed('diary_day', p.clientId, d);
-              return last;
-            }
-          : undefined,
+        review: own(p.mine) ? () => markAllReviewed('diary_day', p.dates.map((d) => ({ clientId: p.clientId, ref: d }))) : undefined,
       })),
     });
   }
@@ -439,7 +428,12 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
         ) : (
           <div className="space-y-2.5">
             {upNext ? (
-              <Link href={sessionHref(upNext)} className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4">
+              // While a class is on, the card opens Run this class itself: it used to be Up next, then the roster, then Run this class
+              // (DB8, CS20). Before it starts it still opens the roster; the times underneath always do.
+              <Link
+                href={inProgress ? runHref(upNext) : sessionHref(upNext)}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4"
+              >
                 <span className="min-w-0">
                   <span className="block text-3xl font-black leading-tight text-black dark:text-zinc-50">{formatClassTime(upNext.startTime)}</span>
                   <span className="block truncate text-sm text-zinc-500">{upNext.className}</span>
@@ -449,7 +443,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
                     {upNext.bookedCount}
                     <span className="text-sm font-semibold text-zinc-500"> / {upNext.capacity}</span>
                   </span>
-                  <span className="text-xs font-bold text-accent">Open roster →</span>
+                  <span className="text-xs font-bold text-accent">{inProgress ? 'Run this class →' : 'Open roster →'}</span>
                 </span>
               </Link>
             ) : (

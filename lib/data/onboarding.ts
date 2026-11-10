@@ -336,19 +336,32 @@ export interface ReviewQueueItem {
   clientId: string;
   name: string;
   reasons: string[];
+  // The signed-in coach's own member. Other coaches' members are counted, not listed (CL2).
+  mine: boolean;
 }
 
-// New members whose starting plan the coach hasn't reviewed yet (RLS limits this to clients the
-// coach can see).
+// New members whose starting plan hasn't been reviewed yet, newest first. RLS lets a coach read every member at their gym, so each
+// one says whether it is the coach's own: the Clients banner used to count the whole gym with no word of whose they were (CL2).
 export async function getClientsNeedingReview(): Promise<ReviewQueueItem[]> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
   const { data, error } = await supabase
-    .from('client_profiles')
-    .select('client_id, name, review_reasons')
-    .eq('needs_coach_review', true)
-    .order('updated_at', { ascending: false });
+    .from('profiles')
+    .select('id, coach_id, client_profiles!inner(name, review_reasons, updated_at)')
+    .eq('role', 'client')
+    .eq('client_profiles.needs_coach_review', true);
   if (error) return []; // column missing until the migration is applied
-  return (data ?? []).map((r) => ({ clientId: r.client_id, name: r.name || 'New member', reasons: r.review_reasons ?? [] }));
+  type Row = { id: string; coach_id: string | null; client_profiles: { name: string | null; review_reasons: string[] | null; updated_at: string | null } | { name: string | null; review_reasons: string[] | null; updated_at: string | null }[] };
+  return ((data ?? []) as unknown as Row[])
+    .map((r) => {
+      const cp = Array.isArray(r.client_profiles) ? r.client_profiles[0] : r.client_profiles;
+      return { clientId: r.id, name: cp?.name || 'New member', reasons: cp?.review_reasons ?? [], mine: r.coach_id === user.id, updatedAt: cp?.updated_at ?? '' };
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(({ updatedAt: _updatedAt, ...item }) => item); // eslint-disable-line @typescript-eslint/no-unused-vars
 }
 
 // A coach marks a new member's plan as reviewed (clears the flag).

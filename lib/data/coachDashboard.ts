@@ -6,13 +6,17 @@ import { EXERCISES } from '@/lib/bigDog';
 import { isPlateaued } from '@/lib/calculations';
 import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
-import { minuteOfDayIn, toMinutes } from '@/lib/todaySessions';
+import { minuteOfDayIn } from '@/lib/todaySessions';
+import { reviewRows, startedBy } from '@/lib/coachDashboardRules';
 import { coachProgrammeEndLine, needsNextProgramme, programmeEnd, programmeEndStage } from '@/lib/utils/programEnding';
 import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
 import { getRedFlagReport } from './redFlags';
 import { fetchAllPages } from '@/lib/paging';
+import { fail, ok } from './result';
+import type { ActionResult } from './result';
+import type { ReviewKind } from './coachReviews';
 import type { ActivityEventRow, DailyLogRow, ScheduleOccurrence } from './types';
 
 export type DashboardScope = 'mine' | 'gym' | 'coach';
@@ -218,6 +222,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const since28 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -28));
   const since7 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
   const since30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
+  const since90 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -90));
   const since365 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -365));
   // "This time last week": the same weekday last week, and on that day only the sessions that had started by now.
   const sameDayLastWeek = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
@@ -232,12 +237,19 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       .gte('nutrition_feedback.log_date', since7)
       .gte('bookings.booking_date', prevWeek)
       .eq('bookings.status', 'booked')
+      // Only recent rows of these, not every one ever (CW10). Forms are listed for 30 days after completion and every other review
+      // marker is for something in the last three weeks (the two check-in weeks, a week's meal photos, the current challenge week),
+      // and a marker is always written after the thing it marks, so 30 days of markers is all the To do can need. Peak week scores:
+      // 90 days of results, so a score left unverified for longer drops off here (the member's Overview still lists it).
+      .gte('form_assignments.completed_at', since30)
+      .gte('big_dog_results.created_at', since90)
       // Programmes for "Programmes ending": only those started in the last year, and only each one's highest week number (one
       // day row per programme, not every day), so the end can be worked out without loading whole programmes (DB21 / CW10).
       .not('workout_programs.start_date', 'is', null)
       .gte('workout_programs.start_date', since365)
       .order('week_num', { referencedTable: 'workout_programs.workout_program_days', ascending: false })
       .limit(1, { referencedTable: 'workout_programs.workout_program_days' });
+    if (select.includes('coach_reviews')) q = q.gte('coach_reviews.reviewed_at', since30);
     if (scope === 'mine') q = q.eq('coach_id', user.id);
     else if (scope === 'coach' && selectedCoachId) q = q.eq('coach_id', selectedCoachId);
     else if (me?.gym_id) q = q.eq('gym_id', me.gym_id);
@@ -385,7 +397,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       if (!b.attended) continue;
       if (b.booking_date >= thisWeek) sessionsAttended += 1;
       else if (b.booking_date < sameDayLastWeek) sessionsAttendedSameTimeLastWeek += 1;
-      else if (b.booking_date === sameDayLastWeek && toMinutes(one(b.class)?.start_time ?? null) <= nowMinute) sessionsAttendedSameTimeLastWeek += 1;
+      // A class with no start time can't be placed before or after now, so it isn't counted as started (toMinutes reads it as midnight).
+      else if (b.booking_date === sameDayLastWeek && startedBy(one(b.class)?.start_time ?? null, nowMinute)) sessionsAttendedSameTimeLastWeek += 1;
     }
 
     // Members worth a conversation, and why.
@@ -469,6 +482,18 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     activity,
     nameById,
   };
+}
+
+// "Mark all reviewed" (the thin check-in weeks) and a photo diary's Reviewed button: every marker in one insert, where it used to be
+// one call per week or day. The coach's own members only: the insert policy refuses the lot if any row is someone else's member.
+// Idempotent, like markReviewed.
+export async function markAllReviewed(kind: ReviewKind, items: { clientId: string; ref: string }[]): Promise<ActionResult> {
+  const rows = reviewRows(kind, items);
+  if (!rows) return fail(null, 'Too many to mark at once');
+  if (rows.length === 0) return ok();
+  const supabase = await createClient();
+  const { error } = await supabase.from('coach_reviews').upsert(rows, { onConflict: 'kind,client_id,ref', ignoreDuplicates: true });
+  return error ? fail(error, 'Could not mark those as reviewed') : ok();
 }
 
 // ---- Business overview (gym owners and managers) ----
