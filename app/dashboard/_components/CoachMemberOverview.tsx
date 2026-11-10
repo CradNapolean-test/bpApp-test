@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
+  Beef,
   CalendarDays,
   Check,
   ChevronRight,
@@ -33,6 +34,7 @@ import { dayCaloriesOf, hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLo
 import { planCountdown, planCountdownLabel } from '@/lib/planCountdown';
 import { lastActiveLabel } from '@/lib/healthStatus';
 import { weightGoalProgress } from '@/lib/weightGoal';
+import { calorieTone, proteinTone, splitFoodDays } from '@/lib/weekFood';
 import { olderUnreviewed, olderUnreviewedLine } from '@/lib/memberReview';
 import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
@@ -171,16 +173,13 @@ export function CoachMemberOverview({
   const weekDays = weekLogs.filter(hasLoggedData);
   const stepsAvg = avg(weekDays.map((l) => l.steps));
   const sleepAvg = avg(weekDays.map((l) => l.sleep));
-  // Calories include Quick Adds with no macros (R11), and a day whose food was all deleted is not a food day (M2).
-  const foodDays = weekDays.filter(hasFoodLogged);
-  const kcalAvg = avg(foodDays.map(dayCaloriesOf));
   // Each average says how many of this week's days it comes from: one day of food read as a whole week's average (CR3).
   const daysSoFar = Math.min(7, Math.round((new Date(todayIso + 'T00:00:00Z').getTime() - new Date(thisWeek + 'T00:00:00Z').getTime()) / 86400000) + 1);
   const stepsDays = weekDays.filter((l) => l.steps != null).length;
   const sleepDays = weekDays.filter((l) => l.sleep != null).length;
-  const fromDays = (n: number) => (
-    <span className={n < daysSoFar ? 'font-semibold text-warning' : undefined}>
-      {n} of {daysSoFar} day{daysSoFar === 1 ? '' : 's'}
+  const fromDays = (n: number, of = daysSoFar) => (
+    <span className={n < of ? 'font-semibold text-warning' : undefined}>
+      {n} of {of} day{of === 1 ? '' : 's'}
     </span>
   );
   // Read against the week's average, so a calorie-cycling member's is the planned average day (low and high days together).
@@ -188,6 +187,26 @@ export function CoachMemberOverview({
     const engine = toEngineProfile(profile);
     return averageDayTarget(engine ? weeklyTarget(engine, programWeek) : null);
   }, [profile, programWeek]);
+  // Calories include Quick Adds with no macros (R11), and a day whose food was all deleted is not a food day (M2). The averages use
+  // full days only: not today (still going) and not a part-logged day such as a shake and nothing else (NU25).
+  const foodSplit = splitFoodDays(weekDays.filter(hasFoodLogged), todayIso, thisWeek, dayTarget?.calories ?? null, dayCaloriesOf);
+  const kcalAvg = avg(foodSplit.full.map(dayCaloriesOf));
+  const proteinAvg = avg(foodSplit.full.map((l) => l.protein));
+  const partDays = foodSplit.part.length;
+  const foodHint = (target: string | null) =>
+    foodSplit.completedDays === 0 ? (
+      <>Counted from tomorrow{target ? <> · target {target}</> : null}</>
+    ) : (
+      <>
+        {foodSplit.full.length > 0 ? fromDays(foodSplit.full.length, foodSplit.completedDays) : <span className="font-semibold text-warning">No full day logged</span>}
+        {target && <> · target {target}</>}
+        {partDays > 0 && (
+          <span className="block">
+            {partDays} part-logged day{partDays === 1 ? '' : 's'} left out
+          </span>
+        )}
+      </>
+    );
   const attendedThisWeek = bookings.filter((b) => b.attended && b.booking_date >= thisWeek).length;
   const perWeek = membership?.package?.credits_per_week ?? null;
   const loggedWorkoutDays = new Set(workoutLogs.filter((w) => w.logged_at.slice(0, 10) >= thisWeek).map((w) => w.logged_at.slice(0, 10))).size;
@@ -313,7 +332,10 @@ export function CoachMemberOverview({
   })();
   const { run: runReviewed, busy: reviewing } = useAction();
   const memberSince = profile?.join_date ?? null;
-  const notes = journalEntries.slice(0, 2);
+  // Coach-added injuries (Notes → Injuries & Limitations) always show, beside the member's own health notes. They used to show only
+  // when they were among the two newest notes of any kind (CL9).
+  const injuries = journalEntries.filter((n) => n.kind === 'injury');
+  const notes = journalEntries.filter((n) => n.kind !== 'injury').slice(0, 2);
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 lg:grid lg:grid-cols-5 lg:items-start lg:gap-4 lg:space-y-0">
@@ -354,6 +376,18 @@ export function CoachMemberOverview({
           <p className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-black dark:text-zinc-100">
             <b className="text-warning">Health notes:</b> {profile.health_notes}
           </p>
+        )}
+        {injuries.length > 0 && (
+          <div className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-black dark:text-zinc-100">
+            <b className="text-warning">Injuries &amp; limitations</b>
+            <ul className="mt-0.5 space-y-0.5">
+              {injuries.map((i) => (
+                <li key={i.id} className="whitespace-pre-wrap">
+                  {i.body} <span className="text-zinc-500">· {shortDate(i.created_at.slice(0, 10))}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className="mt-3 flex gap-2 sm:max-w-sm">
           <button type="button" onClick={() => onNavigate('Messages')} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground">
@@ -447,19 +481,23 @@ export function CoachMemberOverview({
               </>
             }
           />
+          {/* Coloured against the target as steps and sleep are against theirs, with protein beside it (CL13, DB11). */}
           {!isPhoto && (
             <Tile
               icon={Utensils}
               label="Calories (avg)"
               value={kcalAvg != null ? Math.round(kcalAvg).toLocaleString() : '—'}
-              hint={
-                kcalAvg != null || dayTarget ? (
-                  <>
-                    {kcalAvg != null ? fromDays(foodDays.length) : <span className="font-semibold text-warning">No food logged</span>}
-                    {dayTarget && <> · target {Math.round(dayTarget.calories).toLocaleString()}</>}
-                  </>
-                ) : undefined
-              }
+              tone={kcalAvg != null && dayTarget ? calorieTone(kcalAvg, dayTarget.calories) : null}
+              hint={foodHint(dayTarget ? Math.round(dayTarget.calories).toLocaleString() : null)}
+            />
+          )}
+          {!isPhoto && (
+            <Tile
+              icon={Beef}
+              label="Protein (avg)"
+              value={proteinAvg != null ? `${Math.round(proteinAvg)}g` : '—'}
+              tone={proteinAvg != null && dayTarget ? proteinTone(proteinAvg, dayTarget.protein) : null}
+              hint={foodHint(dayTarget ? `${Math.round(dayTarget.protein)}g` : null)}
             />
           )}
           <Tile

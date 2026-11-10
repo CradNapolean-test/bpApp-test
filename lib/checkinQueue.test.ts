@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { checkinRowHint, isQueuedCheckin, nextQueuedCheckin, saveCheckinQueue, type QueuedCheckin } from './checkinQueue';
+import { NEXT_CHECKIN_LOOKUPS, checkinRowHint, isQueuedCheckin, nextQueuedCheckin, nextUnreviewedCheckin, saveCheckinQueue, type QueuedCheckin } from './checkinQueue';
 
 const item = (clientId: string, weekStart: string, name = clientId): QueuedCheckin => ({
   clientId,
@@ -67,5 +67,43 @@ describe('check-in queue (UX6)', () => {
 
     vi.stubGlobal('sessionStorage', { getItem: () => '{not json', setItem: () => {} });
     expect(nextQueuedCheckin('a', '2026-10-26')).toBeNull();
+  });
+
+  describe('skipping weeks reviewed since the list was saved', () => {
+    const reviewedBy = (weeks: Record<string, string[]>) => vi.fn(async (clientId: string) => weeks[clientId] ?? []);
+
+    it('skips a week already reviewed and offers the next one that is not', async () => {
+      saveCheckinQueue([item('a', '2026-10-26'), item('b', '2026-10-26'), item('c', '2026-10-26'), item('a', '2026-10-19')]);
+      const lookup = reviewedBy({ b: ['2026-10-26'] });
+      expect(await nextUnreviewedCheckin('a', '2026-10-26', lookup)).toMatchObject({ clientId: 'c' });
+    });
+
+    it("skips the same member's other week once that is reviewed too, looking each member up once", async () => {
+      saveCheckinQueue([item('a', '2026-10-26'), item('b', '2026-10-26'), item('a', '2026-10-19'), item('b', '2026-10-19')]);
+      const lookup = reviewedBy({ b: ['2026-10-26', '2026-10-19'], a: ['2026-10-26', '2026-10-19'] });
+      expect(await nextUnreviewedCheckin('a', '2026-10-26', lookup)).toBeNull();
+      expect(lookup).toHaveBeenCalledTimes(2);
+    });
+
+    it('offers the next one as before when the lookup fails', async () => {
+      saveCheckinQueue([item('a', '2026-10-26'), item('b', '2026-10-26')]);
+      const failing = vi.fn(async () => {
+        throw new Error('offline');
+      });
+      expect(await nextUnreviewedCheckin('a', '2026-10-26', failing)).toMatchObject({ clientId: 'b' });
+    });
+
+    it('stops looking after a few members and offers the next one unchecked', async () => {
+      const many = Array.from({ length: NEXT_CHECKIN_LOOKUPS + 2 }, (_, i) => item(`m${i}`, '2026-10-26'));
+      saveCheckinQueue([item('a', '2026-10-26'), ...many]);
+      const allReviewed = vi.fn(async () => ['2026-10-26']);
+      expect(await nextUnreviewedCheckin('a', '2026-10-26', allReviewed)).toMatchObject({ clientId: `m${NEXT_CHECKIN_LOOKUPS}` });
+      expect(allReviewed).toHaveBeenCalledTimes(NEXT_CHECKIN_LOOKUPS);
+    });
+
+    it('gives nothing for a week not on the list', async () => {
+      saveCheckinQueue([item('a', '2026-10-26')]);
+      expect(await nextUnreviewedCheckin('z', '2026-10-26', reviewedBy({}))).toBeNull();
+    });
   });
 });

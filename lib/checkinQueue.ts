@@ -46,6 +46,38 @@ export function nextQueuedCheckin(clientId: string, weekStart: string): QueuedCh
   }
 }
 
+// How many members' reviewed weeks "Next check-in" looks up before it stops checking and offers the next one as it is.
+export const NEXT_CHECKIN_LOOKUPS = 10;
+
+// The first check-in after this one on the saved list that hasn't been reviewed since the list was saved: by this coach on another
+// page or tab, or from the dashboard's Reviewed button. It used to offer the next one on the list whatever had happened to it since.
+// `reviewedWeeksOf` gives a member's reviewed weeks (getReviewedWeeks); a member whose lookup fails is offered as before.
+export async function nextUnreviewedCheckin(
+  clientId: string,
+  weekStart: string,
+  reviewedWeeksOf: (clientId: string) => Promise<string[]>
+): Promise<QueuedCheckin | null> {
+  let items: QueuedCheckin[];
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(KEY) ?? '[]') as QueuedCheckin[];
+    items = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return null;
+  }
+  const at = items.findIndex((i) => i.clientId === clientId && i.weekStart === weekStart);
+  if (at < 0) return null;
+  const reviewed = new Map<string, Set<string>>();
+  for (const item of items.slice(at + 1)) {
+    if (!reviewed.has(item.clientId)) {
+      if (reviewed.size >= NEXT_CHECKIN_LOOKUPS) return item;
+      const weeks = await reviewedWeeksOf(item.clientId).catch(() => [] as string[]);
+      reviewed.set(item.clientId, new Set(weeks));
+    }
+    if (!reviewed.get(item.clientId)!.has(item.weekStart)) return item;
+  }
+  return null;
+}
+
 // Whether this week is on the saved list at all (to say "that was the last one" rather than nothing).
 export function isQueuedCheckin(clientId: string, weekStart: string): boolean {
   try {

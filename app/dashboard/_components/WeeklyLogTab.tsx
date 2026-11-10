@@ -23,7 +23,7 @@ import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 import { getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
 import { sendMessage } from '@/lib/data/chat';
 import { checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
-import { isQueuedCheckin, nextQueuedCheckin } from '@/lib/checkinQueue';
+import { isQueuedCheckin, nextUnreviewedCheckin, type QueuedCheckin } from '@/lib/checkinQueue';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
@@ -269,6 +269,7 @@ function WeekLog({
   const dayTarget = targetForDayType(d.day_type);
   const attendedToday = attendedSessions.find((a) => a.date === focusedDate) ?? null;
   const gymOn = d.gym_session || attendedToday != null;
+  const weekNotes = weekDates.map((date) => ({ date, text: days[date].notes?.trim() ?? '' })).filter((n) => n.text !== '');
 
   return (
     <div className="space-y-6">
@@ -371,7 +372,9 @@ function WeekLog({
               type="button"
               aria-pressed={isFocused}
               onClick={() => setFocusedDate(date)}
-              className={`flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors ${
+              // `relative` keeps the sr-only label (absolutely positioned) inside the chip: with no positioned parent it escaped the
+              // scrolling strip and made the whole page 460px wide on a 375px phone (CW15).
+              className={`relative flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors ${
                 isFocused
                   ? 'border-accent bg-accent text-accent-foreground'
                   : 'border-black/[.05] text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
@@ -615,6 +618,27 @@ function WeekLog({
           </p>
         )}
       </div>
+
+      {/* Every day's notes in one list, just above the reply: a note like "Feeling unwell today" was only seen by tapping that day (CV15). */}
+      {isCoachView && (
+        <div className={cardCls}>
+          <h4 className="text-sm font-bold text-black dark:text-zinc-50">Their notes this week</h4>
+          {weekNotes.length === 0 ? (
+            <p className="mt-1 text-sm text-zinc-400">No notes this week.</p>
+          ) : (
+            <ul className="mt-2 space-y-2.5">
+              {weekNotes.map(({ date, text }) => (
+                <li key={date}>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">
+                    {new Date(date + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm text-black dark:text-zinc-50">{text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -789,8 +813,22 @@ export function WeeklyLogTab(
 // Once a week is reviewed, the next one on the dashboard's list, so the coach can work through them without going back each time
 // (UX6). Only when the coach came from that list: the order is kept for this browser tab (lib/checkinQueue.ts). Shown after the week
 // has loaded, so it is never rendered on the server.
+// Weeks reviewed since the list was saved (on another page, in another tab, or with the dashboard's Reviewed button) are skipped.
 function NextCheckin({ clientId, weekStart }: { clientId: string; weekStart: string }) {
-  const [queued] = useState(() => ({ next: nextQueuedCheckin(clientId, weekStart), onList: isQueuedCheckin(clientId, weekStart) }));
+  const [queued, setQueued] = useState<{ next: QueuedCheckin | null; onList: boolean } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const onList = isQueuedCheckin(clientId, weekStart);
+    (onList ? nextUnreviewedCheckin(clientId, weekStart, getReviewedWeeks) : Promise.resolve(null))
+      .catch(() => null)
+      .then((next) => {
+        if (live) setQueued({ next, onList });
+      });
+    return () => {
+      live = false;
+    };
+  }, [clientId, weekStart]);
+  if (!queued) return null;
   if (queued.next) {
     return (
       <Link href={queued.next.href} className={`${cardCls} flex items-center gap-3`}>
