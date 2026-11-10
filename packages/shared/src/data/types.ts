@@ -671,8 +671,10 @@ export interface ScheduleOccurrence {
   cutoffHours: number;
   blackoutStart: string | null;
   blackoutEnd: string | null;
-  // Past bookings on this date not yet marked attended / no-show.
+  // Booked places not yet marked attended / no-show, once the session has started (CV9/BK28).
   unmarkedCount?: number;
+  // How many are on the waitlist (coach screens; a member reads only their own bookings).
+  waitlistCount?: number;
   // Only set when the coach asks for cancelled dates too: this date was cancelled, and why (if they said).
   cancelled?: boolean;
   cancelReason?: string | null;

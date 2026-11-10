@@ -10,7 +10,9 @@ import { createClient } from '@/lib/supabase/server';
 import { affectedMembers, type AffectedBooking } from '@/lib/classCancelPush';
 import { notifyClassCancelled } from '@/lib/classCancelNotify';
 import { notifyWaitlistPromotion, waitlistBeforeCancel } from '@/lib/waitlistPromotionNotify';
-import { addDays, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
+import { countSessionBookings } from '@/lib/classSessionCounts';
+import { nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { addDays, DEFAULT_TIMEZONE, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
 import type {
   AttendanceStatus,
   BookingRow,
@@ -289,7 +291,8 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
 
   // Gym blackout window (0064). If the migration hasn't been applied yet the columns don't
   // exist -- fall back to no blackout rather than failing the whole dashboard load.
-  const { data: gym } = await supabase.from('gyms').select('blackout_start, blackout_end').eq('id', gymId).maybeSingle();
+  // The timezone (same migration) says when a session has started, for "to mark".
+  const { data: gym } = await supabase.from('gyms').select('blackout_start, blackout_end, timezone').eq('id', gymId).maybeSingle();
   const blackoutStart: string | null = gym?.blackout_start ?? null;
   const blackoutEnd: string | null = gym?.blackout_end ?? null;
 
@@ -360,21 +363,19 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
 
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
-    .select('class_id, booking_date, attended, no_show')
+    .select('class_id, booking_date, status, attended, no_show')
     .in('class_id', classIds)
     .in('booking_date', dates)
-    .eq('status', 'booked');
+    .in('status', ['booked', 'waitlist']);
   if (bookingsError) raise(bookingsError);
 
-  const todayIso = toIsoDate(new Date());
-  const countMap = new Map<string, number>();
-  // Past bookings the coach hasn't marked attended or no-show yet -- what Attendance nudges about.
-  const unmarkedMap = new Map<string, number>();
-  for (const b of bookings ?? []) {
-    const key = `${b.class_id}|${b.booking_date}`;
-    countMap.set(key, (countMap.get(key) ?? 0) + 1);
-    if (b.booking_date < todayIso && !b.attended && !b.no_show) unmarkedMap.set(key, (unmarkedMap.get(key) ?? 0) + 1);
-  }
+  // Booked places, the waitlist, and booked places the coach hasn't marked attended or no-show yet once the session has started (at the
+  // gym's clock), which is what Sessions and the dashboard nudge about. A member reads only their own rows, so for them the waitlist count
+  // is their own; only the coach's screens show it.
+  const startTimeOf = new Map((classes ?? []).map((c) => [c.id as string, (c.start_time as string | null) ?? null]));
+  const counts = countSessionBookings(bookings ?? [], startTimeOf, nowLocalMs(gym?.timezone || DEFAULT_TIMEZONE));
+  const countMap = counts.booked;
+  const unmarkedMap = counts.unmarked;
 
   // A member can only read their own bookings, so the count above is only theirs. Ask for the real
   // per-session totals (counts only, never who) so "spots left" is right for everyone. Falls back to
@@ -396,6 +397,7 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
       ...o,
       bookedCount: countMap.get(`${o.classId}|${o.date}`) ?? 0,
       unmarkedCount: unmarkedMap.get(`${o.classId}|${o.date}`) ?? 0,
+      waitlistCount: counts.waiting.get(`${o.classId}|${o.date}`) ?? 0,
       ...(includeCancelled && cancelledKeys.has(`${o.classId}|${o.date}`)
         ? { cancelled: true, cancelReason: cancelledKeys.get(`${o.classId}|${o.date}`) ?? null }
         : {}),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Ban, CalendarDays, Check, Dumbbell, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
@@ -29,11 +29,14 @@ function longDay(iso: string): string {
   return parseDay(iso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 }
 
+const monthShort = (iso: string) => parseDay(iso).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+
 export function SessionsView({
   occurrences,
   clients,
   timezone,
   initialTarget = null,
+  initialDate = null,
 }: {
   occurrences: ScheduleOccurrence[];
   clients: CoachClientRow[];
@@ -41,6 +44,8 @@ export function SessionsView({
   timezone?: string | null;
   // Open straight onto one session (from a dashboard link).
   initialTarget?: { date: string; classId: string } | null;
+  // Open on a day without opening a session (Run this class's "← Sessions" link, CS2).
+  initialDate?: string | null;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -51,7 +56,7 @@ export function SessionsView({
 
   const todayIso = todayIsoInTz(timezone ?? DEFAULT_TIMEZONE);
   const dates = useMemo(() => [...new Set(occurrences.map((o) => o.date))].sort(), [occurrences]);
-  const [pickedDate, setPickedDate] = useState<string | null>(initialTarget?.date ?? null);
+  const [pickedDate, setPickedDate] = useState<string | null>(initialTarget?.date ?? initialDate ?? null);
   const defaultDate = dates.find((d) => d >= todayIso) ?? dates[dates.length - 1] ?? null;
   const selectedDate = pickedDate && dates.includes(pickedDate) ? pickedDate : defaultDate;
 
@@ -209,7 +214,6 @@ export function SessionsView({
     .slice(0, 20);
   const sessionFull = !!open && open.bookedCount >= open.capacity;
   const noCredits = !!open && !!chosenClient && chosenClient.balance < open.creditCost;
-  const isPast = (o: ScheduleOccurrence) => o.date < todayIso;
   // Once a session has started it can't be cancelled: that would refund everyone, including the people who came (BK27; the database
   // refuses it too, migration 0158). Compared at the gym's wall clock.
   const hasStarted = (o: ScheduleOccurrence) => startMs(o.date, o.startTime) <= nowLocalMs(timezone ?? DEFAULT_TIMEZONE);
@@ -226,37 +230,46 @@ export function SessionsView({
           className="flex w-full items-center justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-left"
         >
           <span className="text-sm font-semibold text-black dark:text-zinc-50">
-            {needsMarking.length} past {needsMarking.length === 1 ? 'session needs' : 'sessions need'} marking
+            {needsMarking.length} {needsMarking.length === 1 ? 'session needs' : 'sessions need'} marking
           </span>
           <span className="shrink-0 text-xs font-bold text-warning">Mark now</span>
         </button>
       )}
 
+      {/* The strip spans about seven weeks, so day numbers repeat: each month is labelled where it starts (BK30). */}
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {dates.map((d) => {
+        {dates.map((d, i) => {
           const dt = parseDay(d);
           const active = d === selectedDate;
           const past = d < todayIso;
           const unmarked = occurrences.some((o) => o.date === d && (o.unmarkedCount ?? 0) > 0);
+          const newMonth = i === 0 || d.slice(0, 7) !== dates[i - 1].slice(0, 7);
           return (
-            <button
-              key={d}
-              ref={active ? activeChip : undefined}
-              type="button"
-              onClick={() => setPickedDate(d)}
-              aria-pressed={active}
-              className={`flex w-[3.25rem] shrink-0 flex-col items-center gap-0.5 rounded-2xl border py-2.5 transition-colors ${
-                active
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : past
-                    ? 'border-transparent text-zinc-400 dark:text-zinc-600'
-                    : 'border-black/[.06] bg-card text-black dark:border-white/10 dark:text-zinc-100'
-              }`}
-            >
-              <span className="text-[11px] font-bold uppercase opacity-80">{WEEKDAY_SHORT[dt.getUTCDay()]}</span>
-              <span className="text-base font-black leading-none">{dt.getUTCDate()}</span>
-              <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${unmarked ? 'bg-warning' : d === todayIso ? (active ? 'bg-accent-foreground' : 'bg-accent') : 'bg-transparent'}`} />
-            </button>
+            <Fragment key={d}>
+              {newMonth && (
+                <span aria-hidden className="flex shrink-0 items-center px-0.5 text-[11px] font-extrabold uppercase tracking-wide text-zinc-500">
+                  {monthShort(d)}
+                </span>
+              )}
+              <button
+                ref={active ? activeChip : undefined}
+                type="button"
+                onClick={() => setPickedDate(d)}
+                aria-pressed={active}
+                aria-label={longDay(d)}
+                className={`flex w-[3.25rem] shrink-0 flex-col items-center gap-0.5 rounded-2xl border py-2.5 transition-colors ${
+                  active
+                    ? 'border-accent bg-accent text-accent-foreground'
+                    : past
+                      ? 'border-transparent text-zinc-400 dark:text-zinc-600'
+                      : 'border-black/[.06] bg-card text-black dark:border-white/10 dark:text-zinc-100'
+                }`}
+              >
+                <span className="text-[11px] font-bold uppercase opacity-80">{WEEKDAY_SHORT[dt.getUTCDay()]}</span>
+                <span className="text-base font-black leading-none">{dt.getUTCDate()}</span>
+                <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${unmarked ? 'bg-warning' : d === todayIso ? (active ? 'bg-accent-foreground' : 'bg-accent') : 'bg-transparent'}`} />
+              </button>
+            </Fragment>
           );
         })}
       </div>
@@ -280,6 +293,7 @@ export function SessionsView({
           const full = o.bookedCount >= o.capacity;
           const fill = Math.min(100, Math.round((o.bookedCount / o.capacity) * 100));
           const toMark = o.unmarkedCount ?? 0;
+          const waiting = o.waitlistCount ?? 0;
           return (
             <button
               key={occKey(o)}
@@ -303,9 +317,11 @@ export function SessionsView({
                   <span className="h-1 w-16 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
                     <span className={`block h-full rounded-full ${full ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${fill}%` }} />
                   </span>
+                  {/* A full session reads 12 / 12 whether nobody or six are waiting (BK15). */}
+                  {waiting > 0 && <span className="text-[11px] font-bold text-warning">{waiting} waiting</span>}
                   {toMark > 0 ? (
                     <span className="text-[11px] font-bold text-warning">{toMark} to mark</span>
-                  ) : isPast(o) && o.bookedCount > 0 ? (
+                  ) : hasStarted(o) && o.bookedCount > 0 ? (
                     <span className="text-[11px] font-semibold text-success">Marked</span>
                   ) : null}
                 </span>
@@ -321,6 +337,7 @@ export function SessionsView({
           <p className="-mt-2 mb-3 text-xs text-zinc-500">
             {longDay(open.date)}
             {open.cancelled ? ' · Cancelled' : ` · ${open.bookedCount} of ${open.capacity} booked`}
+            {!open.cancelled && (open.waitlistCount ?? 0) > 0 && ` · ${open.waitlistCount} waiting`}
           </p>
           {open.cancelled && open.cancelReason && <p className="mb-3 rounded-xl bg-black/5 px-3 py-2 text-sm text-zinc-700 dark:bg-white/10 dark:text-zinc-200">Reason: {open.cancelReason}</p>}
 
