@@ -66,6 +66,14 @@ export function cancelNote(deadline: CancelDeadline): string {
     : `Cancel by ${formatClock(deadline.time)} to keep your credit`;
 }
 
+// The cancel line on the booking sheet. Once the deadline has passed, a booking made now can't be refunded, so say that instead of
+// "Cancel by ..." (BK21). `late` lets the sheet show it as a warning.
+export function bookSheetNote(deadline: CancelDeadline, nowMs: number): { text: string; late: boolean } {
+  if (nowMs < deadline.deadlineMs) return { text: cancelNote(deadline), late: false };
+  const when = `${formatClock(deadline.time)}${deadline.dayBefore ? ' the night before' : ''}`;
+  return { text: `The cancel deadline (${when}) has passed. If you book now and can't come, your credit won't be refunded.`, late: true };
+}
+
 // "Now" as wall-clock ms in the given IANA timezone, for comparing against deadlineMs.
 export function nowLocalMs(timeZone: string, now: Date = new Date()): number {
   const parts = new Intl.DateTimeFormat('en-CA', {

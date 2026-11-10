@@ -8,8 +8,9 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { Badge, Card, Segmented } from '@/app/_components/ui';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { bookClass, cancelBooking, getMemberTimetable } from '@/lib/data/classes';
-import { addDays, DEFAULT_TIMEZONE, formatClassTime, startOfWeek, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
-import { cancelDeadline, cancelNote, nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { bookSheetNote, cancelDeadline, cancelNote, nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { cancelSummary, nextResetDate, startMs } from '@/lib/utils/booking';
 import { cancellationPolicyText } from '@/lib/bookingRules';
 import { CheckInButton } from './CheckInButton';
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
@@ -90,7 +91,8 @@ export function ClassesArea({
   const tz = timezone ?? DEFAULT_TIMEZONE;
   const todayIso = todayIsoInTz(tz);
   const nowMs = nowLocalMs(tz);
-  const nextReset = toIsoDate(addDays(startOfWeek(new Date()), 7));
+  // Weekly credits reset on Saturday (migration 0144), the same day the Credits screen and the phone app give (BK2).
+  const nextReset = nextResetDate(todayIso);
 
   const advanceDays = membership?.package?.advance_booking_days ?? null;
   const windowDays = advanceDays ?? 13;
@@ -102,11 +104,6 @@ export function ClassesArea({
 
   const blackoutStart = gymBlackout?.start ?? occurrences.find((o) => o.blackoutStart)?.blackoutStart ?? null;
   const blackoutEnd = gymBlackout?.end ?? occurrences.find((o) => o.blackoutEnd)?.blackoutEnd ?? null;
-
-  function startMs(date: string, startTime: string | null): number {
-    const [h, m] = (startTime ?? '00:00').split(':').map(Number);
-    return Date.parse(`${date}T00:00:00Z`) + (h * 60 + (m || 0)) * 60_000;
-  }
 
   // Only sessions still ahead of us and inside this member's booking window are offered.
   const bookable = occurrences.filter((o) => startMs(o.date, o.startTime) > nowMs && o.date <= lastDate);
@@ -345,9 +342,7 @@ export function ClassesArea({
             </div>
           ) : (
             upcoming.map((b, i) => {
-              const waitlisted = b.status === 'waitlist';
-              const deadline = !waitlisted && b.class ? cancelDeadline(b.booking_date, b.class.start_time, b.class.cutoff_hours, blackoutStart, blackoutEnd) : null;
-              const late = deadline != null && nowMs >= deadline.deadlineMs;
+              const { waitlisted, late, deadline, refundUntilStart } = cancelSummary(b, nowMs, blackoutStart, blackoutEnd);
               const showDay = i === 0 || upcoming[i - 1].booking_date !== b.booking_date;
               return (
                 <div key={b.id}>
@@ -371,7 +366,11 @@ export function ClassesArea({
                     </div>
                     {deadline && (
                       <p className={`mt-2 text-xs ${late ? 'text-danger' : 'text-zinc-500'}`}>
-                        {late ? 'Past the cancel deadline — cancelling now forfeits your credit' : cancelNote(deadline)}
+                        {refundUntilStart
+                          ? 'You came off the waitlist after the cancel deadline: cancel any time before it starts for a full refund'
+                          : late
+                            ? 'Past the cancel deadline — cancelling now forfeits your credit'
+                            : cancelNote(deadline)}
                       </p>
                     )}
                     {!waitlisted && b.booking_date === todayIso && (
@@ -391,7 +390,10 @@ export function ClassesArea({
         const full = bookSheet.bookedCount >= bookSheet.capacity;
         const cost = bookSheet.creditCost;
         const enough = creditsBalance >= cost;
-        const deadline = cancelDeadline(bookSheet.date, bookSheet.startTime, bookSheet.cutoffHours, bookSheet.blackoutStart, bookSheet.blackoutEnd);
+        const note = bookSheetNote(
+          cancelDeadline(bookSheet.date, bookSheet.startTime, bookSheet.cutoffHours, bookSheet.blackoutStart, bookSheet.blackoutEnd),
+          nowMs
+        );
         return (
           <BottomSheet title={full ? 'Join the waitlist' : 'Book this session'} onClose={() => setSheet(null)}>
             <div className="divide-y divide-black/5 dark:divide-white/10">
@@ -408,10 +410,10 @@ export function ClassesArea({
                 </>
               )}
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+            <p className={`mt-3 text-xs leading-relaxed ${!full && note.late ? 'font-semibold text-warning' : 'text-zinc-500'}`}>
               {full
                 ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit — nothing is used until then."
-                : cancelNote(deadline)}
+                : note.text}
             </p>
             {!full && !enough && (
               <p className="mt-2 rounded-xl bg-warning/10 p-3 text-xs font-semibold text-warning">
@@ -440,11 +442,7 @@ export function ClassesArea({
       })()}
 
       {cancelSheet && (() => {
-        const waitlisted = cancelSheet.status === 'waitlist';
-        const deadline = !waitlisted && cancelSheet.class
-          ? cancelDeadline(cancelSheet.booking_date, cancelSheet.class.start_time, cancelSheet.class.cutoff_hours, blackoutStart, blackoutEnd)
-          : null;
-        const late = deadline != null && nowMs >= deadline.deadlineMs;
+        const { waitlisted, late, refundUntilStart } = cancelSummary(cancelSheet, nowMs, blackoutStart, blackoutEnd);
         return (
           <BottomSheet title={waitlisted ? 'Leave the waitlist?' : 'Cancel this booking?'} onClose={() => setSheet(null)}>
             <div className="divide-y divide-black/5 dark:divide-white/10">
@@ -455,9 +453,11 @@ export function ClassesArea({
             <p className={`mt-3 text-xs leading-relaxed ${late ? 'font-semibold text-danger' : 'text-zinc-500'}`}>
               {waitlisted
                 ? "You won't be charged anything."
-                : late
-                  ? "It's too close to the session to get your credit back. You can still cancel, but it won't be refunded."
-                  : 'You can cancel now and get your credit back.'}
+                : refundUntilStart
+                  ? 'You came off the waitlist after the cancel deadline, so you get your credit back if you cancel any time before it starts.'
+                  : late
+                    ? "It's too close to the session to get your credit back. You can still cancel, but it won't be refunded."
+                    : 'You can cancel now and get your credit back.'}
             </p>
             <div className="mt-5 flex gap-2.5">
               <button

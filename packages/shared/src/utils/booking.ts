@@ -43,17 +43,19 @@ export function bookSummary(occ: ScheduleOccurrence, creditsBalance: number) {
   return { full, cost: occ.creditCost, enough, left: creditsBalance - occ.creditCost, canConfirm: full || enough };
 }
 
-// What the cancel sheet shows. `late` means inside the cut-off: cancelling now forfeits the credit.
+// What the cancel sheet shows. `late` means cancelling now forfeits the credit: inside the cut-off, unless the booking came off the
+// waitlist after the cut-off, which is refunded until the session starts (`refundUntilStart`, decision D1, migration 0158's cancel_booking).
 export function cancelSummary(
-  booking: Pick<BookingRow, 'status' | 'booking_date'> & { class: { start_time: string | null; cutoff_hours: number } | null },
+  booking: Pick<BookingRow, 'status' | 'booking_date' | 'promoted_after_cutoff'> & { class: { start_time: string | null; cutoff_hours: number } | null },
   nowMs: number,
   blackoutStart: string | null,
   blackoutEnd: string | null,
-): { waitlisted: boolean; late: boolean; deadline: CancelDeadline | null } {
+): { waitlisted: boolean; late: boolean; deadline: CancelDeadline | null; refundUntilStart: boolean } {
   const waitlisted = booking.status === 'waitlist';
-  if (waitlisted || !booking.class) return { waitlisted, late: false, deadline: null };
+  if (waitlisted || !booking.class) return { waitlisted, late: false, deadline: null, refundUntilStart: false };
   const deadline = cancelDeadline(booking.booking_date, booking.class.start_time, booking.class.cutoff_hours, blackoutStart, blackoutEnd);
-  return { waitlisted, late: nowMs >= deadline.deadlineMs, deadline };
+  const refundUntilStart = !!booking.promoted_after_cutoff && nowMs < startMs(booking.booking_date, booking.class.start_time);
+  return { waitlisted, late: nowMs >= deadline.deadlineMs && !refundUntilStart, deadline, refundUntilStart };
 }
 
 // The Saturday a member's credit week started on. Weekly credits reset on SATURDAY (migration 0144), so a member can book the week

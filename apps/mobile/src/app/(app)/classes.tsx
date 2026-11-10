@@ -173,7 +173,7 @@ export default function Classes() {
       </ScrollScreen>
 
       {sheet?.kind === 'book' ? (
-        <BookSheet occ={sheet.occ} balance={creditsQ.data?.balance ?? 0} busy={book.isPending} error={book.error?.message ?? null} onConfirm={() => confirmBook(sheet.occ)} onClose={() => setSheet(null)} />
+        <BookSheet occ={sheet.occ} balance={creditsQ.data?.balance ?? 0} nowMs={nowMs} busy={book.isPending} error={book.error?.message ?? null} onConfirm={() => confirmBook(sheet.occ)} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.kind === 'cancel' ? (
         <CancelSheet booking={sheet.booking} nowMs={nowMs} blackoutStart={blackoutStart} blackoutEnd={blackoutEnd} busy={cancel.isPending} error={cancel.error?.message ?? null} onConfirm={() => confirmCancel(sheet.booking)} onClose={() => setSheet(null)} />

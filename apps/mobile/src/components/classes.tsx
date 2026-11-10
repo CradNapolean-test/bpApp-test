@@ -3,7 +3,7 @@ import { ScrollView, View } from 'react-native';
 
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@ballistic/shared/data/types';
 import { bookSummary, cancelSummary, slotState, spots } from '@ballistic/shared/utils/booking';
-import { cancelDeadline, cancelNote } from '@ballistic/shared/utils/cancelDeadline';
+import { bookSheetNote, cancelDeadline, cancelNote } from '@ballistic/shared/utils/cancelDeadline';
 import { addDays, formatClassTime, toIsoDate, WEEKDAY_SHORT } from '@ballistic/shared/utils/dates';
 
 import { Pressable } from '@/components/press';
@@ -117,9 +117,10 @@ function SummaryRow({ label, value, tone }: { label: string; value: string; tone
   );
 }
 
-export function BookSheet({ occ, balance, busy, error, onConfirm, onClose }: { occ: ScheduleOccurrence; balance: number; busy: boolean; error: string | null; onConfirm: () => void; onClose: () => void }) {
+export function BookSheet({ occ, balance, nowMs, busy, error, onConfirm, onClose }: { occ: ScheduleOccurrence; balance: number; nowMs: number; busy: boolean; error: string | null; onConfirm: () => void; onClose: () => void }) {
   const s = bookSummary(occ, balance);
-  const deadline = cancelDeadline(occ.date, occ.startTime, occ.cutoffHours, occ.blackoutStart, occ.blackoutEnd);
+  // After the cancel deadline the sheet says the credit won't come back, instead of "Cancel by ..." (BK21).
+  const note = bookSheetNote(cancelDeadline(occ.date, occ.startTime, occ.cutoffHours, occ.blackoutStart, occ.blackoutEnd), nowMs);
   return (
     <SheetFrame title={s.full ? 'Join the waitlist' : 'Book this session'} onClose={onClose}>
       <View>
@@ -132,8 +133,8 @@ export function BookSheet({ occ, balance, busy, error, onConfirm, onClose }: { o
           </>
         ) : null}
       </View>
-      <AppText variant="small" color="muted">
-        {s.full ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit. Nothing is used until then." : cancelNote(deadline)}
+      <AppText variant="small" color={!s.full && note.late ? 'warning' : 'muted'} style={!s.full && note.late ? { fontWeight: '600' } : undefined}>
+        {s.full ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit. Nothing is used until then." : note.text}
       </AppText>
       {!s.full && !s.enough ? <AppText color="warning" style={{ fontWeight: '600' }}>You don&apos;t have enough credits for this session. Ask your coach to top up.</AppText> : null}
       {error ? <AppText color="danger">{error}</AppText> : null}
@@ -146,7 +147,7 @@ export function BookSheet({ occ, balance, busy, error, onConfirm, onClose }: { o
 }
 
 export function CancelSheet({ booking, nowMs, blackoutStart, blackoutEnd, busy, error, onConfirm, onClose }: { booking: BookingRow; nowMs: number; blackoutStart: string | null; blackoutEnd: string | null; busy: boolean; error: string | null; onConfirm: () => void; onClose: () => void }) {
-  const { waitlisted, late } = cancelSummary(booking, nowMs, blackoutStart, blackoutEnd);
+  const { waitlisted, late, refundUntilStart } = cancelSummary(booking, nowMs, blackoutStart, blackoutEnd);
   return (
     <SheetFrame title={waitlisted ? 'Leave the waitlist?' : 'Cancel this booking?'} onClose={onClose}>
       <View>
@@ -155,7 +156,13 @@ export function CancelSheet({ booking, nowMs, blackoutStart, blackoutEnd, busy, 
         {!waitlisted ? <SummaryRow label="Your credit" value={late ? 'Not refunded' : 'Refunded'} tone={late ? 'warn' : 'good'} /> : null}
       </View>
       <AppText variant="small" color={late ? 'danger' : 'muted'} style={late ? { fontWeight: '600' } : undefined}>
-        {waitlisted ? "You won't be charged anything." : late ? "It's too close to the session to get your credit back. You can still cancel, but it won't be refunded." : 'You can cancel now and get your credit back.'}
+        {waitlisted
+          ? "You won't be charged anything."
+          : refundUntilStart
+            ? 'You came off the waitlist after the cancel deadline, so you get your credit back if you cancel any time before it starts.'
+            : late
+              ? "It's too close to the session to get your credit back. You can still cancel, but it won't be refunded."
+              : 'You can cancel now and get your credit back.'}
       </AppText>
       {error ? <AppText color="danger">{error}</AppText> : null}
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -169,7 +176,7 @@ export function CancelSheet({ booking, nowMs, blackoutStart, blackoutEnd, busy, 
 // ---------- My bookings ----------
 export function MyBookingCard({ booking, todayIso, tz, now, nowMs, blackoutStart, blackoutEnd, onCancel }: { booking: BookingRow; todayIso: string; tz: string; now: Date; nowMs: number; blackoutStart: string | null; blackoutEnd: string | null; onCancel: () => void }) {
   const t = useTheme();
-  const { waitlisted, late, deadline } = cancelSummary(booking, nowMs, blackoutStart, blackoutEnd);
+  const { waitlisted, late, deadline, refundUntilStart } = cancelSummary(booking, nowMs, blackoutStart, blackoutEnd);
   return (
     <Card style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md }}>
@@ -188,7 +195,11 @@ export function MyBookingCard({ booking, todayIso, tz, now, nowMs, blackoutStart
       </View>
       {deadline ? (
         <AppText variant="small" color={late ? 'danger' : 'muted'}>
-          {late ? 'Past the cancel deadline. Cancelling now forfeits your credit.' : cancelNote(deadline)}
+          {refundUntilStart
+            ? 'You came off the waitlist after the cancel deadline: cancel any time before it starts for a full refund.'
+            : late
+              ? 'Past the cancel deadline. Cancelling now forfeits your credit.'
+              : cancelNote(deadline)}
         </AppText>
       ) : null}
       {!waitlisted && booking.booking_date === todayIso ? <CheckInStatus booking={booking} tz={tz} now={now} /> : null}

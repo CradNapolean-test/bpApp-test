@@ -85,8 +85,16 @@ describe('cancelSummary', () => {
   });
 
   it('is never late for a waitlist spot (nothing was charged) or a booking with no class loaded', () => {
-    expect(cancelSummary(b({ start_time: '06:00', cutoff_hours: 3 }, 'waitlist'), at('2026-10-13T05:59'), null, null)).toEqual({ waitlisted: true, late: false, deadline: null });
+    expect(cancelSummary(b({ start_time: '06:00', cutoff_hours: 3 }, 'waitlist'), at('2026-10-13T05:59'), null, null)).toEqual({ waitlisted: true, late: false, deadline: null, refundUntilStart: false });
     expect(cancelSummary(b(null), at('2026-10-13T05:59'), null, null)).toMatchObject({ late: false, deadline: null });
+  });
+
+  // Decision D1 (migration 0158): a place given from the waitlist after the cut-off is refunded until the session starts.
+  it('a booking moved off the waitlist after the cut-off is refunded until the session starts, then not', () => {
+    const promoted = { ...b({ start_time: '17:30', cutoff_hours: 3 }), promoted_after_cutoff: true }; // deadline 14:30, start 17:30
+    expect(cancelSummary(promoted, at('2026-10-13T17:29'), null, null)).toMatchObject({ late: false, refundUntilStart: true });
+    expect(cancelSummary(promoted, at('2026-10-13T17:30'), null, null)).toMatchObject({ late: true, refundUntilStart: false });
+    expect(cancelSummary({ ...promoted, promoted_after_cutoff: false }, at('2026-10-13T17:29'), null, null)).toMatchObject({ late: true, refundUntilStart: false });
   });
 });
 

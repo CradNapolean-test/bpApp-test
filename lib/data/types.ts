@@ -236,6 +236,10 @@ export interface BookingRow {
   created_at: string;
   attended: boolean;
   attended_at: string | null;
+  // Set when the booking came off the waitlist (migration 0158). promoted_after_cutoff: it came off after the cancel deadline, so it can be
+  // cancelled for a full refund until the session starts (decision D1). Optional: rows read before 0158 is applied don't have them.
+  promoted_at?: string | null;
+  promoted_after_cutoff?: boolean;
   class: ClassRow | null;
 }
 
