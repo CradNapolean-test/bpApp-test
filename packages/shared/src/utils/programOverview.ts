@@ -1,4 +1,4 @@
-import { exerciseIsVisible, type SectionedExercise, usesSections } from '../workoutSections';
+import { dayHighlights, dayLogProgress, type SectionedExercise } from '../workoutSections';
 
 // The list of workout days a member sees for a programme week: weekday badge, title, a couple of lift names, how
 // many are logged. Moved from the web WorkoutTab / ProgramDayList so web and mobile agree.
@@ -39,20 +39,20 @@ export function summariseDays(
 ): DaySummary[] {
   return days.map((day) => {
     const all = exercisesByDay.get(day.id) ?? [];
-    const sectioned = usesSections(all);
-    const chosen = chosenBlocksFor(day.id);
-    const visible = sectioned ? all.filter((ex) => exerciseIsVisible(ex, true, chosen)) : all;
-    const lifts = visible.filter((ex) => ex.block_type === 'exercise');
+    // The warm-up counts once and only the picked Strong / Conditioning blocks count, as on the open day (TR4, TR5).
+    const progress = dayLogProgress(all, chosenBlocksFor(day.id), (id) => loggedExerciseIds.has(id));
     return {
       id: day.id,
       weekNum: day.week_num,
       dayLabel: day.day_label,
       phaseLabel: day.phase_label,
       dayPosition: day.day_position,
-      exerciseCount: all.length,
-      liftCount: lifts.length,
-      loggedCount: lifts.filter((ex) => loggedExerciseIds.has(ex.id)).length,
-      highlights: [...lifts].sort((a, b) => a.sort_order - b.sort_order).slice(0, 2).map((ex) => ex.name),
+      // What the member will do, the same number the open day counts to (it read 17 here and "0 of 5" inside, TR5).
+      exerciseCount: progress.total,
+      liftCount: progress.total,
+      loggedCount: progress.done,
+      // The Lift, not the warm-up (TR7).
+      highlights: dayHighlights(all),
       done: all.some((ex) => loggedExerciseIds.has(ex.id)),
       isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek,
     };
@@ -69,8 +69,8 @@ export function daysForWeek<T extends { weekNum: number; dayPosition: number | n
 
 export const weekNumbers = (days: { weekNum: number }[]) => Array.from(new Set(days.map((d) => d.weekNum))).sort((a, b) => a - b);
 
-// "3 of 5 exercises logged" for the open day, and whether it is all done.
-export function dayProgress(lifts: { id: string }[], loggedExerciseIds: Set<string>) {
-  const done = lifts.filter((l) => loggedExerciseIds.has(l.id)).length;
-  return { done, total: lifts.length, allDone: lifts.length > 0 && done === lifts.length, pct: lifts.length ? Math.round((done / lifts.length) * 100) : 0 };
+// "3 of 5 exercises logged" for the open day, and whether it is all done: the warm-up is one item, and only the picked Strong /
+// Conditioning blocks count (TR4).
+export function dayProgress(exercises: OverviewExercise[], chosen: string[], loggedExerciseIds: Set<string>) {
+  return dayLogProgress(exercises, chosen, (id) => loggedExerciseIds.has(id));
 }

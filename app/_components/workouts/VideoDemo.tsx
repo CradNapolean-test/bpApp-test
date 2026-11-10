@@ -5,10 +5,8 @@ import { parseVideoEmbedUrl } from '@/lib/utils/videoEmbed';
 
 // Same in-app embed treatment as Education's lesson videos (EducationTab.tsx) -- an iframe for
 // recognized YouTube/Vimeo URLs, falling back to an external link for anything else.
-// `alwaysOpen` skips the click-to-expand toggle for short lists (a workout day's handful of
-// exercises, matching Education's always-visible lesson embeds); the Library's page of
-// hundreds of exercises defaults closed instead, so viewing one demo doesn't mean loading
-// every exercise's video iframe at once.
+// `alwaysOpen` skips the click-to-expand toggle. A member's workout day used it, which made every demo a full-width player between the
+// set boxes (TR6); it now opens on "Watch demo" like the Library, so viewing one demo doesn't mean loading every video at once.
 export function VideoDemo({ videoUrl, title, alwaysOpen = false }: { videoUrl: string; title: string; alwaysOpen?: boolean }) {
   const [open, setOpen] = useState(alwaysOpen);
   const embedUrl = parseVideoEmbedUrl(videoUrl);
@@ -30,7 +28,8 @@ export function VideoDemo({ videoUrl, title, alwaysOpen = false }: { videoUrl: s
   }
 
   return (
-    <div className="mt-1.5 space-y-1">
+    // Capped at a phone-ish width: full width on a laptop the player was 1286 × 723 px (TR6).
+    <div className="mt-1.5 max-w-xl space-y-1">
       <div className="aspect-video w-full overflow-hidden rounded-md">
         <iframe
           src={embedUrl}

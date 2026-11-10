@@ -34,7 +34,7 @@ describe('isEmptySet', () => {
 
 describe('finishing a workout', () => {
   it('counts the sets and the exercises they were for', () => {
-    expect(workoutSummary([3, 0, 4, 1])).toEqual({ sets: 8, exercises: 3, empty: false });
+    expect(workoutSummary([3, 0, 4, 1])).toEqual({ sets: 8, exercises: 3, empty: false, warmup: false });
     expect(finishMessage(workoutSummary([3, 0, 4, 1]))).toBe('Workout complete: 8 sets across 3 exercises. Nice work.');
     expect(finishMessage(workoutSummary([1]))).toBe('Workout complete: 1 set across 1 exercise. Nice work.');
   });
@@ -43,6 +43,13 @@ describe('finishing a workout', () => {
     const empty = workoutSummary([0, 0]);
     expect(empty.empty).toBe(true);
     expect(finishMessage(empty)).toBe('Workout closed. Nothing was logged.');
+  });
+
+  it('counts a ticked warm-up once, not as a set per warm-up exercise (TR4)', () => {
+    const warmupOnly = workoutSummary([0, 0], true);
+    expect(warmupOnly.empty).toBe(false);
+    expect(finishMessage(warmupOnly)).toBe('Warm-up done. Nothing else was logged.');
+    expect(finishMessage(workoutSummary([3, 2], true))).toBe('Workout complete: warm-up plus 5 sets across 2 exercises. Nice work.');
   });
 });
 

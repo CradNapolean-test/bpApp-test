@@ -458,18 +458,21 @@ export function SetEditSheet({ log, index, tracking, onSave, onDelete, onClose }
 }
 
 // ---------- rate the session ----------
-export function FeedbackForm({ initialRpe, initialNotes, saving, saved, onSave }: { initialRpe: number | null; initialNotes: string | null; saving: boolean; saved: boolean; onSave: (rpe: number | null, notes: string | null) => void }) {
-  const [rpe, setRpe] = useState<number | null>(initialRpe);
-  const [notes, setNotes] = useState(initialNotes ?? '');
+// `onDraft` hears every change, so Finish workout can save a rating the member did not tap Save for (TR9).
+export function FeedbackForm({ initialRpe, initialNotes, saving, saved, onSave, onDraft }: { initialRpe: number | null; initialNotes: string | null; saving: boolean; saved: boolean; onSave: (rpe: number | null, notes: string | null) => void; onDraft?: (rpe: number | null, notes: string | null) => void }) {
+  const [rpe, setRpeState] = useState<number | null>(initialRpe);
+  const [notes, setNotesState] = useState(initialNotes ?? '');
   const hadRating = initialRpe != null || !!initialNotes;
+  const setRpe = (v: number | null) => { setRpeState(v); onDraft?.(v, notes.trim() || null); };
+  const setNotes = (v: string) => { setNotesState(v); onDraft?.(rpe, v.trim() || null); };
   return (
     <Card style={{ gap: spacing.sm }}>
-      <AppText variant="heading">{hadRating ? 'Update rating' : 'Rate this session'}</AppText>
-      <AppText variant="small" color="muted">How hard was it overall? 1 is easy, 10 is all out.</AppText>
+      <AppText variant="heading">{hadRating ? 'Your rating' : 'Rate this session'}</AppText>
+      <AppText variant="small" color="muted">How hard was it overall? 1 is easy, 10 is all out. Your coach sees it, and Finish workout saves it.</AppText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => <Chip key={v} label={String(v)} active={rpe === v} onPress={() => setRpe(v)} />)}
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((v) => <Chip key={v} label={String(v)} active={rpe === v} onPress={() => setRpe(rpe === v ? null : v)} />)}
       </View>
-      <TextField label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
+      <TextField label="Notes for your coach (optional)" value={notes} onChangeText={setNotes} multiline />
       <Button title={saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'} loading={saving} onPress={() => onSave(rpe, notes.trim() || null)} />
     </Card>
   );

@@ -61,19 +61,22 @@ export interface WorkoutSummary {
   sets: number;
   exercises: number;
   empty: boolean;
+  // The warm-up was ticked off. It is one tick, not a set per warm-up exercise, so it is not in `sets` (TR4).
+  warmup: boolean;
 }
 
-// Given how many sets were logged for each exercise in the workout.
-export function workoutSummary(setsPerExercise: number[]): WorkoutSummary {
+// Given how many sets were logged for each exercise in the workout, leaving out the warm-up's exercises, and whether the warm-up was ticked.
+export function workoutSummary(setsPerExercise: number[], warmupDone = false): WorkoutSummary {
   const sets = setsPerExercise.reduce((a, b) => a + b, 0);
-  return { sets, exercises: setsPerExercise.filter((n) => n > 0).length, empty: sets === 0 };
+  return { sets, exercises: setsPerExercise.filter((n) => n > 0).length, empty: sets === 0 && !warmupDone, warmup: warmupDone };
 }
 
 export function finishMessage(summary: WorkoutSummary): string {
   if (summary.empty) return 'Workout closed. Nothing was logged.';
+  if (summary.sets === 0) return 'Warm-up done. Nothing else was logged.';
   const sets = `${summary.sets} set${summary.sets === 1 ? '' : 's'}`;
   const exercises = `${summary.exercises} exercise${summary.exercises === 1 ? '' : 's'}`;
-  return `Workout complete: ${sets} across ${exercises}. Nice work.`;
+  return `Workout complete: ${summary.warmup ? 'warm-up plus ' : ''}${sets} across ${exercises}. Nice work.`;
 }
 
 // ---- Strong / Conditioning block choices ----

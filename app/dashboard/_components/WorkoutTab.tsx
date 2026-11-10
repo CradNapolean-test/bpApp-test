@@ -39,8 +39,8 @@ import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { coachProgrammeEndLine, memberProgrammeNotice, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
-import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange } from '@/lib/workoutSets';
-import { blockFormatOf, chosenBlockKeys, describeChoices, exerciseBlockKey, exerciseIsVisible, usesSections } from '@/lib/workoutSections';
+import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange, type WorkoutSummary } from '@/lib/workoutSets';
+import { blockFormatOf, chosenBlockKeys, dayHighlights, dayLogProgress, describeChoices, exerciseBlockKey } from '@/lib/workoutSections';
 import { blockConfigOf, resultForConfig, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
 import { SetInputsGrid } from './SetInputsGrid';
@@ -477,49 +477,74 @@ function SetEditSheet({ log, index, tracking, onClose, onChange }: { log: Workou
   );
 }
 
-function DayFeedbackForm({
+// The member's rating of the session, as the coach reads it.
+function DayFeedbackLine({ feedback }: { feedback: WorkoutDayFeedbackRow | undefined }) {
+  if (!feedback) return null;
+  return (
+    <p className="mt-2 border-t border-black/5 pt-2 text-xs text-zinc-500 dark:border-white/5">
+      Session RPE {feedback.session_rpe ?? '—'}/10{feedback.notes ? ` — “${feedback.notes}”` : ''}
+    </p>
+  );
+}
+
+// Rate the session, then finish it. Finish saves the rating and notes as well (TR9): they used to need their own small Save above it and
+// Finish saved nothing, so a member who rated and tapped Finish lost the rating and few ratings reached the coach.
+function FinishWorkoutPanel({
   clientId,
   programDayId,
-  isCoachView,
   feedback,
+  summary,
+  onFinished,
 }: {
   clientId: string;
   programDayId: string;
-  isCoachView: boolean;
   feedback: WorkoutDayFeedbackRow | undefined;
+  summary: WorkoutSummary;
+  onFinished: () => void;
 }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const { run, busy } = useAction();
-  const [rpe, setRpe] = useState<number | ''>(feedback?.session_rpe ?? '');
+  const [rpe, setRpe] = useState<number | null>(feedback?.session_rpe ?? null);
   const [notes, setNotes] = useState(feedback?.notes ?? '');
+  const cleanNotes = notes.trim() || null;
+  // Something to send: a change to a saved rating, or a first rating with something in it.
+  const unsaved =
+    (rpe !== (feedback?.session_rpe ?? null) || cleanNotes !== (feedback?.notes ?? null)) && (feedback != null || rpe != null || cleanNotes != null);
 
-  if (isCoachView) {
-    if (!feedback) return null;
-    return (
-      <p className="mt-2 border-t border-black/5 pt-2 text-xs text-zinc-500 dark:border-white/5">
-        Session RPE {feedback.session_rpe ?? '—'}/10{feedback.notes ? ` — “${feedback.notes}”` : ''}
-      </p>
-    );
+  const saveRating = (opts: { success?: string; refresh?: boolean }) =>
+    run(() => submitDayFeedback(clientId, programDayId, rpe, cleanNotes), opts);
+
+  async function finish() {
+    // Says what was actually done instead of always congratulating, and asks first if nothing was logged or rated. The dashboard is
+    // refreshed so Home and the streak count the session (L4).
+    if (summary.empty && rpe == null && !cleanNotes) {
+      const ok = await confirm({
+        title: 'Nothing logged yet',
+        body: 'You have not logged any sets for this workout. Close it anyway?',
+        confirmLabel: 'Close it',
+      });
+      if (!ok) return;
+    }
+    if (unsaved && !(await saveRating({ refresh: false }))) return;
+    toast.success(`${finishMessage(summary)}${unsaved ? ' Rating saved.' : ''}`);
+    onFinished();
   }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    await run(() => submitDayFeedback(clientId, programDayId, rpe === '' ? null : rpe, notes || null), {
-      success: feedback ? 'Rating updated' : 'Session rated',
-    });
-  }
-
-  const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
 
   return (
-    <form onSubmit={handleSubmit} className="mt-2 space-y-2 border-t border-black/5 pt-2 dark:border-white/5">
-      <p className="font-bold text-black dark:text-zinc-50">{feedback ? 'Update rating' : 'Rate this session'}</p>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="mt-4 space-y-3 border-t border-black/5 pt-4 dark:border-white/5">
+      <div>
+        <p className="font-bold text-black dark:text-zinc-50">{feedback ? 'Your rating' : 'Rate this session'}</p>
+        <p className="text-xs text-zinc-500">How hard was it overall? 1 is easy, 10 is all out. Your coach sees it.</p>
+      </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Session rating, 1 to 10">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <button
             key={n}
             type="button"
-            onClick={() => setRpe(n)}
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors ${
+            aria-pressed={rpe === n}
+            onClick={() => setRpe(rpe === n ? null : n)}
+            className={`flex h-11 w-11 items-center justify-center rounded-full text-base font-bold transition-colors ${
               rpe === n
                 ? 'bg-accent text-accent-foreground'
                 : 'bg-black/5 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15'
@@ -529,13 +554,35 @@ function DayFeedbackForm({
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <input placeholder="Notes (optional)" className={`${inputCls} w-48`} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        <button type="submit" disabled={busy} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground disabled:opacity-50">
-          Save
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-zinc-500">Notes for your coach (optional)</span>
+        <textarea
+          rows={2}
+          maxLength={1000}
+          className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2 text-base dark:border-white/10"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
+      </label>
+      {unsaved && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void saveRating({ success: feedback ? 'Rating updated' : 'Session rated' })}
+          className="text-sm font-semibold text-accent disabled:opacity-50"
+        >
+          Save rating without finishing
         </button>
-      </div>
-    </form>
+      )}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void finish()}
+        className="h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground disabled:opacity-50"
+      >
+        {busy ? 'Saving…' : 'Finish workout'}
+      </button>
+    </div>
   );
 }
 
@@ -958,10 +1005,10 @@ export function WorkoutTab({
     const c = choicesByDay.get(dayId);
     return chosenBlockKeys(c?.slot1 ?? null, c?.slot2 ?? null);
   };
-  const visibleFor = (day: WorkoutProgramRow['workout_program_days'][number]) =>
-    !isCoachView && usesSections(day.workout_exercises)
-      ? day.workout_exercises.filter((ex) => exerciseIsVisible(ex, true, chosenFor(day.id)))
-      : day.workout_exercises;
+  // "3 of 7 logged": the warm-up is one item and only the blocks the member picked count. The coach's copy counts from the member's picks
+  // too, so a finished class day reads the same on both sides (TR4, TR5).
+  const progressOf = (day: WorkoutProgramRow['workout_program_days'][number]) =>
+    dayLogProgress(day.workout_exercises, chosenFor(day.id), (id) => (logsByExercise[id]?.length ?? 0) > 0);
   const { current, upcoming, past } = pickCurrentProgram(programs, todayIsoLocal);
   // The programme's last week, or its end with nothing next (D2). The member is told their coach is setting up the next one;
   // the coach sees when it ends and can start the next one from the day after.
@@ -1087,24 +1134,25 @@ export function WorkoutTab({
               activeWeek={shownWeek}
               currentWeek={currentWeek(program) > 0 ? currentWeek(program) : undefined}
               onChangeWeek={(week) => setActiveWeeks((st) => ({ ...st, [program.id]: week }))}
-              days={program.workout_program_days.map((day) => ({
-                id: day.id,
-                weekNum: day.week_num,
-                dayLabel: day.day_label,
-                phaseLabel: day.phase_label,
-                exerciseCount: day.workout_exercises.length,
-                exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
-                done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
-                liftCount: visibleFor(day).filter((ex) => ex.block_type === 'exercise').length,
-                highlights: [...visibleFor(day)]
-                  .filter((ex) => ex.block_type === 'exercise')
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .slice(0, 2)
-                  .map((ex) => ex.name),
-                loggedCount: visibleFor(day).filter((ex) => ex.block_type === 'exercise' && (logsByExercise[ex.id]?.length ?? 0) > 0).length,
-                dayPosition: day.day_position,
-                isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
-              }))}
+              days={program.workout_program_days.map((day) => {
+                const progress = progressOf(day);
+                return {
+                  id: day.id,
+                  weekNum: day.week_num,
+                  dayLabel: day.day_label,
+                  phaseLabel: day.phase_label,
+                  // The coach builds every block, so their card counts the rows; the member's counts what they will do, the same total the
+                  // open day shows (TR5).
+                  exerciseCount: isCoachView ? day.workout_exercises.length : progress.total,
+                  exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
+                  done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
+                  liftCount: progress.total,
+                  highlights: dayHighlights(day.workout_exercises),
+                  loggedCount: progress.done,
+                  dayPosition: day.day_position,
+                  isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
+                };
+              })}
               renderDayControls={
                 isCoachView
                   ? (summary: ProgramDaySummary) => {
@@ -1255,25 +1303,26 @@ export function WorkoutTab({
           subtitle={`Week ${openDay.week_num}`}
           onClose={() => setOpenDayId(null)}
         >
+          {/* A readable column on a laptop: full width, each set box was 415-610 px wide (TR6). */}
+          <div className="mx-auto w-full max-w-2xl">
           {isCoachView && <DayNotesField dayId={openDay.id} initial={openDay.notes} />}
           {!isCoachView && openDay.notes && (
             <p className="mb-3 whitespace-pre-wrap text-sm text-zinc-500">{openDay.notes}</p>
           )}
 
           {!isCoachView && (() => {
-            const lifts = visibleFor(openDay).filter((e) => e.block_type === 'exercise');
-            if (lifts.length === 0) return null;
-            const done = lifts.filter((e) => (logsByExercise[e.id]?.length ?? 0) > 0).length;
+            const progress = progressOf(openDay);
+            if (progress.total === 0) return null;
             return (
               <div className="mb-3">
                 <div className="mb-1 flex items-center justify-between text-xs">
                   <span className="font-semibold text-black dark:text-zinc-50">
-                    {done} of {lifts.length} exercises logged
+                    {progress.done} of {progress.total} exercises logged
                   </span>
-                  {done === lifts.length && <span className="font-bold text-success">All done ✓</span>}
+                  {progress.allDone && <span className="font-bold text-success">All done ✓</span>}
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                  <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${Math.round((done / lifts.length) * 100)}%` }} />
+                  <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress.pct}%` }} />
                 </div>
               </div>
             );
@@ -1420,9 +1469,8 @@ export function WorkoutTab({
                   : setSummary(tracking, l, compact);
               return (
                 <>
-                  {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && (
-                    <VideoDemo videoUrl={videoUrl} title={ex.name} alwaysOpen />
-                  )}
+                  {/* Folded until tapped: open, every demo was a full-width player (819 px tall each on a laptop, TR6). */}
+                  {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && <VideoDemo videoUrl={videoUrl} title={ex.name} />}
                   {last && !isWarmup && (
                     <div className="mt-2">
                       <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-accent">
@@ -1487,35 +1535,31 @@ export function WorkoutTab({
 
           {isCoachView && <BatchApplyForm dayId={openDay.id} />}
 
-          <DayFeedbackForm clientId={clientId} programDayId={openDay.id} isCoachView={isCoachView} feedback={feedbackByDay[openDay.id]} />
+          {isCoachView && <DayFeedbackLine feedback={feedbackByDay[openDay.id]} />}
 
-          {!isCoachView && (
-            <button
-              type="button"
-              onClick={async () => {
-                // Says what was actually done instead of always congratulating, and asks first if nothing was logged. The dashboard is
-                // refreshed so Home and the streak count the session (L4).
-                const summary = workoutSummary(
-                  openDay.workout_exercises.filter((e) => e.block_type === 'exercise').map((e) => logsByExercise[e.id]?.length ?? 0)
-                );
-                if (summary.empty) {
-                  const finish = await confirm({
-                    title: 'Nothing logged yet',
-                    body: 'You have not logged any sets for this workout. Close it anyway?',
-                    confirmLabel: 'Close it',
-                  });
-                  if (!finish) return;
-                }
-                toast.success(finishMessage(summary));
-                setOpenDayId(null);
-                logsChanged.current = false; // refreshed here; no second refresh when this screen is left
-                router.refresh();
-              }}
-              className="mt-4 h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground"
-            >
-              Finish workout
-            </button>
-          )}
+          {!isCoachView && (() => {
+            const lifts = openDay.workout_exercises.filter((e) => e.block_type === 'exercise');
+            const warmups = lifts.filter((e) => e.section === 'warmup');
+            const summary = workoutSummary(
+              lifts.filter((e) => e.section !== 'warmup').map((e) => logsByExercise[e.id]?.length ?? 0),
+              warmups.length > 0 && warmups.every((e) => (logsByExercise[e.id]?.length ?? 0) > 0)
+            );
+            return (
+              <FinishWorkoutPanel
+                key={openDay.id}
+                clientId={clientId}
+                programDayId={openDay.id}
+                feedback={feedbackByDay[openDay.id]}
+                summary={summary}
+                onFinished={() => {
+                  setOpenDayId(null);
+                  logsChanged.current = false; // refreshed here; no second refresh when this screen is left
+                  router.refresh();
+                }}
+              />
+            );
+          })()}
+          </div>
         </FocusOverlay>
       )}
     </div>

@@ -11,6 +11,7 @@ import { DEFAULT_TIMEZONE, WEEKDAY_LABELS, todayIsoInTz } from '@/lib/utils/date
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { memberProgrammeNotice, programmeEnd } from '@/lib/utils/programEnding';
+import { dayHighlights } from '@/lib/workoutSections';
 import { dayCaloriesOf } from '@/lib/utils/dailyLog';
 import { trafficLight } from '@/lib/utils/accountability';
 import type { TrafficLight } from '@/lib/utils/accountability';
@@ -85,13 +86,8 @@ export function CoachingHub({
   const todayDow = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
   const activeBlock = resolveActiveProgram(programs, todayIso);
   const todaysDay = activeBlock ? resolveProgramDayByPosition(activeBlock.program, activeBlock.weekNum, todayDow) : null;
-  const todaysLifts = todaysDay
-    ? [...todaysDay.workout_exercises]
-        .filter((e) => e.block_type === 'exercise')
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .slice(0, 2)
-        .map((e) => e.name)
-    : [];
+  // The day's Lift, not its warm-up ("SKI ERG · SA Banded Chest Press" on a bench day, TR7).
+  const todaysLifts = todaysDay ? dayHighlights(todaysDay.workout_exercises) : [];
   // The last week, or the end with nothing next (D2): "Last week of this programme: your coach is setting up the next one".
   const programmeNotice = memberProgrammeNotice(programmeEnd(programs, todayIso), (iso) =>
     new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })

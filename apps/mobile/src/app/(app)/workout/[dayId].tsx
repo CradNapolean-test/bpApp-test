@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import type { WorkoutExerciseRow, WorkoutLogRow } from '@ballistic/shared/data/types';
@@ -9,7 +9,7 @@ import { dayProgress } from '@ballistic/shared/utils/programOverview';
 import { blockForDisplay, memberDayBlocks } from '@ballistic/shared/utils/workoutDisplay';
 import { earlierLogs, lastSessionFor, priorBestLoad } from '@ballistic/shared/utils/workoutHistory';
 import { finishMessage, workoutSummary } from '@ballistic/shared/utils/workoutSets';
-import { blockFormatOf, chosenBlockKeys, exerciseIsVisible, slotOptions, usesSections } from '@ballistic/shared/workoutSections';
+import { blockFormatOf, chosenBlockKeys, slotOptions } from '@ballistic/shared/workoutSections';
 import { blockConfigOf, resultForConfig } from '@ballistic/shared/blockScoring';
 import { trackingOf } from '@ballistic/shared/workoutTracking';
 
@@ -39,6 +39,8 @@ export default function WorkoutDay() {
   const [editing, setEditing] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   // What the workout came to, shown when the member finishes it (L4): sets and exercises, or that nothing was logged.
   const [summary, setSummary] = useState<string | null>(null);
+  // The rating as the member has it in the form, saved by Finish if they did not tap its Save (TR9).
+  const ratingDraft = useRef<{ rpe: number | null; notes: string | null } | null>(null);
 
   if (dayQ.isPending) {
     return (
@@ -58,18 +60,31 @@ export default function WorkoutDay() {
 
   const d = dayQ.data;
   const exercises = d.exercises;
-  const sectioned = usesSections(exercises);
   const chosen = chosenBlockKeys(d.choices.slot1, d.choices.slot2);
-  const visible = sectioned ? exercises.filter((e) => exerciseIsVisible(e, true, chosen)) : exercises;
-  const lifts = visible.filter((e) => e.block_type === 'exercise');
 
   const logsByExercise = new Map<string, WorkoutLogRow[]>();
   for (const l of d.logs) if (l.exercise_id) (logsByExercise.get(l.exercise_id) ?? logsByExercise.set(l.exercise_id, []).get(l.exercise_id)!).push(l);
   const logged = new Set(logsByExercise.keys());
-  const progress = dayProgress(lifts, logged);
+  // The warm-up counts as one, and only the picked Strong / Conditioning blocks count (TR4).
+  const progress = dayProgress(exercises, chosen, logged);
   const refs = new Map(Object.entries(d.refs));
 
   const layout = memberDayBlocks(exercises, true);
+
+  // Finish: what was done (the warm-up as one tick, not a set per warm-up exercise), and the rating if it has not been saved yet.
+  const finish = () => {
+    const lifts = exercises.filter((e) => e.block_type === 'exercise');
+    const warmups = lifts.filter((e) => e.section === 'warmup');
+    const done = workoutSummary(
+      lifts.filter((e) => e.section !== 'warmup').map((e) => logsByExercise.get(e.id)?.length ?? 0),
+      warmups.length > 0 && warmups.every((e) => logged.has(e.id)),
+    );
+    const draft = ratingDraft.current;
+    const saved = { rpe: d.feedback?.session_rpe ?? null, notes: d.feedback?.notes ?? null };
+    const rate = draft != null && (draft.rpe !== saved.rpe || draft.notes !== saved.notes) && (d.feedback != null || draft.rpe != null || draft.notes != null);
+    if (rate) feedback.mutate({ sessionRpe: draft.rpe, notes: draft.notes });
+    setSummary(`${finishMessage(done)}${rate ? ' Rating saved.' : ''}`);
+  };
 
   const renderExercise = (ex: WorkoutExerciseRow, index: number) => {
     const logs = (logsByExercise.get(ex.id) ?? []).sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0) || a.logged_at.localeCompare(b.logged_at));
@@ -135,7 +150,7 @@ export default function WorkoutDay() {
         </View>
         {d.day.notes ? <AppText color="muted">{d.day.notes}</AppText> : null}
 
-        {lifts.length ? (
+        {progress.total ? (
           <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <AppText variant="small" style={{ fontWeight: '700' }}>{progress.done} of {progress.total} exercises logged</AppText>
@@ -180,6 +195,7 @@ export default function WorkoutDay() {
           saving={feedback.isPending}
           saved={feedback.isSuccess}
           onSave={(rpe, notes) => feedback.mutate({ sessionRpe: rpe, notes })}
+          onDraft={(rpe, notes) => { ratingDraft.current = { rpe, notes }; }}
         />
 
         {summary ? (
@@ -188,7 +204,7 @@ export default function WorkoutDay() {
             <Button title="Back to workouts" onPress={() => router.replace('/workouts')} />
           </>
         ) : (
-          <Button title="Finish workout" onPress={() => setSummary(finishMessage(workoutSummary([...logsByExercise.values()].map((l) => l.length))))} />
+          <Button title="Finish workout" onPress={finish} />
         )}
       </ScrollScreen>
 

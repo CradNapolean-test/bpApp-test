@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { bigDogCount, TIER_TITLE, tierForCount } from '@ballistic/shared/bigDog';
+import { dayHighlights } from '@ballistic/shared/workoutSections';
 
 import { CheckinTiles, CoachCard, CountBadge, NutritionBlock } from '@/components/coach';
 import { AppText, Badge, ListGroup, ListRow, ScrollScreen, SectionLabel } from '@/components/ui';
@@ -19,11 +20,8 @@ function TrainingRow({ workout }: { workout: TodayWorkout | undefined }) {
   const openWeeks = () => router.navigate('/workouts');
   if (!workout) return <ListRow icon="dumbbell" title="Today's workout" subtitle="Loading…" />;
   if (workout.status === 'workout') {
-    const lifts = workout.exercises
-      .filter((e) => e.block_type === 'exercise')
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .slice(0, 2)
-      .map((e) => e.name);
+    // The day's Lift, not its warm-up (TR7).
+    const lifts = dayHighlights(workout.exercises);
     return (
       <ListRow
         icon="dumbbell"

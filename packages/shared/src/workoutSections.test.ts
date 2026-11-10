@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chosenBlockKeys, describeChoices, slotOptions, strongBlock2IsSplit, blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
+import { chosenBlockKeys, dayHighlights, dayLogItems, dayLogProgress, describeChoices, slotOptions, strongBlock2IsSplit, blockFormatOf, conditioningIsSingle, blockKey, exerciseBlockKey, groupIntoBlocks, parseBlockKey, usesSections } from './workoutSections';
 
 const ex = (section: 'warmup' | 'lift' | 'strong' | 'conditioning', block_no: number | null, sort_order: number, block_format: string | null = null) => ({
   section,
@@ -99,5 +99,54 @@ describe('Conditioning breath / burn', () => {
   it('offers breath and burn as the second slot choices', () => {
     const present = new Set(['strong:1', 'conditioning:1', 'conditioning:2:breath', 'conditioning:2:burn']);
     expect(slotOptions(present, 2, 'conditioning:1').options.map((o) => o.key)).toEqual(['conditioning:2:breath', 'conditioning:2:burn']);
+  });
+});
+
+describe('what a member day adds up to (TR4, TR5, TR7)', () => {
+  const row = (id: string, name: string, section: 'warmup' | 'lift' | 'strong' | 'conditioning', sort_order: number, block_no: number | null = null, block_type = 'exercise') => ({
+    id,
+    name,
+    section,
+    block_no,
+    block_part: null,
+    sort_order,
+    block_type,
+  });
+  const day = [
+    row('w1', 'BIKE', 'warmup', 0),
+    row('w2', 'Supported Squat Hold', 'warmup', 1),
+    row('w3', 'Band Pull Apart', 'warmup', 2),
+    row('l1', 'Back Squat', 'lift', 3),
+    row('l2', 'RDL', 'lift', 4),
+    row('s1', 'KB Swing', 'strong', 5, 1),
+    row('c1', 'Erg Sprints', 'conditioning', 6, 1),
+    row('c2', '3 rounds', 'conditioning', 7, 1, 'circuit'),
+  ];
+
+  it('counts the warm-up as one item however many exercises it lists', () => {
+    expect(dayLogItems(day, []).map((item) => item.map((e) => e.id))).toEqual([['w1', 'w2', 'w3'], ['l1'], ['l2']]);
+    const warmupTicked = new Set(['w1', 'w2', 'w3']);
+    expect(dayLogProgress(day, [], (id) => warmupTicked.has(id))).toEqual({ done: 1, total: 3, allDone: false, pct: 33 });
+  });
+
+  it('only counts the Strong / Conditioning blocks picked, and never instruction lines', () => {
+    expect(dayLogProgress(day, ['conditioning:1'], () => false).total).toBe(4);
+    expect(dayLogProgress(day, ['strong:1'], (id) => id === 's1').done).toBe(1);
+  });
+
+  it('the warm-up counts as done only once every warm-up exercise has its tick', () => {
+    expect(dayLogProgress(day, [], (id) => id === 'w1').done).toBe(0);
+  });
+
+  it('a plain day (no sections) counts every exercise', () => {
+    const plain = [row('a', 'Bench', 'lift', 0), row('b', 'Row', 'lift', 1)];
+    expect(dayLogProgress(plain, [], (id) => id === 'a')).toEqual({ done: 1, total: 2, allDone: false, pct: 50 });
+    expect(dayLogProgress(plain, [], () => true).allDone).toBe(true);
+  });
+
+  it('day cards name the Lift, not the warm-up', () => {
+    expect(dayHighlights(day)).toEqual(['Back Squat', 'RDL']);
+    expect(dayHighlights(day.filter((e) => e.section !== 'lift'))).toEqual(['KB Swing', 'Erg Sprints']);
+    expect(dayHighlights(day.filter((e) => e.section === 'warmup'), 1)).toEqual(['BIKE']);
   });
 });

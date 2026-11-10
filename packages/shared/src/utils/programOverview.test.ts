@@ -43,7 +43,20 @@ describe('summariseDays', () => {
     const strong = summariseDays([days[0]], sectioned, new Set(['s']), () => ['strong:1'], 1, 12)[0];
     expect(strong.liftCount).toBe(3);
     expect(strong.loggedCount).toBe(1);
-    expect(strong.exerciseCount).toBe(4); // the raw count ignores choices
+    expect(strong.exerciseCount).toBe(3); // what the member does, the same total the open day counts to (TR5)
+  });
+
+  it('counts the warm-up once and names the Lift, not the warm-up (TR4, TR7)', () => {
+    const withWarmup = new Map<string, OverviewExercise[]>([
+      ['d1', [
+        lift('w1', 'BIKE', 0, { section: 'warmup' }),
+        lift('w2', 'Squat Hold', 1, { section: 'warmup' }),
+        lift('w3', 'Band Pull Apart', 2, { section: 'warmup' }),
+        lift('l', 'Back Squat', 3),
+      ]],
+    ]);
+    const d = summariseDays([days[0]], withWarmup, new Set(['w1', 'w2', 'w3']), () => [], 1, 12)[0];
+    expect(d).toMatchObject({ exerciseCount: 2, liftCount: 2, loggedCount: 1, highlights: ['Back Squat'] });
   });
 });
 
@@ -62,9 +75,14 @@ describe('daysForWeek / weekNumbers', () => {
 
 describe('dayProgress', () => {
   it('counts logged lifts and flags all done', () => {
-    const lifts = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
-    expect(dayProgress(lifts, new Set(['a']))).toEqual({ done: 1, total: 3, allDone: false, pct: 33 });
-    expect(dayProgress(lifts, new Set(['a', 'b', 'c']))).toMatchObject({ allDone: true, pct: 100 });
-    expect(dayProgress([], new Set())).toEqual({ done: 0, total: 0, allDone: false, pct: 0 });
+    const lifts = [lift('a', 'A', 1), lift('b', 'B', 2), lift('c', 'C', 3)];
+    expect(dayProgress(lifts, [], new Set(['a']))).toEqual({ done: 1, total: 3, allDone: false, pct: 33 });
+    expect(dayProgress(lifts, [], new Set(['a', 'b', 'c']))).toMatchObject({ allDone: true, pct: 100 });
+    expect(dayProgress([], [], new Set())).toEqual({ done: 0, total: 0, allDone: false, pct: 0 });
+  });
+
+  it('counts the ticked warm-up as one exercise, not three (TR4)', () => {
+    const rows = [lift('w1', 'Bike', 0, { section: 'warmup' }), lift('w2', 'Hold', 1, { section: 'warmup' }), lift('l', 'Squat', 2)];
+    expect(dayProgress(rows, [], new Set(['w1', 'w2']))).toMatchObject({ done: 1, total: 2 });
   });
 });

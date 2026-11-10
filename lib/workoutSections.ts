@@ -201,6 +201,48 @@ export function exerciseIsVisible(
   return chosen.includes(exerciseBlockKey(ex));
 }
 
+// ---- what a member's day adds up to ----
+type CountedExercise = Pick<SectionedExercise, 'section' | 'block_no' | 'block_part'> & { id: string; block_type: string };
+
+// The things a member ticks off in a day, for "3 of 7 exercises logged" and the day cards: each exercise they do (Warm-up, Lift and the
+// Strong / Conditioning blocks they picked), with the whole warm-up as ONE item, because it is ticked off as a whole (TR4). The coach's
+// copy is counted from the member's picks too, so both read the same numbers (TR5). Instruction lines are not counted.
+export function dayLogItems<T extends CountedExercise>(exercises: T[], chosen: string[]): T[][] {
+  const sectioned = usesSections(exercises);
+  const doing = exercises.filter((ex) => ex.block_type === 'exercise' && exerciseIsVisible(ex, sectioned, chosen));
+  const warmup = doing.filter((ex) => ex.section === 'warmup');
+  return [...(warmup.length > 0 ? [warmup] : []), ...doing.filter((ex) => ex.section !== 'warmup').map((ex) => [ex])];
+}
+
+export interface DayLogProgress {
+  done: number;
+  total: number;
+  allDone: boolean;
+  pct: number;
+}
+
+// How far through the day the member is: an exercise counts once it has a set, the warm-up once it is ticked (every warm-up exercise has
+// its set).
+export function dayLogProgress<T extends CountedExercise>(exercises: T[], chosen: string[], isLogged: (exerciseId: string) => boolean): DayLogProgress {
+  const items = dayLogItems(exercises, chosen);
+  const done = items.filter((item) => item.every((ex) => isLogged(ex.id))).length;
+  const total = items.length;
+  return { done, total, allDone: total > 0 && done === total, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+
+// The names a day card leads with (TR7): the Lift, then Strong / Conditioning when the day has no Lift, and the warm-up only when there is
+// nothing else. They used to be the first exercises in order, which is always the warm-up ("BIKE · Supported Squat Hold" on a squat day).
+export function dayHighlights<T extends Pick<SectionedExercise, 'section' | 'sort_order'> & { name: string; block_type: string }>(
+  exercises: T[],
+  count = 2
+): string[] {
+  const exercisesOnly = exercises.filter((ex) => ex.block_type === 'exercise').sort((a, b) => a.sort_order - b.sort_order);
+  const lift = exercisesOnly.filter((ex) => (ex.section ?? 'lift') === 'lift');
+  const blocks = exercisesOnly.filter((ex) => ex.section === 'strong' || ex.section === 'conditioning');
+  const pick = lift.length > 0 ? lift : blocks.length > 0 ? blocks : exercisesOnly;
+  return pick.slice(0, count).map((ex) => ex.name);
+}
+
 // Picker value for "move to": e.g. 'strong:2'.
 export function parseBlockKey(key: string): { section: WorkoutSection; blockNo: 0 | 1 | 2 | null; part: BlockPart | null } {
   const [section, block, part] = key.split(':');
