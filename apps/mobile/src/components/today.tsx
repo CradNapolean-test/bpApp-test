@@ -28,7 +28,8 @@ export function Hero({ profile, now }: { profile: ClientProfileRow; now: Date })
 
 const NO_WORKOUT_REASON = {
   no_program: "You don't have an active programme running right now.",
-  ended: "You don't have an active programme running right now.",
+  no_start_date: "Your programme doesn't have a start date yet. Ask your coach.",
+  ended: 'Your programme has finished.',
   rest_day: "Your programme doesn't have a workout set for this day of the week yet.",
 } as const;
 
@@ -66,7 +67,9 @@ export function NextSessionCard({
   const router = useRouter();
   const label = booking ? (booking.booking_date === todayIso ? 'Today' : 'Next session') : 'Your next session';
   const isToday = booking?.booking_date === todayIso;
-  const reason = workout && workout.status !== 'workout' ? NO_WORKOUT_REASON[workout.status] : null;
+  // A finished programme says what the web says (D2): "Your programme has finished. Your coach is setting up the next one."
+  const reason =
+    !workout || workout.status === 'workout' ? null : workout.status === 'ended' && workout.notice ? workout.notice.text : NO_WORKOUT_REASON[workout.status];
 
   // The next session and My bookings are one tile (web 345fc6a): the session on top, a row to manage bookings underneath, or a pill to book.
   return (

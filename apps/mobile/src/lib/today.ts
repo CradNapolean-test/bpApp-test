@@ -14,6 +14,7 @@ import type {
 import { MEMBER_PROFILE_SELECT } from '@ballistic/shared/data/clientProfileColumns';
 import { resolveActiveProgram, resolveProgramDayByPosition } from '@ballistic/shared/utils/checkin';
 import { pickCurrentProgram } from '@ballistic/shared/utils/currentProgram';
+import { memberProgrammeNotice, programmeEnd, type ProgrammeNotice } from '@ballistic/shared/utils/programEnding';
 import { addDays, DEFAULT_TIMEZONE, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
 
 import { useSession } from '@/lib/session';
@@ -145,11 +146,16 @@ export function usePendingForms() {
   });
 }
 
+// `notice` is the programme's last week, or its end, in the web's words (D2): "Last week of this programme: your coach is
+// setting up the next one", "Your programme has finished. Your coach is setting up the next one."
 export type TodayWorkout =
   | { status: 'no_program' }
-  | { status: 'ended'; programName: string }
-  | { status: 'rest_day'; programName: string; weekNum: number; totalWeeks: number }
-  | { status: 'workout'; programName: string; weekNum: number; totalWeeks: number; day: WorkoutProgramDayRow; exercises: WorkoutExerciseRow[]; loggedToday: boolean };
+  | { status: 'no_start_date'; programName: string }
+  | { status: 'ended'; programName: string; notice: ProgrammeNotice | null }
+  | { status: 'rest_day'; programName: string; weekNum: number; totalWeeks: number; notice: ProgrammeNotice | null }
+  | { status: 'workout'; programName: string; weekNum: number; totalWeeks: number; day: WorkoutProgramDayRow; exercises: WorkoutExerciseRow[]; loggedToday: boolean; notice: ProgrammeNotice | null };
+
+const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 // 6. Today's workout. Programme and day lists are tiny (no exercises), so only the one day's exercises are fetched.
 export function useTodayWorkout(todayIso: string, tz: string, enabled: boolean) {
@@ -161,8 +167,10 @@ export function useTodayWorkout(todayIso: string, tz: string, enabled: boolean) 
       const programsRes = await supabase.from('workout_programs').select('id, client_id, name, created_at, start_date').eq('client_id', userId);
       if (programsRes.error) throw programsRes.error;
       const programs = (programsRes.data ?? []).map((p) => ({ ...(p as Omit<WorkoutProgramRow, 'workout_program_days'>), workout_program_days: [] as WorkoutProgramDayRow[] }));
-      const current = pickCurrentProgram(programs, todayIso).current;
+      const { current, upcoming } = pickCurrentProgram(programs, todayIso);
       if (!current) return { status: 'no_program' };
+      // A programme with no start date can't be placed in a week: it isn't over, the coach hasn't dated it yet.
+      if (!current.start_date) return { status: 'no_start_date', programName: current.name };
 
       const daysRes = await supabase
         .from('workout_program_days')
@@ -172,12 +180,13 @@ export function useTodayWorkout(todayIso: string, tz: string, enabled: boolean) 
       const days = (daysRes.data ?? []).map((d) => ({ ...(d as Omit<WorkoutProgramDayRow, 'workout_exercises'>), workout_exercises: [] as WorkoutExerciseRow[] }));
       const program: WorkoutProgramRow = { ...current, workout_program_days: days };
 
+      const notice = memberProgrammeNotice(programmeEnd([program, ...upcoming], todayIso), shortDay);
       const active = resolveActiveProgram([program], todayIso);
-      if (!active) return { status: 'ended', programName: program.name };
+      if (!active) return { status: 'ended', programName: program.name, notice };
       const totalWeeks = Math.max(0, ...days.map((d) => d.week_num));
       const weekday = new Date(todayIso + 'T00:00:00Z').getUTCDay();
       const day = resolveProgramDayByPosition(active.program, active.weekNum, weekday);
-      if (!day) return { status: 'rest_day', programName: program.name, weekNum: active.weekNum, totalWeeks };
+      if (!day) return { status: 'rest_day', programName: program.name, weekNum: active.weekNum, totalWeeks, notice };
 
       const exRes = await supabase.from('workout_exercises').select('*').eq('program_day_id', day.id).order('sort_order', { ascending: true });
       if (exRes.error) throw exRes.error;
@@ -191,7 +200,7 @@ export function useTodayWorkout(todayIso: string, tz: string, enabled: boolean) 
         if (logsRes.error) throw logsRes.error;
         loggedToday = (logsRes.data ?? []).some((l) => isoDateInTz(new Date(l.logged_at as string), tz) === todayIso);
       }
-      return { status: 'workout', programName: program.name, weekNum: active.weekNum, totalWeeks, day, exercises, loggedToday };
+      return { status: 'workout', programName: program.name, weekNum: active.weekNum, totalWeeks, day, exercises, loggedToday, notice };
     },
   });
 }

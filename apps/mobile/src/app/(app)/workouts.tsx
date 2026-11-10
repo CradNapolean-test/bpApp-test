@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import type { WorkoutProgramDayRow, WorkoutProgramRow } from '@ballistic/shared/data/types';
 import { resolveActiveProgram } from '@ballistic/shared/utils/checkin';
 import { isoDateInTz } from '@ballistic/shared/utils/dates';
+import { memberProgrammeNotice, programmeEnd } from '@ballistic/shared/utils/programEnding';
 import { daysForWeek, summariseDays, weekNumbers } from '@ballistic/shared/utils/programOverview';
 import { chosenBlockKeys } from '@ballistic/shared/workoutSections';
 
@@ -62,6 +63,17 @@ export default function Workouts() {
     todayIso,
   );
   const currentWeek = active?.weekNum ?? null;
+  // The last week, or the end with nothing next, in the web's words (D2).
+  const notice = memberProgrammeNotice(
+    programmeEnd(
+      [
+        { id: current.id, name: current.name, start_date: current.start_date, workout_program_days: o.days },
+        ...o.upcoming.map((u) => ({ ...u, workout_program_days: [] })),
+      ],
+      todayIso,
+    ),
+    prettyDate,
+  );
 
   const choiceByDay = new Map<string, { slot1: string | null; slot2: string | null }>();
   for (const c of o.choices) {
@@ -89,9 +101,22 @@ export default function Workouts() {
         <View style={{ gap: 2 }}>
           <AppText variant="title">{current.name}</AppText>
           <AppText color="muted">
-            {currentWeek ? `Week ${currentWeek} of ${current.totalWeeks}` : current.totalWeeks > 0 ? 'This block has finished.' : 'No workouts in this programme yet.'}
+            {!current.start_date
+              ? 'No start date yet. Ask your coach.'
+              : currentWeek
+                ? `Week ${currentWeek} of ${current.totalWeeks}`
+                : current.totalWeeks > 0
+                  ? 'This programme has finished.'
+                  : 'No workouts in this programme yet.'}
           </AppText>
         </View>
+
+        {notice ? (
+          <View style={{ backgroundColor: t.accentSoft, borderRadius: 16, padding: spacing.md, gap: 2 }}>
+            <AppText color="accent" style={{ fontWeight: '600' }}>{notice.text}</AppText>
+            {notice.detail ? <AppText variant="small" color="muted">{notice.detail}</AppText> : null}
+          </View>
+        ) : null}
 
         {o.upcoming.length ? (
           <View style={{ backgroundColor: t.accentSoft, borderRadius: 16, padding: spacing.md }}>

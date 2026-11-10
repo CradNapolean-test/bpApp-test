@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import { bigDogCount, TIER_TITLE, tierForCount } from '@ballistic/shared/bigDog';
 
 import { CheckinTiles, CoachCard, CountBadge, NutritionBlock } from '@/components/coach';
-import { Badge, ListGroup, ListRow, ScrollScreen, SectionLabel } from '@/components/ui';
+import { AppText, Badge, ListGroup, ListRow, ScrollScreen, SectionLabel } from '@/components/ui';
 import { useBigDogResults } from '@/lib/bigDog';
 import { useChatUnread, useOwnUserId } from '@/lib/chat';
 import { useDayContext } from '@/lib/day';
@@ -38,7 +38,10 @@ function TrainingRow({ workout }: { workout: TodayWorkout | undefined }) {
     return <ListRow icon="dumbbell" title="Rest day · no workout today" subtitle={`${workout.programName} · Week ${workout.weekNum}, tap to see the week`} onPress={openWeeks} />;
   }
   if (workout.status === 'ended') {
-    return <ListRow icon="dumbbell" title="Your programme" subtitle={`${workout.programName} · this block has finished`} onPress={openWeeks} />;
+    return <ListRow icon="dumbbell" title="Your programme" subtitle={workout.notice?.text ?? `${workout.programName} · this programme has finished`} onPress={openWeeks} />;
+  }
+  if (workout.status === 'no_start_date') {
+    return <ListRow icon="dumbbell" title="Your programme" subtitle={`${workout.programName} · no start date yet, ask your coach`} onPress={openWeeks} />;
   }
   return <ListRow icon="dumbbell" title="Your programme" subtitle="No programme assigned yet" onPress={openWeeks} />;
 }
@@ -53,6 +56,9 @@ export default function Coach() {
   const unread = useChatUnread(useOwnUserId()).data ?? 0;
   const { profileQ, profile, tz, todayIso, ready, logsQ, todayLog, target } = useDayContext();
   const workoutQ = useTodayWorkout(todayIso, tz, ready);
+  // The programme's last week (D2), under the Training row as on the web.
+  const w = workoutQ.data;
+  const lastWeekNotice = w && (w.status === 'workout' || w.status === 'rest_day') && w.notice?.stage === 'last_week' ? w.notice.text : null;
   const formsQ = usePendingForms();
   const pendingForms = formsQ.data ?? 0;
   const bigDogQ = useBigDogResults();
@@ -82,6 +88,11 @@ export default function Coach() {
           <ListGroup>
             {areas.workouts ? <TrainingRow workout={workoutQ.data} /> : <ListRow icon="activity" title="Activity" subtitle="Swap your steps for another activity" onPress={() => router.navigate('/activity')} />}
           </ListGroup>
+          {areas.workouts && lastWeekNotice ? (
+            <AppText variant="small" color="accent" style={{ fontWeight: '600', marginTop: 8, paddingHorizontal: 4 }}>
+              {lastWeekNotice}
+            </AppText>
+          ) : null}
         </View>
       ) : null}
 
