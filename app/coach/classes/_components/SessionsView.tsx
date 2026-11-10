@@ -12,6 +12,8 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { bookClassForClient, cancelClassOccurrence, getRoster, markAttendanceStatus, removeFromSession, restoreClassOccurrence } from '@/lib/data/classes';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { nowLocalMs } from '@/lib/utils/cancelDeadline';
+import { startMs } from '@/lib/utils/booking';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
@@ -208,6 +210,9 @@ export function SessionsView({
   const sessionFull = !!open && open.bookedCount >= open.capacity;
   const noCredits = !!open && !!chosenClient && chosenClient.balance < open.creditCost;
   const isPast = (o: ScheduleOccurrence) => o.date < todayIso;
+  // Once a session has started it can't be cancelled: that would refund everyone, including the people who came (BK27; the database
+  // refuses it too, migration 0158). Compared at the gym's wall clock.
+  const hasStarted = (o: ScheduleOccurrence) => startMs(o.date, o.startTime) <= nowLocalMs(timezone ?? DEFAULT_TIMEZONE);
 
   return (
     <div className="space-y-4">
@@ -491,7 +496,7 @@ export function SessionsView({
               >
                 <Dumbbell className="h-4 w-4" /> Run this class
               </Link>
-              {!isPast(open) && (
+              {!hasStarted(open) && (
                 <button
                   type="button"
                   onClick={() => setCancelOpen(true)}
