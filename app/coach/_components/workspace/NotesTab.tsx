@@ -8,6 +8,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { addJournalEntry, deleteJournalEntry } from '@/lib/data/clientJournal';
 import { getClientCoachNotes, updateClientAdminDetails } from '@/lib/data/clientProfile';
 import type { ClientJournalEntryRow, ClientProfileRow } from '@/lib/data/types';
+import { DeleteMemberCard } from './DeleteMemberCard';
 
 const SECTIONS: { kind: ClientJournalEntryRow['kind']; label: string; addLabel: string; placeholder: string }[] = [
   { kind: 'goal', label: 'Client Goals', addLabel: '+ Add Goal', placeholder: 'e.g. Lose 5kg by December' },
@@ -258,6 +259,8 @@ export function NotesTab({
           currentUserId={currentUserId}
         />
       ))}
+      {/* readOnly is false only for the member's own coach (DashboardShell passes !isOwnClient). */}
+      {!readOnly && <DeleteMemberCard clientId={clientId} memberName={profile?.name?.trim() || 'this member'} />}
     </div>
   );
 }
