@@ -28,6 +28,8 @@ import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
 import { BpHomeExplore, BpHomeHero, BpHomeProgress, BpMainTiles } from './BpHome';
 import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
+import { challengeHome } from '@/lib/challengeHome';
+import { shortDay, WhatsNextCard } from './HomeChallenge';
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 const clickableCardCls = `${cardCls} w-full text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`;
@@ -72,6 +74,8 @@ export function TodayTab({
   dailyCheckinHidden = false,
   streakDays,
   disabledMetrics = [],
+  clientId,
+  coachName,
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -98,6 +102,9 @@ export function TodayTab({
   // Consecutive days logged, worked out on the server from a year of logs (L2).
   streakDays?: number;
   disabledMetrics?: string[];
+  // The member's own id (a "What's next" choice leaves a message in their chat) and their coach's name, when known.
+  clientId?: string;
+  coachName?: string | null;
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -137,9 +144,27 @@ export function TodayTab({
   const greetingHour = new Date().getHours();
   const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
 
+  // D5: where a member is in a plan with a set length (the 6 Week Challenge), and in its last 2 weeks what comes next.
+  const challenge = isCoachView ? null : challengeHome(membership, todayIso, shortDay);
+
   return (
     <div className="space-y-3">
-      {!isCoachView && <BpHomeHero profile={profile} />}
+      {!isCoachView && (
+        <BpHomeHero
+          profile={profile}
+          plan={challenge ? { name: challenge.planName, label: challenge.label } : null}
+          onOpenPlan={() => onNavigate('Account Settings', 'Credits')}
+        />
+      )}
+      {challenge?.whatsNext && clientId && (
+        <WhatsNextCard
+          home={challenge}
+          clientId={clientId}
+          gymId={membership?.package?.gym_id ?? null}
+          coachName={coachName}
+          onOpenChat={() => onNavigate('Messages')}
+        />
+      )}
       {!isCoachView && upcomingEvent && <EventBanner event={upcomingEvent} onOpen={() => onNavigate('Community', 'Events')} />}
 
       {isCoachView && (

@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, View } from 'react-native';
 
@@ -30,6 +30,15 @@ export default function Chat() {
   const sender = useChatSender(clientId);
   const markRead = useMarkChatRead(clientId);
   const [viewing, setViewing] = useState<string | null>(null);
+
+  // A message to put in the box (Home's "What's next" card, D5). The param is cleared once read, so the same choice made again later
+  // fills the box again; the chat screen stays mounted between visits.
+  const router = useRouter();
+  const params = useLocalSearchParams<{ draft?: string }>();
+  const draft = typeof params.draft === 'string' && params.draft ? params.draft : undefined;
+  useEffect(() => {
+    if (draft) router.setParams({ draft: undefined });
+  }, [draft, router]);
 
   // Looking at the conversation means it is read: on opening, and for whatever the coach sends while it is open.
   const [focused, setFocused] = useState(false);
@@ -150,6 +159,7 @@ export default function Chat() {
           onSendText={sender.sendText}
           onSendPhoto={sender.sendPhoto}
           onSendVoice={sender.sendVoice}
+          draft={draft}
         />
       </KeyboardAvoidingView>
       <PhotoViewer src={viewing} onClose={() => setViewing(null)} />

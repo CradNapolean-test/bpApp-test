@@ -847,6 +847,8 @@ export function DashboardShell({
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
               streakDays={streak}
               disabledMetrics={disabledMetrics}
+              clientId={clientId}
+              coachName={coachName}
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (

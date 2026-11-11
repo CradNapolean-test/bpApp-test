@@ -2,6 +2,7 @@ import { View } from 'react-native';
 
 import type { CreditsLedgerRow } from '@ballistic/shared/data/types';
 import { isoDateInTz } from '@ballistic/shared/utils/dates';
+import { planCountdown } from '@ballistic/shared/utils/planCountdown';
 
 import { AppText, Button, Card, ScrollScreen } from '@/components/ui';
 import { useCreditBuckets, useCreditLedger } from '@/lib/classes';
@@ -39,6 +40,8 @@ export default function Credits() {
   const ledger = useCreditLedger();
   const membership = credits.data?.membership ?? null;
   const pkg = membership?.package ?? null;
+  // A plan with a set length (the 6 Week Challenge): how long it is and which week the member is in (D5).
+  const countdown = membership && pkg?.duration_weeks ? planCountdown({ ...membership, durationWeeks: pkg.duration_weeks }, todayIso) : null;
   const balance = credits.data?.balance ?? 0;
   const rows = ledger.data?.pages.flat() ?? [];
 
@@ -62,6 +65,9 @@ export default function Credits() {
                 ['Weekly allowance', `${plural(pkg.credits_per_week, 'credit')}, reset Saturdays`],
                 ...(pkg.advance_booking_days != null ? [['Book up to', `${pkg.advance_booking_days} days ahead`]] : []),
                 ...(membership?.started_at && membership.started_at > todayIso ? [['Starts', longDate(membership.started_at)]] : []),
+                ...(countdown?.totalWeeks
+                  ? [['Length', `${countdown.totalWeeks} weeks${countdown.state === 'active' && countdown.week ? ` · you are in week ${countdown.week}` : ''}`]]
+                  : []),
                 ...(membership?.scheduled_end ? [['Ends', longDate(membership.scheduled_end)]] : []),
                 ...(membership?.started_at ? [['Member since', longDate(membership.started_at)]] : []),
               ].map(([label, value]) => (

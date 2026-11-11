@@ -1,9 +1,11 @@
 import { useState } from 'react';
 
+import { challengeHome } from '@ballistic/shared/utils/challengeHome';
 import { clubProgress } from '@ballistic/shared/utils/clubs';
 import { monthsSince, nextSessionsReward } from '@ballistic/shared/utils/home';
 import { showsStreak } from '@ballistic/shared/utils/streak';
 
+import { shortDay, WhatsNextCard } from '@/components/homeChallenge';
 import { DetailsConfirmBanner, EventBanner, ExploreTiles, FormsBanner, MyCoachingTile, StatsCard, YourProgress } from '@/components/home';
 import { PushCard } from '@/components/push';
 import { HomeSkeleton } from '@/components/skeleton';
@@ -66,6 +68,9 @@ function HomeContent() {
   const sessionsDone = doneQ.data ?? 0;
   const club = clubProgress(sessionsDone);
   const nextReward = nextSessionsReward(rewardsQ.data ?? [], doneQ.data ?? 0);
+  // D5: where the member is in a plan with a set length (the 6 Week Challenge), and in its last 2 weeks what comes next.
+  const challenge = challengeHome(membership, todayIso, shortDay);
+  const coachName = useMe().data?.coachName;
 
   const [refreshing, setRefreshing] = useState(false);
   async function refresh() {
@@ -96,7 +101,8 @@ function HomeContent() {
 
   return (
     <ScrollScreen refreshing={refreshing} onRefresh={refresh}>
-      <Hero profile={profile} now={now} />
+      <Hero profile={profile} now={now} plan={challenge ? { name: challenge.planName, label: challenge.label } : null} />
+      {challenge?.whatsNext ? <WhatsNextCard home={challenge} gymId={membership?.package?.gym_id} coachName={coachName} /> : null}
       <DetailsConfirmBanner clientId={profile.client_id} requestedAt={profile.details_confirm_requested_at} />
       {eventQ.data ? <EventBanner key={eventQ.data.id} event={eventQ.data} /> : null}
       <NextSessionCard booking={nextBooking} todayIso={todayIso} tz={tz} now={now} workout={workoutQ.data} />

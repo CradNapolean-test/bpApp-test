@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getMyCreditHistory } from '@/lib/data/memberships';
 import { friendlyCreditReason } from '@/lib/creditsForm';
+import { planCountdown } from '@/lib/planCountdown';
 import { todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientMembershipRow, CreditBucketBalances, CreditsLedgerRow } from '@/lib/data/types';
 
@@ -26,6 +27,9 @@ export function ClientCreditsTab({
   membership: ClientMembershipRow | null;
 }) {
   const pkg = membership?.package ?? null;
+  // A plan with a set length (the 6 Week Challenge): how long it is and which week the member is in (D5).
+  const countdown =
+    membership && pkg?.duration_weeks ? planCountdown({ ...membership, durationWeeks: pkg.duration_weeks }, todayIsoInTz(DEFAULT_TIMEZONE)) : null;
   // The last ten changes and the bonus credits that will run out (CC1). Read when the screen opens, and again when the balance changes.
   const [history, setHistory] = useState<{ recent: CreditsLedgerRow[]; expiring: CreditsLedgerRow[] } | null>(null);
   useEffect(() => {
@@ -118,6 +122,14 @@ export function ClientCreditsTab({
                 <div className="flex justify-between py-2">
                   <dt className="text-zinc-500">Starts</dt>
                   <dd className="font-semibold text-black dark:text-zinc-50">{longDate(membership.started_at)}</dd>
+                </div>
+              )}
+              {countdown && countdown.totalWeeks && (
+                <div className="flex justify-between py-2">
+                  <dt className="text-zinc-500">Length</dt>
+                  <dd className="font-semibold text-black dark:text-zinc-50">
+                    {countdown.totalWeeks} weeks{countdown.state === 'active' && countdown.week ? ` · you are in week ${countdown.week}` : ''}
+                  </dd>
                 </div>
               )}
               {membership?.scheduled_end && (

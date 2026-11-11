@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CLUB_MILESTONES } from './clubs';
 import { CHECKIN_CLOSES_AFTER_MIN, CHECKIN_OPENS_BEFORE_MIN } from './checkinWindow';
-import { FAQ_TODO, buildFaqs, describeClubs } from './faqContent';
+import { FAQ_TODO, buildFaqs, describeClubs, planEndFaq } from './faqContent';
 
 const base = {
   planName: 'Strong',
@@ -67,5 +67,27 @@ describe('Email your coach', () => {
     expect(withEmail?.email).toBe('coach@example.com');
     expect(buildFaqs(base).some((f) => f.q === 'Email your coach')).toBe(false);
     expect(buildFaqs({ ...base, coachEmail: null }).some((f) => f.q === 'Email your coach')).toBe(false);
+  });
+});
+
+describe('the plan end date (D5, MX19)', () => {
+  const challenge = { ...base, planName: '6 Week Challenge', planEndsOn: '2026-11-14', planFixedLength: true };
+  it('gives the end date in the plan answer and in its own question, after the plan answer', () => {
+    const faqs = buildFaqs(challenge);
+    expect(answer(faqs, /my plan include/i)).toContain('It ends on Saturday 14 November 2026.');
+    const at = faqs.findIndex((f) => f.q === 'When does my plan end?');
+    expect(faqs[at - 1].q).toBe('What does my plan include?');
+    expect(faqs[at].a).toBe(
+      "Your 6 Week Challenge ends on Saturday 14 November 2026. In its last two weeks your Home screen shows what comes next: carry on with one of the gym's ongoing plans, or talk it through with your coach."
+    );
+  });
+  it('points an ongoing plan with an end date at the coach instead', () => {
+    expect(planEndFaq('Big Dog', '2026-12-31')?.a).toBe('Your Big Dog ends on Thursday 31 December 2026. To carry on after that, message your coach.');
+  });
+  it('adds nothing without an end date or a plan', () => {
+    expect(buildFaqs(base).some((f) => f.q === 'When does my plan end?')).toBe(false);
+    expect(answer(buildFaqs(base), /my plan include/i)).not.toContain('ends on');
+    expect(buildFaqs({ ...challenge, planName: null }).some((f) => f.q === 'When does my plan end?')).toBe(false);
+    expect(planEndFaq('Big Dog', null)).toBeNull();
   });
 });

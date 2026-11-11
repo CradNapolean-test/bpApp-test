@@ -37,6 +37,28 @@ export interface FaqInputs {
   referralUrl: string | null;
   // The member's coach's email, when known (then an "Email your coach" question is added).
   coachEmail?: string | null;
+  // The plan's planned last day (client_memberships.scheduled_end, ISO), and whether the plan has a set length such as the 6 Week
+  // Challenge (D5). With an end date the plan answer gives it and a "When does my plan end?" question is added.
+  planEndsOn?: string | null;
+  planFixedLength?: boolean;
+}
+
+// "Saturday 14 November 2026". A plan's end is a calendar day, so it is written in UTC and never moves a day.
+function longDay(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`)
+    .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .replace(/^(\w+),\s/, '$1 ');
+}
+
+// "When does my plan end?" (D5, MX19): the challenge end used to be only at the bottom of Credits & membership. Null without an end date.
+// The phone's FAQ adds this same question to its own list.
+export function planEndFaq(planName: string | null, endsOn: string | null | undefined, fixedLength = false): Faq | null {
+  if (!endsOn) return null;
+  const plan = planName ? `Your ${planName}` : 'Your plan';
+  const next = fixedLength
+    ? 'In its last two weeks your Home screen shows what comes next: carry on with one of the gym\'s ongoing plans, or talk it through with your coach.'
+    : 'To carry on after that, message your coach.';
+  return { q: 'When does my plan end?', a: `${plan} ends on ${longDay(endsOn)}. ${next}` };
 }
 
 // "100, 250 and 500, then every 500 after that", from the club list the Home screen uses.
@@ -48,7 +70,7 @@ export function describeClubs(milestones: readonly number[] = CLUB_MILESTONES): 
 export function buildFaqs(input: FaqInputs): Faq[] {
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const plan = input.planName
-    ? `You are on ${input.planName}${input.creditsPerWeek != null ? `, which gives you ${plural(input.creditsPerWeek, 'credit')} a week. Your weekly credits reset every Saturday, so you can book the week ahead.` : '.'} Each session uses the credits shown on it, and your Credits screen shows your balance.`
+    ? `You are on ${input.planName}${input.creditsPerWeek != null ? `, which gives you ${plural(input.creditsPerWeek, 'credit')} a week. Your weekly credits reset every Saturday, so you can book the week ahead.` : '.'}${input.planEndsOn ? ` It ends on ${longDay(input.planEndsOn)}.` : ''} Each session uses the credits shown on it, and your Credits screen shows your balance.`
     : 'Your coach sets up your plan. Ask them what it includes. Your credits are shown at the top of the Book tab.';
   const ahead =
     input.advanceBookingDays != null
@@ -76,6 +98,8 @@ export function buildFaqs(input: FaqInputs): Faq[] {
     { q: 'What are the session clubs?', a: `Clubs mark the sessions you have attended: ${describeClubs()}. Your progress towards the next club is on your Home screen.` },
     { q: 'How do I get my reward?', a: 'When a reward shows Earned on the Rewards screen, ask your coach and they will give it to you.' },
   ];
+  const ending = input.planName ? planEndFaq(input.planName, input.planEndsOn, input.planFixedLength) : null;
+  if (ending) faqs.splice(faqs.findIndex((f) => f.q === 'What does my plan include?') + 1, 0, ending);
   if (input.coachEmail) {
     const at = faqs.findIndex((f) => f.q === 'How do I get in touch with my coach?');
     faqs.splice(at + 1, 0, { q: 'Email your coach', a: 'Prefer email? Write to your coach at:', email: input.coachEmail });

@@ -353,6 +353,8 @@ export function FaqTab({
     cancellation: cancellationPolicyText(gymBlackout, cutoffs),
     referralUrl,
     coachEmail,
+    planEndsOn: membership?.scheduled_end ?? null,
+    planFixedLength: !!pkg?.duration_weeks && pkg.duration_weeks > 0,
   });
   return (
     <div className="space-y-3">

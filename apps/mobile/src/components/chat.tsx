@@ -297,15 +297,23 @@ export function Composer({
   onSendText,
   onSendPhoto,
   onSendVoice,
+  draft,
 }: {
   placeholder: string;
   disabled?: boolean;
   onSendText: (text: string) => string | null;
   onSendPhoto: (asset: { uri: string; width: number; height: number }) => void;
   onSendVoice: (uri: string, seconds: number) => void;
+  // A message put in the box for the member to read and send (Home's "What's next" card, D5). Never over what they were writing.
+  draft?: string;
 }) {
   const t = useTheme();
   const [text, setText] = useState('');
+  const [seenDraft, setSeenDraft] = useState<string | undefined>(undefined);
+  if (draft !== seenDraft) {
+    setSeenDraft(draft);
+    if (draft && !text.trim()) setText(draft);
+  }
   const [menu, setMenu] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const rec = useVoiceRecorder(onSendVoice, setNote);

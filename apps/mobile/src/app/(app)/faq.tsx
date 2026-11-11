@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { FAQS } from '@ballistic/shared/utils/community';
+import { planEndFaq } from '@ballistic/shared/utils/faqContent';
 
 import { FaqList } from '@/components/community';
 import { ScrollScreen } from '@/components/ui';
 import { useSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
+import { useCredits } from '@/lib/today';
 
 // Frequently asked questions. (The Terms and Privacy links come once the app has a web address to point them at.)
 export default function Faq() {
@@ -21,7 +23,15 @@ export default function Faq() {
       return typeof data === 'string' && data ? data : null;
     },
   });
-  const items = coachEmail.data ? [...FAQS, { q: 'Email your coach', a: 'Prefer email? Write to your coach at:', email: coachEmail.data }] : FAQS;
+  // When the member's plan ends, if it has an end date (D5): the challenge end used to be only on Credits & membership.
+  const membership = useCredits().data?.membership;
+  const pkg = membership?.package;
+  const ending = planEndFaq(pkg?.name ?? null, pkg ? membership?.scheduled_end : null, !!pkg?.duration_weeks && pkg.duration_weeks > 0);
+  const items = [
+    ...(ending ? [ending] : []),
+    ...FAQS,
+    ...(coachEmail.data ? [{ q: 'Email your coach', a: 'Prefer email? Write to your coach at:', email: coachEmail.data }] : []),
+  ];
   return (
     <ScrollScreen>
       <FaqList items={items} />

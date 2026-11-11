@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Award, ChevronRight, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
+import { Award, CalendarClock, ChevronRight, Gift, HelpCircle, MessagesSquare, PlayCircle, Star, Trophy, Users } from 'lucide-react';
 import type { BookingRow, ClientMembershipRow, ClientProfileRow, RewardRow } from '@/lib/data/types';
 import { clubProgress } from '@/lib/clubs';
 import { ClubBar } from './ClubBar';
@@ -73,7 +73,16 @@ export function BpMainTiles({ onNavigate }: { onNavigate: (category: Category, s
   );
 }
 
-export function BpHomeHero({ profile }: { profile: ClientProfileRow | null }) {
+// `plan` is a plan with a set length (D5): "6 Week Challenge · Week 5 of 6 · ends 14 Nov" under the name, opening Credits & membership.
+export function BpHomeHero({
+  profile,
+  plan,
+  onOpenPlan,
+}: {
+  profile: ClientProfileRow | null;
+  plan?: { name: string; label: string } | null;
+  onOpenPlan?: () => void;
+}) {
   const greetingHour = new Date().getHours();
   const greeting = greetingHour < 12 ? 'Good morning' : greetingHour < 18 ? 'Good afternoon' : 'Good evening';
   const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
@@ -81,6 +90,19 @@ export function BpHomeHero({ profile }: { profile: ClientProfileRow | null }) {
     <div className="px-1 pt-1">
       <p className="text-sm text-zinc-500">{greeting}</p>
       <p className="truncate text-2xl font-black text-black dark:text-zinc-50">{firstName}</p>
+      {plan && (
+        <button
+          type="button"
+          onClick={onOpenPlan}
+          disabled={!onOpenPlan}
+          className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1 text-left text-xs font-bold text-accent"
+        >
+          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">
+            {plan.name} · {plan.label}
+          </span>
+        </button>
+      )}
     </div>
   );
 }

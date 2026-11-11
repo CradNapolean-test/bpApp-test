@@ -11,8 +11,11 @@ import { AppText, Button } from '@/components/ui';
 import { useCheckIn, type TodayWorkout } from '@/lib/today';
 import { spacing, useTheme } from '@/theme';
 
-// The greeting: the time of day and the member's first name. (Credits live on the Book and Profile screens.)
-export function Hero({ profile, now }: { profile: ClientProfileRow; now: Date }) {
+// The greeting: the time of day and the member's first name. (Credits live on the Book and Profile screens.) A plan with a set length
+// (D5) adds "6 Week Challenge · Week 5 of 6 · ends 14 Nov" under the name, opening Credits & membership.
+export function Hero({ profile, now, plan }: { profile: ClientProfileRow; now: Date; plan?: { name: string; label: string } | null }) {
+  const t = useTheme();
+  const router = useRouter();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const firstName = profile.name?.trim().split(/\s+/)[0] ?? 'there';
@@ -22,6 +25,19 @@ export function Hero({ profile, now }: { profile: ClientProfileRow; now: Date })
       <AppText style={{ fontSize: 26, fontWeight: '900' }} numberOfLines={1}>
         {firstName}
       </AppText>
+      {plan ? (
+        <Pressable
+          onPress={() => router.navigate('/credits')}
+          accessibilityRole="button"
+          accessibilityLabel={`${plan.name}, ${plan.label}. Open credits and membership`}
+          style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: t.accentSoft, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, maxWidth: '100%' }}
+        >
+          <Icon name="calendarDays" size={14} color={t.accent} />
+          <AppText variant="small" style={{ color: t.accentText, fontWeight: '800', flexShrink: 1 }} numberOfLines={1}>
+            {plan.name} · {plan.label}
+          </AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
