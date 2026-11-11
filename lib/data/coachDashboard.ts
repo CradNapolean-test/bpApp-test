@@ -3,17 +3,17 @@
 import { createClient } from '@/lib/supabase/server';
 import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
-import { isPlateaued } from '@/lib/calculations';
-import { isGoneQuiet } from '@/lib/followUp';
+import { isGoneQuiet, sortFollowUps, type FollowUpKind, type FollowUpReason } from '@/lib/followUp';
 import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { minuteOfDayIn } from '@/lib/todaySessions';
 import { reviewRows, startedBy } from '@/lib/coachDashboardRules';
-import { coachProgrammeEndLine, needsNextProgramme, programmeEnd, programmeEndStage } from '@/lib/utils/programEnding';
+import { coachProgrammeEndLine, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
 import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
 import { getRedFlagReport } from './redFlags';
+import { FOLLOW_UP_RELATIONS, followUpFilters, followUpOfRow, followUpSince } from './followUps';
 import { fetchAllPages } from '@/lib/paging';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
@@ -92,11 +92,12 @@ export interface UnreadThread {
   name: string;
   unread: number;
 }
-export type CheckReason = 'quiet' | 'missed' | 'credits' | 'stalled' | 'programme';
+// "Members to check in on": the one follow-up list (lib/followUp.ts), the same members and reasons as Clients → Check in on (CL16, D28).
+export type CheckReason = FollowUpKind;
 export interface MemberToCheck {
   clientId: string;
   name: string;
-  reasons: { kind: CheckReason; label: string }[];
+  reasons: FollowUpReason[];
   detail: string;
 }
 
@@ -165,7 +166,11 @@ interface MemberRow {
   nutrition_feedback: { log_date: string; photo_id: string | null }[] | null;
   coach_reviews: { kind: string; ref: string }[] | null;
   form_assignments: { id: string; completed_at: string | null; form_templates: ProfileRel<{ name: string }> }[] | null;
-  bookings: { booking_date: string; attended: boolean | null; status: string; class: ProfileRel<{ start_time: string | null }> }[] | null;
+  // Still booked, from FOLLOW_UP_WINDOW_DAYS ago onwards (followUpFilters).
+  bookings: { booking_date: string; attended: boolean | null; no_show: boolean | null; status: string; class: ProfileRel<{ start_time: string | null }> }[] | null;
+  credits_balance: ProfileRel<{ balance: number | null }>;
+  // Holds running today.
+  membership_holds: { id: string }[] | null;
   big_dog_results: { exercise_key: string; self_reported: boolean | null; result_text: string | null; created_at: string }[] | null;
   // Programmes started in the last year, each with only its highest week number (see buildQuery).
   workout_programs: { id: string; name: string; start_date: string | null; workout_program_days: { week_num: number }[] | null }[] | null;
@@ -182,9 +187,10 @@ const SELECT = `
   nutrition_feedback!client_id(log_date, photo_id),
   coach_reviews!client_id(kind, ref),
   form_assignments!client_id(id, completed_at, form_templates(name)),
-  bookings!client_id(booking_date, attended, status, class:classes(start_time)),
+  bookings!client_id(booking_date, attended, no_show, status, class:classes(start_time)),
   big_dog_results!client_id(exercise_key, self_reported, result_text, created_at),
-  workout_programs(id, name, start_date, workout_program_days(week_num))
+  workout_programs(id, name, start_date, workout_program_days(week_num)),
+  ${FOLLOW_UP_RELATIONS}
 `;
 
 // Everything the coach dashboard needs in one go. `scope` narrows it to the coach's own members
@@ -220,7 +226,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const lastWeek = toIsoDate(addDays(new Date(thisWeek + 'T00:00:00Z'), -7));
   const prevWeek = toIsoDate(addDays(new Date(thisWeek + 'T00:00:00Z'), -7));
   const prev2Week = toIsoDate(addDays(new Date(thisWeek + 'T00:00:00Z'), -14));
-  const since28 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -28));
+  // The follow-up list's window (FOLLOW_UP_WINDOW_DAYS): logs from here, the same as Clients.
+  const since28 = followUpSince(todayIso);
   const since7 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -7));
   const since30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
   const since90 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -90));
@@ -236,8 +243,6 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       .eq('role', 'client')
       .gte('daily_logs.log_date', since28)
       .gte('nutrition_feedback.log_date', since7)
-      .gte('bookings.booking_date', prevWeek)
-      .eq('bookings.status', 'booked')
       // Only recent rows of these, not every one ever (CW10). Forms are listed for 30 days after completion and every other review
       // marker is for something in the last three weeks (the two check-in weeks, a week's meal photos, the current challenge week),
       // and a marker is always written after the thing it marks, so 30 days of markers is all the To do can need. Peak week scores:
@@ -250,6 +255,9 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       .gte('workout_programs.start_date', since365)
       .order('week_num', { referencedTable: 'workout_programs.workout_program_days', ascending: false })
       .limit(1, { referencedTable: 'workout_programs.workout_program_days' });
+    // Bookings (still booked, 28 days back, for the follow-up list and this week's numbers) and today's holds, read as the Clients page
+    // reads them.
+    q = followUpFilters(q, todayIso);
     if (select.includes('coach_reviews')) q = q.gte('coach_reviews.reviewed_at', since30);
     if (scope === 'mine') q = q.eq('coach_id', user.id);
     else if (scope === 'coach' && selectedCoachId) q = q.eq('coach_id', selectedCoachId);
@@ -395,44 +403,21 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
 
     // This week against the same point last week: comparing a part week with a whole one showed a fall almost every day (UX1).
     for (const b of m.bookings ?? []) {
-      if (!b.attended) continue;
+      // Bookings go back 28 days for the follow-up list; these numbers only look at this week and last.
+      if (!b.attended || b.booking_date < prevWeek) continue;
       if (b.booking_date >= thisWeek) sessionsAttended += 1;
       else if (b.booking_date < sameDayLastWeek) sessionsAttendedSameTimeLastWeek += 1;
       // A class with no start time can't be placed before or after now, so it isn't counted as started (toMinutes reads it as midnight).
       else if (b.booking_date === sameDayLastWeek && startedBy(one(b.class)?.start_time ?? null, nowMinute)) sessionsAttendedSameTimeLastWeek += 1;
     }
 
-    // Members worth a conversation, and why.
-    if (!onboarded) continue;
-    const reasons: MemberToCheck['reasons'] = [];
-    let detail = '';
-    const lastLog = logs.map((l) => l.log_date).sort().at(-1) ?? null;
-    const sinceDays = lastLog ? Math.round((new Date(todayIso).getTime() - new Date(lastLog).getTime()) / 86400000) : null;
-    const memberForDays = Math.round((new Date(todayIso).getTime() - new Date(m.created_at.slice(0, 10)).getTime()) / 86400000);
-    // D11: the one "gone quiet" rule (lib/followUp.ts), the same as Clients and the owner's screen.
-    if (isGoneQuiet({ onboarded, onHold: false, reminderDays: cp?.checkin_reminder_days, lastLog, createdAt: m.created_at, todayIso })) {
-      reasons.push({ kind: 'quiet', label: sinceDays != null ? `${sinceDays} days quiet` : 'Never logged' });
-      detail = lastLog ? `Last log ${new Date(lastLog + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}` : 'No logs yet';
-    }
-    if (memberForDays > 14 && daysIn(prevWeek) === 0 && !reasons.some((r) => r.kind === 'quiet')) {
-      reasons.push({ kind: 'missed', label: 'Missed last week' });
-      detail = detail || 'No check-in days last week';
-    }
-    // No credits reason any more: it only fired for members on a weekly plan who had used their allowance, which means they are booking
-    // and turning up, not that they need a call (CR3). The Clients page's "Low credits" filter still lists them for anyone who wants it.
-    const weights = logs.filter((l) => l.bodyweight != null).sort((a, b) => (a.log_date < b.log_date ? -1 : 1)).map((l) => l.bodyweight as number);
-    if (weights.length >= 6 && isPlateaued(weights)) {
-      reasons.push({ kind: 'stalled', label: 'Weight stalled' });
-      detail = detail || `${weights.length} weigh-ins, no change`;
-    }
-    if (programmeDue) {
-      reasons.push({ kind: 'programme', label: programmeEndStage(programmeDue) === 'ended' ? 'Programme finished' : 'Programme ending' });
-      detail = detail || programmeLine;
-    }
-    if (reasons.length > 0) toCheck.push({ clientId: m.id, name, reasons, detail });
+    // Members worth a conversation, and why: the one follow-up list (lib/followUp.ts), built from the same rows as Clients → Check in on
+    // (CL16). Gone quiet (D11), missed last week and weight stalled for members whose logging is watched; missed 2+ classes and out of
+    // credits with nothing booked (D28) for anyone. Members on hold are left out. Programmes ending have their own To do (D28 leaves them
+    // out of this list).
+    const followUp = followUpOfRow(m, logs, todayIso);
+    if (followUp) toCheck.push({ clientId: m.id, name, ...followUp });
   }
-
-  toCheck.sort((a, b) => b.reasons.length - a.reasons.length || (a.reasons[0].kind === 'quiet' ? -1 : 1));
 
   // Group scores per person for the summary row; keep the rows for the expanded list.
   const unreadThreads: UnreadThread[] = (chatOverview as { client_id: string; client_name: string; unread_count: number }[])
@@ -470,7 +455,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     photoReviews,
     forms,
     scores,
-    toCheck,
+    toCheck: sortFollowUps(toCheck),
     stats: {
       sessionsAttended,
       sessionsAttendedSameTimeLastWeek,

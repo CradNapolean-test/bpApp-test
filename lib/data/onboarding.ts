@@ -332,6 +332,8 @@ export async function requestDetailsUpdateForAll(): Promise<{ ok: true; count: n
   return { ok: true, count: data?.length ?? 0 };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface ReviewQueueItem {
   clientId: string;
   name: string;
@@ -342,17 +344,21 @@ export interface ReviewQueueItem {
 
 // New members whose starting plan hasn't been reviewed yet, newest first. RLS lets a coach read every member at their gym, so each
 // one says whether it is the coach's own: the Clients banner used to count the whole gym with no word of whose they were (CL2).
-export async function getClientsNeedingReview(): Promise<ReviewQueueItem[]> {
+// With `gymId`: the coach's own (any gym) and other coaches' at that gym only, so the banner's "N more at the gym" is the Whole gym chip
+// less the coach's own there (CL16); without it, everyone the coach can read.
+export async function getClientsNeedingReview(gymId?: string | null): Promise<ReviewQueueItem[]> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from('profiles')
     .select('id, coach_id, client_profiles!inner(name, review_reasons, updated_at)')
     .eq('role', 'client')
     .eq('client_profiles.needs_coach_review', true);
+  if (gymId && UUID.test(gymId)) query = query.or(`coach_id.eq.${user.id},gym_id.eq.${gymId}`);
+  const { data, error } = await query;
   if (error) return []; // column missing until the migration is applied
   type Row = { id: string; coach_id: string | null; client_profiles: { name: string | null; review_reasons: string[] | null; updated_at: string | null } | { name: string | null; review_reasons: string[] | null; updated_at: string | null }[] };
   return ((data ?? []) as unknown as Row[])

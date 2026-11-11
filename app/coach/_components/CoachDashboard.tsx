@@ -28,11 +28,20 @@ import { markAllReviewed } from '@/lib/data/coachDashboard';
 import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from '@/lib/checkinQueue';
 import { formatClassTime } from '@/lib/utils/dates';
 import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
-import type { CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
+import type { CheckReason, CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
 import type { ScheduleOccurrence } from '@/lib/data/types';
 import { ActiveGymTag } from './ActiveGymTag';
 import { AddClientForm } from './AddClientForm';
 import { JoinLinkCard } from './JoinLinkCard';
+
+// Reason chips in "Members to check in on" (and on Clients → Check in on).
+const REASON_CLS: Record<CheckReason, string> = {
+  quiet: 'bg-danger/15 text-danger',
+  classes: 'bg-danger/15 text-danger',
+  missed: 'bg-warning/15 text-warning',
+  credits: 'bg-warning/15 text-warning',
+  stalled: 'bg-accent/15 text-accent',
+};
 
 const sessionHref = (o: ScheduleOccurrence) => `/coach/classes?tab=sessions&date=${o.date}&class=${o.classId}`;
 const runHref = (o: ScheduleOccurrence) => `/coach/run/${o.classId}/${o.date}`;
@@ -500,9 +509,17 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
       </div>
 
       {/* ---- Members to check in on ---- */}
+      {/* The same list, with the same reasons, as Clients → Check in on (CL16). */}
       {data.toCheck.length > 0 && (
         <div>
-          <SectionLabel>Members to check in on · {data.toCheck.length}</SectionLabel>
+          <div className="flex items-baseline justify-between gap-2">
+            <SectionLabel>Members to check in on · {data.toCheck.length}</SectionLabel>
+            {scope !== 'coach' && (
+              <Link href={`/coach/clients?filter=check${scope === 'gym' ? '&scope=gym' : ''}`} className="shrink-0 text-xs font-bold text-accent">
+                On Clients →
+              </Link>
+            )}
+          </div>
           <div className={showAllToCheck ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3' : '-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden'}>
             {(showAllToCheck ? data.toCheck : data.toCheck.slice(0, 12)).map((m) => (
               <div key={m.clientId} className={`${showAllToCheck ? '' : 'w-40 shrink-0'} rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10`}>
@@ -513,9 +530,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
                     {m.reasons.map((r) => (
                       <span
                         key={r.kind}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                          r.kind === 'quiet' ? 'bg-danger/15 text-danger' : r.kind === 'stalled' ? 'bg-accent/15 text-accent' : 'bg-warning/15 text-warning'
-                        }`}
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${REASON_CLS[r.kind]}`}
                       >
                         {r.label}
                       </span>

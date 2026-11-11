@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpDown, MessageSquare, Search, Users } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
@@ -9,15 +9,25 @@ import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 import { LIST_STEP, remainingAfter, showMore, visibleCount } from '@/lib/paging';
-import { QUIET_DAYS, SLIPPING_DAYS } from '@/lib/followUp';
+import { QUIET_DAYS, SLIPPING_DAYS, hasReason, type FollowUp, type FollowUpKind } from '@/lib/followUp';
 import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow, GymClientRow } from '@/lib/data/coach';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 type Scope = 'mine' | 'gym';
-type QuickFilter = 'all' | 'review' | 'quiet' | 'credits' | 'noplan';
+export type QuickFilter = 'all' | 'review' | 'check' | 'quiet' | 'credits' | 'noplan';
 
-const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
+const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3, notsetup: 3 };
+
+// Reason chips, as on the dashboard's "Members to check in on".
+const REASON_CLS: Record<FollowUpKind, string> = {
+  quiet: 'bg-danger/15 text-danger',
+  classes: 'bg-danger/15 text-danger',
+  missed: 'bg-warning/15 text-warning',
+  credits: 'bg-warning/15 text-warning',
+  stalled: 'bg-accent/15 text-accent',
+};
+const NOT_SET_UP = { label: 'Not set up', cls: 'text-zinc-400' };
 
 // The Logging column (D10): how recently the member logged anything, as a colour word. It measures logging only, not attendance or
 // progress, hence the name (it was "Status", CL5). The bands are lib/followUp.ts's: red is exactly "Gone quiet" (D11).
@@ -38,6 +48,9 @@ export function ClientTable({
   unreadByClient = {},
   initialPlan = '',
   initialScope = 'mine',
+  initialQuick = 'all',
+  followUps = {},
+  notSetUpIds = [],
 }: {
   clients: CoachClientRow[];
   // Every client at the gym, regardless of assigned coach -- only present when this table is
@@ -53,6 +66,12 @@ export function ClientTable({
   // Opened from a plan's member count: start on that plan, across the whole gym.
   initialPlan?: string;
   initialScope?: Scope;
+  // Opened from the dashboard's "Members to check in on": start on that filter.
+  initialQuick?: QuickFilter;
+  // The follow-up list (lib/followUp.ts) by member: the same members and reasons as the dashboard's "Members to check in on" (CL16).
+  followUps?: Record<string, FollowUp>;
+  // Members who have not finished setting up the app.
+  notSetUpIds?: string[];
 }) {
   const [scope, setScope] = useState<Scope>(initialScope);
   const [planFilter, setPlanFilter] = useState(initialPlan);
@@ -61,13 +80,29 @@ export function ClientTable({
   const [query, setQuery] = useState('');
   const [groupId, setGroupId] = useState('');
   const [managingGroups, setManagingGroups] = useState(false);
-  const [quick, setQuick] = useState<QuickFilter>('all');
+  const [quick, setQuick] = useState<QuickFilter>(initialQuick);
   const [legend, setLegend] = useState(false);
   const onHold = useMemo(() => new Set(holdIds), [holdIds]);
+  const notSetUp = useMemo(() => new Set(notSetUpIds), [notSetUpIds]);
 
   const activeClients: (CoachClientRow | GymClientRow)[] = scope === 'gym' && gymClients ? gymClients : clients;
 
   const statusById = useMemo(() => new Map(statuses.map((s) => [s.clientId, s])), [statuses]);
+
+  // The quick filters. Check in on, Gone quiet and Out of credits are the dashboard's follow-up reasons (members on hold have none); Out
+  // of credits replaces "Low credits", which listed plan members who had simply booked their week (CL19, RO5).
+  const inQuick = useCallback(
+    (key: QuickFilter, c: CoachClientRow): boolean => {
+      const f = followUps[c.id];
+      if (key === 'review') return c.needsReview;
+      if (key === 'check') return !!f;
+      if (key === 'quiet') return hasReason(f, 'quiet');
+      if (key === 'credits') return hasReason(f, 'credits');
+      if (key === 'noplan') return c.planName == null;
+      return true;
+    },
+    [followUps]
+  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -78,17 +113,7 @@ export function ClientTable({
       .filter((c) => (planFilter ? (planFilter === '__none' ? c.planName == null : c.planName === planFilter) : true));
     const merged = filteredClients
       .map((c) => ({ client: c, health: statusById.get(c.id) ?? null }))
-      .filter(({ client, health }) =>
-        quick === 'review'
-          ? client.needsReview
-          : quick === 'quiet'
-            ? !onHold.has(client.id) && health?.status === 'red'
-            : quick === 'credits'
-              ? client.balance <= 1 && client.planName != null
-              : quick === 'noplan'
-                ? client.planName == null
-                : true
-      );
+      .filter(({ client }) => inQuick(quick, client));
     merged.sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'name') {
@@ -96,9 +121,8 @@ export function ClientTable({
       } else if (sortKey === 'credits') {
         cmp = a.client.balance - b.client.balance;
       } else if (sortKey === 'status') {
-        cmp =
-          (STATUS_RANK[a.health?.status ?? 'unmonitored'] ?? 9) -
-          (STATUS_RANK[b.health?.status ?? 'unmonitored'] ?? 9);
+        const rank = (r: typeof a) => (notSetUp.has(r.client.id) ? STATUS_RANK.notsetup : (STATUS_RANK[r.health?.status ?? 'unmonitored'] ?? 9));
+        cmp = rank(a) - rank(b);
       } else {
         // Never-logged sorts as most stale rather than silently landing at one end.
         cmp = (b.health?.daysSinceActive ?? Infinity) - (a.health?.daysSinceActive ?? Infinity);
@@ -106,19 +130,18 @@ export function ClientTable({
       return asc ? cmp : -cmp;
     });
     return merged;
-  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, quick, onHold, planFilter]);
+  }, [activeClients, statusById, sortKey, asc, query, groupId, groups, quick, planFilter, inQuick, notSetUp]);
 
+  // Every count comes from the same follow-up list as the dashboard, for whichever of My clients / Whole gym is showing.
   const quickCounts = useMemo(
     () => ({
-      review: activeClients.filter((c) => c.needsReview).length,
-      quiet: activeClients.filter((c) => {
-        const s = statusById.get(c.id)?.status;
-        return !onHold.has(c.id) && s === 'red';
-      }).length,
-      credits: activeClients.filter((c) => c.balance <= 1 && c.planName != null).length,
-      noplan: activeClients.filter((c) => c.planName == null).length,
+      review: activeClients.filter((c) => inQuick('review', c)).length,
+      check: activeClients.filter((c) => inQuick('check', c)).length,
+      quiet: activeClients.filter((c) => inQuick('quiet', c)).length,
+      credits: activeClients.filter((c) => inQuick('credits', c)).length,
+      noplan: activeClients.filter((c) => inQuick('noplan', c)).length,
     }),
-    [activeClients, statusById, onHold]
+    [activeClients, inQuick]
   );
 
   const planNames = useMemo(() => [...new Set(activeClients.map((c) => c.planName).filter((n): n is string => !!n))].sort(), [activeClients]);
@@ -137,10 +160,27 @@ export function ClientTable({
     setPlanFilter('');
   }
   const emptyText = filtersOn ? 'Nobody matches these filters.' : 'No clients here yet.';
-  // 0 or 1 credits left on a plan stands out; no plan means the number does not matter.
+  const whose =
+    scope === 'gym' && gymClients
+      ? `member${activeClients.length === 1 ? '' : 's'} at ${gymName ?? 'the gym'}`
+      : `of your member${activeClients.length === 1 ? '' : 's'}`;
+  // Red only when they are out of credits with nothing booked (the Out of credits reason). A plan member at 0 who has booked their week is
+  // fine (CL19); 0 with nothing to act on is grey.
   const creditCls = (c: CoachClientRow) =>
-    c.planName == null ? 'text-zinc-500' : c.balance <= 0 ? 'text-danger' : c.balance === 1 ? 'text-warning' : 'text-black dark:text-zinc-50';
-  const statusFor = (id: string, health: ClientHealthStatus | null) => (onHold.has(id) ? { label: 'On hold', cls: 'text-sky-600 dark:text-sky-400' } : STATUS_TEXT[health?.status ?? 'unmonitored']);
+    hasReason(followUps[c.id], 'credits') ? 'text-danger' : c.balance <= 0 ? 'text-zinc-500' : 'text-black dark:text-zinc-50';
+  const statusFor = (id: string, health: ClientHealthStatus | null) =>
+    onHold.has(id) ? { label: 'On hold', cls: 'text-sky-600 dark:text-sky-400' } : notSetUp.has(id) ? NOT_SET_UP : STATUS_TEXT[health?.status ?? 'unmonitored'];
+  // Why each member on Check in on is there, under their name.
+  const reasonChips = (id: string) =>
+    quick === 'check' && followUps[id] ? (
+      <span className="mt-1 flex flex-wrap gap-1">
+        {followUps[id].reasons.map((r) => (
+          <span key={r.kind} className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${REASON_CLS[r.kind]}`}>
+            {r.label}
+          </span>
+        ))}
+      </span>
+    ) : null;
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setAsc((v) => !v);
@@ -155,14 +195,15 @@ export function ClientTable({
   // click away instead of a separate flow.
   function handleExport() {
     const csv = toCsv(
-      ['Name', 'Email', 'Logging', 'Last active', 'Days since active', 'Credits'],
+      ['Name', 'Email', 'Logging', 'Last active', 'Days since active', 'Credits', 'Check in on'],
       rows.map(({ client, health }) => [
         client.name ?? '',
         client.email,
-        health ? STATUS_TEXT[health.status].label : STATUS_TEXT.unmonitored.label,
+        statusFor(client.id, health).label,
         health?.lastActiveDate ?? 'Never logged',
         health?.daysSinceActive ?? '',
         client.balance,
+        followUps[client.id]?.reasons.map((r) => r.label).join('; ') ?? '',
       ])
     );
     downloadTextFile(`clients-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8;');
@@ -261,8 +302,9 @@ const scopeBtnCls = (active: boolean) =>
         {([
           ['all', 'All', activeClients.length],
           ['review', 'New to review', quickCounts.review],
+          ['check', 'Check in on', quickCounts.check],
           ['quiet', 'Gone quiet', quickCounts.quiet],
-          ['credits', 'Low credits', quickCounts.credits],
+          ['credits', 'Out of credits', quickCounts.credits],
           ['noplan', 'No plan', quickCounts.noplan],
         ] as [QuickFilter, string, number][]).map(([key, label, count]) => (
           <button
@@ -281,7 +323,8 @@ const scopeBtnCls = (active: boolean) =>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-xs text-zinc-500">
-          {rows.length === activeClients.length ? `${rows.length} member${rows.length === 1 ? '' : 's'}` : `Showing ${rows.length} of ${activeClients.length}`}
+          {/* Says whose members the list and the counts above are for: they change with My clients / Whole gym (CL16). */}
+          {rows.length === activeClients.length ? `${rows.length} ${whose}` : `Showing ${rows.length} of ${activeClients.length} ${whose}`}
           {filtersOn && (
             <button type="button" onClick={clearFilters} className="ml-2 font-bold text-accent">
               Clear filters
@@ -338,6 +381,7 @@ const scopeBtnCls = (active: boolean) =>
                     {client.planName ? ` · ${client.planName}` : ' · No plan'}
                     {'coachName' in client && !client.isOwnClient ? ` · ${client.coachName}` : ''}
                   </p>
+                  {reasonChips(client.id)}
                 </div>
                 <div className="shrink-0 text-right">
                   <p className={`text-sm font-bold ${creditCls(client)}`}>{client.balance}</p>
@@ -415,6 +459,7 @@ const scopeBtnCls = (active: boolean) =>
                         )}
                       </div>
                       <p className="truncate text-xs text-zinc-500">{client.planName ?? 'No plan'} · {client.email}</p>
+                      {reasonChips(client.id)}
                     </div>
                   </div>
                 </td>
@@ -476,6 +521,7 @@ const scopeBtnCls = (active: boolean) =>
                 `Gone quiet: ${QUIET_DAYS} days or more without logging. The Gone quiet filter and the dashboard's "Members to check in on" use the same ${QUIET_DAYS} days.`,
               ],
               ['Not monitored', 'text-zinc-400', 'Check-in reminders are switched off for them (Credits & plan), so they are never counted as gone quiet.'],
+              ['Not set up', 'text-zinc-400', 'They have not finished setting up the app, so there is no logging to follow yet.'],
               ['On hold', 'text-sky-600 dark:text-sky-400', 'Membership on hold (holiday, injury). Left out of Gone quiet and the red flag lists.'],
             ].map(([label, cls, text]) => (
               <div key={label}>
@@ -485,7 +531,17 @@ const scopeBtnCls = (active: boolean) =>
             ))}
             <div>
               <dt className="font-bold text-black dark:text-zinc-50">Credits</dt>
-              <dd className="text-zinc-600 dark:text-zinc-400">Red at 0 and amber at 1 for members on a plan. &quot;Low credits&quot; lists everyone at 1 or fewer.</dd>
+              <dd className="text-zinc-600 dark:text-zinc-400">
+                Red when they are out of credits with nothing booked this week or later (the Out of credits filter): members on a plan with
+                weekly credits, or who booked a class in the last 4 weeks. A plan member at 0 who has booked their week is not out.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-bold text-black dark:text-zinc-50">Check in on</dt>
+              <dd className="text-zinc-600 dark:text-zinc-400">
+                The same list as the dashboard&apos;s &quot;Members to check in on&quot;: gone quiet, missed last week, weight stalled, missed 2 or
+                more booked classes in 2 weeks, or out of credits and not booked. Members on hold are left out.
+              </dd>
             </div>
           </dl>
         </BottomSheet>

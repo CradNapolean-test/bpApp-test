@@ -7,8 +7,9 @@ import type { ReviewQueueItem } from '@/lib/data/onboarding';
 
 // The coach's own new members who finished onboarding and are waiting for them to check their starting plan. One line until opened,
 // so it does not push the member list off a phone screen. It used to count the whole gym and list other coaches' members unlabelled
-// (CL2): now it lists the coach's own and only says how many more are waiting with other coaches.
-export function ReviewQueue({ items }: { items: ReviewQueueItem[] }) {
+// (CL2): now it lists the coach's own and only says how many more are waiting with other coaches at this gym. The same members as the
+// "New to review" filter (My clients) and the dashboard's "New members to review" (CL16).
+export function ReviewQueue({ items, gymName = 'the gym' }: { items: ReviewQueueItem[]; gymName?: string }) {
   const [open, setOpen] = useState(false);
   const mine = items.filter((i) => i.mine);
   const others = items.length - mine.length;
@@ -35,7 +36,7 @@ export function ReviewQueue({ items }: { items: ReviewQueueItem[] }) {
           </ul>
           {others > 0 && (
             <p className="px-1 pt-1 text-xs text-amber-800 dark:text-amber-300">
-              {others} more new member{others === 1 ? '' : 's'} at the gym {others === 1 ? 'belongs' : 'belong'} to other coaches.
+              {others} more new member{others === 1 ? '' : 's'} at {gymName} {others === 1 ? 'belongs' : 'belong'} to other coaches.
             </p>
           )}
         </div>
