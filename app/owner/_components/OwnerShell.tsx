@@ -96,7 +96,7 @@ function TeamTable({ team }: { team: OwnerTeamRow[] }) {
             <th className="py-1.5 pr-2 font-bold">Coach</th>
             <th className="px-2 py-1.5 text-right font-bold">Members</th>
             <th className="px-2 py-1.5 text-right font-bold">Logged this week</th>
-            <th className="px-2 py-1.5 text-right font-bold">Quiet 7+ days</th>
+            <th className="px-2 py-1.5 text-right font-bold">Quiet 5+ days</th>
             <th className="py-1.5 pl-2 text-right font-bold">To review</th>
           </tr>
         </thead>

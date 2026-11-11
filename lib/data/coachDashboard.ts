@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
 import { isPlateaued } from '@/lib/calculations';
+import { isGoneQuiet } from '@/lib/followUp';
 import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { minuteOfDayIn } from '@/lib/todaySessions';
@@ -408,8 +409,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     const lastLog = logs.map((l) => l.log_date).sort().at(-1) ?? null;
     const sinceDays = lastLog ? Math.round((new Date(todayIso).getTime() - new Date(lastLog).getTime()) / 86400000) : null;
     const memberForDays = Math.round((new Date(todayIso).getTime() - new Date(m.created_at.slice(0, 10)).getTime()) / 86400000);
-    const threshold = Math.max(5, cp?.checkin_reminder_days ?? 3);
-    if (sinceDays != null ? sinceDays >= threshold : memberForDays >= threshold) {
+    // D11: the one "gone quiet" rule (lib/followUp.ts), the same as Clients and the owner's screen.
+    if (isGoneQuiet({ onboarded, onHold: false, reminderDays: cp?.checkin_reminder_days, lastLog, createdAt: m.created_at, todayIso })) {
       reasons.push({ kind: 'quiet', label: sinceDays != null ? `${sinceDays} days quiet` : 'Never logged' });
       detail = lastLog ? `Last log ${new Date(lastLog + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}` : 'No logs yet';
     }
@@ -548,15 +549,19 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
         .from('profiles')
         .select(
           `id, email, coach_id, created_at,
-         client_profiles(name, onboarding_completed_at, needs_coach_review),
+         client_profiles(name, onboarding_completed_at, needs_coach_review, checkin_reminder_days),
          client_memberships!client_id(ended_at, scheduled_end, membership_packages(name)),
-         daily_logs(log_date, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes),
-         bookings!client_id(booking_date, attended)`
+         daily_logs(log_date, calories, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes),
+         bookings!client_id(booking_date, attended),
+         membership_holds!client_id(id)`
         )
         .eq('role', 'client')
         .eq('gym_id', gymId)
         .gte('daily_logs.log_date', since14)
         .gte('bookings.booking_date', prevMonthStart)
+        // Only holds running today, for the quiet count.
+        .lte('membership_holds.started_on', todayIso)
+        .or(`ended_on.is.null,ended_on.gte.${todayIso}`, { referencedTable: 'membership_holds' })
         .order('id')
         .range(from, to)
     ),
@@ -582,10 +587,11 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
     email: string;
     coach_id: string | null;
     created_at: string;
-    client_profiles: ProfileRel<{ name: string | null; onboarding_completed_at: string | null; needs_coach_review: boolean | null }>;
+    client_profiles: ProfileRel<{ name: string | null; onboarding_completed_at: string | null; needs_coach_review: boolean | null; checkin_reminder_days: number | null }>;
     client_memberships: { ended_at: string | null; scheduled_end?: string | null; membership_packages: ProfileRel<{ name: string }> }[] | null;
     daily_logs: DailyLogRow[] | null;
     bookings: { booking_date: string; attended: boolean | null }[] | null;
+    membership_holds: { id: string }[] | null;
   };
   for (const m of (rows ?? []) as unknown as Row[]) {
     const cp = one(m.client_profiles);
@@ -622,9 +628,10 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
     if (cp?.onboarding_completed_at !== null && cp) {
       t.eligible += 1;
       if (logs.some((l) => l.log_date >= thisWeek)) t.checkedIn += 1;
-      const last = logs.map((l) => l.log_date).sort().at(-1);
-      const days = last ? Math.round((new Date(todayIso).getTime() - new Date(last).getTime()) / 86400000) : 99;
-      if (days >= 7) t.quiet += 1;
+      // D11: the one "gone quiet" rule (5 days), as on the dashboard, Clients and the owner's screen. It was 7 days here.
+      const lastLog = logs.map((l) => l.log_date).sort().at(-1) ?? null;
+      const onHold = (m.membership_holds ?? []).length > 0;
+      if (isGoneQuiet({ onboarded: true, onHold, reminderDays: cp.checkin_reminder_days, lastLog, createdAt: m.created_at, todayIso })) t.quiet += 1;
     }
   }
 

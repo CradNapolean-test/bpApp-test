@@ -1,15 +1,16 @@
-import { daysBetween } from './utils/dates';
+import { DEFAULT_REMINDER_DAYS, loggingBand, quietDays } from './followUp';
 
-// The Green / Amber / Red / Unmonitored dot beside a member (Program Health, the Clients list, the member's header). One place works it out
-// so a colleague's member in "Whole gym" gets exactly the same answer as one of your own (R32).
+// The Green / Amber / Red / Unmonitored dot beside a member (Program Health, the Clients list's Logging column, the member's header). One
+// place works it out so a colleague's member in "Whole gym" gets exactly the same answer as one of your own (R32).
 //
-// Days since active is counted from their last real logged day, relative to THEIR OWN coach-configured reminder days (the same signal
-// the check-in reminder automation uses, rather than a second definition of "at risk"). A member who has never logged anything is
-// counted from the day they signed up.
+// It only measures logging: days since their last real logged day (a member who has never logged anything is counted from the day they
+// signed up), in the bands of lib/followUp.ts, so red here is exactly "gone quiet" (D11: 5 days) on Clients and the dashboard (CL17, CW7).
+// It used to be relative to each member's reminder days (3 by default, red after double). Reminder days of 0 still mean nobody is watching
+// their logging: "unmonitored".
 
 export type ClientHealthBucket = 'green' | 'amber' | 'red' | 'unmonitored';
 
-export const DEFAULT_REMINDER_DAYS = 3;
+export { DEFAULT_REMINDER_DAYS };
 
 export interface HealthInput {
   // The member's check-in reminder days; 0 switches monitoring off. null/undefined means the default (3).
@@ -30,17 +31,9 @@ export interface HealthResult {
 }
 
 export function computeHealth(input: HealthInput): HealthResult {
-  const threshold = input.reminderDays ?? DEFAULT_REMINDER_DAYS;
   const neverLogged = input.lastActive == null;
-  const since = input.lastActive ?? input.createdAt.slice(0, 10);
-  // Clamped at 0: a display value should never read as nonsensical, whatever the clocks say.
-  const daysSinceActive = Math.max(0, daysBetween(since, input.todayIso));
-
-  let status: ClientHealthBucket;
-  if (threshold === 0) status = 'unmonitored';
-  else if (daysSinceActive <= threshold) status = 'green';
-  else if (daysSinceActive <= threshold * 2) status = 'amber';
-  else status = 'red';
+  const daysSinceActive = quietDays(input.lastActive, input.createdAt, input.todayIso);
+  const status: ClientHealthBucket = (input.reminderDays ?? DEFAULT_REMINDER_DAYS) === 0 ? 'unmonitored' : loggingBand(daysSinceActive);
   return { daysSinceActive, status, neverLogged };
 }
 

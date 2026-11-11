@@ -4,15 +4,18 @@ import { computeHealth, lastActiveLabel } from './healthStatus';
 const today = '2026-10-15';
 
 describe('computeHealth', () => {
-  it('is green within the reminder days of the last log', () => {
+  it('is green for up to 2 days after the last log', () => {
     expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-13', createdAt: '2026-01-01T00:00:00Z', todayIso: today })).toEqual({ daysSinceActive: 2, status: 'green', neverLogged: false });
-    expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-12', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('green');
+    expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-15', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('green');
   });
 
-  it('turns amber up to double the reminder days, then red', () => {
+  it('turns amber at 3 and 4 days, and red (gone quiet) from 5, whatever the reminder days (D11)', () => {
+    expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-12', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('amber');
     expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-11', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('amber');
-    expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-09', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('amber');
-    expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-08', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('red');
+    expect(computeHealth({ reminderDays: 3, lastActive: '2026-10-10', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('red');
+    // A member reminded every 7 days is still red at 5: it used to stay green until 7 and amber until 14.
+    expect(computeHealth({ reminderDays: 7, lastActive: '2026-10-10', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('red');
+    expect(computeHealth({ reminderDays: 1, lastActive: '2026-10-13', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('green');
   });
 
   it('with no logs at all, counts from sign-up and says so', () => {
@@ -28,9 +31,9 @@ describe('computeHealth', () => {
     expect(computeHealth({ reminderDays: 0, lastActive: null, createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('unmonitored');
   });
 
-  it('uses 3 days when no reminder setting is stored', () => {
-    expect(computeHealth({ reminderDays: null, lastActive: '2026-10-12', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('green');
-    expect(computeHealth({ reminderDays: undefined, lastActive: '2026-10-11', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('amber');
+  it('is monitored when no reminder setting is stored', () => {
+    expect(computeHealth({ reminderDays: null, lastActive: '2026-10-13', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('green');
+    expect(computeHealth({ reminderDays: undefined, lastActive: '2026-10-08', createdAt: '2026-01-01T00:00:00Z', todayIso: today }).status).toBe('red');
   });
 
   it('never goes negative when the log is dated after their local today', () => {
