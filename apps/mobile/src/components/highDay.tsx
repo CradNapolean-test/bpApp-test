@@ -19,21 +19,24 @@ export function HighDayRow({ profile, today, date }: { profile: ClientProfileRow
   const extra = Math.round(high.extraCalories).toLocaleString();
   // `left` does not count this day, so on a high day one of them is this day.
   const moreLeft = Math.max(0, high.left - 1);
-  const detail = !high.loaded
+  const detail = high.failed
+    ? "Couldn't load this week's high days."
+    : !high.loaded
     ? 'Calorie cycling'
     : high.isHigh
       ? moreLeft > 0 ? `You can have ${moreLeft} more high day${moreLeft === 1 ? '' : 's'} this week.` : 'That is all your high days for this week.'
       : high.left > 0 ? `${high.left} of ${HIGH_DAYS_PER_WEEK} high days left this week, +${extra} kcal each.` : `You have used your ${HIGH_DAYS_PER_WEEK} high days this week.`;
-  const canChange = canEditFoodDay(date, today) && (high.isHigh || high.left > 0);
+  const canChange = !high.failed && canEditFoodDay(date, today) && (high.isHigh || high.left > 0);
   const error = high.toggle.error instanceof Error ? high.toggle.error.message : null;
 
   return (
     <View style={{ gap: spacing.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
         <View style={{ flex: 1 }}>
-          <AppText variant="small" style={{ fontWeight: '700' }}>{high.isHigh ? 'High day' : 'Normal day'}</AppText>
-          <AppText variant="small" color="muted">{detail}</AppText>
+          <AppText variant="small" style={{ fontWeight: '700' }}>{high.failed ? 'Calorie cycling' : high.isHigh ? 'High day' : 'Normal day'}</AppText>
+          <AppText variant="small" color={high.failed ? 'danger' : 'muted'}>{detail}</AppText>
         </View>
+        {high.failed ? <SmallButton title="Try again" tone="muted" onPress={high.retry} /> : null}
         {canChange ? (
           <SmallButton
             title={high.isHigh ? 'Make it a normal day' : 'Make this a high day'}

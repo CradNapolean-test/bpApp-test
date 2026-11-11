@@ -4,8 +4,7 @@ import { useMemo } from 'react';
 import { weeklyTarget } from '@ballistic/shared/calculations';
 import type { ClientProfileRow } from '@ballistic/shared/data/types';
 import { toMemberEngineProfile } from '@ballistic/shared/utils/clientProfile';
-import { addDays, startOfWeek, toIsoDate } from '@ballistic/shared/utils/dates';
-import { dayTargetFor, HIGH_DAYS_PER_WEEK, highDaysLeft, isCyclingTarget } from '@ballistic/shared/utils/dayTarget';
+import { averageDayTarget, dayTargetFor, highDayProblem, highDaysLeft, highDayWeek, isCyclingTarget } from '@ballistic/shared/utils/dayTarget';
 import { programWeekFromLogs } from '@ballistic/shared/utils/streak';
 
 import { useSession } from '@/lib/session';
@@ -19,12 +18,6 @@ function useUserId() {
   return id;
 }
 
-// The Monday-to-Sunday week a date is in.
-function weekAround(date: string): { from: string; to: string } {
-  const monday = startOfWeek(new Date(`${date}T00:00:00Z`));
-  return { from: toIsoDate(monday), to: toIsoDate(addDays(monday, 6)) };
-}
-
 function useWeekTarget(profile: ClientProfileRow | null, today: string) {
   const logsQ = useRecentLogs(today, !!profile);
   const logs = useMemo(() => logsQ.data ?? [], [logsQ.data]);
@@ -34,25 +27,28 @@ function useWeekTarget(profile: ClientProfileRow | null, today: string) {
   }, [profile, logs, today]);
 }
 
-// Calorie cycling: the days of `date`'s week the member made high days (the web reads them the same way). Under the
-// ['daily-logs', userId] key, so any daily log change marks it stale.
+// Calorie cycling: the days of `date`'s week (highDayWeek, shared with the web) the member made high days. Read for the screen and
+// again just before a change.
+async function fetchHighDays(userId: string, date: string): Promise<string[]> {
+  const { from, to } = highDayWeek(date);
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .select('log_date')
+    .eq('client_id', userId)
+    .eq('day_type', 'high')
+    .gte('log_date', from)
+    .lte('log_date', to);
+  if (error) throw error;
+  return (data ?? []).map((r) => r.log_date as string);
+}
+
+// Under the ['daily-logs', userId] key, so any daily log change marks it stale.
 function useHighDays(date: string, enabled: boolean) {
   const userId = useUserId();
-  const { from, to } = weekAround(date);
   return useQuery({
-    queryKey: ['daily-logs', userId, 'high-days', from],
+    queryKey: ['daily-logs', userId, 'high-days', highDayWeek(date).from],
     enabled,
-    queryFn: async (): Promise<string[]> => {
-      const { data, error } = await supabase
-        .from('daily_logs')
-        .select('log_date')
-        .eq('client_id', userId)
-        .eq('day_type', 'high')
-        .gte('log_date', from)
-        .lte('log_date', to);
-      if (error) throw error;
-      return (data ?? []).map((r) => r.log_date as string);
-    },
+    queryFn: () => fetchHighDays(userId, date),
   });
 }
 
@@ -64,6 +60,13 @@ export function useFoodTarget(profile: ClientProfileRow | null, today: string, d
   const highQ = useHighDays(date, isCyclingTarget(weekTarget));
   const isHigh = !!highQ.data?.includes(date);
   return useMemo(() => dayTargetFor(weekTarget, isHigh ? 'high' : 'flat'), [weekTarget, isHigh]);
+}
+
+// The member's targets as an average day (the week over seven; the flat target when not calorie cycling): what "Set my own targets"
+// starts from, since a member's own targets are the same every day.
+export function useAverageFoodTarget(profile: ClientProfileRow | null, today: string) {
+  const weekTarget = useWeekTarget(profile, today);
+  return useMemo(() => averageDayTarget(weekTarget), [weekTarget]);
 }
 
 // Calorie cycling, under the diary's targets: whether `date` is a high day, how many are left that week, and a way to change it.
@@ -80,22 +83,14 @@ export function useHighDay(profile: ClientProfileRow | null, today: string, date
   const toggle = useMutation({
     mutationFn: async (high: boolean) => {
       // Checked again against the database, in case the week changed on another device.
-      const { from, to } = weekAround(date);
-      const { data, error } = await supabase
-        .from('daily_logs')
-        .select('log_date')
-        .eq('client_id', userId)
-        .eq('day_type', 'high')
-        .gte('log_date', from)
-        .lte('log_date', to);
-      if (error) throw error;
-      const taken = (data ?? []).filter((r) => r.log_date !== date).length;
-      if (high && taken >= HIGH_DAYS_PER_WEEK) {
-        throw new Error(`You already have ${HIGH_DAYS_PER_WEEK} high days this week. Make one of them a normal day first.`);
-      }
-      const { error: saveError } = await supabase
-        .from('daily_logs')
-        .upsert({ client_id: userId, log_date: date, day_type: high ? 'high' : 'flat' }, { onConflict: 'client_id,log_date' });
+      const taken = (await fetchHighDays(userId, date)).filter((d) => d !== date).length;
+      const problem = highDayProblem(taken, high);
+      if (problem) throw new Error(problem);
+      // As the web's setHighDay: back to a normal day only changes a row the day already has (no row is already a normal day, and
+      // used to get an empty one); a high day needs its row, so it is made then if the day has none.
+      const { error: saveError } = high
+        ? await supabase.from('daily_logs').upsert({ client_id: userId, log_date: date, day_type: 'high' }, { onConflict: 'client_id,log_date' })
+        : await supabase.from('daily_logs').update({ day_type: 'flat' }).eq('client_id', userId).eq('log_date', date);
       if (saveError) throw saveError;
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['daily-logs', userId] }),
@@ -104,7 +99,11 @@ export function useHighDay(profile: ClientProfileRow | null, today: string, date
   return {
     cycling,
     isHigh,
-    loaded: highQ.isSuccess,
+    // A failed background refresh keeps the week it already had (react-query keeps the data), so only a week never read is "failed".
+    loaded: highQ.data !== undefined,
+    // The week's high days could not be read: the row says so with a way to try again, instead of a button that never wakes up.
+    failed: highQ.isError && highQ.data === undefined,
+    retry: () => void highQ.refetch(),
     left: highDaysLeft(others.map(() => 'high' as const)),
     extraCalories: weekTarget?.dailyHigh && weekTarget.dailyLow ? weekTarget.dailyHigh.calories - weekTarget.dailyLow.calories : 0,
     toggle,

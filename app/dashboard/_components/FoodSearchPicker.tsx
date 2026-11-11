@@ -19,6 +19,14 @@ const isSmallUnit = (u: FoodUnit) => u.grams < 5;
 const UNIT_COUNT_PRESETS = [0.5, 1, 2, 3];
 const SMALL_UNIT_PRESETS = [100, 200, 250, 330];
 
+// A result's calories and protein for `amount` (grams, or portions for a food counted by the portion). Protein is what tells a
+// 0% yogurt from a full-fat one at a glance (NU7); under 10 g it keeps one decimal so 0.4 g does not read as none.
+function kcalAndProtein(food: FoodRow, amount: number): string {
+  const kcal = Math.round(dayCalories(food.protein * amount, food.carbs * amount, food.fat * amount));
+  const protein = food.protein * amount;
+  return `${kcal} kcal · ${protein >= 10 ? Math.round(protein) : Math.round(protein * 10) / 10} g protein`;
+}
+
 // Shared by the search-results list and the Favorites/Recently Logged lists shown before a
 // query is typed -- same grams/units quantity picker either way, just a different source list.
 function FoodResultRow({
@@ -120,10 +128,10 @@ function FoodResultRow({
             <p className="line-clamp-2 break-words font-medium text-black dark:text-zinc-50">{food.name}</p>
             <p className="text-xs text-zinc-500">
               {unit && !small
-                ? `per ${unitText(unit)} · ${Math.round(dayCalories(food.protein * unit.grams, food.carbs * unit.grams, food.fat * unit.grams))} kcal`
+                ? `per ${unitText(unit)} · ${kcalAndProtein(food, unit.grams)}`
                 : isPerGram
-                  ? `per 100 g · ${Math.round(dayCalories(food.protein * 100, food.carbs * 100, food.fat * 100))} kcal`
-                  : `per ${food.portion}`}
+                  ? `per 100 g · ${kcalAndProtein(food, 100)}`
+                  : `per ${food.portion} · ${kcalAndProtein(food, 1)}`}
             </p>
           </div>
         </div>

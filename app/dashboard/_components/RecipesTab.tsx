@@ -16,6 +16,7 @@ import {
   updateRecipeServings,
 } from '@/lib/data/recipes';
 import { entryMacros, totalRecipeMacros } from '@/lib/utils/foodTotals';
+import { recipeServingText, recipeServingWeight } from '@/lib/utils/recipeServing';
 import { AddFoodSheet } from './AddFoodSheet';
 import { AddFoodButtons, useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
 import { QuantitySheet } from './QuantitySheet';
@@ -176,6 +177,7 @@ export function RecipesTab({
             const totals = totalRecipeMacros(recipe.recipe_ingredients);
             const per = recipe.servings || 1;
             const count = recipe.recipe_ingredients.length;
+            const weight = recipeServingWeight(recipe.recipe_ingredients, per);
             return (
               <div key={recipe.id} className="rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
                 <button
@@ -205,6 +207,7 @@ export function RecipesTab({
                     <p className="mt-0.5 text-xs text-zinc-400">
                       {count} ingredient{count === 1 ? '' : 's'} · makes {per} serving{per === 1 ? '' : 's'}
                     </p>
+                    {weight && <p className="text-xs text-zinc-400">{recipeServingText(weight)}</p>}
                   </div>
                   <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                 </button>

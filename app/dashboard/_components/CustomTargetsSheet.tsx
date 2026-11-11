@@ -6,12 +6,14 @@ import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { saveCustomTargets, setCustomTargetsLocked } from '@/lib/data/clientProfile';
 import { TARGETS_LOCKED_MESSAGE, parseCustomTargets } from '@/lib/utils/customTargets';
+import type { DayTarget } from '@/lib/calculations';
 import type { ClientProfileRow } from '@/lib/data/types';
 
 const inputCls =
   'w-full rounded-xl border border-black/10 bg-card px-3 py-2.5 text-base text-black dark:border-white/15 dark:text-zinc-50 disabled:opacity-60';
 
 const text = (n: number | null | undefined) => (n == null ? '' : String(n));
+const whole = (n: number | null | undefined) => (n == null ? '' : String(Math.round(n)));
 
 // Set the daily calorie and macro targets by hand, instead of the calculated ones. A member can do it for themselves unless their coach
 // has locked it; a coach can set or clear them for the member and lock or unlock the member's ability to change them.
@@ -19,23 +21,29 @@ export function CustomTargetsSheet({
   clientId,
   profile,
   isCoach,
+  current,
   onClose,
 }: {
   clientId: string;
   profile: ClientProfileRow | null;
   isCoach: boolean;
+  // The targets the member has now (an average day for a calorie-cycling member), which the boxes start from when they have not set
+  // their own (NU10), so they change a number or two instead of typing all four. The coach's sheet is not given it: there an empty
+  // box means "use the calculated targets".
+  current?: DayTarget | null;
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
-  const [calories, setCalories] = useState(text(profile?.custom_calories));
-  const [protein, setProtein] = useState(text(profile?.custom_protein));
-  const [carbs, setCarbs] = useState(text(profile?.custom_carbs));
-  const [fat, setFat] = useState(text(profile?.custom_fat));
+  const hasCustom = profile?.custom_calories != null;
+  const start = !hasCustom && current ? current : null;
+  const [calories, setCalories] = useState(start ? whole(start.calories) : text(profile?.custom_calories));
+  const [protein, setProtein] = useState(start ? whole(start.protein) : text(profile?.custom_protein));
+  const [carbs, setCarbs] = useState(start ? whole(start.carbs) : text(profile?.custom_carbs));
+  const [fat, setFat] = useState(start ? whole(start.fat) : text(profile?.custom_fat));
   const [locked, setLocked] = useState(profile?.custom_targets_locked ?? false);
   const [problem, setProblem] = useState<string | null>(null);
 
   const memberBlocked = !isCoach && locked;
-  const hasCustom = profile?.custom_calories != null;
 
   async function save() {
     const parsed = parseCustomTargets({ calories, protein, carbs, fat });
@@ -77,6 +85,8 @@ export function CustomTargetsSheet({
           {isCoach
             ? 'These replace the calculated targets for this member everywhere in the app. Leave them empty to use the calculated ones.'
             : 'Set your own daily calories and macros. They replace the calculated targets until you switch back.'}
+          {start && ' These are your targets now: change the ones you want.'}
+          {start && profile?.cycling && ' Your own targets are the same every day, with no high days.'}
         </p>
         {memberBlocked && <p className="rounded-xl bg-card-muted px-3 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">{TARGETS_LOCKED_MESSAGE}</p>}
         <div className="grid grid-cols-2 gap-2">

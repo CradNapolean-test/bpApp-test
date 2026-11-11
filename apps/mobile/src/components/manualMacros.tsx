@@ -119,7 +119,7 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
       <DateNav date={date} today={today} ahead={1} onChange={(d) => setPicked(d === today ? null : d)} />
       <TotalsCard totals={manualTotals(entries)} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
       <HighDayRow profile={profile} today={today} date={date} />
-      <MyTargetsRow profile={profile} />
+      <MyTargetsRow profile={profile} today={today} />
       <CoachFeedbackCard items={feedbackQ.data ?? []} />
       {manualQ.isError ? <AppText color="danger">Could not load this day: {manualQ.error.message}</AppText> : null}
       {sections.map((s) => (

@@ -3,21 +3,14 @@
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { LOGGED_DATA_FILTER } from '@/lib/utils/dailyLog';
-import { addDays, startOfWeek, toIsoDate } from '@/lib/utils/dates';
-import { HIGH_DAYS_PER_WEEK, highDaysLeft } from '@/lib/utils/dayTarget';
+import { highDayProblem, highDayWeek } from '@/lib/utils/dayTarget';
 import type { DailyLogRow } from './types';
 
 // ---- calorie cycling: high days ----
-// The Monday-to-Sunday week a date is in.
-function weekAround(logDate: string): { from: string; to: string } {
-  const monday = startOfWeek(new Date(`${logDate}T00:00:00Z`));
-  return { from: toIsoDate(monday), to: toIsoDate(addDays(monday, 6)) };
-}
-
 // The days of that week the member marked as high days (for "2 high days left this week"). A coach can read them too.
 export async function getHighDaysInWeek(clientId: string, logDate: string): Promise<string[]> {
   const supabase = await createClient();
-  const { from, to } = weekAround(logDate);
+  const { from, to } = highDayWeek(logDate);
   const { data, error } = await supabase
     .from('daily_logs')
     .select('log_date')
@@ -31,15 +24,17 @@ export async function getHighDaysInWeek(clientId: string, logDate: string): Prom
 
 // A cycling member makes a day a high day, or back to a normal (low) day. At most HIGH_DAYS_PER_WEEK high days a week. Only the
 // member can change their own days (daily_logs' update policy is the member's own rows). Returns the week's high days afterwards.
+// Back to a normal day only changes the day's row if it has one: a day with no row is already a normal day, and it used to get an
+// empty row just for saying so. A high day needs a row to say it, so that one is made if the day has none yet (only day_type is
+// written either way, so nothing else on an existing row changes).
 export async function setHighDay(clientId: string, logDate: string, high: boolean): Promise<string[]> {
   const others = (await getHighDaysInWeek(clientId, logDate)).filter((d) => d !== logDate);
-  if (high && highDaysLeft(others.map(() => 'high' as const)) === 0) {
-    throw new Error(`You already have ${HIGH_DAYS_PER_WEEK} high days this week. Make one of them a normal day first.`);
-  }
+  const problem = highDayProblem(others.length, high);
+  if (problem) throw new Error(problem);
   const supabase = await createClient();
-  const { error } = await supabase
-    .from('daily_logs')
-    .upsert({ client_id: clientId, log_date: logDate, day_type: high ? 'high' : 'flat' }, { onConflict: 'client_id,log_date' });
+  const { error } = high
+    ? await supabase.from('daily_logs').upsert({ client_id: clientId, log_date: logDate, day_type: 'high' }, { onConflict: 'client_id,log_date' })
+    : await supabase.from('daily_logs').update({ day_type: 'flat' }).eq('client_id', clientId).eq('log_date', logDate);
   if (error) raise(error);
   return high ? [...others, logDate].sort() : others;
 }

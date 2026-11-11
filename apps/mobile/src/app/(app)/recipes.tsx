@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 import type { RecipeIngredientRow, RecipeWithIngredients } from '@ballistic/shared/data/types';
 import { entryMacros } from '@ballistic/shared/utils/foodTotals';
 import { amountLabel, MAX_SERVINGS, parseServings, perServing, RECIPE_NAME_MAX, validateRecipeName } from '@ballistic/shared/utils/mealPlan';
+import { recipeServingText, recipeServingWeight } from '@ballistic/shared/utils/recipeServing';
 
 import { Pressable } from '@/components/press';
 import { FieldLabel, Input } from '@/components/fields';
@@ -112,6 +113,7 @@ export default function Recipes() {
               const open = openId === r.id;
               const per = perServing(r);
               const count = r.recipe_ingredients.length;
+              const weight = recipeServingWeight(r.recipe_ingredients, r.servings);
               return (
                 <Card key={r.id} style={{ padding: 0 }}>
                   <Pressable onPress={() => setOpenId(open ? null : r.id)} accessibilityRole="button" accessibilityState={{ expanded: open }} aria-expanded={open} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14 }}>
@@ -130,6 +132,7 @@ export default function Recipes() {
                         <AppText variant="small" color="muted">No ingredients yet</AppText>
                       )}
                       <AppText variant="small" color="muted">{count} ingredient{count === 1 ? '' : 's'} · makes {r.servings} serving{r.servings === 1 ? '' : 's'}</AppText>
+                      {weight ? <AppText variant="small" color="muted">{recipeServingText(weight)}</AppText> : null}
                     </View>
                     <Icon name={open ? 'chevronUp' : 'chevronDown'} size={18} color={t.muted} />
                   </Pressable>

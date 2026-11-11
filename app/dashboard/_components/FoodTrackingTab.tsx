@@ -497,10 +497,13 @@ export function FoodTrackingTab({
   }, [profile, programWeek, readOnly]);
 
   // Calorie cycling: every day is a normal (low) day unless the member made it a high day here, up to HIGH_DAYS_PER_WEEK a week.
-  // The week's high days are loaded for the week being looked at; until they arrive the day shows as a normal day.
+  // The week's high days are loaded for the week being looked at; until they arrive the day shows as a normal day. If they cannot be
+  // read, the control says so with a Try again (it used to leave the button greyed out for good).
   const cycling = isCyclingTarget(weekTarget);
   const viewingWeek = toIsoDate(startOfWeek(new Date(viewingDate + 'T00:00:00Z')));
   const [highDays, setHighDays] = useState<{ week: string; dates: string[] } | null>(null);
+  const [highDaysFailedWeek, setHighDaysFailedWeek] = useState<string | null>(null);
+  const [highDaysAttempt, setHighDaysAttempt] = useState(0);
   useEffect(() => {
     if (!cycling) return;
     let live = true;
@@ -509,13 +512,18 @@ export function FoodTrackingTab({
         if (live) setHighDays({ week: viewingWeek, dates });
       })
       .catch(() => {
-        /* shown as a normal day; the toggle says if saving fails */
+        if (live) setHighDaysFailedWeek(viewingWeek);
       });
     return () => {
       live = false;
     };
-  }, [clientId, viewingWeek, cycling]);
+  }, [clientId, viewingWeek, cycling, highDaysAttempt]);
   const weekHighDays = highDays?.week === viewingWeek ? highDays.dates : null;
+  const highDaysFailed = weekHighDays == null && highDaysFailedWeek === viewingWeek;
+  function retryHighDays() {
+    setHighDaysFailedWeek(null);
+    setHighDaysAttempt((n) => n + 1);
+  }
   const isHighDay = !!weekHighDays?.includes(viewingDate);
   const highLeft = weekHighDays ? highDaysLeft(weekHighDays.filter((d) => d !== viewingDate).map(() => 'high' as const)) : 0;
   const dayTarget = dayTargetFor(weekTarget, isHighDay ? 'high' : 'flat');
@@ -874,6 +882,8 @@ export function FoodTrackingTab({
               isHigh={isHighDay}
               left={highLeft}
               loaded={weekHighDays != null}
+              failed={highDaysFailed}
+              onRetry={retryHighDays}
               extraCalories={weekTarget?.dailyHigh && weekTarget.dailyLow ? weekTarget.dailyHigh.calories - weekTarget.dailyLow.calories : 0}
               canChange={!entryReadOnly}
               coachView={readOnly}
@@ -893,7 +903,9 @@ export function FoodTrackingTab({
           </button>
         </div>
       )}
-      {targetsOpen && <CustomTargetsSheet clientId={clientId} profile={profile} isCoach={false} onClose={() => setTargetsOpen(false)} />}
+      {targetsOpen && (
+        <CustomTargetsSheet clientId={clientId} profile={profile} isCoach={false} current={averageDayTarget(weekTarget)} onClose={() => setTargetsOpen(false)} />
+      )}
 
       {!entryReadOnly && !isManual && (
         <div className="space-y-2">

@@ -24,6 +24,14 @@ import { radius, spacing, useTheme } from '@/theme';
 const kcal = (entry: FoodDiaryEntryRow) => Math.round(entryMacros(entry).calories);
 const entryName = (e: FoodDiaryEntryRow) => e.food?.name ?? e.quick_add_name ?? 'Quick add';
 
+// A search result's calories and protein for `amount` (grams, or portions for a food counted by the portion), as the web shows them
+// (NU7): protein is what tells a 0% yogurt from a full-fat one. Under 10 g it keeps one decimal so 0.4 g does not read as none.
+function kcalAndProtein(food: FoodRow, amount: number): string {
+  const kcal = Math.round(dayCalories(food.protein * amount, food.carbs * amount, food.fat * amount));
+  const protein = food.protein * amount;
+  return `${kcal} kcal · ${protein >= 10 ? Math.round(protein) : Math.round(protein * 10) / 10} g protein`;
+}
+
 // ---------- small pieces ----------
 // What the coach wrote about this day's food. Nothing when there is none.
 export function CoachFeedbackCard({ items }: { items: NutritionFeedbackRow[] }) {
@@ -299,8 +307,8 @@ function FoodResultRow({ food, selected, qty, onQty, onSelect, onAdd, isFavorite
           <AppText numberOfLines={2} style={{ fontWeight: '600' }}>{food.name}</AppText>
           <AppText variant="small" color="muted">
             {unit && !small
-              ? `per ${unitText(unit)} · ${Math.round(dayCalories(food.protein * unit.grams, food.carbs * unit.grams, food.fat * unit.grams))} kcal`
-              : cfg.perGram ? `per 100 g · ${Math.round(dayCalories(food.protein * 100, food.carbs * 100, food.fat * 100))} kcal` : `per ${food.portion}`}
+              ? `per ${unitText(unit)} · ${kcalAndProtein(food, unit.grams)}`
+              : cfg.perGram ? `per 100 g · ${kcalAndProtein(food, 100)}` : `per ${food.portion} · ${kcalAndProtein(food, 1)}`}
           </AppText>
         </Pressable>
       </View>

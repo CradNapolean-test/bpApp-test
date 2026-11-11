@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { weeklyTarget, type ClientProfile } from '@/lib/calculations';
-import { averageDayTarget, dayTargetFor, highDaysLeft, HIGH_DAYS_PER_WEEK, isCyclingTarget } from './dayTarget';
+import { averageDayTarget, dayTargetFor, highDaysLeft, HIGH_DAYS_PER_WEEK, isCyclingTarget, highDayProblem, highDayWeek } from './dayTarget';
 
 const base: ClientProfile = {
   age: 34, gender: 'Female', startWeight: 82, goalWeight: 70, bodyFatPct: 31, activityLevel: 1.5,
@@ -53,5 +53,34 @@ describe('highDaysLeft', () => {
     expect(highDaysLeft(['flat', 'high', 'low', null])).toBe(1);
     expect(highDaysLeft(['high', 'high'])).toBe(0);
     expect(highDaysLeft(['high', 'high', 'high'])).toBe(0);
+  });
+});
+
+describe('highDayWeek', () => {
+  it('is the Monday to Sunday the date is in', () => {
+    // Wednesday 11 Nov 2026
+    expect(highDayWeek('2026-11-11')).toEqual({ from: '2026-11-09', to: '2026-11-15' });
+    expect(highDayWeek('2026-11-09')).toEqual({ from: '2026-11-09', to: '2026-11-15' });
+    expect(highDayWeek('2026-11-15')).toEqual({ from: '2026-11-09', to: '2026-11-15' });
+  });
+
+  it('crosses a month and a year', () => {
+    expect(highDayWeek('2027-01-01')).toEqual({ from: '2026-12-28', to: '2027-01-03' });
+  });
+});
+
+describe('highDayProblem', () => {
+  it(`allows a high day while fewer than ${HIGH_DAYS_PER_WEEK} other days are high`, () => {
+    expect(highDayProblem(0, true)).toBeNull();
+    expect(highDayProblem(HIGH_DAYS_PER_WEEK - 1, true)).toBeNull();
+  });
+
+  it('refuses one more, and says what to do', () => {
+    expect(highDayProblem(HIGH_DAYS_PER_WEEK, true)).toBe(`You already have ${HIGH_DAYS_PER_WEEK} high days this week. Make one of them a normal day first.`);
+    expect(highDayProblem(HIGH_DAYS_PER_WEEK + 1, true)).not.toBeNull();
+  });
+
+  it('always allows going back to a normal day', () => {
+    expect(highDayProblem(HIGH_DAYS_PER_WEEK + 1, false)).toBeNull();
   });
 });

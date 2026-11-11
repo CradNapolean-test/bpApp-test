@@ -115,9 +115,9 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
         <DateNav date={date} today={today} ahead={1} onChange={(d) => { setNote(null); scan.clearStatus(); setPicked(d === today ? null : d); }} />
         <TotalsCard entries={entries} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
         <HighDayRow profile={profile} today={today} date={date} />
-        <MyTargetsRow profile={profile} />
+        <MyTargetsRow profile={profile} today={today} />
         <CoachFeedbackCard items={feedbackQ.data ?? []} />
-        {date > today ? <AppText variant="small" color="muted">Planning tomorrow. This food counts towards tomorrow, and stays out of this week's averages until then.</AppText> : null}
+        {date > today ? <AppText variant="small" color="muted">{"Planning tomorrow. This food counts towards tomorrow, and stays out of this week's averages until then."}</AppText> : null}
         {scan.status ? <AppText variant="small" color="muted">{scan.status}</AppText> : null}
         {note ? <AppText variant="small" color="muted">{note}</AppText> : null}
         {diaryQ.isError ? <AppText color="danger">Could not load this day: {diaryQ.error.message}</AppText> : null}
