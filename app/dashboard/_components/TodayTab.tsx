@@ -31,6 +31,7 @@ import { Card, IconChip } from '@/app/_components/ui';
 import { challengeHome } from '@/lib/challengeHome';
 import { shortDay, WhatsNextCard } from './HomeChallenge';
 import { stripWorkoutFor, TodayStrip } from './TodayStrip';
+import { FirstWeekCard } from './FirstWeekCard';
 
 const NO_SCREENS: ReadonlySet<Screen> = new Set();
 
@@ -184,6 +185,23 @@ export function TodayTab({
           gymId={membership?.package?.gym_id ?? null}
           coachName={coachName}
           onOpenChat={() => onNavigate('Messages')}
+        />
+      )}
+      {!isCoachView && clientId && (
+        <FirstWeekCard
+          clientId={clientId}
+          onboardedAt={profile?.onboarding_completed_at}
+          todayIso={todayIso}
+          timezone={profile?.timezone ?? DEFAULT_TIMEZONE}
+          coachName={coachName}
+          show={{ photos: !hiddenScreens.has('Progress & Photos'), weighIn: !dailyCheckinHidden, forms: !hiddenScreens.has('Forms') }}
+          onOpen={(key) => {
+            if (key === 'photos') onNavigate('Progress', 'Progress & Photos');
+            else if (key === 'weigh_in') onNavigate('Accountability', 'Weekly Log');
+            else if (key === 'intake') onNavigate('Accountability', 'Forms');
+            else if (key === 'book') onNavigateClasses?.();
+            else onNavigate('Messages');
+          }}
         />
       )}
       {!isCoachView && upcomingEvent && <EventBanner event={upcomingEvent} onOpen={() => onNavigate('Community', 'Events')} />}

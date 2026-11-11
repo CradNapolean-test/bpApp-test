@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 
 import { challengeHome } from '@ballistic/shared/utils/challengeHome';
 import { clubProgress } from '@ballistic/shared/utils/clubs';
 import { dayCaloriesOf } from '@ballistic/shared/utils/dailyLog';
+import { firstWeekChecklist, firstWeekDay } from '@ballistic/shared/utils/firstWeek';
 import { monthsSince, nextSessionsReward } from '@ballistic/shared/utils/home';
 import { showsStreak } from '@ballistic/shared/utils/streak';
 import { foodLeft } from '@ballistic/shared/utils/todayStrip';
 
 import { shortDay, WhatsNextCard } from '@/components/homeChallenge';
 import { stripWorkoutOf, TodayStrip } from '@/components/todayStrip';
+import { FirstWeekCard } from '@/components/firstWeek';
 import { DetailsConfirmBanner, EventBanner, ExploreTiles, FormsBanner, MyCoachingTile, StatsCard, YourProgress } from '@/components/home';
 import { PushCard } from '@/components/push';
 import { HomeSkeleton } from '@/components/skeleton';
@@ -16,7 +19,7 @@ import { Hero, NextSessionCard } from '@/components/today';
 import { AppText, Button, Screen, ScrollScreen } from '@/components/ui';
 import { useGymReferralUrl, useNextEvent, useRewardList } from '@/lib/community';
 import { useDayContext } from '@/lib/day';
-import { useSessionsDone } from '@/lib/home';
+import { useFirstWeekFacts, useSessionsDone } from '@/lib/home';
 import { useScreenAccess } from '@/lib/screens';
 import { useSession } from '@/lib/session';
 import { useCredits, usePendingForms, useTodayWorkout, useUpcomingBookings } from '@/lib/today';
@@ -83,10 +86,32 @@ function HomeContent() {
       : null;
   const stripWorkout = areas.workouts && workoutQ.data ? stripWorkoutOf(workoutQ.data) : null;
 
+  // D17: the first-week checklist, read only during the member's first 7 days and again each time Home comes back into view (a step
+  // done on another screen is ticked on return; a read already on its way is reused rather than started again).
+  const onboardedAt = profile?.onboarding_completed_at;
+  const inFirstWeek = firstWeekDay(onboardedAt, todayIso, tz) != null;
+  const firstWeekQ = useFirstWeekFacts(inFirstWeek);
+  const refetchFirstWeek = firstWeekQ.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      if (inFirstWeek) void refetchFirstWeek({ cancelRefetch: false });
+    }, [inFirstWeek, refetchFirstWeek]),
+  );
+  const firstWeek = firstWeekQ.data
+    ? firstWeekChecklist({
+        onboardedAt,
+        today: todayIso,
+        tz,
+        facts: firstWeekQ.data,
+        coachName,
+        show: { photos: areas.photos, weighIn: areas.weeklyLog, forms: areas.forms },
+      })
+    : null;
+
   const [refreshing, setRefreshing] = useState(false);
   async function refresh() {
     setRefreshing(true);
-    await Promise.all([profileQ.refetch(), logsQ.refetch(), bookingsQ.refetch(), creditsQ.refetch(), formsQ.refetch(), workoutQ.refetch(), doneQ.refetch()]);
+    await Promise.all([profileQ.refetch(), logsQ.refetch(), bookingsQ.refetch(), creditsQ.refetch(), formsQ.refetch(), workoutQ.refetch(), doneQ.refetch(), ...(inFirstWeek ? [firstWeekQ.refetch()] : [])]);
     setRefreshing(false);
   }
 
@@ -115,6 +140,7 @@ function HomeContent() {
       <Hero profile={profile} now={now} plan={challenge ? { name: challenge.planName, label: challenge.label } : null} />
       <TodayStrip workout={stripWorkout} food={food} dayId={workoutQ.data?.status === 'workout' ? workoutQ.data.day.id : null} />
       {challenge?.whatsNext ? <WhatsNextCard home={challenge} gymId={membership?.package?.gym_id} coachName={coachName} /> : null}
+      {firstWeek ? <FirstWeekCard week={firstWeek} intakeId={firstWeekQ.data?.intake?.id ?? null} /> : null}
       <DetailsConfirmBanner clientId={profile.client_id} requestedAt={profile.details_confirm_requested_at} />
       {eventQ.data ? <EventBanner key={eventQ.data.id} event={eventQ.data} /> : null}
       <NextSessionCard booking={nextBooking} todayIso={todayIso} tz={tz} now={now} workout={workoutQ.data} />
