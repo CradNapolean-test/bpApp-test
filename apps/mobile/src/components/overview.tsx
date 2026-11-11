@@ -8,18 +8,21 @@ import {
   weightGoal,
   type TrendKey,
 } from '@ballistic/shared/utils/overview';
+import { shortDate } from '@ballistic/shared/utils/progress';
 
 import { TrendChart } from '@/components/charts';
 import { AppText, Button, Card } from '@/components/ui';
 import { useClientProfile, useRecentLogs } from '@/lib/today';
 import { spacing, useTheme } from '@/theme';
 
-function GoalCard({ start, goal, now, pct, toGo }: { start: number; goal: number; now: number | null; pct: number; toGo: number }) {
+// "Now" says the day that weight was logged (MX13, as the web): a month-old weigh-in read as today's weight.
+function GoalCard({ start, goal, now, nowDate, pct, toGo }: { start: number; goal: number; now: number | null; nowDate: string | null; pct: number; toGo: number }) {
   const t = useTheme();
-  const col = (label: string, value: string, align: 'flex-start' | 'center' | 'flex-end') => (
+  const col = (label: string, value: string, align: 'flex-start' | 'center' | 'flex-end', note?: string | null) => (
     <View style={{ alignItems: align, gap: 2 }}>
       <AppText variant="small" color="muted" style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>{label}</AppText>
       <AppText style={{ fontWeight: '800' }}>{value}</AppText>
+      {note ? <AppText variant="small" color="muted" style={{ fontSize: 11 }}>{note}</AppText> : null}
     </View>
   );
   return (
@@ -33,7 +36,7 @@ function GoalCard({ start, goal, now, pct, toGo }: { start: number; goal: number
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {col('Start', `${start}kg`, 'flex-start')}
-        {col('Now', now != null ? `${now.toFixed(1)}kg` : '—', 'center')}
+        {col('Now', now != null ? `${now.toFixed(1)}kg` : '—', 'center', now != null && nowDate ? `on ${shortDate(nowDate)}` : null)}
         {col('Goal', `${goal}kg`, 'flex-end')}
       </View>
       <AppText variant="small" color="muted">{toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : 'Goal weight reached. Nice work.'}</AppText>
@@ -102,6 +105,7 @@ export function OverviewSection({ todayIso }: { todayIso: string }) {
   const logs = logsQ.data ?? [];
   const weeks = buildWeeklyTrend(logs).slice(-OVERVIEW_WEEKS);
   const goal = weightGoal(profile, latestBodyweight(logs));
+  const latestWeighInDate = [...logs].reverse().find((l) => l.bodyweight != null)?.log_date ?? null;
 
   return (
     <ScrollView
@@ -114,7 +118,7 @@ export function OverviewSection({ todayIso }: { todayIso: string }) {
         </Card>
       ) : (
         <>
-          {goal ? <GoalCard {...goal} /> : null}
+          {goal ? <GoalCard {...goal} nowDate={latestWeighInDate} /> : null}
           <TrendCard title="Bodyweight" weeks={weeks} dataKey="avgBodyweight" color={t.accent} unit="kg" formatter={(v) => v.toFixed(1)} lowerIsBetter />
           <TrendCard title="Calories" weeks={weeks} dataKey="avgCalories" color="#e8a020" unit="kcal" formatter={(v) => Math.round(v).toString()} />
           <TrendCard title="Protein" weeks={weeks} dataKey="avgProtein" color="#a07aff" unit="g" formatter={(v) => Math.round(v).toString()} lowerIsBetter={false} />

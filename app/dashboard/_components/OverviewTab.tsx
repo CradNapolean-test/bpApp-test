@@ -146,8 +146,19 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
   );
 }
 
-// Start -> now -> goal for bodyweight, from the profile's start/goal weights and the latest logged weight.
-function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfileRow | null; latest: number | null; coachView: boolean }) {
+// Start -> now -> goal for bodyweight, from the profile's start/goal weights and the latest logged weight. "Now" says the day that
+// weight was logged (MX13): a month-old weigh-in read as today's weight.
+function WeightGoalCard({
+  profile,
+  latest,
+  latestDate,
+  coachView,
+}: {
+  profile: ClientProfileRow | null;
+  latest: number | null;
+  latestDate: string | null;
+  coachView: boolean;
+}) {
   const start = profile?.start_weight ?? null;
   const goal = profile?.goal_weight ?? null;
   if (start == null || goal == null || start === goal) return null;
@@ -179,6 +190,7 @@ function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfile
         <div className="text-center">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Now</p>
           <p className="font-bold text-black dark:text-zinc-50">{latest != null ? `${latest.toFixed(1)}kg` : '—'}</p>
+          {latest != null && latestDate && <p className="text-[11px] text-zinc-400">on {shortDate(latestDate)}</p>}
         </div>
         <div className="text-right">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Goal</p>
@@ -200,21 +212,21 @@ function WeightGoalCard({ profile, latest, coachView }: { profile: ClientProfile
 
 export function OverviewTab({ historyLogs, profile, isCoachView = false }: { historyLogs: DailyLogRow[]; profile: ClientProfileRow | null; isCoachView?: boolean }) {
   const weeks = buildWeeklyAverages(historyLogs).slice(-8);
-  const latestWeight = [...historyLogs].reverse().find((l) => l.bodyweight != null)?.bodyweight ?? null;
+  const latestWeighIn = [...historyLogs].reverse().find((l) => l.bodyweight != null) ?? null;
 
   if (weeks.length === 0) {
     return (
       <EmptyState
         icon={TrendingUp}
         title="No trends yet"
-        hint="Log a few days in Weekly Log and your bodyweight, calorie and step trends will build up here."
+        hint="Log a few days in Daily check-in and your bodyweight, calorie and step trends will build up here."
       />
     );
   }
 
   return (
     <div className="space-y-4">
-      <WeightGoalCard profile={profile} latest={latestWeight} coachView={isCoachView} />
+      <WeightGoalCard profile={profile} latest={latestWeighIn?.bodyweight ?? null} latestDate={latestWeighIn?.log_date ?? null} coachView={isCoachView} />
       <WeeklyAverages weeks={weeks} />
     </div>
   );
