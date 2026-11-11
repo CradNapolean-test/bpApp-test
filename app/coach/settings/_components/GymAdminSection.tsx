@@ -30,6 +30,7 @@ import { isValidEmail, normaliseEmail } from '@/lib/accountCreation';
 import { fail, ok } from '@/lib/data/result';
 import { blackoutProblem, referralUrlProblem, timezoneChangeBody } from '@/lib/gymSettings';
 import { prettyName } from '@/lib/gymNames';
+import { lastActiveLabel } from '@/lib/ownerRoster';
 
 // The gym's settings and team, used in two places: a gym admin's own Settings page, and the owner's page for any gym in the organisation
 // (R37). `scope` says which: the same forms call the gym admin's functions or the owner's, and every one of them is checked again by the
@@ -43,6 +44,13 @@ export interface TeamMember {
   isAdmin: boolean;
   // Members assigned to this coach at this gym.
   members: number;
+  // When they last signed in, null for never (BO18). Only the owner's Team tab reads it; undefined shows nothing.
+  lastSignIn?: string | null;
+}
+
+// "Signed in today", "Signed in 12 days ago", "Never signed in": a coach login nobody uses stands out (BO18).
+function signInLabel(lastSignIn: string | null): string {
+  return lastSignIn ? `Signed in ${lastActiveLabel(lastSignIn.slice(0, 10)).toLowerCase()}` : 'Never signed in';
 }
 
 export const teamFromRoster = (roster: GymCoachRow[]): TeamMember[] =>
@@ -372,6 +380,9 @@ function CoachRow({
           <p className="truncate text-xs text-zinc-500">{coach.email}</p>
           <p className="text-xs text-zinc-400">
             {coach.members} member{coach.members === 1 ? '' : 's'}
+            {coach.lastSignIn !== undefined && (
+              <span className={coach.lastSignIn === null ? 'text-warning' : undefined}> · {signInLabel(coach.lastSignIn)}</span>
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">

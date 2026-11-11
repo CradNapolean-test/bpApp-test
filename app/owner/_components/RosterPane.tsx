@@ -5,7 +5,8 @@ import { Search } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { useOnDemand } from '@/app/_components/useOnDemand';
 import { inputCls } from '@/app/_components/ui';
-import { getOwnerGymRoster } from '@/lib/data/owner';
+import { getOwnerGymRoster, type RosterMember } from '@/lib/data/owner';
+import { prettyName } from '@/lib/gymNames';
 import { LOAD_FAILED, settle } from '@/lib/ownerReport';
 import {
   ROSTER_FILTERS,
@@ -19,6 +20,19 @@ import {
   rangeLabel,
   type RosterFilter,
 } from '@/lib/ownerRoster';
+
+// The member's plan status, with "Flagged" and "Not set up" beside it when they apply.
+function MemberStatus({ m }: { m: RosterMember }) {
+  return (
+    <>
+      <span className={`font-semibold ${m.status === 'no_plan' ? 'text-warning' : m.status === 'ending_soon' ? 'text-accent' : 'text-zinc-700 dark:text-zinc-200'}`}>
+        {STATUS_LABELS[m.status] ?? m.status}
+      </span>
+      {m.flagged && <span className="ml-1.5 text-xs font-bold text-danger">Flagged</span>}
+      {!m.onboarded && <span className="ml-1.5 text-xs text-zinc-400">Not set up</span>}
+    </>
+  );
+}
 
 // A read-only list of a gym's members for the owner: name, coach, plan, last active and status, with search, a filter and paging. The
 // database function behind it returns no health information, so there is none to show (R37).
@@ -101,44 +115,67 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
               {search ? ` and “${search}”` : ''}.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
-              <table className="w-full min-w-[34rem] text-left text-sm">
-                <thead>
-                  <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
-                    <th className="px-3 py-2 font-bold">Member</th>
-                    <th className="px-2 py-2 font-bold">Coach</th>
-                    <th className="px-2 py-2 font-bold">Plan</th>
-                    <th className="px-2 py-2 font-bold">Last active</th>
-                    <th className="px-3 py-2 font-bold">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
-                  {roster.members.map((m) => (
-                    <tr key={m.clientId}>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar name={m.name} size="sm" />
-                          <div className="min-w-0">
-                            <p className="max-w-[12rem] truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
-                            {m.name !== m.email && <p className="max-w-[12rem] truncate text-xs text-zinc-500">{m.email}</p>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{m.coachName ?? <span className="text-zinc-400">No coach</span>}</td>
-                      <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{m.plan ?? <span className="text-zinc-400">None</span>}</td>
-                      <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{lastActiveLabel(m.lastActive)}</td>
-                      <td className="px-3 py-2.5">
-                        <span className={`font-semibold ${m.status === 'no_plan' ? 'text-warning' : m.status === 'ending_soon' ? 'text-accent' : 'text-zinc-700 dark:text-zinc-200'}`}>
-                          {STATUS_LABELS[m.status] ?? m.status}
-                        </span>
-                        {m.flagged && <span className="ml-1.5 text-xs font-bold text-danger">Flagged</span>}
-                        {!m.onboarded && <span className="ml-1.5 text-xs text-zinc-400">Not set up</span>}
-                      </td>
+            <>
+              {/* On a phone the five columns do not fit, and Plan, Last active and Status sat off to the side (BO19): each member is a
+                  row of its own there, with the same facts under the name. */}
+              <ul className="divide-y divide-black/[.05] rounded-2xl border border-black/[.06] bg-card text-sm sm:hidden dark:divide-white/10 dark:border-white/10">
+                {roster.members.map((m) => (
+                  <li key={m.clientId} className="flex items-start gap-2.5 px-3 py-2.5">
+                    <Avatar name={m.name} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
+                      {m.name !== m.email && <p className="truncate text-xs text-zinc-500">{m.email}</p>}
+                      <p className="mt-1 text-xs">
+                        <MemberStatus m={m} />
+                      </p>
+                      <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+                        {/* No plan is already the status above, so only a plan's name is repeated here. */}
+                        {[m.plan, m.coachName ? prettyName(m.coachName) : 'No coach', `Last active ${lastActiveLabel(m.lastActive).toLowerCase()}`]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto rounded-2xl border border-black/[.06] bg-card sm:block dark:border-white/10">
+                <table className="w-full min-w-[34rem] text-left text-sm">
+                  <thead>
+                    <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
+                      <th className="px-3 py-2 font-bold">Member</th>
+                      <th className="px-2 py-2 font-bold">Coach</th>
+                      <th className="px-2 py-2 font-bold">Plan</th>
+                      <th className="px-2 py-2 font-bold">Last active</th>
+                      <th className="px-3 py-2 font-bold">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
+                    {roster.members.map((m) => (
+                      <tr key={m.clientId}>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={m.name} size="sm" />
+                            <div className="min-w-0">
+                              <p className="max-w-[12rem] truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
+                              {m.name !== m.email && <p className="max-w-[12rem] truncate text-xs text-zinc-500">{m.email}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">
+                          {/* A coach with no display name came through as a raw login address (RO20); the Overview tidies it the same way. */}
+                          {m.coachName ? prettyName(m.coachName) : <span className="text-zinc-400">No coach</span>}
+                        </td>
+                        <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{m.plan ?? <span className="text-zinc-400">None</span>}</td>
+                        <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{lastActiveLabel(m.lastActive)}</td>
+                        <td className="px-3 py-2.5">
+                          <MemberStatus m={m} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {roster && roster.total > 0 && (

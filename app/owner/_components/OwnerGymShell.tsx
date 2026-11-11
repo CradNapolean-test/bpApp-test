@@ -42,6 +42,7 @@ export function OwnerGymShell({
   siblingNames,
   settings,
   business,
+  lastSignIns,
   orgName,
   email,
   ownerId,
@@ -54,6 +55,8 @@ export function OwnerGymShell({
   settings: OwnerGymSettings | null;
   // null when it could not be loaded.
   business: OwnerGymBusiness | null;
+  // When each coach last signed in (null = never), by coach id (BO18); null, or a coach missing, when it could not be read.
+  lastSignIns: Record<string, string | null> | null;
   orgName: string | null;
   email: string;
   ownerId: string;
@@ -73,6 +76,7 @@ export function OwnerGymShell({
     displayName: c.name && c.name !== c.email ? c.name : null,
     isAdmin: c.isAdmin,
     members: c.members,
+    lastSignIn: lastSignIns && c.id in lastSignIns ? lastSignIns[c.id] : undefined,
   }));
   // The team list remembers who is an admin while open; new data from the server (after a move or a removal) starts it afresh.
   const teamKey = team.map((c) => `${c.id}:${c.isAdmin ? 1 : 0}:${c.members}`).join('|');

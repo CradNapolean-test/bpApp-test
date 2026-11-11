@@ -4,6 +4,7 @@ import { getOwnerGymSettings, getOwnerGyms, getOwnerOrganisationName } from '@/l
 import { parseRosterFilter } from '@/lib/ownerRoster';
 import { getCreditPacksForGym, getOwnerPlanMemberCounts, getPackagesForGym } from '@/lib/data/memberships';
 import { getRewardsForGym } from '@/lib/data/rewards';
+import { getLastSignIns } from '@/lib/coachSignIns';
 import { OwnerGymShell } from '../../_components/OwnerGymShell';
 
 // One gym in the owner's organisation: its members (read only), its coaches, its plans, credit packs and rewards (RO21, decision D3: the
@@ -42,6 +43,10 @@ export default async function OwnerGymPage({
   const gym = gyms.ok ? gyms.data.find((g) => g.id === gymId) : undefined;
   if (gyms.ok && !gym) notFound();
 
+  // Last sign-in per coach for the Team tab (BO18). Read with the service role, so only after the checks above: the caller is the owner,
+  // and the ids are this gym's coaches from the organisation's own list.
+  const lastSignIns = gym ? await getLastSignIns(gym.coaches.map((c) => c.id)) : null;
+
   return (
     <OwnerGymShell
       gymId={gymId}
@@ -49,6 +54,7 @@ export default async function OwnerGymPage({
       siblingNames={gyms.ok ? gyms.data.map((g) => g.name) : []}
       settings={settings}
       business={business}
+      lastSignIns={lastSignIns}
       orgName={orgName}
       email={profile.email ?? user.email ?? 'Owner'}
       ownerId={user.id}

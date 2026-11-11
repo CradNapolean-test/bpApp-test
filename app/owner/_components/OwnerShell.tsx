@@ -183,8 +183,10 @@ function Retry({ message, onRetry }: { message: string; onRetry: () => void }) {
 }
 
 function GymCard({ gym, title, stats, onRetry }: { gym: OwnerGym; title: string; stats: OwnerGymStats | undefined; onRetry: () => void }) {
+  // min-w-0: a grid item is otherwise at least as wide as its widest content, so the coaches table (which scrolls inside its own box)
+  // pushed the card past the screen and the whole page scrolled sideways on a phone (RO22).
   return (
-    <section className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+    <section className="min-w-0 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
       <div className="mb-3 flex items-center justify-between gap-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <Building2 className="h-5 w-5 shrink-0 text-accent" />
@@ -328,7 +330,7 @@ export function OwnerShell({
             )}
 
             {view === 'overview' && stats !== null && (
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {shown.map((g) => (
                   <GymCard key={g.id} gym={g} title={titleOf(g)} stats={statsOf(g.id)} onRetry={retry} />
                 ))}

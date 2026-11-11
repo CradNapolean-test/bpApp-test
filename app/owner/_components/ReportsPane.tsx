@@ -8,6 +8,7 @@ import { downloadTextFile } from '@/lib/utils/csv';
 import { getOwnerActivityReport } from '@/lib/data/owner';
 import type { ActivityReport } from '@/lib/data/owner';
 import { lastTwo, maxOf, settle, weekSoFar, weekdayExtremes, weekdayName } from '@/lib/ownerReport';
+import { prettyName } from '@/lib/gymNames';
 
 // Owner reports: check-ins through the week, per day and per week, and how much each coach has messaged.
 // A check-in is a member logging anything on their daily check-in that day (the same measure as the Overview's
@@ -224,15 +225,17 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
       </section>
 
       <section className={card}>
+        {/* RO23: this table counts members who finished onboarding, like the rest of Reports; the Overview's Coaches table counts every
+            member, so the two "Members" columns differ for a coach with members still setting up. The column and hint say so. */}
         <Heading
           title="Coach messaging"
-          hint="Messages each coach sent in the last 30 days, and how many different members they wrote to."
+          hint="Each coach's members who finished onboarding (the Overview counts everyone), the messages the coach sent them in the last 30 days, and how many different members they wrote to."
           onCsv={() =>
             saveCsv(
               'coach-messaging.csv',
               toCsv(
-                ['Coach', 'Members', 'Checked in this week', 'Messages sent (30 days)', 'Members messaged (30 days)'],
-                report.coaches.map((c) => [c.name, c.members, c.checkedInThisWeek, c.sent30, c.membersMessaged30])
+                ['Coach', 'Members set up', 'Checked in this week', 'Messages sent (30 days)', 'Members messaged (30 days)'],
+                report.coaches.map((c) => [prettyName(c.name), c.members, c.checkedInThisWeek, c.sent30, c.membersMessaged30])
               )
             )
           }
@@ -242,7 +245,7 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="py-1.5 pr-2 font-bold">Coach</th>
-                <th className="px-2 py-1.5 text-right font-bold">Members</th>
+                <th className="px-2 py-1.5 text-right font-bold">Members set up</th>
                 <th className="px-2 py-1.5 text-right font-bold">Checked in</th>
                 <th className="px-2 py-1.5 text-right font-bold">Messages sent</th>
                 <th className="py-1.5 pl-2 text-right font-bold">Members messaged</th>
@@ -251,7 +254,7 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
             <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
               {report.coaches.map((c) => (
                 <tr key={c.coachId}>
-                  <td className="max-w-[10rem] truncate py-2 pr-2 font-semibold text-black dark:text-zinc-50">{c.name}</td>
+                  <td className="max-w-[10rem] truncate py-2 pr-2 font-semibold text-black dark:text-zinc-50">{prettyName(c.name)}</td>
                   <td className="px-2 py-2 text-right">{c.members}</td>
                   <td className="px-2 py-2 text-right">
                     {c.checkedInThisWeek} of {c.members}

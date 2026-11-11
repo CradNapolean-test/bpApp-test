@@ -11,6 +11,7 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { handleTabListKeys } from '@/app/_components/tabKeys';
 import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
@@ -123,7 +124,28 @@ export function BusinessShell({
         </h1>
         <p className={`${!canEdit && ADMIN_ONLY_TABS.includes(tab) ? 'mb-1' : 'mb-4'} text-sm text-zinc-500`}>{BLURB[tab]}</p>
         {!canEdit && ADMIN_ONLY_TABS.includes(tab) && <p className="mb-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">{READ_ONLY_NOTE}</p>}
-        <HubTabBar label="Business sections" tabs={tabs} active={tab} onSelect={setTab} />
+        {/* Six tabs are wider than a phone, and the scrolling row cut the last one to "Feedba" (DB23). On a phone they sit in a grid of
+            three a row, all in view; from the sm width up it is the usual tab row. */}
+        <div role="tablist" aria-label="Business sections" onKeyDown={handleTabListKeys} className="mb-4 grid grid-cols-3 gap-1.5 sm:hidden">
+          {tabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              tabIndex={tab === t ? 0 : -1}
+              onClick={() => setTab(t)}
+              className={`min-h-10 rounded-full px-2 text-sm transition-colors ${
+                tab === t ? 'bg-accent font-bold text-accent-foreground' : 'border border-black/10 font-medium text-zinc-600 dark:border-white/10 dark:text-zinc-300'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <div className="hidden sm:block">
+          <HubTabBar label="Business sections" tabs={tabs} active={tab} onSelect={setTab} />
+        </div>
 
         {tab === 'Overview' && overview && <OverviewPane data={overview} />}
         {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} canEdit={canEdit} />}
