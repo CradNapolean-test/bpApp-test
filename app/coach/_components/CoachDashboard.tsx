@@ -231,20 +231,27 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
     });
   }
 
+  // Week 3 of a fixed-length plan (the 6 week challenge), and from 10 days before it ends (D5): the second is about what they do next, so
+  // it opens the member, not just the messages.
   if (data.challengeDue.length > 0) {
-    const finals = data.challengeDue.filter((c) => c.milestone === 'final').length;
+    const ending = data.challengeDue.filter((c) => c.milestone === 'final').length;
+    const daysLeftText = (c: (typeof data.challengeDue)[number]) =>
+      c.daysLeft == null ? '' : c.daysLeft === 0 ? 'last day today' : `${c.daysLeft} day${c.daysLeft === 1 ? '' : 's'} left`;
     groups.push({
       key: 'challenge',
       icon: Trophy,
       tone: 'amber',
       title: 'Challenge check-ins due',
-      summary: `${data.challengeDue.length} member${data.challengeDue.length === 1 ? '' : 's'} on the challenge to check in with${finals > 0 ? ` (${finals} in the final week)` : ''}`,
+      summary: `${data.challengeDue.length} member${data.challengeDue.length === 1 ? '' : 's'} on the challenge to check in with${ending > 0 ? ` (${ending} ending soon: talk about what's next)` : ''}`,
       items: data.challengeDue.map((c) => ({
         key: `${c.membershipId}|${c.milestone}`,
         clientId: c.clientId,
         title: c.name,
-        hint: `${c.milestone === 'final' ? 'Final week' : `Week ${c.week}`} of ${c.totalWeeks} · ${c.planName}${c.daysLeft != null ? ` · ${c.daysLeft === 0 ? 'last day today' : `${c.daysLeft} day${c.daysLeft === 1 ? '' : 's'} left`}` : ''}`,
-        href: `/coach/clients/${c.clientId}?open=messages`,
+        hint:
+          c.milestone === 'final'
+            ? [`${c.planName} ends${c.endsOn ? ` ${dayShort(c.endsOn)}` : ' this week'}`, daysLeftText(c), "what's next?"].filter(Boolean).join(' · ')
+            : [`Week ${c.week} of ${c.totalWeeks}`, c.planName, daysLeftText(c)].filter(Boolean).join(' · '),
+        href: c.milestone === 'final' ? `/coach/clients/${c.clientId}` : `/coach/clients/${c.clientId}?open=messages`,
         review: own(c.mine) ? () => markReviewed(challengeReviewKind(c.milestone), c.clientId, c.membershipId) : undefined,
       })),
     });

@@ -73,6 +73,8 @@ export interface ChallengeDue {
   week: number;
   totalWeeks: number;
   daysLeft: number | null;
+  // The plan's planned last day, when there is one.
+  endsOn: string | null;
   mine: boolean;
 }
 // A member whose workout programme ends within 7 days, or has finished, with nothing scheduled after it (TR3, CV16, D2).
@@ -334,7 +336,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       }
     }
 
-    // Week 3 and final-week prompts for members on a fixed-length plan (the 6 week challenge).
+    // Week 3, and from 10 days before the end (D5), prompts for members on a fixed-length plan (the 6 week challenge).
     for (const ms of m.client_memberships ?? []) {
       const pkg = one(ms.membership_packages);
       const prompt = challengePrompt({ ...ms, durationWeeks: pkg?.duration_weeks ?? null }, todayIso, reviewed);
