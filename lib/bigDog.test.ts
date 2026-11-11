@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { showStandard, bestResult, bigDogCount, tiersReached, currentLevels, EXERCISES, formatResult, levelForResult, nextTarget, parseResultInput, tierForCount } from './bigDog';
+import { showStandard, bestResult, bigDogCount, tiersReached, currentLevels, EXERCISES, formatResult, levelForResult, nextTarget, nextTierLabel, parseResultInput, tierForCount } from './bigDog';
 import type { BigDogResultLike } from './bigDog';
 
 const row = (exercise_key: string, level: BigDogResultLike['level'], tested_date: string, created_at = tested_date): BigDogResultLike => ({
@@ -231,5 +231,14 @@ describe('showStandard', () => {
     expect(showStandard('time', '7:20')).toBe('7:20 or faster');
     expect(showStandard('distance', '1100m')).toBe('1100m');
     expect(showStandard('weight', '160kg')).toBe('160kg');
+  });
+});
+
+describe('nextTierLabel (TR30)', () => {
+  it('names the next shirt and what it takes', () => {
+    expect(nextTierLabel(0)).toBe('Next: White at 1 Big Dog');
+    expect(nextTierLabel(1)).toBe('Next: Turquoise at 3 Big Dogs');
+    expect(nextTierLabel(6)).toBe('Next: Gold at all 12');
+    expect(nextTierLabel(12)).toBe('Maximum — all 12!');
   });
 });

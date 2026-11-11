@@ -38,6 +38,7 @@ import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
+import { isTestTemplateName, nextProgrammeStart } from '@/lib/utils/programmeStart';
 import { coachProgrammeEndLine, memberProgrammeNotice, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
 import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, setFormHeading, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange, type WorkoutSummary } from '@/lib/workoutSets';
 import { blockFormatOf, chosenBlockKeys, dayHighlights, dayLogProgress, describeChoices, exerciseBlockKey } from '@/lib/workoutSections';
@@ -81,16 +82,19 @@ function StartProgrammeSheet({
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
-  const [mode, setMode] = useState<'template' | 'blank'>(templates.length > 0 ? 'template' : 'blank');
+  // Throwaway "Test" / "test 2" templates are left out (CW17).
+  const offered = templates.filter((t) => !isTestTemplateName(t.name));
+  const [mode, setMode] = useState<'template' | 'blank'>(offered.length > 0 ? 'template' : 'blank');
   const [templateId, setTemplateId] = useState('');
   const [name, setName] = useState('');
-  const [startDate, setStartDate] = useState(() => initialStart ?? todayIsoInTz(DEFAULT_TIMEZONE));
+  // The coming Monday (programme weeks run Monday to Sunday), not today (CW17).
+  const [startDate, setStartDate] = useState(() => initialStart ?? nextProgrammeStart(todayIsoInTz(DEFAULT_TIMEZONE)));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (mode === 'template') {
       if (!templateId) return;
-      const template = templates.find((t) => t.id === templateId);
+      const template = offered.find((t) => t.id === templateId);
       await run(() => instantiateProgramTemplate(templateId, clientId, name.trim() || template?.name || '', startDate || null), {
         success: 'Programme started',
         onDone: onClose,
@@ -104,7 +108,7 @@ function StartProgrammeSheet({
   return (
     <BottomSheet title="Start a programme" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {templates.length > 0 && (
+        {offered.length > 0 && (
           <div className="flex gap-2">
             {(['template', 'blank'] as const).map((m) => (
               <button
@@ -127,7 +131,7 @@ function StartProgrammeSheet({
               <option value="" disabled>
                 Choose a template…
               </option>
-              {templates.map((t) => (
+              {offered.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
@@ -142,7 +146,7 @@ function StartProgrammeSheet({
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Starts</label>
           <input type="date" className={field} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          <p className="text-xs text-zinc-500">Their current programme carries on until this date, then this one takes over.</p>
+          <p className="text-xs text-zinc-500">Programme weeks run Monday to Sunday. Their current programme carries on until this date, then this one takes over.</p>
         </div>
         <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : 'Start programme'}

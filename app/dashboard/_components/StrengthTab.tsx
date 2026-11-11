@@ -9,7 +9,7 @@ import { workoutWindowStart } from '@/lib/trainingWindow';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { exerciseHistory, formatKg, weeklyVolume } from '@/lib/trainingStats';
 import { trackingOf, TRACKING } from '@/lib/workoutTracking';
-import { bestSession, blockInfoFor, blockSeries, exerciseOptions, measureSessions, topSetText } from '@/lib/workoutProgress';
+import { bestSession, bestsLine, blockInfoFor, blockSeries, exerciseOptions, measureSessions, topSetText } from '@/lib/workoutProgress';
 import type { ClientProfileRow, WorkoutBlockResultRow, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10';
@@ -164,7 +164,7 @@ export function StrengthTab({
             <>
               <TrendLine values={e1rms} label="Estimated one-rep max over time" />
               <p className="mt-2 text-xs text-zinc-500">
-                {prs} personal best{prs === 1 ? '' : 's'} · best estimated 1RM {Math.round(bestEver)}kg
+                {bestsLine(prs, bestEver > 0 ? `estimated 1RM ${Math.round(bestEver)}kg` : null)}
               </p>
 
               <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
@@ -196,7 +196,7 @@ export function StrengthTab({
               <p className="mt-2 text-xs text-zinc-500">
                 {selected.type === 'tick'
                   ? `Done on ${other.length} day${other.length === 1 ? '' : 's'}`
-                  : `${otherPBs} personal best${otherPBs === 1 ? '' : 's'}${otherBest ? ` · best ${topSetText(selected.type, otherBest.top)}` : ''}`}
+                  : bestsLine(otherPBs, otherBest ? topSetText(selected.type, otherBest.top) : null)}
               </p>
 
               <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
@@ -226,8 +226,12 @@ export function StrengthTab({
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Block results</h3>
             <select value={block.key} onChange={(e) => setPickedBlock(e.target.value)} aria-label="Block" className={selectCls}>
+              {/* The format alone, with the exercises only when two blocks share a format: the detail is the line below, and it printed
+                  twice (TR29). */}
               {series.map((s) => (
-                <option key={s.key} value={s.key}>{[s.title, s.detail].filter(Boolean).join(' · ')}</option>
+                <option key={s.key} value={s.key}>
+                  {series.some((o) => o.key !== s.key && o.title === s.title) ? [s.title, s.detail].filter(Boolean).join(' · ') : s.title}
+                </option>
               ))}
             </select>
           </div>

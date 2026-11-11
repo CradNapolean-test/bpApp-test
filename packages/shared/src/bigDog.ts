@@ -119,12 +119,14 @@ export const TIER_TITLE: Record<BigDogTier, string> = {
   gold: 'Gold Big Dog',
 };
 
+// The next shirt and what it takes. Before the first it read "Hit Big Dog in 1 exercise", which next to "0 of 12" looked like something
+// already done (TR30).
 export function nextTierLabel(bigDogCount: number): string {
   if (bigDogCount >= TIER_THRESHOLDS.gold) return `Maximum — all ${EXERCISES.length}!`;
-  if (bigDogCount >= TIER_THRESHOLDS.silver) return `Next: Gold (all ${EXERCISES.length})`;
-  if (bigDogCount >= TIER_THRESHOLDS.turquoise) return `Next: Silver (${TIER_THRESHOLDS.silver}+)`;
-  if (bigDogCount >= TIER_THRESHOLDS.white) return `Next: Turquoise (${TIER_THRESHOLDS.turquoise}+)`;
-  return 'Hit Big Dog in 1 exercise';
+  if (bigDogCount >= TIER_THRESHOLDS.silver) return `Next: Gold at all ${EXERCISES.length}`;
+  if (bigDogCount >= TIER_THRESHOLDS.turquoise) return `Next: Silver at ${TIER_THRESHOLDS.silver} Big Dogs`;
+  if (bigDogCount >= TIER_THRESHOLDS.white) return `Next: Turquoise at ${TIER_THRESHOLDS.turquoise} Big Dogs`;
+  return `Next: White at ${TIER_THRESHOLDS.white} Big Dog`;
 }
 
 export function genderFromProfile(gender: string | null | undefined): BigDogGender {

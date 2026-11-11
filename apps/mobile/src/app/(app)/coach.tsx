@@ -107,8 +107,8 @@ export default function Coach() {
           {areas.progress ? <ListRow icon="chartLine" title="Body composition & photos" subtitle="Trends, photos, measurements and scans" onPress={() => router.navigate('/progress')} /> : null}
           <ListRow
             icon="trophy"
-            title="Peak week scores"
-            subtitle="Your Big Dog standards"
+            title="Big Dog standards"
+            subtitle="Your peak week scores and T-shirt tier"
             right={tier === 'none' ? undefined : <Badge>{TIER_TITLE[tier].replace(' Big Dog', '')}</Badge>}
             onPress={() => router.navigate('/bigdog')}
           />

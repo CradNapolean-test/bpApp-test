@@ -35,9 +35,8 @@ export const SECTION_TITLE: Record<WorkoutSection, string> = {
   conditioning: 'Conditioning',
 };
 
-// The formats named in the gym's programming SOP. Only the well-known ones carry a description;
-// the gym-specific ones (Horse Power, YGIG 100, P-ISO...) are left for the coach to explain in an
-// instructions line.
+// The formats named in the gym's programming SOP. The well-known ones carry a description (members see it under the block title); the
+// gym's own (Time Killer, Horse Power, YGIG 100, DESC-15s, Mech-Drop, P-ISO) are left for the coach to explain in an instructions line.
 export interface BlockFormat {
   name: string;
   description?: string;
@@ -49,20 +48,20 @@ export const BLOCK_FORMATS: BlockFormat[] = [
   { name: 'Tabata', description: '20 seconds on, 10 seconds off' },
   { name: 'Big Chipper', description: 'One long list, worked through once' },
   { name: 'Ladder', description: 'Reps step up or down each round' },
-  { name: 'Descending Reps' },
-  { name: 'Ascending Reps' },
-  { name: 'Pyramid' },
-  { name: 'Circuit' },
+  { name: 'Descending Reps', description: 'Fewer reps each round, for time' },
+  { name: 'Ascending Reps', description: 'More reps each round' },
+  { name: 'Pyramid', description: 'Reps climb, then come back down' },
+  { name: 'Circuit', description: 'Each exercise in turn, then round again' },
   { name: 'Time Killer' },
   { name: 'Horse Power' },
-  { name: 'Partner AMRAP' },
-  { name: 'Partner Ladder' },
-  { name: 'Sets × Reps' },
-  { name: '3×12 Ecc' },
-  { name: 'Heavy Ecc' },
+  { name: 'Partner AMRAP', description: 'As many rounds as possible, shared with a partner' },
+  { name: 'Partner Ladder', description: 'A ladder shared with a partner' },
+  { name: 'Sets × Reps', description: 'Straight sets, rest between each' },
+  { name: '3×12 Ecc', description: '3 sets of 12, lowering slowly' },
+  { name: 'Heavy Ecc', description: 'Heavy, lowering slowly' },
   { name: 'YGIG 100' },
   { name: 'DESC-15s' },
-  { name: 'Drop Sets' },
+  { name: 'Drop Sets', description: 'Straight on with a lighter weight after each set' },
   { name: 'Mech-Drop' },
   { name: 'P-ISO' },
 ];

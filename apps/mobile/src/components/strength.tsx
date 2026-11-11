@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { exerciseHistory, formatKg, weeklyVolume } from '@ballistic/shared/utils/trainingStats';
-import { bestSession, blockInfoFor, blockSeries, exerciseOptions, measureSessions, scoreText, topSetText } from '@ballistic/shared/workoutProgress';
+import { bestSession, bestsLine, blockInfoFor, blockSeries, exerciseOptions, measureSessions, scoreText, topSetText } from '@ballistic/shared/workoutProgress';
 import { trackingOf, TRACKING } from '@ballistic/shared/workoutTracking';
 
 import { TrendChart } from '@/components/charts';
@@ -116,7 +116,7 @@ export function StrengthSection({ todayIso, tz }: { todayIso: string; tz: string
                 <TrendChart values={e1rms} labels={lift.map((s) => shortDate(s.date))} color={t.accent} formatter={(v) => `${Math.round(v)}kg`} emptyText="Needs a second session for a trend" />
               ) : null}
               <AppText variant="small" color="muted">
-                {prs} personal best{prs === 1 ? '' : 's'} · best estimated 1RM {Math.round(bestEver)}kg
+                {bestsLine(prs, bestEver > 0 ? `estimated 1RM ${Math.round(bestEver)}kg` : null)}
               </AppText>
 
               <View>
@@ -148,7 +148,7 @@ export function StrengthSection({ todayIso, tz }: { todayIso: string; tz: string
               <AppText variant="small" color="muted">
                 {selected.type === 'tick'
                   ? `Done on ${other.length} day${other.length === 1 ? '' : 's'}`
-                  : `${otherPBs} personal best${otherPBs === 1 ? '' : 's'}${otherBest ? ` · best ${topSetText(selected.type, otherBest.top)}` : ''}`}
+                  : bestsLine(otherPBs, otherBest ? topSetText(selected.type, otherBest.top) : null)}
               </AppText>
 
               <View>

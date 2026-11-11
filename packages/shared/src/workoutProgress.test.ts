@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scoreText, bestSession, blockInfoFor, blockSeries, compareScores, exerciseOptions, measureSessions, resultScore, setScore, topSetText } from './workoutProgress';
+import { scoreText, bestSession, bestsLine, blockInfoFor, blockSeries, compareScores, exerciseOptions, measureSessions, resultScore, setScore, topSetText } from './workoutProgress';
 
 const TZ = 'Europe/London';
 let n = 0;
@@ -175,5 +175,14 @@ describe('block results', () => {
 
   it('has nothing to rank for a tick', () => {
     expect(resultScore({ scoring: 'done', rounds: null, reps: null, seconds: null, score: null })).toBeNull();
+  });
+});
+
+describe('bestsLine (TR29)', () => {
+  it('leaves out "0 personal bests"', () => {
+    expect(bestsLine(0, '22 cal')).toBe('best 22 cal');
+    expect(bestsLine(1, '22 cal')).toBe('1 personal best · best 22 cal');
+    expect(bestsLine(3, null)).toBe('3 personal bests');
+    expect(bestsLine(0, null)).toBe('');
   });
 });

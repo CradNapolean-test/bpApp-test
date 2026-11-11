@@ -239,8 +239,8 @@ export function CoachingHub({
           )}
           <ListRow
             icon={Trophy}
-            title="Peak week scores"
-            subtitle="Your Big Dog standards"
+            title="Big Dog standards"
+            subtitle="Your peak week scores and T-shirt tier"
             badge={tier === 'none' ? undefined : <Badge>{TIER_TITLE[tier].replace(' Big Dog', '')}</Badge>}
             onClick={() => onNavigate('Account Settings', 'Big Dog')}
           />

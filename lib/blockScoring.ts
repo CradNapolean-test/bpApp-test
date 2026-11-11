@@ -28,20 +28,44 @@ export interface BlockConfig {
 
 export const NO_CONFIG: BlockConfig = { scoring: 'none' };
 
-// What picking a well-known format fills in. The coach can change any of it; formats not listed here start with no result.
+// What picking a format fills in. The coach can change any of it. Every conditioning format now records something (TR26: 17 of 22 started
+// as "No result", so nothing was collected); the strength formats (Sets × Reps, the eccentrics, drop sets, P-ISO, DESC-15s) stay with no
+// block result, because their sets are logged one by one. Time Killer and Horse Power are the gym's own, so they get a plain "done" tick.
 const FORMAT_DEFAULTS: Record<string, BlockConfig> = {
   AMRAP: { scoring: 'rounds_reps' },
   'Partner AMRAP': { scoring: 'rounds_reps' },
+  Ladder: { scoring: 'rounds_reps' },
+  'Partner Ladder': { scoring: 'rounds_reps' },
+  'Ascending Reps': { scoring: 'rounds_reps' },
   EMOM: { scoring: 'done' },
+  'Time Killer': { scoring: 'done' },
+  'Horse Power': { scoring: 'done' },
   Tabata: { scoring: 'rounds', work_seconds: 20, rest_seconds: 10, rounds: 8 },
   Circuit: { scoring: 'rounds' },
   'Big Chipper': { scoring: 'time' },
+  'Descending Reps': { scoring: 'time' },
+  Pyramid: { scoring: 'time' },
+  'YGIG 100': { scoring: 'time' },
 };
 
 export function defaultConfigFor(format: string | null): BlockConfig {
   const known = format ? FORMAT_DEFAULTS[format] : undefined;
   return { ...(known ?? NO_CONFIG) };
 }
+
+// The numbers each scoring uses (TR26): a time cap for anything against the clock, rounds with work and rest for intervals. The format
+// sheet shows these (plus any box that already has a number) instead of all four for every format.
+export type ConfigField = 'cap' | 'rounds' | 'work' | 'rest';
+export const CONFIG_FIELDS: ConfigField[] = ['cap', 'rounds', 'work', 'rest'];
+const FIELDS_BY_SCORING: Record<Scoring, ConfigField[]> = {
+  none: [],
+  rounds_reps: ['cap'],
+  time: ['cap'],
+  rounds: ['rounds', 'work', 'rest'],
+  done: ['cap'],
+  score: ['cap'],
+};
+export const configFieldsFor = (scoring: Scoring): ConfigField[] => FIELDS_BY_SCORING[scoring];
 
 const positive = (v: unknown, max: number): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= max ? v : undefined);
 

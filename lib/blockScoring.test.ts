@@ -5,6 +5,7 @@ import {
   blockConfigOf,
   canHitCap,
   capLabel,
+  configFieldsFor,
   configForStorage,
   configSummary,
   defaultConfigFor,
@@ -25,8 +26,19 @@ describe('defaultConfigFor', () => {
     expect(defaultConfigFor('Tabata')).toEqual({ scoring: 'rounds', work_seconds: 20, rest_seconds: 10, rounds: 8 });
     expect(defaultConfigFor('Big Chipper')).toEqual({ scoring: 'time' });
   });
-  it('starts the rest with no result, and hands back a copy', () => {
-    expect(defaultConfigFor('Horse Power')).toEqual(NO_CONFIG);
+  it('gives every conditioning format a result to record (TR26)', () => {
+    expect(defaultConfigFor('Ladder')).toEqual({ scoring: 'rounds_reps' });
+    expect(defaultConfigFor('Descending Reps')).toEqual({ scoring: 'time' });
+    expect(defaultConfigFor('Horse Power')).toEqual({ scoring: 'done' });
+    for (const f of ['Sets × Reps', '3×12 Ecc', 'Heavy Ecc', 'Drop Sets', 'Mech-Drop', 'P-ISO', 'DESC-15s']) expect(defaultConfigFor(f), f).toEqual(NO_CONFIG);
+  });
+  it('shows only the numbers a scoring uses (TR26)', () => {
+    expect(configFieldsFor('rounds_reps')).toEqual(['cap']);
+    expect(configFieldsFor('rounds')).toEqual(['rounds', 'work', 'rest']);
+    expect(configFieldsFor('none')).toEqual([]);
+  });
+  it('starts the strength formats with no result, and hands back a copy', () => {
+    expect(defaultConfigFor('Drop Sets')).toEqual(NO_CONFIG);
     expect(defaultConfigFor(null)).toEqual(NO_CONFIG);
     defaultConfigFor('AMRAP').rounds = 5;
     expect(defaultConfigFor('AMRAP')).toEqual({ scoring: 'rounds_reps' });

@@ -244,3 +244,12 @@ export function blockSeries<R extends ResultLike>(results: R[], infoOf: (program
   }
   return [...out.values()].sort((a, b) => b.entries[b.entries.length - 1].result.logged_at.localeCompare(a.entries[a.entries.length - 1].result.logged_at));
 }
+
+// The line under a progression chart: "2 personal bests · best 22 cal", or just "best 22 cal" before there is one (it read
+// "0 personal bests · best 22 cal", TR29).
+export function bestsLine(personalBests: number, best: string | null): string {
+  const parts: string[] = [];
+  if (personalBests > 0) parts.push(`${personalBests} personal best${personalBests === 1 ? '' : 's'}`);
+  if (best) parts.push(`best ${best}`);
+  return parts.join(' · ');
+}

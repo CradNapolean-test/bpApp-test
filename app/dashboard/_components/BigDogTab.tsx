@@ -349,7 +349,7 @@ export function BigDogTab({
         </div>
         <div className="text-right">
           <p className="text-xl font-black leading-none text-accent">{count}</p>
-          <p className="text-[11px] text-zinc-500">of {EXERCISES.length} BD</p>
+          <p className="text-[11px] text-zinc-500">of {EXERCISES.length} at Big Dog</p>
         </div>
       </div>
 

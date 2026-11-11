@@ -52,14 +52,17 @@ import {
   type WorkoutSection,
 } from '@/lib/workoutSections';
 import {
+  CONFIG_FIELDS,
   SCORING,
   SCORINGS,
   blockConfigOf,
+  configFieldsFor,
   configForStorage,
   configSummary,
   defaultConfigFor,
   sanitiseConfig,
   type BlockConfig,
+  type ConfigField,
   type Scoring,
 } from '@/lib/blockScoring';
 import {
@@ -623,13 +626,15 @@ function FormatSheet({
   const [work, setWork] = useState(start.work_seconds == null ? '' : String(start.work_seconds));
   const [rest, setRest] = useState(start.rest_seconds == null ? '' : String(start.rest_seconds));
   const [unit, setUnit] = useState(start.unit ?? '');
+  const [showAllNumbers, setShowAllNumbers] = useState(false);
 
-  // Choosing a format fills in what usually goes with it; each box can still be changed.
+  // Choosing a format fills in what usually goes with it; each box can still be changed. Anything against the clock gets the block's
+  // length as its cap (Big Chipper had none, TR26).
   function choose(name: string | null) {
     setFormat(name);
     const d = defaultConfigFor(name);
     setScoring(d.scoring);
-    setCapMinutes(d.scoring === 'rounds_reps' || d.scoring === 'done' ? String(defaultCapSeconds / 60) : '');
+    setCapMinutes(configFieldsFor(d.scoring).includes('cap') ? String(defaultCapSeconds / 60) : '');
     setRounds(d.rounds == null ? '' : String(d.rounds));
     setWork(d.work_seconds == null ? '' : String(d.work_seconds));
     setRest(d.rest_seconds == null ? '' : String(d.rest_seconds));
@@ -655,19 +660,55 @@ function FormatSheet({
     return run(() => onSave(format, configForStorage(next)), { onDone: onClose });
   }
 
+  // Only the numbers this scoring uses, plus any already set; "More numbers" shows the rest (TR26: all four showed for every format).
+  const values: Record<ConfigField, string> = { cap: capMinutes, rounds, work, rest };
+  const shownFields = CONFIG_FIELDS.filter((f) => showAllNumbers || configFieldsFor(scoring).includes(f) || values[f].trim() !== '');
+  const numberBox: Record<ConfigField, ReactNode> = {
+    cap: (
+      <Field key="cap" label="Time cap (minutes)">
+        <input type="number" inputMode="decimal" className={fieldCls} value={capMinutes} placeholder={String(defaultCapSeconds / 60)} onChange={(e) => setCapMinutes(e.target.value)} />
+      </Field>
+    ),
+    rounds: (
+      <Field key="rounds" label="Rounds">
+        <input type="number" inputMode="numeric" className={fieldCls} value={rounds} onChange={(e) => setRounds(e.target.value)} />
+      </Field>
+    ),
+    work: (
+      <Field key="work" label="Work (seconds)">
+        <input type="number" inputMode="numeric" className={fieldCls} value={work} onChange={(e) => setWork(e.target.value)} />
+      </Field>
+    ),
+    rest: (
+      <Field key="rest" label="Rest (seconds)">
+        <input type="number" inputMode="numeric" className={fieldCls} value={rest} onChange={(e) => setRest(e.target.value)} />
+      </Field>
+    ),
+  };
+
   return (
     <BottomSheet title={title} onClose={onClose}>
       <div className="space-y-4">
-        <div className="max-h-[32vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {[{ name: null as string | null, description: 'Plain sets and reps' }, ...BLOCK_FORMATS.map((f) => ({ name: f.name as string | null, description: f.description }))].map((f) => (
-            <button key={f.name ?? 'none'} type="button" onClick={() => choose(f.name)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-black dark:text-zinc-50">{f.name ?? 'No format'}</span>
-                {f.description && <span className="text-xs text-zinc-500">{f.description}</span>}
-              </span>
-              {format === f.name && <span className="text-sm font-bold text-accent">✓</span>}
-            </button>
-          ))}
+        {/* Every format at once as chips: the old list showed 4-5 of the 22 at a time (TR26). */}
+        <div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Format">
+            {[null, ...BLOCK_FORMATS.map((f) => f.name)].map((name) => (
+              <button
+                key={name ?? 'none'}
+                type="button"
+                aria-pressed={format === name}
+                onClick={() => choose(name)}
+                className={`min-h-9 rounded-full px-3 py-1.5 text-sm font-semibold ${
+                  format === name ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
+                }`}
+              >
+                {name ?? 'No format'}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            {format == null ? 'Plain sets and reps' : (formatDescription(format) ?? 'The gym’s own format: explain it to members in an instructions line.')}
+          </p>
         </div>
 
         <Field label="What the member records for the block">
@@ -681,20 +722,12 @@ function FormatSheet({
           <span className="text-xs text-zinc-500">{SCORING[scoring].hint}</span>
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Time cap (minutes)">
-            <input type="number" inputMode="decimal" className={fieldCls} value={capMinutes} placeholder={String(defaultCapSeconds / 60)} onChange={(e) => setCapMinutes(e.target.value)} />
-          </Field>
-          <Field label="Rounds">
-            <input type="number" inputMode="numeric" className={fieldCls} value={rounds} onChange={(e) => setRounds(e.target.value)} />
-          </Field>
-          <Field label="Work (seconds)">
-            <input type="number" inputMode="numeric" className={fieldCls} value={work} onChange={(e) => setWork(e.target.value)} />
-          </Field>
-          <Field label="Rest (seconds)">
-            <input type="number" inputMode="numeric" className={fieldCls} value={rest} onChange={(e) => setRest(e.target.value)} />
-          </Field>
-        </div>
+        {shownFields.length > 0 && <div className="grid grid-cols-2 gap-3">{shownFields.map((f) => numberBox[f])}</div>}
+        {shownFields.length < CONFIG_FIELDS.length && (
+          <button type="button" onClick={() => setShowAllNumbers(true)} className="text-xs font-semibold text-accent">
+            + More numbers (time cap, rounds, work and rest)
+          </button>
+        )}
         {scoring === 'score' && (
           <Field label="Score is counted in">
             <input className={fieldCls} value={unit} maxLength={20} placeholder="calories, metres, reps" onChange={(e) => setUnit(e.target.value)} />
