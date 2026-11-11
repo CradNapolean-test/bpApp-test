@@ -75,6 +75,22 @@ describe('emailNotice', () => {
     expect(emailNotice({ sent: 0, failed: 5, skipped: false })).toMatch(/did not go through/);
     expect(emailNotice({ sent: 3, failed: 2, skipped: false })).toBe('Email: 3 sent, 2 failed.');
   });
+
+  it('says "sent in the app" only for a broadcast that went in the app too', () => {
+    expect(emailNotice({ sent: 0, failed: 0, skipped: true, reason: 'no-key' }, 'both')).toMatch(/sent in the app only/);
+    expect(emailNotice({ sent: 0, failed: 5, skipped: false }, 'both')).toMatch(/sent in the app;/);
+  });
+
+  it('tells the coach nobody has an Email-only broadcast when its email did not go', () => {
+    const skipped = emailNotice({ sent: 0, failed: 0, skipped: true, reason: 'sender-not-configured' }, 'email');
+    expect(skipped).toMatch(/^Email is not set up for this gym yet\./);
+    expect(skipped).toMatch(/nobody has it yet/);
+    expect(skipped).not.toMatch(/sent in the app/);
+    const failed = emailNotice({ sent: 0, failed: 5, skipped: false }, 'email');
+    expect(failed).toMatch(/nobody has it yet/);
+    expect(failed).not.toMatch(/sent in the app/);
+    expect(emailNotice({ sent: 3, failed: 2, skipped: false }, 'email')).toBe('Email: 3 sent, 2 failed.');
+  });
 });
 
 describe('emailStatusLabel', () => {

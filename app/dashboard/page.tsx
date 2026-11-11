@@ -21,17 +21,12 @@ export default async function DashboardPage() {
   // New members (no profile row yet, or onboarding not finished) get the onboarding flow first.
   // Strict null, not falsy: undefined means the onboarding migration isn't applied yet.
   if (!bundle.profile || bundle.profile.onboarding_completed_at === null) {
+    // A member cannot read their coach's profile row (the access rules return nothing), so reading it through profiles.coach_id always
+    // gave "Your coach". The narrow get_my_coach_display_name() read (migration 0042) is what the member's chat uses too.
     const supabase = await createClient();
-    const { data: me } = await supabase.from('profiles').select('coach:coach_id(display_name)').eq('id', user.id).maybeSingle();
-    const coach = Array.isArray(me?.coach) ? me.coach[0] : me?.coach;
-    return (
-      <OnboardingFlow
-        clientId={user.id}
-        email={profile.email}
-        existing={bundle.profile}
-        coachFirstName={(coach as { display_name?: string | null } | null)?.display_name?.split(' ')[0] ?? null}
-      />
-    );
+    const { data: coachName } = await supabase.rpc('get_my_coach_display_name');
+    const coachFirstName = typeof coachName === 'string' ? coachName.trim().split(/\s+/)[0] || null : null;
+    return <OnboardingFlow clientId={user.id} email={profile.email} existing={bundle.profile} coachFirstName={coachFirstName} />;
   }
 
   return (

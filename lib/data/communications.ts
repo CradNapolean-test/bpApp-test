@@ -81,7 +81,7 @@ export async function composeCommunication(input: {
       { replyTo: auth.user?.email ?? undefined }
     );
     await recordEmailOutcome(supabase, result.id, sent, 0);
-    notice = emailNotice(sent);
+    notice = emailNotice(sent, input.channel);
   }
   return { ...ok(), emailNotice: notice };
 }

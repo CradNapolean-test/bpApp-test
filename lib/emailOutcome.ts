@@ -57,10 +57,20 @@ export function shouldRetryEmail(row: RetryRow, nowMs: number): boolean {
   return nowMs - new Date(row.sent_at).getTime() <= EMAIL_RETRY_WINDOW_MS;
 }
 
-// A sentence for the coach straight after sending, or null when everything went.
-export function emailNotice(result: EmailResult): string | null {
-  if (result.skipped) return `${skipSentence(result.reason)} The message was sent in the app only.`;
-  if (result.sent === 0 && result.failed > 0) return 'The email did not go through. The message was sent in the app; the email will be tried again.';
+// A sentence for the coach straight after sending, or null when everything went. `channel` is the broadcast's: an Email-only broadcast
+// sends nothing in the app, so when its email does not go, nobody has it yet and the sentence must not say it went in the app.
+export function emailNotice(result: EmailResult, channel: 'email' | 'both' = 'both'): string | null {
+  const emailOnly = channel === 'email';
+  if (result.skipped) {
+    return emailOnly
+      ? `${skipSentence(result.reason)} This broadcast is email only, so nobody has it yet. The daily run emails it if email is set up within 3 days; to reach people now, send it as an in-app message.`
+      : `${skipSentence(result.reason)} The message was sent in the app only.`;
+  }
+  if (result.sent === 0 && result.failed > 0) {
+    return emailOnly
+      ? 'The email did not go through, and this broadcast is email only, so nobody has it yet. The email will be tried again.'
+      : 'The email did not go through. The message was sent in the app; the email will be tried again.';
+  }
   if (result.failed > 0) return `Email: ${result.sent} sent, ${result.failed} failed.`;
   return null;
 }
