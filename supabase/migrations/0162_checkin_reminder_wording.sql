@@ -33,8 +33,8 @@
 --
 -- The next reminder a member gets (the cron runs once a day at about 04:16 UTC) ends "Fill in your Daily check-in to stay on track."
 --
--- REVERSE: run the "create function public.send_checkin_reminders()" block from migration 0060 again, as "create or replace function"
--- (the return type is the same, so no drop is needed).
+-- REVERSE: run send_checkin_reminders' definition from migration 0060 again, starting it with "create or replace" instead of
+-- "create" (the return type is the same, so no drop is needed).
 --
 -- Safe to run again.
 
