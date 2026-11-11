@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
+  BellOff,
   CalendarCheck,
   Check,
   ChevronDown,
@@ -211,6 +212,26 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
           href: '/coach/classes?tab=reports&section=red-flags',
         },
       ],
+    });
+  }
+
+  // D19: 3 check-in reminders unanswered, so the reminders have stopped and it is the coach's turn.
+  if (data.remindersUnanswered.length > 0) {
+    const n = data.remindersUnanswered.length;
+    groups.push({
+      key: 'reminders',
+      icon: BellOff,
+      tone: 'urgent',
+      title: 'Check-in reminders unanswered',
+      summary: `${n} member${n === 1 ? '' : 's'} did not answer 3 reminders, so the app has stopped sending them`,
+      items: data.remindersUnanswered.map((r) => ({
+        key: `${r.clientId}|${r.stoppedOn}`,
+        clientId: r.clientId,
+        title: r.name,
+        hint: `3 reminders unanswered · ${r.lastLog ? `last log ${dayShort(r.lastLog)}` : 'nothing logged in 4 weeks'} · stopped ${dayShort(r.stoppedOn)}`,
+        href: `/coach/clients/${r.clientId}?open=messages`,
+        review: own(r.mine) ? () => markReviewed('checkin_reminders', r.clientId, r.stoppedOn) : undefined,
+      })),
     });
   }
 

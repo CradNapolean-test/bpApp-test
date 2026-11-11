@@ -5,7 +5,7 @@ import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
 import { isGoneQuiet, sortFollowUps, type FollowUpKind, type FollowUpReason } from '@/lib/followUp';
 import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
-import { addDays, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
+import { addDays, isoDateInTz, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { minuteOfDayIn } from '@/lib/todaySessions';
 import { reviewRows, startedBy } from '@/lib/coachDashboardRules';
 import { coachProgrammeEndLine, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
@@ -89,6 +89,17 @@ export interface ProgrammeEnding {
   line: string;
   mine: boolean;
 }
+// D19: a member who did not answer 3 check-in reminders in a row. The reminders have stopped (send_checkin_reminders, migration 0166), so
+// it is the coach's turn. Drops off once they log again, or the coach marks it done.
+export interface RemindersUnanswered {
+  clientId: string;
+  name: string;
+  // The day the reminders stopped (the gym's calendar); also the "done" marker's ref.
+  stoppedOn: string;
+  // Their last logged day in the last 4 weeks, or null.
+  lastLog: string | null;
+  mine: boolean;
+}
 export interface UnreadThread {
   clientId: string;
   name: string;
@@ -122,6 +133,7 @@ export interface CoachDashboardData {
   checkins: WeekCheckin[];
   challengeDue: ChallengeDue[];
   programmesEnding: ProgrammeEnding[];
+  remindersUnanswered: RemindersUnanswered[];
   photoReviews: PhotoReview[];
   forms: FormReview[];
   scores: ScoreToVerify[];
@@ -156,6 +168,8 @@ interface MemberRow {
     needs_coach_review: boolean | null;
     review_reasons: string[] | null;
     checkin_reminder_days: number | null;
+    // Set by send_checkin_reminders when it stops after 3 unanswered (0166); missing before 0166 is applied.
+    checkin_reminders_stopped_at?: string | null;
   }>;
   client_memberships: {
     id: string;
@@ -183,7 +197,7 @@ const shortDay = (iso: string) =>
 
 const SELECT = `
   id, email, coach_id, created_at,
-  client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, checkin_reminder_days),
+  client_profiles(name, timezone, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, checkin_reminder_days, checkin_reminders_stopped_at),
   client_memberships!client_id(id, started_at, scheduled_end, ended_at, membership_packages(credits_per_week, duration_weeks, name)),
   daily_logs(id, log_date, calories, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(id, created_at)),
   nutrition_feedback!client_id(log_date, photo_id),
@@ -260,7 +274,9 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     // Bookings (still booked, 28 days back, for the follow-up list and this week's numbers) and today's holds, read as the Clients page
     // reads them.
     q = followUpFilters(q, todayIso);
-    if (select.includes('coach_reviews')) q = q.gte('coach_reviews.reviewed_at', since30);
+    // "Reminders unanswered" markers are kept whatever their age: the To do they clear is about a member who stopped answering, which can
+    // last longer than 30 days. There is one per stop, so they stay few.
+    if (select.includes('coach_reviews')) q = q.or(`reviewed_at.gte.${since30},kind.eq.checkin_reminders`, { referencedTable: 'coach_reviews' });
     if (scope === 'mine') q = q.eq('coach_id', user.id);
     else if (scope === 'coach' && selectedCoachId) q = q.eq('coach_id', selectedCoachId);
     else if (me?.gym_id) q = q.eq('gym_id', me.gym_id);
@@ -277,7 +293,11 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     };
     const first = await read(SELECT);
     if (!first.error) return first;
-    return read(SELECT.replace('coach_reviews!client_id(kind, ref),', ''));
+    // Before migration 0166 there is no checkin_reminders_stopped_at: the dashboard loads without the "Reminders unanswered" To do.
+    const before0166 = SELECT.replace(', checkin_reminders_stopped_at', '');
+    const second = await read(before0166);
+    if (!second.error) return second;
+    return read(before0166.replace('coach_reviews!client_id(kind, ref),', ''));
   };
 
   const [{ data: rows, error }, occurrences, chatOverview, activity, flagResult] = await Promise.all([
@@ -300,6 +320,7 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const checkins: WeekCheckin[] = [];
   const challengeDue: ChallengeDue[] = [];
   const programmesEnding: ProgrammeEnding[] = [];
+  const remindersUnanswered: RemindersUnanswered[] = [];
   const photoReviews: PhotoReview[] = [];
   const forms: FormReview[] = [];
   const scores: ScoreToVerify[] = [];
@@ -413,6 +434,17 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       else if (b.booking_date === sameDayLastWeek && startedBy(one(b.class)?.start_time ?? null, nowMinute)) sessionsAttendedSameTimeLastWeek += 1;
     }
 
+    // D19: three check-in reminders unanswered, so they stopped. Until the member logs again (a log on or after the day they stopped; the
+    // next run then clears the flag) or the coach marks it done. Not for a member on hold or whose reminders the coach has switched off.
+    const stoppedAt = cp?.checkin_reminders_stopped_at;
+    if (stoppedAt && (cp?.checkin_reminder_days ?? 3) > 0 && (m.membership_holds ?? []).length === 0) {
+      const stoppedOn = isoDateInTz(new Date(stoppedAt), timezone);
+      const lastLog = logs.map((l) => l.log_date).sort().at(-1) ?? null;
+      if ((lastLog == null || lastLog < stoppedOn) && !reviewed.has(`checkin_reminders|${stoppedOn}`)) {
+        remindersUnanswered.push({ clientId: m.id, name, stoppedOn, lastLog, mine: mine(m) });
+      }
+    }
+
     // Members worth a conversation, and why: the one follow-up list (lib/followUp.ts), built from the same rows as Clients → Check in on
     // (CL16). Gone quiet (D11), missed last week and weight stalled for members whose logging is watched; missed 2+ classes and out of
     // credits with nothing booked (D28) for anyone. Members on hold are left out. Programmes ending have their own To do (D28 leaves them
@@ -454,6 +486,8 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     challengeDue,
     // Finished longest ago first, then the soonest to end.
     programmesEnding: programmesEnding.sort((a, b) => a.lastDay.localeCompare(b.lastDay) || a.name.localeCompare(b.name)),
+    // Stopped longest ago first.
+    remindersUnanswered: remindersUnanswered.sort((a, b) => a.stoppedOn.localeCompare(b.stoppedOn) || a.name.localeCompare(b.name)),
     photoReviews,
     forms,
     scores,
