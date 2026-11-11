@@ -18,7 +18,8 @@ export type { EmailResult } from '@/lib/emailOutcome';
 // Kept under its old name for callers that import it.
 export type BroadcastEmailResult = EmailResult;
 
-function senderCheck() {
+// Whether email can be sent now. Also read by pages that offer email, so they can say it is not set up before the coach picks it (MS28).
+export function senderCheck() {
   return checkSender({
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,

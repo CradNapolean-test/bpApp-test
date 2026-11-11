@@ -4,6 +4,7 @@ import { getCoachChatOverview } from '@/lib/data/chat';
 import { getGroups } from '@/lib/data/clientGroups';
 import { getAudienceCounts, getCommunications } from '@/lib/data/communications';
 import { getMessageTemplates } from '@/lib/data/messageTemplates';
+import { senderCheck } from '@/lib/email';
 import { MessagesHubShell } from './_components/MessagesHubShell';
 
 export default async function CoachMessagesPage() {
@@ -28,6 +29,8 @@ export default async function CoachMessagesPage() {
     getMessageTemplates(),
     getAudienceCounts(),
   ]);
+  // Why email cannot go right now, or null when it can: Broadcasts says so next to "Send as" (MS28).
+  const sender = senderCheck();
 
   return (
     <MessagesHubShell
@@ -39,6 +42,7 @@ export default async function CoachMessagesPage() {
       counts={counts}
       timezone={gym?.timezone ?? null}
       email={user.email ?? 'Coach'}
+      emailOff={sender.ok ? null : sender.reason}
     />
   );
 }

@@ -17,6 +17,7 @@ import { broadcastConfirmation, formatInZone, isPastSchedule, nowAsWallTime, wal
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { nextRunLabel } from '@/lib/communicationsSchedule';
 import { emailStatusLabel } from '@/lib/emailOutcome';
+import { skipSentence, type EmailSkipReason } from '@/lib/emailConfig';
 import { useToast } from '@/app/_components/ToastProvider';
 import type { ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
 
@@ -117,6 +118,7 @@ export function BroadcastsPane({
   templates,
   counts,
   timezone,
+  emailOff = null,
 }: {
   groups: ClientGroupWithMembers[];
   communications: ScheduledCommunicationRow[];
@@ -124,6 +126,8 @@ export function BroadcastsPane({
   counts: { mine: number; gym: number };
   // The gym's own timezone; dates and times are shown and scheduled in it, not in the browser's.
   timezone?: string | null;
+  // Why the app cannot send email right now (null when it can).
+  emailOff?: EmailSkipReason | null;
 }) {
   const { run, busy } = useAction();
   const gymId = useActiveGymId();
@@ -291,10 +295,15 @@ export function BroadcastsPane({
             onChange={setChannel}
             options={[
               { value: 'message', label: 'Message' },
-              { value: 'email', label: 'Email' },
-              { value: 'both', label: 'Both' },
+              { value: 'email', label: 'Email', disabled: emailOff != null },
+              { value: 'both', label: 'Both', disabled: emailOff != null },
             ]}
           />
+          {/* While the app cannot send email, Email and Both are greyed out and say why (MS28): an email broadcast used to be held
+              without a word, and the coach could think it had gone. */}
+          {emailOff && (
+            <p className="text-xs text-zinc-500">{skipSentence(emailOff)} Until it is, broadcasts go as in-app messages only.</p>
+          )}
         </div>
 
         <div className="space-y-1.5">

@@ -22,6 +22,7 @@ import { ConversationList } from '@/app/coach/_components/ConversationList';
 import { useFitToWindow } from '@/app/coach/_components/useFitToWindow';
 import { BroadcastsPane } from './BroadcastsPane';
 import type { ChatOverviewRow, ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
+import type { EmailSkipReason } from '@/lib/emailConfig';
 
 type Tab = 'inbox' | 'broadcasts';
 
@@ -36,6 +37,7 @@ export function MessagesHubShell({
   counts,
   timezone,
   email,
+  emailOff = null,
 }: {
   overview: ChatOverviewRow[];
   currentUserId: string;
@@ -46,6 +48,8 @@ export function MessagesHubShell({
   // The gym's own timezone, for scheduling and for the dates shown (R25).
   timezone: string | null;
   email: string;
+  // Why the app cannot send email right now (null when it can), for Broadcasts' "Send as".
+  emailOff?: EmailSkipReason | null;
 }) {
   const searchParams = useSearchParams();
   const [tab, setTabState] = useState<Tab>(() => (searchParams.get('tab') === 'broadcasts' ? 'broadcasts' : 'inbox'));
@@ -56,11 +60,19 @@ export function MessagesHubShell({
   };
   // Phone only: whether a conversation is open (otherwise the list shows).
   const [threadOpen, setThreadOpen] = useState(false);
+  const phoneThread = tab === 'inbox' && threadOpen;
   const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =
     useCoachMessages(overview, currentUserId);
   // On a wide screen the open conversation fills the rest of the window (the page's own 40px padding under it), so the reply box is
   // always on screen and switching conversations does not change the page's height (it used to shrink to "Loading…" and jump).
-  const [threadRef, threadHeight] = useFitToWindow({ bottomGap: 40, min: 360, enabled: tab === 'inbox' });
+  // On a phone an open conversation does the same down to the bottom tab bar (72px, with 8px to spare): its reply box used to start
+  // under the tab bar, so every reply needed a page scroll (MS27).
+  const [threadRef, threadHeight] = useFitToWindow({
+    bottomGap: 40,
+    min: 360,
+    enabled: tab === 'inbox',
+    phoneBottomGap: phoneThread ? 80 : undefined,
+  });
 
   // Nothing is opened on arrival: opening a thread marks it read, so auto-selecting the newest one on a wide screen cleared its unread
   // badge without the coach ever looking at it (R29). The coach picks a conversation.
@@ -72,6 +84,8 @@ export function MessagesHubShell({
   function pick(clientId: string) {
     selectClient(clientId);
     setThreadOpen(true);
+    // On a phone the list is swapped for the thread: start it at the top of the page, not wherever the list had been scrolled to.
+    if (!window.matchMedia('(min-width: 768px)').matches) window.scrollTo(0, 0);
   }
 
   const todayLabel = formatLongDate(new Date());
@@ -84,8 +98,10 @@ export function MessagesHubShell({
     </div>
   );
 
+  // On a phone the title and tabs step aside while a conversation is open, so the thread has the screen (MS27); "All conversations"
+  // goes back to them.
   const header = (
-    <>
+    <div className={phoneThread ? 'hidden md:block' : undefined}>
       <h1 className="mb-4 mt-3 text-2xl font-bold text-black md:mt-0 dark:text-zinc-50">Messages</h1>
       <HubTabBar
         label="Messages sections"
@@ -93,7 +109,7 @@ export function MessagesHubShell({
         active={TAB_LABEL[tab] as 'Conversations' | 'Broadcasts'}
         onSelect={(t) => setTab(t === 'Broadcasts' ? 'broadcasts' : 'inbox')}
       />
-    </>
+    </div>
   );
 
   return (
@@ -121,7 +137,7 @@ export function MessagesHubShell({
         }
       >
         {tab === 'broadcasts' ? (
-          <BroadcastsPane groups={groups} communications={communications} templates={templates} counts={counts} timezone={timezone} />
+          <BroadcastsPane groups={groups} communications={communications} templates={templates} counts={counts} timezone={timezone} emailOff={emailOff} />
         ) : (
           <>
             {/* Phone: a conversation list first, then the thread with a back arrow. The sidebar
@@ -136,11 +152,7 @@ export function MessagesHubShell({
                 currentUserId={currentUserId}
               />
             </div>
-            <div
-              ref={threadRef}
-              className={threadOpen ? '' : 'hidden md:block'}
-              style={threadHeight != null ? { height: threadHeight } : undefined}
-            >
+            <div className={threadOpen ? '' : 'hidden md:block'}>
               {selected && (
                 <button
                   type="button"
@@ -150,6 +162,8 @@ export function MessagesHubShell({
                   <ArrowLeft className="h-4 w-4" /> All conversations
                 </button>
               )}
+              {/* Measured below the back link, so on a phone the thread (not the link with it) is what fits above the tab bar. */}
+              <div ref={threadRef} style={threadHeight != null ? { height: threadHeight } : undefined}>
               {!selected ? (
                 localOverview.length > 0 ? (
                   <EmptyState icon={MessageSquare} title="Choose a conversation" hint="Pick a member from the list to read and reply." />
@@ -186,6 +200,7 @@ export function MessagesHubShell({
                   }}
                 />
               )}
+              </div>
             </div>
           </>
         )}

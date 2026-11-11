@@ -6,9 +6,21 @@ import { useLayoutEffect, useState } from 'react';
 // screen, so scrolling does not change it). The coach inbox uses it so the open conversation and the list each fit the window and scroll
 // inside themselves, instead of the reply box sitting below the fold with two scrollbars to reach it.
 //
-// Only from the md width up, where the inbox is two columns. Below it (and before the first measure, and when not enabled) it gives null,
-// so the caller keeps its normal height. Returns a ref callback to put on the element, and the height.
-export function useFitToWindow({ bottomGap, min, enabled = true }: { bottomGap: number; min: number; enabled?: boolean }) {
+// From the md width up, where the inbox is two columns. Below it, only when `phoneBottomGap` is given (the room the phone's bottom tab
+// bar takes): the open conversation on a phone, whose reply box used to sit under the tab bar (MS27). Otherwise (and before the first
+// measure, and when not enabled) it gives null, so the caller keeps its normal height. Returns a ref callback to put on the element, and
+// the height.
+export function useFitToWindow({
+  bottomGap,
+  min,
+  enabled = true,
+  phoneBottomGap,
+}: {
+  bottomGap: number;
+  min: number;
+  enabled?: boolean;
+  phoneBottomGap?: number;
+}) {
   const [el, setEl] = useState<HTMLElement | null>(null);
   const [height, setHeight] = useState<number | null>(null);
 
@@ -20,12 +32,13 @@ export function useFitToWindow({ bottomGap, min, enabled = true }: { bottomGap: 
     }
     const wide = window.matchMedia('(min-width: 768px)');
     const measure = () => {
-      if (!wide.matches) {
+      const gap = wide.matches ? bottomGap : phoneBottomGap;
+      if (gap == null) {
         setHeight(null);
         return;
       }
       const top = el.getBoundingClientRect().top + window.scrollY;
-      setHeight(Math.max(min, Math.floor(window.innerHeight - top - bottomGap)));
+      setHeight(Math.max(min, Math.floor(window.innerHeight - top - gap)));
     };
     measure();
     window.addEventListener('resize', measure);
@@ -38,7 +51,7 @@ export function useFitToWindow({ bottomGap, min, enabled = true }: { bottomGap: 
       wide.removeEventListener('change', measure);
       observer.disconnect();
     };
-  }, [el, enabled, bottomGap, min]);
+  }, [el, enabled, bottomGap, min, phoneBottomGap]);
 
   return [setEl, height] as const;
 }
