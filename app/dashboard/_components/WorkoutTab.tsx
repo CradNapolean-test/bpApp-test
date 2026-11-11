@@ -39,7 +39,7 @@ import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { coachProgrammeEndLine, memberProgrammeNotice, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
-import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange, type WorkoutSummary } from '@/lib/workoutSets';
+import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, setFormHeading, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange, type WorkoutSummary } from '@/lib/workoutSets';
 import { blockFormatOf, chosenBlockKeys, dayHighlights, dayLogProgress, describeChoices, exerciseBlockKey } from '@/lib/workoutSections';
 import { blockConfigOf, resultForConfig, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
@@ -154,12 +154,13 @@ function StartProgrammeSheet({
 
 // Either party can record a tested/estimated max (RLS: owns_client) -- this is what makes
 // %1RM prescriptions resolve to an actual target load for a given client.
-function RecordMaxForm({ clientId, bare = false }: { clientId: string; bare?: boolean }) {
+// `forExercise` fixes the exercise (the prompt under a %1RM lift with no tested max, TR14): no list to load or pick from.
+function RecordMaxForm({ clientId, bare = false, forExercise }: { clientId: string; bare?: boolean; forExercise?: { libraryId: string; name: string } }) {
   // The exercise list is read when the form opens (R13/M1): the whole library rode on every member page just for this one list.
-  const options = useOnDemand(() => getExerciseOptions(), 'exercise-options');
+  const options = useOnDemand(() => (forExercise ? Promise.resolve([]) : getExerciseOptions()), forExercise ? `max-for:${forExercise.libraryId}` : 'exercise-options');
   const library = options.data ?? [];
   const { run, busy } = useAction();
-  const [libraryId, setLibraryId] = useState('');
+  const [libraryId, setLibraryId] = useState(forExercise?.libraryId ?? '');
   const [max, setMax] = useState<number | ''>('');
   const [reps, setReps] = useState<number | ''>(1);
   const [estimated, setEstimated] = useState(false);
@@ -170,7 +171,7 @@ function RecordMaxForm({ clientId, bare = false }: { clientId: string; bare?: bo
     await run(() => recordExerciseMax(clientId, libraryId, max, estimated, reps === '' ? 1 : reps), {
       success: 'Tested max recorded',
       onDone: () => {
-        setLibraryId('');
+        setLibraryId(forExercise?.libraryId ?? '');
         setMax('');
         setReps(1);
         setEstimated(false);
@@ -178,7 +179,7 @@ function RecordMaxForm({ clientId, bare = false }: { clientId: string; bare?: bo
     });
   }
 
-  if (options.data != null && library.length === 0) return null;
+  if (!forExercise && options.data != null && library.length === 0) return null;
 
   const inputBase = 'h-11 w-full min-w-0 rounded-xl border border-black/10 bg-transparent px-3 text-base dark:border-white/10';
 
@@ -187,6 +188,7 @@ function RecordMaxForm({ clientId, bare = false }: { clientId: string; bare?: bo
       onSubmit={handleSubmit}
       className={`space-y-3 ${bare ? '' : 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10'}`}
     >
+      {!forExercise && (
       <div className="space-y-1">
         {!bare && <label className="text-xs font-medium text-zinc-500">Record a tested max</label>}
         <select required className={inputBase} value={libraryId} disabled={options.data == null} onChange={(e) => setLibraryId(e.target.value)}>
@@ -200,6 +202,7 @@ function RecordMaxForm({ clientId, bare = false }: { clientId: string; bare?: bo
           ))}
         </select>
       </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
           <span className="block text-xs font-medium text-zinc-500">Weight</span>
@@ -308,6 +311,7 @@ function LogSetForm({
   tracking,
   nextSetNumber,
   totalSets,
+  setsDone,
   restSeconds,
   seed,
   lastSet,
@@ -321,6 +325,8 @@ function LogSetForm({
   tracking: TrackingType;
   nextSetNumber: number;
   totalSets: number | null;
+  // How many sets are logged already, for "Set 2 of 3" / "All 3 sets done".
+  setsDone: number;
   restSeconds: number | null;
   // The set the boxes start from: the last one logged today, else the first of last time.
   seed: LogValues | null;
@@ -342,7 +348,7 @@ function LogSetForm({
   const [showLoad, setShowLoad] = useState(!weightless);
 
   const draft = readSetInputs(tracking, inputs);
-  const blank = draft.ok && isBlankSet(tracking, draft.values);
+  const heading = setFormHeading(totalSets, setsDone);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -351,9 +357,10 @@ function LogSetForm({
       return;
     }
     const v = draft.values;
-    // A set with nothing recorded says nothing, and used to be saved and counted as a set done (L4).
-    if (!weightless && isBlankSet(tracking, v)) {
-      toast.error(blankSetMessage(tracking));
+    // A set with nothing recorded says nothing, and used to be saved and counted as a set done (L4). That held for a no-weight exercise
+    // too, whose button read "Done — set 1" while its boxes were blank (TR22).
+    if (isBlankSet(tracking, v)) {
+      toast.error(blankSetMessage(weightless ? 'reps' : tracking));
       return;
     }
     await run(
@@ -373,7 +380,7 @@ function LogSetForm({
       {
         refresh: false,
         success:
-          v.load != null && priorBest != null && v.load > priorBest ? `Set ${nextSetNumber} logged — new best! 🏆` : `Set ${nextSetNumber} logged`,
+          v.load != null && priorBest != null && v.load > priorBest ? `Set ${heading.shown} logged — new best! 🏆` : `Set ${heading.shown} logged`,
         onDone: () => {
           setInputs((p) => ({ ...p, rpe: '' }));
           if (restSeconds != null) setTimerKey((k) => k + 1);
@@ -385,10 +392,7 @@ function LogSetForm({
   return (
     <div className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="whitespace-nowrap text-sm font-bold text-black dark:text-zinc-50">
-          Set {nextSetNumber}
-          {totalSets ? <span className="font-medium text-zinc-500"> of {totalSets}</span> : null}
-        </span>
+        <span className={`whitespace-nowrap text-sm font-bold ${heading.extra ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{heading.title}</span>
         {lastSet && tracking !== 'tick' && hasRecordedValue(tracking, lastSet) && (
           <span className="whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
             Last: {setSummary(tracking, lastSet)}
@@ -407,7 +411,7 @@ function LogSetForm({
           disabled={busy}
           className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
-          {busy ? 'Logging…' : tracking === 'tick' || (weightless && blank) ? `Done — set ${nextSetNumber}` : `Log set ${nextSetNumber}`}
+          {busy ? 'Logging…' : heading.extra ? 'Log an extra set' : tracking === 'tick' ? `Done — set ${heading.shown}` : `Log set ${heading.shown}`}
         </button>
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
@@ -1462,6 +1466,13 @@ export function WorkoutTab({
               const isWarmup = ex.section === 'warmup' && ex.block_type === 'exercise';
               const tracking = trackingOf(ex.tracking_type);
               const weightless = tracking === 'weight_reps' && isWeightless(ex, priorBest, logs.map((l) => l.actual_load));
+              // A %1RM lift with no tested max can't show a weight: ask for the max right here (TR14).
+              const needsMax =
+                !isCoachView &&
+                ex.prescription_type === 'percent_1rm' &&
+                ex.percent_1rm != null &&
+                !!ex.exercise_library_id &&
+                !clientExerciseMaxes.some((m) => m.exercise_library_id === ex.exercise_library_id);
               // A set on one line. Weight x reps keeps its look; a no-weight exercise shows just the reps (or a tick).
               const setText = (l: WorkoutLogRow, compact: boolean) =>
                 tracking === 'weight_reps' && weightless && l.actual_load == null
@@ -1469,6 +1480,16 @@ export function WorkoutTab({
                   : setSummary(tracking, l, compact);
               return (
                 <>
+                  {needsMax && ex.exercise_library_id && (
+                    <details className="mt-2 rounded-xl border border-warning/30 px-3">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm font-semibold text-warning">
+                        Record your {ex.name} max
+                      </summary>
+                      <div className="pb-3">
+                        <RecordMaxForm clientId={clientId} bare forExercise={{ libraryId: ex.exercise_library_id, name: ex.name }} />
+                      </div>
+                    </details>
+                  )}
                   {/* Folded until tapped: open, every demo was a full-width player (819 px tall each on a laptop, TR6). */}
                   {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && <VideoDemo videoUrl={videoUrl} title={ex.name} />}
                   {last && !isWarmup && (
@@ -1519,6 +1540,7 @@ export function WorkoutTab({
                         tracking={tracking}
                         nextSetNumber={nextSetNumber(logs)}
                         totalSets={Number(ex.sets) > 0 ? Number(ex.sets) : null}
+                        setsDone={logs.length}
                         restSeconds={ex.rest_seconds}
                         seed={seed}
                         lastSet={last ? lastFor(nextSetNumber(logs)) : null}

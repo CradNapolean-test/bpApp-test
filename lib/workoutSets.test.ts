@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { finishMessage, isEmptySet, isWeightless, nextSetNumber, reconcileLocalChoices, workoutSummary, applySetChange, sortedSets } from './workoutSets';
+import { finishMessage, isEmptySet, setFormHeading, isWeightless, nextSetNumber, reconcileLocalChoices, workoutSummary, applySetChange, sortedSets } from './workoutSets';
 
 describe('nextSetNumber (L4)', () => {
   it('is 1 for an exercise with nothing logged', () => {
@@ -127,5 +127,15 @@ describe('isWeightless', () => {
     expect(isWeightless(conditioning, null, [12])).toBe(false);
     expect(isWeightless({ ...conditioning, section: 'strong' }, null, [])).toBe(false);
     expect(isWeightless({ ...conditioning, prescription_type: 'percent_1rm' }, null, [])).toBe(false);
+  });
+});
+
+describe('setFormHeading (TR24)', () => {
+  it('counts up to the target, then offers an extra set instead of "Set 4 of 3"', () => {
+    expect(setFormHeading(3, 1)).toEqual({ title: 'Set 2 of 3', shown: 2, extra: false });
+    expect(setFormHeading(3, 3)).toEqual({ title: 'All 3 sets done ✓', shown: 4, extra: true });
+    // After deleting set 2 of three, two are done: the next one shown is set 3.
+    expect(setFormHeading(3, 2)).toEqual({ title: 'Set 3 of 3', shown: 3, extra: false });
+    expect(setFormHeading(null, 4)).toEqual({ title: 'Set 5', shown: 5, extra: false });
   });
 });

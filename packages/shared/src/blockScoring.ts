@@ -102,8 +102,17 @@ export interface ResultInputs {
   time: string;
   score: string;
   done: boolean;
+  // A "for time" block the cap stopped before the member finished: the reps they got instead of a finish time (TR25).
+  capped: boolean;
 }
-export const BLANK_RESULT_INPUTS: ResultInputs = { rounds: '', reps: '', time: '', score: '', done: false };
+export const BLANK_RESULT_INPUTS: ResultInputs = { rounds: '', reps: '', time: '', score: '', done: false, capped: false };
+
+// A "for time" block with a cap can end at the cap. The member then records the reps they got, and the row keeps the cap as its time and
+// done = false, so a capped result never reads (or ranks) as a finish (TR25). No new column: done is otherwise unused for a timed block.
+export const canHitCap = (config: BlockConfig): boolean => config.scoring === 'time' && config.cap_seconds != null;
+export const isCappedResult = (r: { done: boolean | null; seconds: number | null }): boolean => r.done === false && r.seconds != null;
+export const capLabel = (config: BlockConfig): string =>
+  config.cap_seconds != null ? `Hit the ${minutes(config.cap_seconds)} cap before finishing` : 'Hit the cap before finishing';
 
 export type ResultField = 'rounds' | 'reps' | 'time' | 'score' | 'done';
 const FIELDS: Record<Scoring, ResultField[]> = {
@@ -124,7 +133,19 @@ export function resultLabel(field: ResultField, config: BlockConfig): string {
   return config.unit ? `Score (${config.unit})` : 'Score';
 }
 
-export function readResultInputs(scoring: Scoring, i: ResultInputs): { ok: true; values: ResultValues } | { ok: false; error: string } {
+// `config` (optional) adds the cap check for a "for time" block: a time over the cap is refused, and a capped result is read as the cap
+// plus the reps done.
+export function readResultInputs(
+  scoring: Scoring,
+  i: ResultInputs,
+  config?: BlockConfig
+): { ok: true; values: ResultValues } | { ok: false; error: string } {
+  const cap = scoring === 'time' ? config?.cap_seconds : undefined;
+  if (cap != null && i.capped) {
+    const repsDone = parseNumberText(i.reps);
+    if (i.reps.trim() !== '' && (repsDone == null || repsDone < 0)) return { ok: false, error: 'The reps need to be a number.' };
+    return { ok: true, values: { rounds: null, reps: repsDone == null ? null : Math.round(repsDone), seconds: cap, score: null, done: false } };
+  }
   const fields = FIELDS[scoring];
   const has = (f: ResultField) => fields.includes(f);
   const bad = (text: string, n: number | null) => text.trim() !== '' && (n == null || n < 0);
@@ -136,6 +157,9 @@ export function readResultInputs(scoring: Scoring, i: ResultInputs): { ok: true;
   if (bad(i.reps, reps)) return { ok: false, error: 'The reps need to be a number.' };
   if (bad(i.time, seconds)) return { ok: false, error: 'Time can be seconds (90) or minutes and seconds (12:30).' };
   if (bad(i.score, score)) return { ok: false, error: 'The score needs to be a number.' };
+  if (cap != null && seconds != null && seconds > cap) {
+    return { ok: false, error: `That is over the ${minutes(cap)} cap. If the cap stopped you, tick "${capLabel({ scoring, cap_seconds: cap })}" and add the reps you got.` };
+  }
   return {
     ok: true,
     values: {
@@ -172,7 +196,10 @@ export function resultSummary(config: BlockConfig, v: ResultValues): string {
       if (v.rounds == null) return '—';
       return v.reps ? `${plural(v.rounds, 'round')} + ${plural(v.reps, 'rep')}` : plural(v.rounds, 'round');
     case 'time':
-      return v.seconds == null ? '—' : formatDuration(v.seconds);
+      if (v.seconds == null) return '—';
+      if (v.done === false) return `Hit the ${formatDuration(v.seconds)} cap${v.reps != null ? ` · ${plural(v.reps, 'rep')}` : ''}`;
+      // Saved before the cap was checked (TR25): say so rather than let it read as a finish inside the cap.
+      return config.cap_seconds != null && v.seconds > config.cap_seconds ? `${formatDuration(v.seconds)} (over the cap)` : formatDuration(v.seconds);
     case 'rounds':
       return v.rounds == null ? '—' : plural(v.rounds, 'round');
     case 'done':
@@ -187,11 +214,13 @@ export function resultSummary(config: BlockConfig, v: ResultValues): string {
 export function inputsFromResult(r: { rounds: number | null; reps: number | null; seconds: number | null; score: number | null; done: boolean | null } | null | undefined): ResultInputs {
   if (!r) return { ...BLANK_RESULT_INPUTS };
   const text = (n: number | null) => (n == null ? '' : String(n));
+  const capped = isCappedResult(r);
   return {
     rounds: text(r.rounds),
     reps: text(r.reps),
-    time: r.seconds == null ? '' : r.seconds < 60 ? String(r.seconds) : formatDuration(r.seconds),
+    time: r.seconds == null || capped ? '' : r.seconds < 60 ? String(r.seconds) : formatDuration(r.seconds),
     score: text(r.score),
     done: r.done === true,
+    capped,
   };
 }

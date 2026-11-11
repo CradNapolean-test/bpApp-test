@@ -39,9 +39,19 @@ export function isEmptySet(set: { reps: number | '' | null; load: number | '' | 
   return blank(set.reps) && blank(set.load) && blank(set.rpe);
 }
 
+// What the set form is about to log: "Set 2 of 3", or once every target set is logged "All 3 sets done ✓" and an extra set (it carried on
+// as "Set 4 of 3", TR24). Counted from the sets logged (`setsDone`), like the ✓ 1, ✓ 2 chips, so after a deleted set it still reads
+// "Set 3 of 3"; the saved set number stays nextSetNumber, which keeps the order.
+export function setFormHeading(totalSets: number | null, setsDone: number): { title: string; shown: number; extra: boolean } {
+  const shown = setsDone + 1;
+  if (totalSets != null && totalSets > 0 && setsDone >= totalSets) return { title: `All ${totalSets} sets done ✓`, shown, extra: true };
+  return { title: totalSets ? `Set ${shown} of ${totalSets}` : `Set ${shown}`, shown, extra: false };
+}
+
 // ---- exercises with no weight ----
 // A conditioning exercise the coach gave no load for, that the member has never put a weight on (jumping jacks, burpees, a bike), does not
-// ask for one: the set form shows reps and RPE only, with "+ Add weight" to bring the box back, and a set can be logged as simply done.
+// ask for one: the set form shows reps and RPE only, with "+ Add weight" to bring the box back. A blank set is still not saved (TR22: one
+// tap on "Done" logged an empty set).
 export function isWeightless(
   exercise: { section: string; load: number | null; prescription_type: string },
   priorBestLoad: number | null,

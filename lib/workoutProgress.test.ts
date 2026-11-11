@@ -165,6 +165,14 @@ describe('block results', () => {
     expect(series[0].best?.text).toBe('14:00');
   });
 
+  it('ranks any finish above hitting the cap, and more reps above fewer at the cap (TR25)', () => {
+    const t = (day: string, seconds: number, extra: { done?: boolean; reps?: number } = {}) =>
+      result(day, 'd1', { scoring: 'time', format: 'Big Chipper', seconds, ...extra });
+    const series = blockSeries([t('2026-10-01', 600, { done: false, reps: 20 }), t('2026-10-08', 600, { done: false, reps: 30 }), t('2026-10-15', 590)], () => null, TZ);
+    expect(series[0].entries.map((e) => e.isPB)).toEqual([false, true, true]);
+    expect(series[0].best?.text).toBe('9:50');
+  });
+
   it('has nothing to rank for a tick', () => {
     expect(resultScore({ scoring: 'done', rounds: null, reps: null, seconds: null, score: null })).toBeNull();
   });

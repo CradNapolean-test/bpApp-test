@@ -124,7 +124,7 @@ export type WorkoutDayData = {
   history: WorkoutLogRow[];
   // id -> {name, library id} for the exercises in `history` and this day.
   refs: Record<string, ExerciseRef>;
-  library: Record<string, Pick<ExerciseLibraryRow, 'id' | 'name' | 'video_url' | 'image_url' | 'muscle_group'>>;
+  library: Record<string, Pick<ExerciseLibraryRow, 'id' | 'name' | 'video_url' | 'image_url' | 'muscle_group' | 'instructions'>>;
   maxes: ClientExerciseMaxRow[];
   // The heaviest working load per exercise from BEFORE the 90 days of history this screen carries (migration 0137), keyed by library id or "n:<name>".
   priorBests: Record<string, number>;
@@ -158,7 +158,7 @@ export function useWorkoutDay(dayId: string) {
       // Stage 2: this day's logs, library entries (videos), maxes, and the same exercises in other weeks.
       const [logsRes, libRes, maxRes, siblingsByName, siblingsByLib] = await Promise.all([
         exIds.length ? supabase.from('workout_logs').select('*').in('exercise_id', exIds).order('logged_at', { ascending: true }) : Promise.resolve({ data: [], error: null }),
-        libIds.length ? supabase.from('exercise_library').select('id, name, video_url, image_url, muscle_group').in('id', libIds) : Promise.resolve({ data: [], error: null }),
+        libIds.length ? supabase.from('exercise_library').select('id, name, video_url, image_url, muscle_group, instructions').in('id', libIds) : Promise.resolve({ data: [], error: null }),
         libIds.length ? supabase.from('client_exercise_maxes').select('*').eq('client_id', userId).in('exercise_library_id', libIds) : Promise.resolve({ data: [], error: null }),
         names.length ? supabase.from('workout_exercises').select('id, name, exercise_library_id').in('name', names) : Promise.resolve({ data: [], error: null }),
         libIds.length ? supabase.from('workout_exercises').select('id, name, exercise_library_id').in('exercise_library_id', libIds) : Promise.resolve({ data: [], error: null }),

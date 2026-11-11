@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
 
 import {
+  canHitCap,
+  capLabel,
   inputsFromResult,
   isBlankResult,
   readResultInputs,
@@ -21,7 +23,7 @@ import { percentOfMaxKg, type ResolvedMax } from '@ballistic/shared/utils/oneRep
 import type { DaySummary } from '@ballistic/shared/utils/programOverview';
 import type { DisplayBlock } from '@ballistic/shared/utils/workoutDisplay';
 import { isNewBest, lastLogFor, type LastSession } from '@ballistic/shared/utils/workoutHistory';
-import { isWeightless, nextSetNumber } from '@ballistic/shared/utils/workoutSets';
+import { isWeightless, nextSetNumber, setFormHeading } from '@ballistic/shared/utils/workoutSets';
 import {
   blankSetMessage,
   formatDistance,
@@ -157,11 +159,12 @@ function SetBoxes({ tracking, inputs, onChange, showLoad = true }: { tracking: T
 }
 
 function LogSetForm({
-  tracking, setNumber, totalSets, restSeconds, seed, lastSet, priorBest, weightless, onLog,
+  tracking, totalSets, setsDone, restSeconds, seed, lastSet, priorBest, weightless, onLog,
 }: {
   // What the exercise records (reps and weight, a time, a distance, calories, or just done).
   tracking: TrackingType;
-  setNumber: number; totalSets: number | null; restSeconds: number | null;
+  // The target, and how many are logged already ("Set 2 of 3", then "All 3 sets done" rather than "Set 4 of 3", TR24).
+  totalSets: number | null; setsDone: number; restSeconds: number | null;
   // The set the boxes start from: the last one logged today, else the first of last time.
   seed: LogValues | null;
   lastSet: LogValues | null; priorBest: number | null;
@@ -177,7 +180,7 @@ function LogSetForm({
   const [message, setMessage] = useState<{ text: string; problem?: boolean } | null>(null);
 
   const draft = readSetInputs(tracking, inputs);
-  const blank = draft.ok && isBlankSet(tracking, draft.values);
+  const heading = setFormHeading(totalSets, setsDone);
 
   function submit() {
     if (!draft.ok) {
@@ -185,13 +188,14 @@ function LogSetForm({
       return;
     }
     const v = draft.values;
-    // A set with nothing recorded says nothing; it used to be saved anyway and counted as a set done (L4).
-    if (!weightless && isBlankSet(tracking, v)) {
-      setMessage({ text: blankSetMessage(tracking), problem: true });
+    // A set with nothing recorded says nothing; it used to be saved anyway and counted as a set done (L4), and a no-weight exercise still
+    // logged one on "Done" (TR22).
+    if (isBlankSet(tracking, v)) {
+      setMessage({ text: blankSetMessage(weightless ? 'reps' : tracking), problem: true });
       return;
     }
     onLog(v);
-    setMessage({ text: isNewBest(v.load, priorBest) ? `Set ${setNumber} logged. New best! 🏆` : `Set ${setNumber} logged` });
+    setMessage({ text: isNewBest(v.load, priorBest) ? `Set ${heading.shown} logged. New best! 🏆` : `Set ${heading.shown} logged` });
     setInputs((p) => ({ ...p, rpe: '' }));
     if (restSeconds != null) setTimerKey((k) => k + 1);
   }
@@ -199,7 +203,7 @@ function LogSetForm({
   return (
     <View style={{ backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm, gap: spacing.sm }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <AppText style={{ fontWeight: '700' }}>Set {setNumber}{totalSets ? <AppText color="muted"> of {totalSets}</AppText> : null}</AppText>
+        <AppText color={heading.extra ? 'success' : undefined} style={{ fontWeight: '700' }}>{heading.title}</AppText>
         {lastSet && tracking !== 'tick' && hasRecordedValue(tracking, lastSet) ? (
           <View style={{ backgroundColor: t.accentSoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 }}>
             <AppText variant="small" color="accent" style={{ fontWeight: '600' }}>Last: {setSummary(tracking, lastSet)}</AppText>
@@ -208,7 +212,7 @@ function LogSetForm({
       </View>
       <SetBoxes tracking={tracking} inputs={inputs} onChange={setInputs} showLoad={showLoad} />
       {!showLoad ? <Pressable onPress={() => setShowLoad(true)} accessibilityRole="button"><AppText variant="small" color="accent" style={{ fontWeight: '700' }}>+ Add weight</AppText></Pressable> : null}
-      <Button title={tracking === 'tick' || (weightless && blank) ? `Done: set ${setNumber}` : `Log set ${setNumber}`} onPress={submit} />
+      <Button title={heading.extra ? 'Log an extra set' : tracking === 'tick' ? `Done: set ${heading.shown}` : `Log set ${heading.shown}`} onPress={submit} />
       {message ? <AppText variant="small" color={message.problem ? 'danger' : 'success'} style={{ fontWeight: '600' }}>{message.text}</AppText> : null}
       {restSeconds != null && timerKey > 0 ? <RestTimer key={timerKey} seconds={restSeconds} /> : null}
     </View>
@@ -221,7 +225,7 @@ export function ExerciseCard({
   exercise: WorkoutExerciseRow;
   index: number;
   tz: string;
-  library: Pick<ExerciseLibraryRow, 'video_url'> | undefined;
+  library: Pick<ExerciseLibraryRow, 'video_url' | 'instructions'> | undefined;
   resolvedMax: ResolvedMax | null;
   logs: WorkoutLogRow[];
   last: LastSession<WorkoutLogRow> | null;
@@ -244,6 +248,9 @@ export function ExerciseCard({
   const setNumber = nextSetNumber(logs);
   // The day shown is the member's own calendar day for that session, not the phone's.
   const when = last ? new Date(last.loggedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: tz }) : '';
+  // The library's Instructions for the exercise never reached members (TR15). Folded, so the card stays short.
+  const instructions = !isCircuit ? library?.instructions?.trim() || null : null;
+  const [showHow, setShowHow] = useState(false);
 
   return (
     <Card style={{ gap: spacing.sm }}>
@@ -265,12 +272,20 @@ export function ExerciseCard({
             </View>
           ) : null}
           {kg != null ? <AppText variant="small" color="muted">≈ {kg} kg</AppText> : null}
-          {isPercent && kg == null ? <AppText variant="small" color="muted">Record a tested max to see your target weight.</AppText> : null}
+          {isPercent && kg == null ? <AppText variant="small" color="muted">No tested max yet: record one under Tested maxes on the Workouts page to see your target weight.</AppText> : null}
         </View>
       </View>
 
       {exercise.notes && !isCircuit ? <AppText color="muted">{exercise.notes}</AppText> : null}
       {isCircuit && exercise.notes ? <View style={{ backgroundColor: t.cardMuted, borderRadius: radius.md, padding: spacing.sm }}><AppText color="muted">{exercise.notes}</AppText></View> : null}
+      {instructions ? (
+        <View style={{ gap: 4 }}>
+          <Pressable onPress={() => setShowHow((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: showHow }} style={{ minHeight: 36, justifyContent: 'center' }}>
+            <AppText variant="small" color="accent" style={{ fontWeight: '600' }}>{showHow ? 'Hide how to do it' : 'How to do it'}</AppText>
+          </Pressable>
+          {showHow ? <AppText color="muted">{instructions}</AppText> : null}
+        </View>
+      ) : null}
       {safeHttpUrl(videoUrl) ? (
         <Pressable onPress={() => void Linking.openURL(safeHttpUrl(videoUrl) as string).catch(() => {})} accessibilityRole="link"><AppText variant="small" color="accent" style={{ fontWeight: '600' }}>▶ Watch demo ↗</AppText></Pressable>
       ) : null}
@@ -301,8 +316,8 @@ export function ExerciseCard({
           ) : null}
           <LogSetForm
             tracking={tracking}
-            setNumber={setNumber}
             totalSets={Number(exercise.sets) > 0 ? Number(exercise.sets) : null}
+            setsDone={logs.length}
             restSeconds={exercise.rest_seconds}
             seed={seed}
             lastSet={last ? lastLogFor(last, setNumber) : null}
@@ -371,11 +386,17 @@ export function BlockResultForm({ config, result, onSave, onClear }: { config: B
   const t = useTheme();
   const [inputs, setInputs] = useState<ResultInputs>(() => inputsFromResult(result));
   const [message, setMessage] = useState<{ text: string; problem?: boolean } | null>(null);
+  // "Remove result" asks with a second tap (TR25): it went on one tap, with no undo.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   if (config.scoring === 'none') return null;
   const scoring = config.scoring;
+  // A "for time" block the cap stopped: the reps done instead of a finish time (TR25).
+  const cappable = canHitCap(config);
+  const capped = cappable && inputs.capped;
+  const fields: ResultField[] = capped ? ['reps'] : resultFields(scoring);
 
   function save() {
-    const read = readResultInputs(scoring, inputs);
+    const read = readResultInputs(scoring, inputs, config);
     if (!read.ok) {
       setMessage({ text: read.error, problem: true });
       return;
@@ -405,7 +426,7 @@ export function BlockResultForm({ config, result, onSave, onClear }: { config: B
     ) : (
       <NumberBox
         key={f}
-        label={resultLabel(f, config)}
+        label={capped && f === 'reps' ? 'Reps done (optional)' : resultLabel(f, config)}
         value={inputs[f]}
         onChange={(v) => setInputs((p) => ({ ...p, [f]: v }))}
         keyboard={f === 'time' ? 'numbers-and-punctuation' : 'decimal-pad'}
@@ -423,12 +444,33 @@ export function BlockResultForm({ config, result, onSave, onClear }: { config: B
           </View>
         ) : null}
       </View>
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>{resultFields(scoring).map(box)}</View>
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>{fields.map(box)}</View>
+      {cappable ? (
+        <Pressable
+          onPress={() => setInputs((p) => ({ ...p, capped: !p.capped }))}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: inputs.capped }}
+          accessibilityLabel={capLabel(config)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 }}>
+          <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: inputs.capped ? t.accent : t.border, backgroundColor: inputs.capped ? t.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+            {inputs.capped ? <AppText style={{ color: t.accentForeground, fontWeight: '800' }}>✓</AppText> : null}
+          </View>
+          <AppText style={{ fontWeight: '600', flexShrink: 1 }}>{capLabel(config)}</AppText>
+        </Pressable>
+      ) : null}
       <Button title={result ? 'Update result' : 'Save result'} onPress={save} />
       {message ? <AppText variant="small" color={message.problem ? 'danger' : 'success'} style={{ fontWeight: '600' }}>{message.text}</AppText> : null}
       {result ? (
-        <Pressable onPress={() => { onClear(); setInputs(inputsFromResult(undefined)); setMessage(null); }} accessibilityRole="button">
-          <AppText variant="small" color="danger" style={{ fontWeight: '700' }}>Remove result</AppText>
+        <Pressable
+          onPress={() => {
+            if (!confirmingRemove) return setConfirmingRemove(true);
+            onClear();
+            setInputs(inputsFromResult(undefined));
+            setMessage(null);
+            setConfirmingRemove(false);
+          }}
+          accessibilityRole="button">
+          <AppText variant="small" color="danger" style={{ fontWeight: '700' }}>{confirmingRemove ? 'Tap again to remove your result' : 'Remove result'}</AppText>
         </Pressable>
       ) : null}
     </View>

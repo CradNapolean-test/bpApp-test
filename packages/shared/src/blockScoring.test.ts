@@ -3,6 +3,8 @@ import {
   BLANK_RESULT_INPUTS,
   NO_CONFIG,
   blockConfigOf,
+  canHitCap,
+  capLabel,
   configForStorage,
   configSummary,
   defaultConfigFor,
@@ -109,7 +111,7 @@ describe('results', () => {
     expect(resultSummary({ scoring: 'done' }, { ...none, done: true })).toBe('Done');
   });
   it('turns a saved result back into box text', () => {
-    expect(inputsFromResult({ rounds: 5, reps: 3, seconds: 750, score: null, done: null })).toEqual({ rounds: '5', reps: '3', time: '12:30', score: '', done: false });
+    expect(inputsFromResult({ rounds: 5, reps: 3, seconds: 750, score: null, done: null })).toEqual({ rounds: '5', reps: '3', time: '12:30', score: '', done: false, capped: false });
     expect(inputsFromResult(null)).toEqual(BLANK_RESULT_INPUTS);
   });
 });
@@ -122,5 +124,42 @@ describe('resultForConfig', () => {
   it('ignores a result saved under another scoring, or no result at all', () => {
     expect(resultForConfig({ scoring: 'time' }, rounds)).toBeUndefined();
     expect(resultForConfig({ scoring: 'time' }, undefined)).toBeUndefined();
+  });
+});
+
+describe('a "for time" block that hits its cap (TR25)', () => {
+  const capped10 = { scoring: 'time' as const, cap_seconds: 600 };
+  const none = { rounds: null, reps: null, seconds: null, score: null, done: null };
+
+  it('refuses a finish time over the cap and says how to record a capped result', () => {
+    const read = readResultInputs('time', { ...BLANK_RESULT_INPUTS, time: '12:30' }, capped10);
+    expect(read).toMatchObject({ ok: false });
+    expect(!read.ok && read.error).toContain('Hit the 10 min cap before finishing');
+    expect(readResultInputs('time', { ...BLANK_RESULT_INPUTS, time: '9:45' }, capped10)).toMatchObject({ ok: true, values: { seconds: 585, done: null } });
+    // With no cap set, any time is fine.
+    expect(readResultInputs('time', { ...BLANK_RESULT_INPUTS, time: '12:30' }, { scoring: 'time' })).toMatchObject({ ok: true });
+  });
+
+  it('records a capped result as the cap, the reps done and done = false', () => {
+    expect(readResultInputs('time', { ...BLANK_RESULT_INPUTS, capped: true, reps: '25' }, capped10)).toEqual({
+      ok: true,
+      values: { rounds: null, reps: 25, seconds: 600, score: null, done: false },
+    });
+    expect(readResultInputs('time', { ...BLANK_RESULT_INPUTS, capped: true, reps: 'lots' }, capped10)).toMatchObject({ ok: false });
+    expect(isBlankResult('time', { ...none, seconds: 600, done: false })).toBe(false);
+  });
+
+  it('reads back as capped, not as a finish', () => {
+    expect(resultSummary(capped10, { ...none, seconds: 600, reps: 25, done: false })).toBe('Hit the 10:00 cap · 25 reps');
+    expect(resultSummary(capped10, { ...none, seconds: 600, done: false })).toBe('Hit the 10:00 cap');
+    expect(resultSummary(capped10, { ...none, seconds: 750 })).toBe('12:30 (over the cap)');
+    expect(inputsFromResult({ ...none, seconds: 600, reps: 25, done: false })).toMatchObject({ capped: true, time: '', reps: '25' });
+  });
+
+  it('is only offered for a timed block with a cap', () => {
+    expect(canHitCap(capped10)).toBe(true);
+    expect(canHitCap({ scoring: 'time' })).toBe(false);
+    expect(canHitCap({ scoring: 'rounds_reps', cap_seconds: 600 })).toBe(false);
+    expect(capLabel(capped10)).toBe('Hit the 10 min cap before finishing');
   });
 });

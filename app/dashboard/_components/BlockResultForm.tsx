@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import { useAction } from '@/app/_components/useAction';
+import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 import { deleteBlockResult, saveBlockResult } from '@/lib/data/blockResults';
 import type { WorkoutBlockResultRow } from '@/lib/data/types';
 import {
+  canHitCap,
+  capLabel,
   inputsFromResult,
   isBlankResult,
   readResultInputs,
@@ -36,13 +39,17 @@ export function BlockResultForm({
 }) {
   const { run, busy } = useAction();
   const toast = useToast();
+  const confirm = useConfirm();
   const [inputs, setInputs] = useState<ResultInputs>(() => inputsFromResult(result));
   if (config.scoring === 'none') return null;
   const scoring = config.scoring;
-  const fields = resultFields(scoring);
+  // A "for time" block the cap stopped: the reps done instead of a finish time (TR25).
+  const cappable = canHitCap(config);
+  const capped = cappable && inputs.capped;
+  const fields = capped ? (['reps'] as ResultField[]) : resultFields(scoring);
 
   async function save() {
-    const read = readResultInputs(scoring, inputs);
+    const read = readResultInputs(scoring, inputs, config);
     if (!read.ok) {
       toast.error(read.error);
       return;
@@ -69,7 +76,7 @@ export function BlockResultForm({
       </label>
     ) : (
       <label key={f} className="block">
-        <span className="mb-1 block text-center text-[11px] font-medium text-zinc-500">{resultLabel(f, config)}</span>
+        <span className="mb-1 block text-center text-[11px] font-medium text-zinc-500">{capped && f === 'reps' ? 'Reps done (optional)' : resultLabel(f, config)}</span>
         <input
           type="text"
           inputMode={f === 'time' ? 'text' : 'decimal'}
@@ -92,6 +99,17 @@ export function BlockResultForm({
         )}
       </div>
       <div className={`grid gap-2 ${fields.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>{fields.map(box)}</div>
+      {cappable && (
+        <label className="mt-2 flex min-h-11 items-center gap-3 text-sm font-semibold text-black dark:text-zinc-50">
+          <input
+            type="checkbox"
+            checked={inputs.capped}
+            onChange={(e) => setInputs((p) => ({ ...p, capped: e.target.checked }))}
+            className="h-5 w-5 shrink-0 accent-[var(--accent)]"
+          />
+          {capLabel(config)}
+        </label>
+      )}
       <button
         type="button"
         disabled={busy}
@@ -104,7 +122,12 @@ export function BlockResultForm({
         <button
           type="button"
           disabled={busy}
-          onClick={() => void run(() => deleteBlockResult(programDayId, blockKey), { success: 'Result removed', onDone: () => setInputs(inputsFromResult(undefined)) })}
+          onClick={async () => {
+            // It went on one tap, with no undo (TR25).
+            const ok = await confirm({ title: 'Remove this result?', body: `Your ${resultSummary(config, result)} for this block is deleted.`, confirmLabel: 'Remove', destructive: true });
+            if (!ok) return;
+            await run(() => deleteBlockResult(programDayId, blockKey), { success: 'Result removed', onDone: () => setInputs(inputsFromResult(undefined)) });
+          }}
           className="mt-1 block w-full py-1 text-sm font-semibold text-danger disabled:opacity-50"
         >
           Remove result

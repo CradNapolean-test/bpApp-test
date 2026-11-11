@@ -851,6 +851,12 @@ function MemberExerciseRow<T extends EditableExercise>({
           {isPercent && resolvedMax != null && exercise.percent_1rm != null && (
             <p className="mt-1.5 text-xs text-zinc-500">≈ {Math.round((resolvedMax.estimated1RM * exercise.percent_1rm) / 100)} kg</p>
           )}
+          {/* It showed "70% 1RM" and no weight, with nothing saying why (TR14). The form to record one sits under the card. */}
+          {isPercent && resolvedMax == null && exercise.percent_1rm != null && hasMeasure(tracking, 'weight') && (
+            <p className="mt-1.5 text-xs font-medium text-warning">
+              {exercise.exercise_library_id ? 'No tested max yet: record one to see your target weight.' : 'No target weight yet: ask your coach.'}
+            </p>
+          )}
         </div>
         <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/5 dark:bg-white/10">
           {isAllowedImage(libraryEntry?.image_url, IMAGE_HOSTS) ? (
@@ -862,6 +868,16 @@ function MemberExerciseRow<T extends EditableExercise>({
         </span>
       </div>
       {exercise.notes && !isCircuit && <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{exercise.notes}</p>}
+      {/* The library's Instructions for the exercise never reached members (TR15). Folded, so the card stays short. */}
+      {!isCircuit && libraryEntry?.instructions?.trim() && (
+        <details className="group mt-2">
+          <summary className="inline-flex min-h-9 cursor-pointer list-none items-center text-xs font-semibold text-accent">
+            <span className="group-open:hidden">How to do it</span>
+            <span className="hidden group-open:inline">Hide how to do it</span>
+          </summary>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{libraryEntry.instructions.trim()}</p>
+        </details>
+      )}
       {isCircuit && exercise.notes && (
         <p className="mt-3 whitespace-pre-wrap rounded-xl bg-black/[.03] p-3 text-sm leading-relaxed text-zinc-600 dark:bg-white/[.04] dark:text-zinc-400">
           {exercise.notes}

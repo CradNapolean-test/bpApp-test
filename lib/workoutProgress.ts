@@ -191,13 +191,15 @@ export interface BlockSeries<R> {
   best: BlockEntry<R> | null;
 }
 
-// A result's score, higher is better (a quicker time scores higher). A tick has nothing to rank.
-export function resultScore(r: Pick<ResultLike, 'scoring' | 'rounds' | 'reps' | 'seconds' | 'score'>): number[] | null {
+// A result's score, higher is better (a quicker time scores higher, and any finish beats hitting the cap, where more reps is better). A
+// tick has nothing to rank.
+export function resultScore(r: Pick<ResultLike, 'scoring' | 'rounds' | 'reps' | 'seconds' | 'score'> & { done?: boolean | null }): number[] | null {
   switch (r.scoring) {
     case 'rounds_reps':
       return r.rounds == null ? null : [r.rounds, r.reps ?? 0];
     case 'time':
-      return r.seconds == null ? null : [-r.seconds];
+      if (r.seconds == null) return null;
+      return r.done === false ? [0, r.reps ?? 0] : [1, -r.seconds];
     case 'rounds':
       return r.rounds == null ? null : [r.rounds];
     case 'score':
