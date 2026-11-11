@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CalendarDays, Check, Clock, Info, Ticket } from 'lucide-react';
+import { CalendarDays, Check, Clock, Info, MessageSquare, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useOnDemand } from '@/app/_components/useOnDemand';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -415,10 +415,17 @@ export function ClassesArea({
                 ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit — nothing is used until then."
                 : note.text}
             </p>
+            {/* Top-ups are manual, so the way on is the coach (BK3). A full page load: the dashboard opens Messages from ?open=messages. */}
             {!full && !enough && (
-              <p className="mt-2 rounded-xl bg-warning/10 p-3 text-xs font-semibold text-warning">
-                You don&apos;t have enough credits for this session. Ask your coach to top up.
-              </p>
+              <div className="mt-2 rounded-xl bg-warning/10 p-3">
+                <p className="text-xs font-semibold text-warning">You don&apos;t have enough credits for this session. Ask your coach to top up.</p>
+                <a
+                  href="/dashboard?open=messages"
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-card px-4 py-2 text-xs font-bold text-black dark:text-zinc-50"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-accent" /> Message your coach
+                </a>
+              </div>
             )}
             <div className="mt-5 flex gap-2.5">
               <button

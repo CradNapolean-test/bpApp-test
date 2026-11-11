@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@ballistic/shared/data/types';
@@ -118,6 +118,7 @@ function SummaryRow({ label, value, tone }: { label: string; value: string; tone
 }
 
 export function BookSheet({ occ, balance, nowMs, busy, error, onConfirm, onClose }: { occ: ScheduleOccurrence; balance: number; nowMs: number; busy: boolean; error: string | null; onConfirm: () => void; onClose: () => void }) {
+  const router = useRouter();
   const s = bookSummary(occ, balance);
   // After the cancel deadline the sheet says the credit won't come back, instead of "Cancel by ..." (BK21).
   const note = bookSheetNote(cancelDeadline(occ.date, occ.startTime, occ.cutoffHours, occ.blackoutStart, occ.blackoutEnd), nowMs);
@@ -136,7 +137,20 @@ export function BookSheet({ occ, balance, nowMs, busy, error, onConfirm, onClose
       <AppText variant="small" color={!s.full && note.late ? 'warning' : 'muted'} style={!s.full && note.late ? { fontWeight: '600' } : undefined}>
         {s.full ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit. Nothing is used until then." : note.text}
       </AppText>
-      {!s.full && !s.enough ? <AppText color="warning" style={{ fontWeight: '600' }}>You don&apos;t have enough credits for this session. Ask your coach to top up.</AppText> : null}
+      {/* Top-ups are manual, so the way on is the coach (BK3, as on the web). */}
+      {!s.full && !s.enough ? (
+        <View style={{ gap: spacing.sm }}>
+          <AppText color="warning" style={{ fontWeight: '600' }}>You don&apos;t have enough credits for this session. Ask your coach to top up.</AppText>
+          <Button
+            title="Message your coach"
+            variant="secondary"
+            onPress={() => {
+              onClose();
+              router.navigate('/chat');
+            }}
+          />
+        </View>
+      ) : null}
       {error ? <AppText color="danger">{error}</AppText> : null}
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <View style={{ flex: 1 }}><Button title="Not now" variant="secondary" onPress={onClose} /></View>
