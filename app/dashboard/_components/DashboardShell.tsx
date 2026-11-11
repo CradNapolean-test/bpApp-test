@@ -296,6 +296,22 @@ export function DashboardShell({
       if (channel) supabase.removeChannel(channel);
     };
   }, [clientId, currentUserId, isCoachView]);
+  // The member's coach's name for the chat (MS25). A member cannot read their coach's profile row, so it comes from the narrow
+  // get_my_coach_display_name() read made for this (migration 0042). Null until it arrives, or when the coach has no name set.
+  const [coachName, setCoachName] = useState<string | null>(null);
+  useEffect(() => {
+    if (isCoachView) return;
+    let cancelled = false;
+    void Promise.resolve(createClient().rpc('get_my_coach_display_name'))
+      .then(({ data }) => {
+        const name = typeof data === 'string' ? data.trim() : '';
+        if (!cancelled && name) setCoachName(name);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isCoachView]);
   const periodStartDates = historyLogs.filter((l) => l.period_started).map((l) => l.log_date);
   // The last seven days of food, oldest first, for the coach's at-a-glance strip on the Food screen.
   const memberToday = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
@@ -495,9 +511,9 @@ export function DashboardShell({
   const todayLabel = formatLongDate(new Date(), { timeZone: profile?.timezone ?? DEFAULT_TIMEZONE }).toUpperCase();
   const greetingHour = new Date().getHours();
   const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
-  // Who the client is chatting with (coach sees the client's name; client sees a generic
-  // "Your coach" since the client-side bundle doesn't carry the coach's own profile).
-  const otherPartyName = isCoachView ? clientLabel : 'Your coach';
+  // Who the client is chatting with: the coach sees the client's name, the member their coach's name (MS25), or "Your coach" until it
+  // is known or when the coach has not set one.
+  const otherPartyName = isCoachView ? clientLabel : (coachName ?? 'Your coach');
   // Screens reached by tapping into something (header icons, avatar) rather than a bottom
   // tab -- get a back-chevron chip in place of the avatar, matching the redesign's pattern of
   // only showing self-identity on the persistent tab screens. The Classes area (its own top
@@ -699,11 +715,13 @@ export function DashboardShell({
             )}
           </button>
           )}
+          {/* At every width (MX22): it used to be phone only, and the side menu on a tablet or laptop has no way to the notifications, so
+              a waitlist place or a class time change never reached a member there. */}
           {!isCoachView && (
           <button
             onClick={() => handleNavigate('Notifications')}
-            aria-label="Notifications"
-            className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+            aria-label={notifications.some((n) => !n.read_at) ? 'Notifications, some unread' : 'Notifications'}
+            className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
             <Bell className="h-5 w-5" />
             {notifications.some((n) => !n.read_at) && (
@@ -1049,7 +1067,10 @@ export function DashboardShell({
               initialMessages={messages}
               currentUserId={currentUserId}
               otherPartyName={otherPartyName}
+              composePlaceholder={coachName ? undefined : 'Message your coach…'}
               readOnly={isCoachView && !isOwnClient}
+              // A half-written message is still there after the member leaves Messages and comes back (MS26), as the coach's is.
+              draftKey={`member-${clientId}`}
             />
           )}
         </>

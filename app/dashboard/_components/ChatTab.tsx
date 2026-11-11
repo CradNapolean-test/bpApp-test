@@ -234,6 +234,7 @@ export function ChatTab({
   initialMessages,
   currentUserId,
   otherPartyName = 'Them',
+  composePlaceholder,
   readOnly = false,
   fill = false,
   draftKey,
@@ -246,9 +247,11 @@ export function ChatTab({
   clientId: string;
   initialMessages: ChatMessage[];
   currentUserId: string;
-  // Shown on the other party's message avatars -- the client's name (coach's view) or
-  // "Your coach" (client's own view), since this component doesn't otherwise know names.
+  // Shown in the header and on the other party's message avatars -- the client's name (coach's view) or the coach's name (client's
+  // own view, "Your coach" when it is not known), since this component doesn't otherwise know names.
   otherPartyName?: string;
+  // The reply box's hint, when "Message {otherPartyName}…" would read wrongly ("Message Your coach…").
+  composePlaceholder?: string;
   // Hides the composer -- a coach viewing a colleague's client read-only can still see the
   // thread, but sendMessage would fail RLS (owns_client) anyway since they aren't the
   // assigned coach.
@@ -461,6 +464,28 @@ export function ChatTab({
     markRead();
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [clientId, active, markRead]);
+
+  // A photo that finishes loading after the list has scrolled down makes the list taller (a loading photo holds a 160px box, a loaded
+  // one is up to 256px), so the chat opened short of the newest message (MS24). While the reader is at the newest message, a photo
+  // loading keeps them there; once they have scrolled up to read, it leaves them where they are.
+  const atBottomRef = useRef(true);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const onScroll = () => {
+      atBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
+    };
+    const onLoad = (e: Event) => {
+      if (e.target instanceof HTMLImageElement && atBottomRef.current) list.scrollTop = list.scrollHeight;
+    };
+    list.addEventListener('scroll', onScroll, { passive: true });
+    // A picture's load event does not bubble, so it is caught on the way down.
+    list.addEventListener('load', onLoad, true);
+    return () => {
+      list.removeEventListener('scroll', onScroll);
+      list.removeEventListener('load', onLoad, true);
+    };
+  }, []);
 
   async function loadEarlier() {
     const before = firstSavedAt(messages);
@@ -731,8 +756,8 @@ export function ChatTab({
               onChange={(e) => changeText(e.target.value)}
               onKeyDown={handleKeyDown}
               // A short hint in the narrow drawer, where "Message a long member name…" wrapped (the name is in the header above).
-              placeholder={narrow ? 'Write a message…' : `Message ${otherPartyName}…`}
-              aria-label={`Message ${otherPartyName}`}
+              placeholder={narrow ? 'Write a message…' : (composePlaceholder ?? `Message ${otherPartyName}…`)}
+              aria-label={composePlaceholder ? composePlaceholder.replace(/…$/, '') : `Message ${otherPartyName}`}
               style={{ outline: 'none' }}
               className="min-w-0 flex-1 resize-none bg-transparent py-2.5 text-base leading-5 outline-none placeholder:text-zinc-400 sm:text-sm sm:leading-5"
             />
