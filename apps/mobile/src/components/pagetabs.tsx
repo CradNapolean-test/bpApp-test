@@ -5,7 +5,7 @@ import { useScreenAccess } from '@/lib/screens';
 import { useClientProfile } from '@/lib/today';
 
 // The web groups some pages under one title with a row of pills (Nutrition: Food Tracking / Meal Planner / Recipes, Training:
-// Workout / Activity, Check-in: Weekly Log / Forms). Each page here is its own screen; these rows sit at the top of each and
+// Workout / Activity, Check-in: Daily check-in / Forms). Each page here is its own screen; these rows sit at the top of each and
 // switch between them. A pill is left out when this member's plan or coach has that page switched off, and the row is left out
 // when fewer than two pills remain (as on the web).
 type Page<T extends string> = { value: T; label: string; href: Href; show: boolean };
@@ -62,7 +62,8 @@ export function CheckinTabs({ current }: { current: 'checkin' | 'forms' }) {
     <PageRow
       current={current}
       pages={[
-        { value: 'checkin', label: 'Weekly Log', href: '/checkin', show: areas.weeklyLog },
+        // Members see "Daily check-in", as on the web and in the reminders (migration 0162); the screen is still "Weekly Log" in the data.
+        { value: 'checkin', label: 'Daily check-in', href: '/checkin', show: areas.weeklyLog },
         { value: 'forms', label: 'Forms', href: '/forms', show: areas.forms },
       ]}
     />

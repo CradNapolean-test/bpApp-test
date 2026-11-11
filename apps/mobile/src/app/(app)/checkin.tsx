@@ -23,7 +23,7 @@ import { spacing, useTheme } from '@/theme';
 const dayMonth = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const fmt = (v: number | null, digits = 0) => (v == null ? '—' : digits ? v.toFixed(digits) : Math.round(v).toLocaleString('en-GB'));
 
-// The daily check-in (the web's "Weekly Log"): pick a week and a day, then sleep, steps, water, bodyweight, how you feel,
+// The daily check-in (the "Weekly Log" screen in the data; members see "Daily check-in"): pick a week and a day, then sleep, steps, water, bodyweight, how you feel,
 // whether you trained, and notes. Every change saves on its own, and only the field you changed.
 export default function Checkin() {
   const t = useTheme();
