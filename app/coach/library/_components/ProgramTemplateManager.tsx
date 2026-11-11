@@ -5,6 +5,8 @@ import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
+import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
+import { dayHighlights } from '@/lib/workoutSections';
 import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { useToast } from '@/app/_components/ToastProvider';
 import { BottomSheet } from '@/app/_components/BottomSheet';
@@ -306,8 +308,27 @@ export function ProgramTemplateManager({
     });
   }
 
-  async function handleCopyDay(dayId: string, weekNum: number, dayLabel: string) {
-    await runMutate(() => duplicateTemplateDay(dayId, weekNum + 1, dayLabel), { success: 'Workout copied to next week' });
+  // Copying onto a week that already has this workout replaces it (LB3): it used to add a second one, so after "Add week" the next week
+  // had two Mondays.
+  async function handleCopyDay(template: ProgramTemplateWithDays, day: ProgramTemplateWithDays['program_template_days'][number]) {
+    const next = day.week_num + 1;
+    const existing = sameWorkoutInWeek(template.program_template_days, day, next);
+    if (existing.length > 0) {
+      const ok = await confirm({
+        title: `Replace week ${next}’s ${existing[0].day_label}?`,
+        body: `Week ${next} already has this workout. Copying replaces it and its exercises with week ${day.week_num}’s.`,
+        confirmLabel: 'Replace it',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    await runMutate(
+      async () => {
+        await duplicateTemplateDay(day.id, next, day.day_label);
+        for (const old of existing) await deleteTemplateDay(old.id);
+      },
+      { success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week' }
+    );
   }
 
   async function handleDuplicate(templateId: string, name: string) {
@@ -512,7 +533,16 @@ export function ProgramTemplateManager({
                     </span>
                     <button
                       type="button"
-                      onClick={() => runMutate(() => cancelProgrammeRollout(r.id), { success: 'Cancelled' })}
+                      onClick={async () => {
+                        // It went on one tap (LB2).
+                        const ok = await confirm({
+                          title: `Stop “${r.program_name}” starting on ${longDate(r.start_date)}?`,
+                          body: `It is scheduled for ${r.audience === 'all' ? 'everyone at the gym' : `${r.client_ids.length} member${r.client_ids.length === 1 ? '' : 's'}`}. Nobody has it yet, so nothing else changes, and you can schedule it again.`,
+                          confirmLabel: 'Stop it starting',
+                          destructive: true,
+                        });
+                        if (ok) await runMutate(() => cancelProgrammeRollout(r.id), { success: 'Scheduled start cancelled' });
+                      }}
                       className="shrink-0 text-xs font-bold text-danger"
                     >
                       Cancel
@@ -541,7 +571,8 @@ export function ProgramTemplateManager({
               dayPosition: day.day_position,
               exerciseCount: day.program_template_exercises.length,
               exerciseLibraryIds: day.program_template_exercises.map((ex) => ex.exercise_library_id),
-              highlights: day.program_template_exercises.slice(0, 3).map((ex) => ex.name),
+              // The Lift, not the warm-up (TR7).
+              highlights: dayHighlights(day.program_template_exercises, 3),
             }))}
             renderDayControls={(summary: ProgramDaySummary) => {
               const day = previewTemplate.program_template_days.find((d) => d.id === summary.id)!;
@@ -552,7 +583,7 @@ export function ProgramTemplateManager({
                     triggerLabel="Workout actions"
                     items={[
                       { label: 'Rename', onSelect: () => setRenameDay({ id: day.id, name: day.day_label, position: day.day_position }) },
-                      { label: 'Copy to next week', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
+                      { label: 'Copy to next week', onSelect: () => handleCopyDay(previewTemplate, day) },
                       {
                         label: 'Delete workout',
                         onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num}: ${day.day_label}`),

@@ -39,6 +39,7 @@ import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { isTestTemplateName, nextProgrammeStart } from '@/lib/utils/programmeStart';
+import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
 import { coachProgrammeEndLine, memberProgrammeNotice, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
 import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, setFormHeading, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange, type WorkoutSummary } from '@/lib/workoutSets';
 import { blockFormatOf, chosenBlockKeys, dayHighlights, dayLogProgress, describeChoices, exerciseBlockKey } from '@/lib/workoutSections';
@@ -921,8 +922,29 @@ export function WorkoutTab({
     await runMutate(() => deleteProgramDay(dayId), { success: 'Day deleted' });
   }
 
-  async function handleCopyDay(dayId: string, weekNum: number, dayLabel: string) {
-    await runMutate(() => duplicateProgramDay(dayId, weekNum + 1, dayLabel), { success: 'Workout copied to next week' });
+  // Copying onto a week that already has this workout replaces it (LB3): it used to add a second one.
+  async function handleCopyDay(program: WorkoutProgramRow, day: WorkoutProgramRow['workout_program_days'][number]) {
+    const next = day.week_num + 1;
+    const existing = sameWorkoutInWeek(program.workout_program_days, day, next);
+    if (existing.length > 0) {
+      const logged = existing.flatMap((d) => d.workout_exercises).reduce((n, ex) => n + (logsByExercise[ex.id]?.length ?? 0), 0);
+      const ok = await confirm({
+        title: `Replace week ${next}’s ${existing[0].day_label}?`,
+        body: `Week ${next} already has this workout. Copying replaces it and its exercises with week ${day.week_num}’s.${
+          logged > 0 ? ` The member has logged ${logged} set${logged === 1 ? '' : 's'} on it: they stay on file but are no longer linked to this workout.` : ''
+        }`,
+        confirmLabel: 'Replace it',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    await runMutate(
+      async () => {
+        await duplicateProgramDay(day.id, next, day.day_label);
+        for (const old of existing) await deleteProgramDay(old.id);
+      },
+      { success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week' }
+    );
   }
 
   const logsByExercise = Object.fromEntries(
@@ -1172,7 +1194,7 @@ export function WorkoutTab({
                             triggerLabel="Workout actions"
                             items={[
                               { label: 'Rename', onSelect: () => setSheet({ kind: 'renameDay', dayId: day.id, name: day.day_label, position: day.day_position }) },
-                              { label: 'Copy to next week', onSelect: () => handleCopyDay(day.id, day.week_num, day.day_label) },
+                              { label: 'Copy to next week', onSelect: () => handleCopyDay(program, day) },
                               {
                                 label: 'Delete workout',
                                 onSelect: () => handleDeleteDay(day.id, `Week ${day.week_num}: ${day.day_label}`),

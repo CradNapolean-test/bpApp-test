@@ -15,6 +15,13 @@ describe('guessTrackingType', () => {
     expectType('distance', ['RUN', 'SHUTTLES', 'BEAR CRAWL', 'REVERSE CRAWL']);
   });
 
+  it('reads a run or machine with a set distance as distance and time (LB7, TR27)', () => {
+    expectType('distance_time', ['Run 400m', 'Rower 500m', 'ROWER 500 M', 'Ski Erg 1000m', 'Bike 2km', '1 mile run']);
+    // A weight or a calorie target is not a distance.
+    expectType('calories', ['Bike 20 cal', 'Rower 15 cals']);
+    expectType('weight_distance', ['Farmers Carry 20m', 'Sled Push']);
+  });
+
   it('reads carries and the prowler as weight and distance', () => {
     expectType('weight_distance', ['FARMERS WALK', 'FARMER CARRIES', 'SUITCASE CARRY', 'MB BEAR HUG CARRY', 'PLATE PINCH CARRY', 'PROWLER PUSH', 'PROWLER DRAG']);
   });

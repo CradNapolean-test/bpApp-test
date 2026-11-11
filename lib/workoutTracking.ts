@@ -11,10 +11,11 @@ export const TRACKING: Record<TrackingType, { label: string; hint: string; measu
   reps: { label: 'Reps only', hint: 'Push-ups, pull-ups, burpees', measures: ['reps'] },
   weight_time: { label: 'Weight and time', hint: 'Loaded hold', measures: ['weight', 'time'] },
   time: { label: 'Time', hint: 'Plank, wall sit, a timed effort', measures: ['time'] },
-  distance: { label: 'Distance', hint: 'Broad jump, sled push', measures: ['distance'] },
-  distance_time: { label: 'Distance and time', hint: '400 m run, row for time', measures: ['distance', 'time'] },
+  // The hints match what the name guess picks (LB7): a sled push is weight and distance, a run with a set distance is distance and time.
+  distance: { label: 'Distance', hint: 'Run, shuttles, bear crawl', measures: ['distance'] },
+  distance_time: { label: 'Distance and time', hint: 'Run 400 m, row 500 m', measures: ['distance', 'time'] },
   calories: { label: 'Calories', hint: 'Bike, ski erg, rower', measures: ['calories'] },
-  weight_distance: { label: 'Weight and distance', hint: "Farmer's carry, loaded sled", measures: ['weight', 'distance'] },
+  weight_distance: { label: 'Weight and distance', hint: "Farmer's carry, sled push", measures: ['weight', 'distance'] },
   tick: { label: 'Tick when done', hint: 'Mobility, anything with no numbers', measures: [] },
 };
 

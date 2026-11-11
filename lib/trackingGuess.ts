@@ -1,7 +1,9 @@
 // What an exercise most likely records, read from its name: a bike or ski erg is calories, a run is distance, a carry or prowler is
 // weight and distance, a plank or hold is time, burpees and press-ups are reps. Used when a coach types a new exercise (in the library,
-// or a custom one in a workout) so it does not start as weight x reps; the coach can always change it. Migration 0156 applied the same
-// rules once to the exercises that already existed (supabase/migrations/0156_tracking_and_scoring_backfill.sql).
+// or a custom one in a workout) so it does not start as weight x reps; the coach can always change it. Migration 0156 applied these
+// rules once, as they were then, to the exercises that already existed (supabase/migrations/0156_tracking_and_scoring_backfill.sql).
+// A run or machine that names its distance ("Run 400m", "Rower 500m") is distance and time, as the option's hint says (LB7, TR27): the
+// distance is set, the time is what is recorded. It read "Rower 500m" as calories.
 //
 // Null means "no confident guess": the exercise keeps weight x reps. Combinations ("Squat Hold + Run", "DB Squat & Press") and anything
 // called weighted are left alone on purpose.
@@ -30,6 +32,8 @@ const HOLD_LOAD = any(['db', 'kb', 'bb', 'mb', 'plate', 'barbell', 'dumbbell', '
 const CALORIES = any(['bike', 'bikes', 'airbike', 'erg', 'ergs', 'skierg', 'rower', 'rowers', 'kcal', 'kcals', 'cal', 'cals', 'calorie', 'calories']);
 const WEIGHT_DISTANCE = any(['carry', 'carries', 'farmer', 'farmers', 'prowler', 'sled', 'sleds', 'yoke']);
 const DISTANCE = any(['run', 'runs', 'running', 'jog', 'jogging', 'sprint', 'sprints', 'shuttle', 'shuttles', 'crawl', 'crawls']);
+// A set distance in the name: "400m", "500 m", "2km", "1 mile" (not "16kg").
+const NAMED_DISTANCE = /(?:^| )\d+ ?(?:m|km|metre|metres|meter|meters|mile|miles)(?: |$)/;
 // Reps whatever is in the hand (a ball, a pair of dumbbells for a burpee thruster).
 const REPS_ANY_LOAD = any([
   'slam',
@@ -102,9 +106,10 @@ const TIMED = any(['wall sit', 'dead hang', 'battle rope', 'battle ropes', 'skip
 export function guessTrackingType(name: string): TrackingType | null {
   const n = normaliseExerciseName(name);
   if (!n || COMBINATION.test(n) || WEIGHTED.test(n)) return null;
-  if (CALORIES.test(n)) return 'calories';
+  const setDistance = NAMED_DISTANCE.test(n);
+  if (CALORIES.test(n)) return setDistance ? 'distance_time' : 'calories';
   if (WEIGHT_DISTANCE.test(n)) return 'weight_distance';
-  if (DISTANCE.test(n)) return 'distance';
+  if (DISTANCE.test(n)) return setDistance ? 'distance_time' : 'distance';
   if (REPS_ANY_LOAD.test(n)) return 'reps';
   if (REPS_BODYWEIGHT.test(n) && !CABLE.test(n) && !FREE_WEIGHT.test(n)) return 'reps';
   if (HOLD.test(n)) return HOLD_LOAD.test(n) && !BAND.test(n) ? 'weight_time' : 'time';
