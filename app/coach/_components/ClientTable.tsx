@@ -9,6 +9,7 @@ import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 import { LIST_STEP, remainingAfter, showMore, visibleCount } from '@/lib/paging';
+import { QUIET_DAYS, SLIPPING_DAYS } from '@/lib/followUp';
 import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow, GymClientRow } from '@/lib/data/coach';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
 
@@ -18,14 +19,13 @@ type QuickFilter = 'all' | 'review' | 'quiet' | 'credits' | 'noplan';
 
 const STATUS_RANK: Record<string, number> = { red: 0, amber: 1, green: 2, unmonitored: 3 };
 
-// Plain color-word text for this table specifically (matches the desktop clients table design)
-// -- distinct from StatusBadge's pill+label treatment used in Program Health / client detail,
-// which needs the fuller "Action required"/"Keep watch" phrasing since it stands alone there.
+// The Logging column (D10): how recently the member logged anything, as a colour word. It measures logging only, not attendance or
+// progress, hence the name (it was "Status", CL5). The bands are lib/followUp.ts's: red is exactly "Gone quiet" (D11).
 const STATUS_TEXT: Record<ClientHealthBucket, { label: string; cls: string }> = {
   red: { label: 'Red', cls: 'text-red-600 dark:text-red-400' },
   amber: { label: 'Amber', cls: 'text-amber-600 dark:text-amber-400' },
   green: { label: 'Green', cls: 'text-emerald-600 dark:text-emerald-400' },
-  unmonitored: { label: 'Unmonitored', cls: 'text-zinc-400' },
+  unmonitored: { label: 'Not monitored', cls: 'text-zinc-400' },
 };
 
 export function ClientTable({
@@ -82,7 +82,7 @@ export function ClientTable({
         quick === 'review'
           ? client.needsReview
           : quick === 'quiet'
-            ? !onHold.has(client.id) && (health?.status === 'red' || health?.status === 'amber')
+            ? !onHold.has(client.id) && health?.status === 'red'
             : quick === 'credits'
               ? client.balance <= 1 && client.planName != null
               : quick === 'noplan'
@@ -113,7 +113,7 @@ export function ClientTable({
       review: activeClients.filter((c) => c.needsReview).length,
       quiet: activeClients.filter((c) => {
         const s = statusById.get(c.id)?.status;
-        return !onHold.has(c.id) && (s === 'red' || s === 'amber');
+        return !onHold.has(c.id) && s === 'red';
       }).length,
       credits: activeClients.filter((c) => c.balance <= 1 && c.planName != null).length,
       noplan: activeClients.filter((c) => c.planName == null).length,
@@ -155,7 +155,7 @@ export function ClientTable({
   // click away instead of a separate flow.
   function handleExport() {
     const csv = toCsv(
-      ['Name', 'Email', 'Status', 'Last active', 'Days since active', 'Credits'],
+      ['Name', 'Email', 'Logging', 'Last active', 'Days since active', 'Credits'],
       rows.map(({ client, health }) => [
         client.name ?? '',
         client.email,
@@ -300,7 +300,7 @@ const scopeBtnCls = (active: boolean) =>
           >
             <option value="name">Name A–Z</option>
             <option value="lastActive">Most inactive first</option>
-            <option value="status">Needs attention first</option>
+            <option value="status">Logging, red first</option>
             <option value="credits">Fewest credits first</option>
           </select>
           <button type="button" onClick={() => setLegend(true)} className="min-h-9 shrink-0 px-1 text-xs font-bold text-accent">
@@ -369,7 +369,7 @@ const scopeBtnCls = (active: boolean) =>
             {scope === 'gym' && <th className={headerCls}>Coach</th>}
             <th className={headerCls}>
               <button onClick={() => toggleSort('status')} className={sortBtn}>
-                Status <ArrowUpDown className="h-3 w-3" />
+                Logging <ArrowUpDown className="h-3 w-3" />
               </button>
             </th>
             <th className={headerCls}>
@@ -462,12 +462,20 @@ const scopeBtnCls = (active: boolean) =>
       )}
       {legend && (
         <BottomSheet title="What the colours mean" onClose={() => setLegend(false)}>
+          <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
+            Logging shows how long since the member last logged anything (food, weight, steps, sleep, any part of the daily check-in), or since
+            they joined if they never have. It does not measure class attendance or progress.
+          </p>
           <dl className="space-y-3 text-sm">
             {[
-              ['Green', 'text-emerald-600 dark:text-emerald-400', 'Logged recently: within their check-in reminder days (3 by default).'],
-              ['Amber', 'text-amber-600 dark:text-amber-400', 'Gone quiet: longer than the reminder days, up to double.'],
-              ['Red', 'text-red-600 dark:text-red-400', 'More than double the reminder days since they last logged anything.'],
-              ['Unmonitored', 'text-zinc-400', 'Check-in reminders are switched off for them, so no status is worked out.'],
+              ['Green', 'text-emerald-600 dark:text-emerald-400', `Logged in the last ${SLIPPING_DAYS - 1} days.`],
+              ['Amber', 'text-amber-600 dark:text-amber-400', `${SLIPPING_DAYS} or ${QUIET_DAYS - 1} days since they last logged anything.`],
+              [
+                'Red',
+                'text-red-600 dark:text-red-400',
+                `Gone quiet: ${QUIET_DAYS} days or more without logging. The Gone quiet filter and the dashboard's "Members to check in on" use the same ${QUIET_DAYS} days.`,
+              ],
+              ['Not monitored', 'text-zinc-400', 'Check-in reminders are switched off for them (Credits & plan), so they are never counted as gone quiet.'],
               ['On hold', 'text-sky-600 dark:text-sky-400', 'Membership on hold (holiday, injury). Left out of Gone quiet and the red flag lists.'],
             ].map(([label, cls, text]) => (
               <div key={label}>
