@@ -30,6 +30,9 @@ import { BigDogCard } from './BigDogTab';
 import { Card, IconChip } from '@/app/_components/ui';
 import { challengeHome } from '@/lib/challengeHome';
 import { shortDay, WhatsNextCard } from './HomeChallenge';
+import { stripWorkoutFor, TodayStrip } from './TodayStrip';
+
+const NO_SCREENS: ReadonlySet<Screen> = new Set();
 
 const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
 const clickableCardCls = `${cardCls} w-full text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`;
@@ -76,6 +79,7 @@ export function TodayTab({
   disabledMetrics = [],
   clientId,
   coachName,
+  hiddenScreens = NO_SCREENS,
 }: {
   profile: ClientProfileRow | null;
   programWeek: number;
@@ -105,6 +109,8 @@ export function TodayTab({
   // The member's own id (a "What's next" choice leaves a message in their chat) and their coach's name, when known.
   clientId?: string;
   coachName?: string | null;
+  // Screens switched off for this member (their plan or coach): the Today strip leaves out what they cannot open.
+  hiddenScreens?: ReadonlySet<Screen>;
 }) {
   // Must match the timezone dashboardBundle used server-side to resolve `weekLogs`/streaks/etc
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` here is the UTC date,
@@ -147,6 +153,13 @@ export function TodayTab({
   // D5: where a member is in a plan with a set length (the 6 Week Challenge), and in its last 2 weeks what comes next.
   const challenge = isCoachView ? null : challengeHome(membership, todayIso, shortDay);
 
+  // D15: the Today strip. The day's target is the food diary's own (dayTargetFor above); none while the plan waits for the coach.
+  // A half is left out when the member's plan or coach switched that screen off (a photo-diary member always keeps Food).
+  const mode = profile?.nutrition_tracking_mode;
+  const foodOn = mode === 'photo_diary' || !hiddenScreens.has('Food Tracking');
+  const strip =
+    isCoachView || hiddenScreens.has('Workout') ? null : stripWorkoutFor(programs, workoutLogs, todayIso, profile?.timezone ?? DEFAULT_TIMEZONE);
+
   return (
     <div className="space-y-3">
       {!isCoachView && (
@@ -154,6 +167,14 @@ export function TodayTab({
           profile={profile}
           plan={challenge ? { name: challenge.planName, label: challenge.label } : null}
           onOpenPlan={() => onNavigate('Account Settings', 'Credits')}
+        />
+      )}
+      {!isCoachView && (
+        <TodayStrip
+          workout={strip?.workout ?? null}
+          food={foodOn ? { mode, held: planHeld, target: dayTarget, eaten: { calories: todayCalories, protein: todayLog?.protein ?? 0 } } : null}
+          onOpenWorkout={() => (strip?.dayId ? onCheckIn(strip.dayId) : onNavigate('Training', 'Workout'))}
+          onOpenFood={() => onNavigate('Nutrition', 'Food Tracking')}
         />
       )}
       {challenge?.whatsNext && clientId && (

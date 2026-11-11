@@ -849,6 +849,7 @@ export function DashboardShell({
               disabledMetrics={disabledMetrics}
               clientId={clientId}
               coachName={coachName}
+              hiddenScreens={disabledScreenSet}
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (

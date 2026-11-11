@@ -2,10 +2,13 @@ import { useState } from 'react';
 
 import { challengeHome } from '@ballistic/shared/utils/challengeHome';
 import { clubProgress } from '@ballistic/shared/utils/clubs';
+import { dayCaloriesOf } from '@ballistic/shared/utils/dailyLog';
 import { monthsSince, nextSessionsReward } from '@ballistic/shared/utils/home';
 import { showsStreak } from '@ballistic/shared/utils/streak';
+import { foodLeft } from '@ballistic/shared/utils/todayStrip';
 
 import { shortDay, WhatsNextCard } from '@/components/homeChallenge';
+import { stripWorkoutOf, TodayStrip } from '@/components/todayStrip';
 import { DetailsConfirmBanner, EventBanner, ExploreTiles, FormsBanner, MyCoachingTile, StatsCard, YourProgress } from '@/components/home';
 import { PushCard } from '@/components/push';
 import { HomeSkeleton } from '@/components/skeleton';
@@ -48,7 +51,7 @@ export default function Today() {
 
 function HomeContent() {
   const { areas } = useScreenAccess();
-  const { now, profileQ, profile, tz, todayIso, ready, logsQ, streak, checkinDone, checkinTotal } = useDayContext();
+  const { now, profileQ, profile, tz, todayIso, ready, logsQ, todayLog, target, targetHeld, streak, checkinDone, checkinTotal } = useDayContext();
 
   // One small query per card, started together once the profile (which holds the timezone) is known.
   const bookingsQ = useUpcomingBookings(todayIso, ready);
@@ -71,6 +74,14 @@ function HomeContent() {
   // D5: where the member is in a plan with a set length (the 6 Week Challenge), and in its last 2 weeks what comes next.
   const challenge = challengeHome(membership, todayIso, shortDay);
   const coachName = useMe().data?.coachName;
+  // D15: the Today strip. The target is the food diary's own day target (useDayContext: dayTargetFor), none while the plan waits for the
+  // coach. A half is left out when the member's plan or coach switched that screen off (a photo-diary member always keeps Food).
+  const mode = profile?.nutrition_tracking_mode;
+  const food =
+    mode === 'photo_diary' || areas.food
+      ? foodLeft({ mode, held: targetHeld, target, eaten: { calories: todayLog ? dayCaloriesOf(todayLog) : 0, protein: todayLog?.protein ?? 0 } })
+      : null;
+  const stripWorkout = areas.workouts && workoutQ.data ? stripWorkoutOf(workoutQ.data) : null;
 
   const [refreshing, setRefreshing] = useState(false);
   async function refresh() {
@@ -102,6 +113,7 @@ function HomeContent() {
   return (
     <ScrollScreen refreshing={refreshing} onRefresh={refresh}>
       <Hero profile={profile} now={now} plan={challenge ? { name: challenge.planName, label: challenge.label } : null} />
+      <TodayStrip workout={stripWorkout} food={food} dayId={workoutQ.data?.status === 'workout' ? workoutQ.data.day.id : null} />
       {challenge?.whatsNext ? <WhatsNextCard home={challenge} gymId={membership?.package?.gym_id} coachName={coachName} /> : null}
       <DetailsConfirmBanner clientId={profile.client_id} requestedAt={profile.details_confirm_requested_at} />
       {eventQ.data ? <EventBanner key={eventQ.data.id} event={eventQ.data} /> : null}
