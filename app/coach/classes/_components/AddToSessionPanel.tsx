@@ -5,7 +5,9 @@ import { inputCls } from '@/app/_components/ui';
 import type { CoachClientRow } from '@/lib/data/coach';
 
 // Search for a member and add them to one session: used by the Sessions roster pop-up and by Run this class (a walk-in, CS2). Says
-// what it costs, or that they go on the waitlist when it is full; the database (book_class_for_client) decides.
+// what it costs, or that they go on the waitlist when it is full; the database (book_class_for_client) decides. A member short of
+// credits can be given what they are short and booked in one step (onAddWithCredits, D18). Only the coach's own members are listed:
+// the database lets only a member's own coach book them in or add credits.
 export function AddToSessionPanel({
   clients,
   excludeIds,
@@ -13,6 +15,7 @@ export function AddToSessionPanel({
   creditCost,
   busy,
   onAdd,
+  onAddWithCredits,
 }: {
   // null while the list is loading.
   clients: CoachClientRow[] | null;
@@ -22,6 +25,8 @@ export function AddToSessionPanel({
   creditCost: number;
   busy: boolean;
   onAdd: (clientId: string) => void;
+  // Adds the credits they are short, then books them (grantCreditsAndBook). Without it a short member can't be added here.
+  onAddWithCredits?: (clientId: string, credits: number) => void;
 }) {
   const [clientId, setClientId] = useState('');
   const [search, setSearch] = useState('');
@@ -34,6 +39,8 @@ export function AddToSessionPanel({
     .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email))
     .slice(0, 20);
   const noCredits = !!chosen && chosen.balance < creditCost;
+  const short = chosen ? Math.max(1, creditCost - Math.max(0, chosen.balance)) : 0;
+  const topUp = noCredits && !full && !!onAddWithCredits;
 
   return (
     <div className="space-y-2">
@@ -73,13 +80,17 @@ export function AddToSessionPanel({
             ))}
           </div>
         ))}
+      {clients != null && !chosen && (
+        <p className="px-1 text-[11px] text-zinc-500">Only your own members are listed: a member&apos;s own coach books them in and adds their credits.</p>
+      )}
       {chosen && (
         <>
           {full ? (
             <p className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">This session is full, so {chosen.name ?? 'they'} will join the waitlist (no credit is taken until a place opens).</p>
           ) : noCredits ? (
             <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
-              {chosen.name ?? 'They'} only {chosen.balance === 1 ? 'has 1 credit' : `has ${chosen.balance} credits`} and this session costs {creditCost}. Add credits from their profile first.
+              {chosen.name ?? 'They'} only {chosen.balance === 1 ? 'has 1 credit' : `has ${chosen.balance} credits`} and this session costs {creditCost}.
+              {topUp ? ' Add what they are short and book them in one go.' : ' Add credits from their profile first.'}
             </p>
           ) : (
             <p className="px-1 text-xs text-zinc-500">
@@ -88,11 +99,11 @@ export function AddToSessionPanel({
           )}
           <button
             type="button"
-            disabled={busy || (noCredits && !full)}
-            onClick={() => onAdd(chosen.id)}
+            disabled={busy || (noCredits && !full && !topUp)}
+            onClick={() => (topUp ? onAddWithCredits!(chosen.id, short) : onAdd(chosen.id))}
             className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
           >
-            {busy ? 'Adding…' : full ? 'Add to waitlist' : 'Add to session'}
+            {busy ? 'Adding…' : full ? 'Add to waitlist' : topUp ? `Add ${short} credit${short === 1 ? '' : 's'} and book` : 'Add to session'}
           </button>
         </>
       )}

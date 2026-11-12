@@ -204,6 +204,24 @@ export async function bookClassForClient(classId: string, clientId: string, book
   return error ? fail(error, 'Could not book that class') : ok();
 }
 
+// A walk-in short of credits, in one step at the door (D18, BK14): adds the credits they are short (grant_credits: the bonus bucket, a
+// reason naming the session) and then books them in (book_class_for_client). The database lets only the member's own coach do either, so
+// the walk-in list only holds the coach's own members. If the booking then fails (the last place went, say), the credits stay on the
+// member's ledger and the message says so, so the coach can try again or take them off.
+export async function grantCreditsAndBook(
+  classId: string,
+  clientId: string,
+  bookingDate: string,
+  credits: number,
+  sessionLabel: string
+): Promise<ActionResult> {
+  const granted = await grantCredits(clientId, credits, `Added at the door: ${sessionLabel}`.slice(0, 200));
+  if (!granted.ok) return granted;
+  const booked = await bookClassForClient(classId, clientId, bookingDate);
+  if (booked.ok) return booked;
+  return { ok: false, error: `${credits} credit${credits === 1 ? ' was' : 's were'} added, but the booking didn't go through: ${booked.error}` };
+}
+
 export async function getCreditsBalance(clientId: string): Promise<number> {
   const supabase = await createClient();
   const { data, error } = await supabase

@@ -11,7 +11,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { AddToSessionPanel } from './AddToSessionPanel';
-import { bookClassForClient, cancelClassOccurrence, getRoster, markAttendanceStatus, removeFromSession, restoreClassOccurrence } from '@/lib/data/classes';
+import { bookClassForClient, cancelClassOccurrence, getRoster, grantCreditsAndBook, markAttendanceStatus, removeFromSession, restoreClassOccurrence } from '@/lib/data/classes';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { startMs } from '@/lib/utils/booking';
@@ -19,8 +19,9 @@ import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/da
 import type { CoachClientRow } from '@/lib/data/coach';
 
 // The coach's live view of the gym: pick a day, see every session with how full it is, tap one to
-// open its roster (mark attended / no-show, add a client, cancel that one date). Replaces the old
-// separate Schedule-list + Attendance screens so there is one place to look at "what's on".
+// open its roster (add a client, cancel that one date, mark a past session). Replaces the old
+// separate Schedule-list + Attendance screens so there is one place to look at "what's on". It is for planning: today's sessions
+// open Run this class, the door screen, for marking and walk-ins (D18).
 
 const statusOf = (e: RosterEntry): AttendanceStatus => (e.attended ? 'attended' : e.noShow ? 'no_show' : 'unmarked');
 const occKey = (o: ScheduleOccurrence) => `${o.classId}|${o.date}`;
@@ -140,18 +141,21 @@ export function SessionsView({
     }
   }
 
-  async function addClient(clientId: string) {
+  // credits: a member short of credits is given what they are short first, in the same step (D18, BK14).
+  async function addClient(clientId: string, credits = 0) {
     if (!open) return;
     await runBook(
       async () => {
-        const result = await bookClassForClient(open.classId, clientId, open.date);
+        const result = credits > 0
+          ? await grantCreditsAndBook(open.classId, clientId, open.date, credits, `${open.className}, ${longDay(open.date)}`)
+          : await bookClassForClient(open.classId, clientId, open.date);
         if (result.ok) {
           setAdding(false);
           await openSession(open);
         }
         return result;
       },
-      { success: 'Client added' }
+      { success: credits > 0 ? 'Credit added and booked in' : 'Client added' }
     );
   }
 
@@ -197,8 +201,11 @@ export function SessionsView({
   const active = (roster ?? []).filter((r) => r.status !== 'cancelled');
   const cancelledEntries = (roster ?? []).filter((r) => r.status === 'cancelled');
   const unmarkedBooked = active.filter((r) => r.status === 'booked' && statusOf(r) === 'unmarked').length;
-  // Only today's and earlier sessions can be marked attended in bulk -- a future class has not happened yet.
-  const canMarkAll = !!open && open.date <= todayIso;
+  // D18: Run this class is the door screen. Today's sessions (live or not started yet) are marked there; past ones are still marked here so
+  // none is left unmarked; a future session can't be marked at all (the database refuses, SV1).
+  const markHere = !!open && open.date < todayIso;
+  const runToday = !!open && open.date === todayIso && !open.cancelled;
+  const canMarkAll = markHere;
   const bookedIds = new Set(active.map((r) => r.clientId));
   // From the roster once it has loaded, so a place just filled from this pop-up counts.
   const bookedNow = roster ? active.filter((r) => r.status === 'booked').length : (open?.bookedCount ?? 0);
@@ -330,6 +337,18 @@ export function SessionsView({
           </p>
           {open.cancelled && open.cancelReason && <p className="mb-3 rounded-xl bg-black/5 px-3 py-2 text-sm text-zinc-700 dark:bg-white/10 dark:text-zinc-200">Reason: {open.cancelReason}</p>}
 
+          {runToday && (
+            <div className="mb-3 space-y-1.5">
+              <Link
+                href={`/coach/run/${open.classId}/${open.date}`}
+                className="flex w-full items-center justify-center gap-1.5 rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground"
+              >
+                <Dumbbell className="h-4 w-4" /> Run this class
+              </Link>
+              <p className="text-center text-xs text-zinc-500">Mark who came, add walk-ins and add a credit there: it&apos;s the screen for the door.</p>
+            </div>
+          )}
+
           {loading && <p className="py-6 text-center text-sm text-zinc-500">Loading roster…</p>}
 
           {!loading && roster && active.length === 0 && !open.cancelled && (
@@ -371,7 +390,7 @@ export function SessionsView({
                         Remove
                       </button>
                     </div>
-                    {!waitlisted && (
+                    {!waitlisted && markHere && (
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
                           type="button"
@@ -429,7 +448,15 @@ export function SessionsView({
           {!loading && roster && !open.cancelled && (
             <div className="mt-4 space-y-3">
               {adding ? (
-                <AddToSessionPanel clients={clients} excludeIds={bookedIds} full={sessionFull} creditCost={open.creditCost} busy={booking} onAdd={addClient} />
+                <AddToSessionPanel
+                  clients={clients}
+                  excludeIds={bookedIds}
+                  full={sessionFull}
+                  creditCost={open.creditCost}
+                  busy={booking}
+                  onAdd={addClient}
+                  onAddWithCredits={addClient}
+                />
               ) : (
                 <button
                   type="button"
@@ -439,12 +466,14 @@ export function SessionsView({
                   <UserPlus className="h-4 w-4" /> Add a client
                 </button>
               )}
-              <Link
-                href={`/coach/run/${open.classId}/${open.date}`}
-                className="flex w-full items-center justify-center gap-1.5 rounded-full border border-accent py-3 text-sm font-extrabold text-accent"
-              >
-                <Dumbbell className="h-4 w-4" /> Run this class
-              </Link>
+              {!runToday && (
+                <Link
+                  href={`/coach/run/${open.classId}/${open.date}`}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-full border border-accent py-3 text-sm font-extrabold text-accent"
+                >
+                  <Dumbbell className="h-4 w-4" /> Run this class
+                </Link>
+              )}
               {!hasStarted(open) && (
                 <button
                   type="button"

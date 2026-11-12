@@ -8,7 +8,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
 import { useAction } from '@/app/_components/useAction';
 import { AddToSessionPanel } from '@/app/coach/classes/_components/AddToSessionPanel';
-import { bookClassForClient, markAttendanceStatus } from '@/lib/data/classes';
+import { bookClassForClient, grantCreditsAndBook, markAttendanceStatus } from '@/lib/data/classes';
 import { getRunClassData, getWalkInCandidates } from '@/lib/data/runClass';
 import { exerciseIsVisible, SECTION_TITLE, usesSections } from '@/lib/workoutSections';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz } from '@/lib/utils/dates';
@@ -95,10 +95,13 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
 
   // Books them in through the same rules as the Sessions pop-up (book_class_for_client: a credit, or the waitlist when full), then
   // reads the class again so they appear with their picks and last weights.
-  async function addWalkIn(clientId: string) {
+  // credits: a walk-in short of credits is given what they are short first, in the same step (D18).
+  async function addWalkIn(clientId: string, credits = 0) {
     await runAdd(
       async () => {
-        const result = await bookClassForClient(classId, clientId, initial.date);
+        const result = credits > 0
+          ? await grantCreditsAndBook(classId, clientId, initial.date, credits, `${initial.className}, ${heading}`)
+          : await bookClassForClient(classId, clientId, initial.date);
         if (result.ok) {
           setAdding(false);
           setCandidates(null); // balances have changed; read them again next time
@@ -107,7 +110,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
         }
         return result;
       },
-      { success: 'Added to the class', refresh: false }
+      { success: credits > 1 ? 'Credits added and booked in' : credits === 1 ? 'Credit added and booked in' : 'Added to the class', refresh: false }
     );
   }
 
@@ -272,6 +275,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
               creditCost={initial.creditCost}
               busy={addingBusy}
               onAdd={addWalkIn}
+              onAddWithCredits={addWalkIn}
             />
           </div>
         ) : (
