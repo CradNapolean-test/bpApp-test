@@ -10,9 +10,11 @@ import { useAction } from '@/app/_components/useAction';
 import { AddToSessionPanel } from '@/app/coach/classes/_components/AddToSessionPanel';
 import { bookClassForClient, grantCreditsAndBook, markAttendanceStatus } from '@/lib/data/classes';
 import { getRunClassData, getWalkInCandidates } from '@/lib/data/runClass';
-import { exerciseIsVisible, SECTION_TITLE, usesSections } from '@/lib/workoutSections';
+import { exerciseBlockKey, exerciseIsVisible, SECTION_TITLE, usesSections } from '@/lib/workoutSections';
+import { describeHistorySets, describePastResult, pastResultsFor } from '@/lib/runClassHistory';
+import { sanitiseConfig } from '@/lib/blockScoring';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz } from '@/lib/utils/dates';
-import type { HistorySession, RunClassData, RunClassMember } from '@/lib/data/runClass';
+import type { RunClassData, RunClassMember } from '@/lib/data/runClass';
 import type { CoachClientRow } from '@/lib/data/coach';
 import type { AttendanceStatus, WorkoutExerciseRow } from '@/lib/data/types';
 
@@ -23,31 +25,47 @@ const statusOf = (m: { attended: boolean; noShow: boolean }): AttendanceStatus =
 
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-// "60kg × 8, 8, 6" -- consecutive sets at the same load are joined.
-function describeSets(sets: HistorySession['sets']): string {
-  const parts: string[] = [];
-  let i = 0;
-  while (i < sets.length) {
-    let j = i;
-    while (j + 1 < sets.length && sets[j + 1].load === sets[i].load) j++;
-    const reps = sets
-      .slice(i, j + 1)
-      .map((s) => s.reps ?? '?')
-      .join(', ');
-    parts.push(sets[i].load != null ? `${sets[i].load}kg × ${reps}` : `${reps} reps`);
-    i = j + 1;
-  }
-  return parts.join(' · ');
-}
-
 function MemberHistory({ member, exercises }: { member: RunClassMember; exercises: WorkoutExerciseRow[] }) {
   const sectioned = usesSections(exercises);
   const rows = exercises.filter((e) => (member.chosenKeys.length === 0 || exerciseIsVisible(e, sectioned, member.chosenKeys)));
   if (rows.length === 0) return <p className="px-1 py-2 text-sm text-zinc-500">No exercises to show yet.</p>;
+  // The day's scored blocks (an AMRAP, a for-time, a score), once each, with the member's earlier results on the same block (CS18).
+  const scored = new Map<string, { title: string; format: string | null; config: unknown }>();
+  for (const e of rows) {
+    const key = exerciseBlockKey(e);
+    if (!scored.has(key) && sanitiseConfig(e.block_config).scoring !== 'none') {
+      scored.set(key, { title: e.block_format ?? SECTION_TITLE[e.section ?? 'lift'], format: e.block_format, config: e.block_config });
+    }
+  }
   return (
     <div className="space-y-2.5 pt-2">
+      {[...scored].map(([key, b]) => {
+        const past = pastResultsFor(member.blockResults, key, b.format);
+        return (
+          <div key={`block-${key}`} className="rounded-xl bg-accent/[.06] px-3 py-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="truncate text-sm font-bold text-black dark:text-zinc-50">{b.title}</p>
+              <p className="shrink-0 text-[11px] font-semibold uppercase text-zinc-500">Block result</p>
+            </div>
+            {past.length === 0 ? (
+              <p className="text-xs text-zinc-500">No result on this block yet</p>
+            ) : (
+              <ul className="mt-0.5 space-y-0.5">
+                {past.map((r, i) => (
+                  <li key={`${r.date}-${i}`} className={`flex justify-between gap-3 text-sm ${i === 0 ? 'font-semibold text-black dark:text-zinc-50' : 'text-zinc-500'}`}>
+                    <span>{describePastResult(r, b.config)}</span>
+                    <span className="shrink-0 text-xs text-zinc-500">{shortDate(r.date)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
       {rows.map((e) => {
-        const sessions = (e.exercise_library_id ? member.history[e.exercise_library_id] : undefined) ?? member.history[e.name.trim().toLowerCase()] ?? [];
+        const logged = (e.exercise_library_id ? member.history[e.exercise_library_id] : undefined) ?? member.history[e.name.trim().toLowerCase()] ?? [];
+        // A session with nothing recorded on it (an empty time box, say) is left out rather than shown as blanks.
+        const sessions = logged.map((s) => ({ date: s.date, text: describeHistorySets(s.sets) })).filter((s): s is { date: string; text: string } => s.text != null);
         return (
           <div key={e.id} className="rounded-xl bg-black/[.03] px-3 py-2 dark:bg-white/[.05]">
             <div className="flex items-baseline justify-between gap-2">
@@ -60,7 +78,7 @@ function MemberHistory({ member, exercises }: { member: RunClassMember; exercise
               <ul className="mt-0.5 space-y-0.5">
                 {sessions.map((s, i) => (
                   <li key={s.date} className={`flex justify-between gap-3 text-sm ${i === 0 ? 'font-semibold text-black dark:text-zinc-50' : 'text-zinc-500'}`}>
-                    <span>{describeSets(s.sets)}</span>
+                    <span>{s.text}</span>
                     <span className="shrink-0 text-xs text-zinc-500">{shortDate(s.date)}</span>
                   </li>
                 ))}
