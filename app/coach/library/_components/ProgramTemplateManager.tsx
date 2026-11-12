@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
@@ -31,6 +31,10 @@ import {
   cancelProgrammeRollout,
   scheduleProgrammeRollout,
   getGymMemberCount,
+  getRolloutUsage,
+  previewTemplateToRollout,
+  applyTemplateToRollout,
+  type RolloutUsageRow,
   reorderTemplateExercises,
   updateTemplateDay,
   updateTemplateExercise,
@@ -38,7 +42,8 @@ import {
 } from '@/lib/data/programTemplates';
 import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
-import { DEFAULT_ROLLOUT_AUDIENCE, rolloutButtonLabel, rolloutConfirmation, rolloutSuccessMessage, type RolloutPlan } from '@/lib/rolloutPlan';
+import { DEFAULT_ROLLOUT_AUDIENCE, membersLabel, rolloutButtonLabel, rolloutConfirmation, rolloutSuccessMessage, type RolloutPlan } from '@/lib/rolloutPlan';
+import { NOTHING_TO_UPDATE, rolloutUpdateConfirmation, rolloutUpdateDone, templateInUseLabel } from '@/lib/rolloutUpdate';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgrammeRolloutRow, ProgramTemplateWithDays } from '@/lib/data/types';
 
@@ -192,6 +197,50 @@ export function ProgramTemplateManager({
   const [groupId, setGroupId] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const importFileRef = useRef<HTMLInputElement>(null);
+  // D8: the rollouts members are still on, for "In use by N members" and "Apply to everyone on this rollout". Read again after the page
+  // refreshes (a programme started or a template changed) and after applying.
+  const [usage, setUsage] = useState<RolloutUsageRow[]>([]);
+  const [usageVersion, setUsageVersion] = useState(0);
+  useEffect(() => {
+    let live = true;
+    getRolloutUsage()
+      .then((rows) => {
+        if (live) setUsage(rows);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [initialTemplates, usageVersion]);
+
+  // Copies the template into everyone's copy on a rollout for the weeks they haven't reached yet, after a confirm naming how many members.
+  async function handleApplyToRollout(r: RolloutUsageRow) {
+    const preview = await previewTemplateToRollout(r.rolloutId);
+    if (!preview.ok) {
+      toast.error(preview.error);
+      return;
+    }
+    const confirmation = rolloutUpdateConfirmation(r.programName, preview.counts);
+    if (!confirmation) {
+      toast.success(NOTHING_TO_UPDATE);
+      return;
+    }
+    if (!(await confirm({ ...confirmation, destructive: true }))) return;
+    let message = '';
+    await runMutate(
+      async () => {
+        const result = await applyTemplateToRollout(r.rolloutId, gymId);
+        if (result.ok) message = rolloutUpdateDone(result.counts);
+        return result;
+      },
+      {
+        onDone: () => {
+          toast.success(message);
+          setUsageVersion((v) => v + 1);
+        },
+      }
+    );
+  }
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -456,6 +505,7 @@ export function ProgramTemplateManager({
           const weekNums = Array.from(new Set(template.program_template_days.map((d) => d.week_num)));
           const perWeek = Math.max(0, ...weekNums.map((w) => template.program_template_days.filter((d) => d.week_num === w).length));
           const exercises = template.program_template_days.reduce((n, d) => n + d.program_template_exercises.length, 0);
+          const inUse = templateInUseLabel(usage.filter((u) => u.templateId === template.id));
           return (
             <div
               key={template.id}
@@ -466,6 +516,11 @@ export function ProgramTemplateManager({
                   <p className="font-bold text-black dark:text-zinc-50">{template.name}</p>
                   {template.description && (
                     <p className="mt-0.5 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
+                  )}
+                  {inUse && (
+                    <p className="mt-1 mr-1 inline-block rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                      {inUse}
+                    </p>
                   )}
                   {rollouts.filter((r) => r.template_id === template.id).slice(0, 1).map((r) => (
                     <p key={r.id} className="mt-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
@@ -549,6 +604,38 @@ export function ProgramTemplateManager({
                     </button>
                   </div>
                 ))}
+            </div>
+          )}
+
+          {usage.filter((u) => u.templateId === previewTemplate.id).length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {usage
+                .filter((u) => u.templateId === previewTemplate.id)
+                .map((u) => (
+                  <div key={u.rolloutId} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm dark:border-white/10">
+                    <span className="min-w-0 flex-1">
+                      <span className="font-semibold text-black dark:text-zinc-50">
+                        In use by {membersLabel(u.members)}
+                      </span>
+                      <span className="block text-xs text-zinc-500">
+                        Started {longDate(u.startDate)} for {u.audience === 'all' ? 'everyone at the gym' : 'chosen members'}
+                        {u.programName !== previewTemplate.name ? ` as “${u.programName}”` : ''}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={mutating}
+                      onClick={() => handleApplyToRollout(u)}
+                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      Apply to everyone on this rollout
+                    </button>
+                  </div>
+                ))}
+              <p className="text-xs text-zinc-500">
+                Changes you make here reach members only when you apply them, and only for weeks they haven’t reached yet. Members given this
+                programme one at a time keep their own copy.
+              </p>
             </div>
           )}
 

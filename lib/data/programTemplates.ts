@@ -5,6 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
+import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
 import type {
   ProgrammeRolloutRow,
   ProgramTemplateDayRow,
@@ -404,4 +405,58 @@ export async function cancelProgrammeRollout(rolloutId: string): Promise<ActionR
   const supabase = await createClient();
   const { error } = await supabase.from('programme_rollouts').delete().eq('id', rolloutId).is('applied_at', null);
   return error ? fail(error, 'Could not cancel that') : ok();
+}
+
+// D8 (LB1, TR18): who is still on each rollout of a template, and copying the template's later weeks into their copies (migration 0167).
+export type RolloutUsageRow = {
+  rolloutId: string;
+  templateId: string;
+  programName: string;
+  startDate: string;
+  audience: 'all' | 'selected';
+  // Members whose copy from this rollout is still running or not started (not finished, not replaced by a later programme).
+  members: number;
+};
+
+// The given-out rollouts at the gym that members are still on. Empty until migration 0167 is applied, rather than breaking the library.
+export async function getRolloutUsage(): Promise<RolloutUsageRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('programme_rollout_usage');
+  if (error || !Array.isArray(data)) return [];
+  return data.map((r: { rollout_id: string; template_id: string; program_name: string; start_date: string; audience: string; members: number }) => ({
+    rolloutId: r.rollout_id,
+    templateId: r.template_id,
+    programName: r.program_name,
+    startDate: r.start_date,
+    audience: r.audience === 'all' ? 'all' : 'selected',
+    members: r.members ?? 0,
+  }));
+}
+
+function readUpdateCounts(data: unknown): RolloutUpdateCounts {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === 'number' ? v : 0);
+  return { members: n(d.members), daysRemoved: n(d.days_removed), daysAdded: n(d.days_added), daysKept: n(d.days_kept) };
+}
+
+// What applying would change, without changing anything (for the confirm).
+export async function previewTemplateToRollout(rolloutId: string): Promise<{ ok: true; counts: RolloutUpdateCounts } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('apply_template_to_rollout', { p_rollout_id: rolloutId, p_dry_run: true });
+  if (error) return fail(error, 'Could not check that programme') as { ok: false; error: string };
+  return { ok: true, counts: readUpdateCounts(data) };
+}
+
+// Copies the template into every live copy on the rollout, for the weeks each member hasn't reached yet. Days a member has logged on
+// are kept, and the week they are in now is never changed.
+export async function applyTemplateToRollout(
+  rolloutId: string,
+  expectedGymId?: string | null
+): Promise<{ ok: true; counts: RolloutUpdateCounts } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale as { ok: false; error: string };
+  const { data, error } = await supabase.rpc('apply_template_to_rollout', { p_rollout_id: rolloutId, p_dry_run: false });
+  if (error) return fail(error, 'Could not update that programme') as { ok: false; error: string };
+  return { ok: true, counts: readUpdateCounts(data) };
 }
