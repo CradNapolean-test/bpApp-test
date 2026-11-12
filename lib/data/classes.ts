@@ -331,6 +331,7 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
         cutoffHours: c.cutoff_hours,
         blackoutStart,
         blackoutEnd,
+        ...(includeCancelled ? { coachNote: c.coach_note ?? null } : {}),
       });
       continue;
     }
@@ -347,6 +348,7 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
         cutoffHours: c.cutoff_hours,
         blackoutStart,
         blackoutEnd,
+        ...(includeCancelled ? { coachNote: c.coach_note ?? null } : {}),
       });
     }
   }
@@ -496,24 +498,65 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     for (const r of refunds ?? []) if (r.booking_id) refundedIds.add(r.booking_id);
   }
 
-  const clientIds = bookings.map((b) => b.client_id);
-  const { data: profiles, error: profilesError } = await supabase
-    .from('client_profiles')
-    .select('client_id, name')
-    .in('client_id', clientIds);
-  if (profilesError) raise(profilesError);
+  const clientIds = [...new Set(bookings.map((b) => b.client_id))];
+  // The name, plus what the coach should know on the day (CS4): health notes, injury notes, credits, a hold, how new they are. Only the
+  // name is required; the rest show when the coach is allowed to read them.
+  const [profilesRes, joinedRes, injuriesRes, balancesRes, holdsRes] = await Promise.all([
+    supabase.from('client_profiles').select('client_id, name, health_notes').in('client_id', clientIds),
+    supabase.from('profiles').select('id, created_at').in('id', clientIds),
+    supabase
+      .from('client_journal_entries')
+      .select('client_id, body')
+      .eq('kind', 'injury')
+      .in('client_id', clientIds)
+      .order('created_at', { ascending: false })
+      .limit(200),
+    supabase.from('credits_balance').select('client_id, balance').in('client_id', clientIds),
+    supabase.from('membership_holds').select('client_id, started_on, ended_on').in('client_id', clientIds).lte('started_on', date),
+  ]);
+  if (profilesRes.error) raise(profilesRes.error);
 
-  const nameMap = new Map((profiles ?? []).map((p) => [p.client_id, p.name]));
+  const profileOf = new Map((profilesRes.data ?? []).map((p) => [p.client_id as string, p as { name: string | null; health_notes: string | null }]));
+  const injuriesOf = new Map<string, string[]>();
+  for (const j of (injuriesRes.data ?? []) as { client_id: string; body: string }[]) {
+    const list = injuriesOf.get(j.client_id) ?? [];
+    if (list.length < 2 && j.body?.trim()) list.push(j.body.trim());
+    injuriesOf.set(j.client_id, list);
+  }
+  const balanceOf = new Map(((balancesRes.data ?? []) as { client_id: string; balance: number }[]).map((r) => [r.client_id, r.balance]));
+  const onHold = new Set(
+    ((holdsRes.data ?? []) as { client_id: string; started_on: string; ended_on: string | null }[])
+      .filter((h) => h.started_on <= date && (h.ended_on == null || h.ended_on >= date))
+      .map((h) => h.client_id)
+  );
+  const joinedOn = new Map(((joinedRes.data ?? []) as { id: string; created_at: string }[]).map((p) => [p.id, p.created_at.slice(0, 10)]));
+  const daysBefore = (n: number) => toIsoDate(addDays(new Date(`${date}T00:00:00Z`), -n));
+  // First class: only members who joined in the last 90 days are checked, so a long-standing member's history isn't read.
+  const recent = clientIds.filter((id) => (joinedOn.get(id) ?? '') >= daysBefore(90));
+  const { data: earlier } = recent.length
+    ? await supabase.from('bookings').select('client_id').in('client_id', recent).eq('status', 'booked').eq('attended', true).lt('booking_date', date).limit(2000)
+    : { data: [] as { client_id: string }[] };
+  const cameBefore = new Set((earlier ?? []).map((r) => r.client_id as string));
 
-  return bookings.map((b) => ({
-    bookingId: b.id,
-    clientId: b.client_id,
-    clientName: nameMap.get(b.client_id) ?? 'Unknown',
-    status: b.status,
-    attended: b.attended,
-    noShow: b.no_show,
-    lateCancel: b.status === 'cancelled' && !refundedIds.has(b.id),
-  }));
+  return bookings.map((b) => {
+    const profile = profileOf.get(b.client_id);
+    const joined = joinedOn.get(b.client_id);
+    return {
+      bookingId: b.id,
+      clientId: b.client_id,
+      clientName: profile?.name ?? 'Unknown',
+      status: b.status,
+      attended: b.attended,
+      noShow: b.no_show,
+      lateCancel: b.status === 'cancelled' && !refundedIds.has(b.id),
+      firstClass: recent.includes(b.client_id) && !cameBefore.has(b.client_id),
+      newMember: !!joined && joined >= daysBefore(14),
+      healthNotes: profile?.health_notes?.trim() || null,
+      injuryNotes: injuriesOf.get(b.client_id) ?? [],
+      credits: balanceOf.has(b.client_id) ? balanceOf.get(b.client_id)! : null,
+      onHold: onHold.has(b.client_id),
+    };
+  });
 }
 
 // Supersedes markAttendance's 2-state (attended/not) write -- the redesign's Take Attendance

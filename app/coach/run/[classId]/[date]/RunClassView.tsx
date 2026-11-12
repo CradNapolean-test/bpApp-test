@@ -8,6 +8,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useToast } from '@/app/_components/ToastProvider';
 import { useAction } from '@/app/_components/useAction';
 import { AddToSessionPanel } from '@/app/coach/classes/_components/AddToSessionPanel';
+import { RosterMarkers, SessionCoachNote } from '@/app/coach/classes/_components/RosterMarkers';
 import { bookClassForClient, grantCreditsAndBook, markAttendanceStatus } from '@/lib/data/classes';
 import { getRunClassData, getWalkInCandidates } from '@/lib/data/runClass';
 import { exerciseBlockKey, exerciseIsVisible, SECTION_TITLE, usesSections } from '@/lib/workoutSections';
@@ -193,6 +194,8 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
         )}
       </div>
 
+      <SessionCoachNote note={initial.coachNote} />
+
       <div className="flex items-center justify-between px-1">
         <p className="text-sm font-extrabold text-black dark:text-zinc-50">
           {here} of {booked.length} here
@@ -258,6 +261,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                   </div>
                 )}
               </div>
+              <RosterMarkers entry={m} creditCost={initial.creditCost} />
               {initial.workout && (
                 <>
                   <button

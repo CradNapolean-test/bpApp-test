@@ -11,6 +11,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { AddToSessionPanel } from './AddToSessionPanel';
+import { RosterMarkers, SessionCoachNote } from './RosterMarkers';
 import { bookClassForClient, cancelClassOccurrence, getRoster, grantCreditsAndBook, markAttendanceStatus, removeFromSession, restoreClassOccurrence } from '@/lib/data/classes';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
@@ -349,6 +350,12 @@ export function SessionsView({
             </div>
           )}
 
+          {!open.cancelled && open.coachNote?.trim() && (
+            <div className="mb-3">
+              <SessionCoachNote note={open.coachNote} />
+            </div>
+          )}
+
           {loading && <p className="py-6 text-center text-sm text-zinc-500">Loading roster…</p>}
 
           {!loading && roster && active.length === 0 && !open.cancelled && (
@@ -390,6 +397,7 @@ export function SessionsView({
                         Remove
                       </button>
                     </div>
+                    <RosterMarkers entry={entry} creditCost={open.creditCost} />
                     {!waitlisted && markHere && (
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button

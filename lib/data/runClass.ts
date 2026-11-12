@@ -37,6 +37,8 @@ export interface RunClassData {
   // For adding a walk-in (CS2): whether a place is free, and what it costs.
   capacity: number;
   creditCost: number;
+  // The note typed on the session in the Timetable (CS4).
+  coachNote: string | null;
   workout: { programName: string; dayLabel: string; weekNum: number; exercises: WorkoutExerciseRow[] } | null;
   members: RunClassMember[];
 }
@@ -62,7 +64,7 @@ function resolveDay(programs: WorkoutProgramRow[], date: string, weekday: number
 
 export async function getRunClassData(classId: string, date: string): Promise<RunClassData> {
   const supabase = await createClient();
-  const { data: cls, error: classError } = await supabase.from('classes').select('name, start_time, capacity, credit_cost').eq('id', classId).single();
+  const { data: cls, error: classError } = await supabase.from('classes').select('name, start_time, capacity, credit_cost, coach_note').eq('id', classId).single();
   if (classError || !cls) raise(classError ?? new Error('Class not found'));
 
   const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
@@ -212,6 +214,7 @@ export async function getRunClassData(classId: string, date: string): Promise<Ru
     startTime: cls.start_time,
     capacity: cls.capacity,
     creditCost: cls.credit_cost,
+    coachNote: cls.coach_note ?? null,
     workout: shown
       ? {
           programName: shown.program.name,

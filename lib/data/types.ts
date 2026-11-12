@@ -676,6 +676,8 @@ export interface ScheduleOccurrence {
   unmarkedCount?: number;
   // How many are on the waitlist (coach screens; a member reads only their own bookings).
   waitlistCount?: number;
+  // The coach note typed on the session in the Timetable (classes.coach_note); coach screens only (CS4).
+  coachNote?: string | null;
   // Only set when the coach asks for cancelled dates too: this date was cancelled, and why (if they said).
   cancelled?: boolean;
   cancelReason?: string | null;
@@ -690,6 +692,20 @@ export interface RosterEntry {
   noShow: boolean;
   // A cancelled booking whose credit was not given back (cancelled inside the cut-off, or removed without a refund).
   lateCancel?: boolean;
+  // What the coach should know on the day (CS4), filled by getRoster for the Sessions pop-up and Run this class. Each is read with the
+  // coach's own access, so what Row Level Security hides stays hidden. Never shown on the TV.
+  // No attended class before this date (checked for members who joined in the last 90 days).
+  firstClass?: boolean;
+  // Joined in the 14 days before this date.
+  newMember?: boolean;
+  // What the member wrote about their health at sign-up (client_profiles.health_notes).
+  healthNotes?: string | null;
+  // The coach's injury notes on the member's journal, newest first (up to 2).
+  injuryNotes?: string[];
+  // Credit balance now; null when it can't be read.
+  credits?: number | null;
+  // A plan hold covers this date.
+  onHold?: boolean;
 }
 
 export type AttendanceStatus = 'unmarked' | 'attended' | 'no_show';
