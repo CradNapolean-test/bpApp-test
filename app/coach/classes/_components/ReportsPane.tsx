@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { getCoachReports } from '@/lib/data/reports';
 import { fillPercent } from '@/lib/slotPopularity';
 import type { CoachReport } from '@/lib/data/types';
-import { RedFlagsView } from './RedFlagsView';
 import { handleTabListKeys } from '@/app/_components/tabKeys';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 
@@ -14,11 +13,12 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
   downloadTextFile(filename, toCsv(headers as string[], body), 'text/csv;charset=utf-8;');
 }
 
-type Section = 'Red flags' | 'Overview' | 'No-shows' | 'Busiest';
-const SECTIONS: Section[] = ['Red flags', 'Overview', 'No-shows', 'Busiest'];
+type Section = 'Overview' | 'No-shows' | 'Busiest';
+const SECTIONS: Section[] = ['Overview', 'No-shows', 'Busiest'];
 
 // What each section is called in a link (?tab=reports&section=...), so the dashboard can open the one it is about (UX3).
-const SECTION_PARAM: Record<string, Section> = { 'red-flags': 'Red flags', overview: 'Overview', 'no-shows': 'No-shows', busiest: 'Busiest' };
+// Red flags has its own Classes tab since D12 (ClassesHubShell reads ?section=red-flags).
+const SECTION_PARAM: Record<string, Section> = { overview: 'Overview', 'no-shows': 'No-shows', busiest: 'Busiest' };
 export const reportSectionFromParam = (value: string | null): Section | undefined => (value ? SECTION_PARAM[value] : undefined);
 const RANGES = [7, 30, 90] as const;
 
@@ -41,13 +41,13 @@ function Delta({ now, before, unit = '', goodWhen = 'up' }: { now: number | null
   );
 }
 
-// Classes and attendance across the gym. The first view is the weekly Red Flag list; the others look at a chosen
+// Classes and attendance across the gym, for a chosen
 // period (7, 30 or 90 days) and compare it with the period before. `onOpenAttendance` jumps to the Attendance tab,
 // where sessions get marked.
 export function ReportsPane({
   report: initialReport,
   onOpenAttendance,
-  initialSection = 'Red flags',
+  initialSection = 'Overview',
 }: {
   report: CoachReport;
   onOpenAttendance?: () => void;
@@ -148,28 +148,24 @@ export function ReportsPane({
         ))}
       </div>
 
-      {section === 'Red flags' && <RedFlagsView onOpenAttendance={onOpenAttendance} />}
-
-      {section !== 'Red flags' && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div role="group" aria-label="Period" className="flex gap-1.5">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                aria-pressed={days === r}
-                onClick={() => setDays(r)}
-                className={`min-h-10 rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                  days === r ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
-                }`}
-              >
-                {r} days
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-zinc-500">{loading ? 'Updating…' : rangeLabel}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="group" aria-label="Period" className="flex gap-1.5">
+          {RANGES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              aria-pressed={days === r}
+              onClick={() => setDays(r)}
+              className={`min-h-10 rounded-full px-3.5 py-1.5 text-xs font-bold ${
+                days === r ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+              }`}
+            >
+              {r} days
+            </button>
+          ))}
         </div>
-      )}
+        <p className="text-xs text-zinc-500">{loading ? 'Updating…' : rangeLabel}</p>
+      </div>
 
       {section === 'Overview' && (
         <>

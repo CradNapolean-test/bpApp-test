@@ -50,14 +50,12 @@ function FlagRow({
   stat,
   coaches,
   kind,
-  thresholds,
   onChange,
 }: {
   entry: RedFlagEntry;
   stat: RedFlagStat | undefined;
   coaches: GymCoachRow[];
   kind: 'low' | 'late';
-  thresholds: { min_attended: number };
   onChange: (id: string, fields: Partial<RedFlagEntry>) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -65,13 +63,12 @@ function FlagRow({
   const name = stat?.name ?? 'Member';
   const headline =
     kind === 'low'
-      ? `${entry.attended} attended`
+      ? `${entry.attended} attended${stat?.weekly_credits ? ` · ${stat.weekly_credits} credit${stat.weekly_credits === 1 ? '' : 's'} a week` : ''}`
       : [entry.late_cancels > 0 ? `${entry.late_cancels} late cancel${entry.late_cancels === 1 ? '' : 's'}` : '', entry.no_shows > 0 ? `${entry.no_shows} no-show${entry.no_shows === 1 ? '' : 's'}` : '']
           .filter(Boolean)
           .join(' · ');
   const contactedLabel = entry.contacted === 'yes' ? 'Contacted' : entry.contacted === 'na' ? 'Reason known' : 'To contact';
   const coach = coaches.find((c) => c.id === entry.coach_id);
-  void thresholds;
 
   return (
     <div className="rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
@@ -228,7 +225,19 @@ function ContactHelp({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ThresholdsSheet({ initial, gymId, onSaved, onClose }: { initial: RedFlagReport['thresholds']; gymId: string | null; onSaved: () => void; onClose: () => void }) {
+function ThresholdsSheet({
+  initial,
+  perMember,
+  gymId,
+  onSaved,
+  onClose,
+}: {
+  initial: RedFlagReport['thresholds'];
+  perMember: boolean;
+  gymId: string | null;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
   const toast = useToast();
   const [vals, setVals] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -245,11 +254,20 @@ function ThresholdsSheet({ initial, gymId, onSaved, onClose }: { initial: RedFla
   return (
     <BottomSheet title="Red flag thresholds" onClose={onClose}>
       <div className="space-y-4">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">A member is flagged for a week when any of these is true. The usual setting is 2, 2 and 2.</p>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-zinc-500">Attended fewer than this many classes</label>
-          {num('min_attended')}
-        </div>
+        {perMember ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Low attendance follows each member&apos;s plan: attended under half their weekly credits (under 3 on a 6-a-week plan, 0 or 1 on
+            3 a week). A member is also flagged when either of these is true. The usual setting is 2 and 2.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">A member is flagged for a week when any of these is true. The usual setting is 2, 2 and 2.</p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Attended fewer than this many classes</label>
+              {num('min_attended')}
+            </div>
+          </>
+        )}
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Late cancels this many or more</label>
           {num('late_cancels')}
@@ -353,6 +371,10 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
   const reds = entries.filter((e) => e.tier === 'red').length;
   const anyUnmarked = entries.some((e) => (statById.get(e.client_id)?.unmarked ?? 0) > 0);
   const leftOut = (report?.stats ?? []).filter((s) => s.status !== 'covered');
+  // Since migration 0159 low attendance is under half each member's weekly credits; before it, one gym-wide number.
+  const perMember = report?.low_rule === 'half_weekly_credits';
+  const isLow = (m: RedFlagReport['master']['members'][number], i: number, c: number) =>
+    m.lows ? m.lows[i] === true : c < (report?.thresholds.min_attended ?? 2);
   const leftOutLabel: Record<string, string> = { new: 'Joined during or after the week', hold: 'On hold', ended: 'Membership already ended' };
 
   return (
@@ -473,11 +495,13 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
           <section className="space-y-2">
             <div>
               <h3 className="text-sm font-extrabold text-black dark:text-zinc-50">Low attendance · {low.length}</h3>
-              <p className="text-xs text-zinc-500">Attended fewer than {report.thresholds.min_attended} classes. Fewest first.</p>
+              <p className="text-xs text-zinc-500">
+                {perMember ? 'Attended under half their weekly credits.' : `Attended fewer than ${report.thresholds.min_attended} classes.`} Fewest first.
+              </p>
             </div>
             {low.length === 0 && <EmptyState compact title={entries.some((e) => e.low_attendance) ? 'Nobody matches this filter.' : 'Nobody had low attendance this week.'} />}
             {low.map((e) => (
-              <FlagRow key={`low-${e.id}`} entry={e} stat={statById.get(e.client_id)} coaches={coaches} kind="low" thresholds={report.thresholds} onChange={change} />
+              <FlagRow key={`low-${e.id}`} entry={e} stat={statById.get(e.client_id)} coaches={coaches} kind="low" onChange={change} />
             ))}
           </section>
 
@@ -490,7 +514,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
             </div>
             {late.length === 0 && <EmptyState compact title={entries.some((e) => e.late_or_no_show) ? 'Nobody matches this filter.' : 'No late cancel or no-show problems this week.'} />}
             {late.map((e) => (
-              <FlagRow key={`late-${e.id}`} entry={e} stat={statById.get(e.client_id)} coaches={coaches} kind="late" thresholds={report.thresholds} onChange={change} />
+              <FlagRow key={`late-${e.id}`} entry={e} stat={statById.get(e.client_id)} coaches={coaches} kind="late" onChange={change} />
             ))}
           </section>
 
@@ -499,7 +523,8 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
               <h3 className="text-sm font-extrabold text-black dark:text-zinc-50">Last 6 weeks</h3>
               <p className="text-xs text-zinc-500">
                 Members flagged for low attendance in any of these weeks who are still active. <span className="font-bold text-danger">0</span> no classes,{' '}
-                <span className="font-bold text-warning">1</span> one class, <span className="font-bold text-success">IN</span> enough.
+                <span className="font-bold text-warning">1</span> {perMember ? 'under half their weekly credits' : 'one class'},{' '}
+                <span className="font-bold text-success">IN</span> enough.
               </p>
             </div>
             {report.master.members.length === 0 ? (
@@ -524,6 +549,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
                           <Link href={`/coach/clients/${m.client_id}`} className="hover:underline">
                             {m.name}
                           </Link>
+                          {m.weekly_credits ? <span className="block text-[10px] font-medium text-zinc-500">{m.weekly_credits} a week</span> : null}
                         </td>
                         {m.counts.map((c, i) => (
                           <td key={i} className="px-1 py-1.5 text-center">
@@ -532,12 +558,12 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
                                 className={`inline-block min-w-[2rem] rounded-md px-1.5 py-1 text-xs font-extrabold ${
                                   c === 0
                                     ? 'bg-danger/15 text-danger'
-                                    : c < report.thresholds.min_attended
+                                    : isLow(m, i, c)
                                       ? 'bg-warning/20 text-warning'
                                       : 'bg-success/15 text-success'
                                 }`}
                               >
-                                {c < report.thresholds.min_attended ? c : 'IN'}
+                                {c === 0 || isLow(m, i, c) ? c : 'IN'}
                               </span>
                             )}
                           </td>
@@ -573,7 +599,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
 
       {sheet === 'help' && <ContactHelp onClose={() => setSheet(null)} />}
       {sheet === 'thresholds' && report && (
-        <ThresholdsSheet initial={report.thresholds} gymId={gymId} onSaved={() => setReload((n) => n + 1)} onClose={() => setSheet(null)} />
+        <ThresholdsSheet initial={report.thresholds} perMember={perMember} gymId={gymId} onSaved={() => setReload((n) => n + 1)} onClose={() => setSheet(null)} />
       )}
     </div>
   );

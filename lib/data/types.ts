@@ -881,6 +881,8 @@ export interface RedFlagStat {
   no_shows: number;
   // Past bookings in the week not yet marked attended or no-show.
   unmarked: number;
+  // Credits a week on the plan the member was on at the start of the week (migration 0159; absent before it, empty when not covered).
+  weekly_credits?: number | null;
 }
 
 export interface RedFlagEntry {
@@ -913,12 +915,16 @@ export interface RedFlagReport {
   // Monday of the last finished week at the gym, by the gym's own calendar.
   latest_completed_week?: string;
   thresholds: RedFlagThresholds;
+  // 'half_weekly_credits' since migration 0159: low attendance = attended under half the member's weekly credits (D12), and
+  // thresholds.min_attended is no longer used. Absent before it: low attendance = fewer than thresholds.min_attended.
+  low_rule?: 'half_weekly_credits';
   stats: RedFlagStat[];
   entries: RedFlagEntry[];
   master: {
     weeks: string[];
     // counts per week, oldest first; null = not a covered member that week
-    members: { client_id: string; name: string; coach_id: string | null; counts: (number | null)[] }[];
+    // lows (0159): true for a week the member was under half their weekly credits; weekly_credits: their latest covered week's.
+    members: { client_id: string; name: string; coach_id: string | null; counts: (number | null)[]; lows?: boolean[]; weekly_credits?: number | null }[];
   };
 }
 
