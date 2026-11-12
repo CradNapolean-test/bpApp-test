@@ -65,6 +65,14 @@
 --          to_regprocedure('public.apply_template_to_rollout(uuid, boolean)') is not null as already_applied;
 -- Expected before: true, true, true, true, true, false.
 --
+--   -- 1. Copies given out by each rollout:
+--   select r.program_name, r.start_date, r.audience, count(wp.id) as copies
+--   from public.programme_rollouts r left join public.workout_programs wp on wp.rollout_id = r.id
+--   group by r.id order by r.start_date;
+-- Expected on 12 Nov 2026: September Weeks 1-4 (3 Oct) 0, test 2 (3 Oct) 1, September Weeks 1-4 (4 Oct) 1, October Weeks 5-8 (10 Oct) 4,
+-- October Weeks 5-8 (19 Oct) 4, November Weeks 9-11 (10 Nov) 17. Only the 17 are still running: everyone on the October rollouts has
+-- started November since, so "In use by" shows on November Weeks 9-11 only.
+--
 --   -- 2. Rollout copies by the weekday they started (isodow 1 = Monday), and how many already have week_one (none before):
 --   select extract(isodow from wp.start_date) as isodow, count(*) as copies
 --   from public.workout_programs wp where wp.rollout_id is not null and wp.start_date is not null group by 1 order by 1;
@@ -94,12 +102,6 @@
 --   select (select count(*) from public.workout_exercises where exercise_library_id is not null) as programme_linked,
 --          (select count(*) from public.program_template_exercises where exercise_library_id is not null) as template_linked;
 --
---   -- 1. Members on each rollout copy today, and how many of those copies are still running (what "In use by" will show):
---   select r.program_name, r.start_date, r.audience, count(wp.id) as copies
---   from public.programme_rollouts r left join public.workout_programs wp on wp.rollout_id = r.id
---   group by r.id order by r.start_date;
--- Expected on 12 Nov 2026: September Weeks 1-4 (3 Oct, 4 Oct) 1 and 1, test 2 (3 Oct) 1, October Weeks 5-8 (10 Oct) 4, October Weeks 5-8
--- (19 Oct) 4, November Weeks 9-11 (10 Nov) 17.
 --
 -- AFTER (read-only):
 --   select to_regprocedure('public.apply_template_to_rollout(uuid, boolean)') is not null, to_regprocedure('public.programme_rollout_usage()') is not null;
