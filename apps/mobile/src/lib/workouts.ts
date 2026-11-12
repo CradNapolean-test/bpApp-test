@@ -52,7 +52,7 @@ const chunk = <T,>(arr: T[], n: number): T[][] => Array.from({ length: Math.ceil
 
 // ---------- the programme overview (week pills + day cards) ----------
 export type ProgramOverview = {
-  current: { id: string; name: string; start_date: string | null; totalWeeks: number } | null;
+  current: { id: string; name: string; start_date: string | null; week_one: string | null; totalWeeks: number } | null;
   upcoming: { id: string; name: string; start_date: string | null }[];
   days: Pick<WorkoutProgramDayRow, 'id' | 'week_num' | 'day_label' | 'phase_label' | 'day_position' | 'notes'>[];
   exercisesByDay: Record<string, OverviewExercise[]>;
@@ -68,7 +68,7 @@ export function useProgramOverview(todayIso: string, enabled: boolean) {
     queryKey: ['program-overview', userId, todayIso],
     enabled,
     queryFn: async (): Promise<ProgramOverview> => {
-      const programsRes = await supabase.from('workout_programs').select('id, client_id, name, created_at, start_date').eq('client_id', userId);
+      const programsRes = await supabase.from('workout_programs').select('id, client_id, name, created_at, start_date, week_one').eq('client_id', userId);
       if (programsRes.error) throw programsRes.error;
       const programs = (programsRes.data ?? []).map((p) => ({ ...(p as Omit<WorkoutProgramRow, 'workout_program_days'>), workout_program_days: [] as WorkoutProgramDayRow[] }));
       const { current, upcoming } = pickCurrentProgram(programs, todayIso);
@@ -103,7 +103,7 @@ export function useProgramOverview(todayIso: string, enabled: boolean) {
       }
       const totalWeeks = Math.max(0, ...days.map((d) => d.week_num));
       return {
-        current: { id: current.id, name: current.name, start_date: current.start_date, totalWeeks },
+        current: { id: current.id, name: current.name, start_date: current.start_date, week_one: current.week_one ?? null, totalWeeks },
         upcoming: upcomingOut,
         days,
         exercisesByDay,

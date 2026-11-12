@@ -333,6 +333,9 @@ export interface WorkoutProgramRow {
   // (still fully usable for manual logging/editing). Block length is derived from
   // max(week_num) across workout_program_days, not stored separately.
   start_date: string | null;
+  // The Monday week 1 starts on, for a programme given to the whole gym or a group (migration 0167, D9): its weeks follow the gym's
+  // calendar. Null (or not loaded) for a 1:1 programme, whose weeks count from start_date. See programWeekStart in utils/checkin.ts.
+  week_one?: string | null;
   workout_program_days: WorkoutProgramDayRow[];
 }
 

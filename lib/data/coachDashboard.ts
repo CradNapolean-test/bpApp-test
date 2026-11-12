@@ -189,7 +189,7 @@ interface MemberRow {
   membership_holds: { id: string }[] | null;
   big_dog_results: { exercise_key: string; self_reported: boolean | null; result_text: string | null; created_at: string }[] | null;
   // Programmes started in the last year, each with only its highest week number (see buildQuery).
-  workout_programs: { id: string; name: string; start_date: string | null; workout_program_days: { week_num: number }[] | null }[] | null;
+  workout_programs: { id: string; name: string; start_date: string | null; week_one: string | null; workout_program_days: { week_num: number }[] | null }[] | null;
 }
 
 const shortDay = (iso: string) =>
@@ -205,7 +205,7 @@ const SELECT = `
   form_assignments!client_id(id, completed_at, form_templates(name)),
   bookings!client_id(booking_date, attended, no_show, status, class:classes(start_time)),
   big_dog_results!client_id(exercise_key, self_reported, result_text, created_at),
-  workout_programs(id, name, start_date, workout_program_days(week_num)),
+  workout_programs(id, name, start_date, week_one, workout_program_days(week_num)),
   ${FOLLOW_UP_RELATIONS}
 `;
 

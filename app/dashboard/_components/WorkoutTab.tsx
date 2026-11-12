@@ -36,7 +36,7 @@ import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
 import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
-import { resolveActiveProgram } from '@/lib/utils/checkin';
+import { programWeekOn, resolveActiveProgram } from '@/lib/utils/checkin';
 import { pickCurrentProgram } from '@/lib/utils/currentProgram';
 import { isTestTemplateName, nextProgrammeStart } from '@/lib/utils/programmeStart';
 import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
@@ -1051,7 +1051,7 @@ export function WorkoutTab({
   const progressLine = (program: WorkoutProgramRow) => {
     const total = Math.max(0, ...program.workout_program_days.map((d) => d.week_num));
     if (!program.start_date) return 'No start date yet. Set one so check-ins find the right workout.';
-    const week = Math.floor(daysBetween(program.start_date, todayIsoLocal) / 7) + 1;
+    const week = programWeekOn({ start_date: program.start_date, week_one: program.week_one }, todayIsoLocal);
     return week > total && total > 0
       ? `Finished · started ${prettyDate(program.start_date)}`
       : `Week ${Math.max(week, 1)} of ${total || 1} · started ${prettyDate(program.start_date)}`;

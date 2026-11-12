@@ -164,7 +164,7 @@ export function useTodayWorkout(todayIso: string, tz: string, enabled: boolean) 
     queryKey: ['today-workout', userId, todayIso],
     enabled,
     queryFn: async (): Promise<TodayWorkout> => {
-      const programsRes = await supabase.from('workout_programs').select('id, client_id, name, created_at, start_date').eq('client_id', userId);
+      const programsRes = await supabase.from('workout_programs').select('id, client_id, name, created_at, start_date, week_one').eq('client_id', userId);
       if (programsRes.error) throw programsRes.error;
       const programs = (programsRes.data ?? []).map((p) => ({ ...(p as Omit<WorkoutProgramRow, 'workout_program_days'>), workout_program_days: [] as WorkoutProgramDayRow[] }));
       const { current, upcoming } = pickCurrentProgram(programs, todayIso);

@@ -37,6 +37,20 @@ export function programWeekCount(program: { workout_program_days: { week_num: nu
   return Math.max(0, ...program.workout_program_days.map((d) => d.week_num));
 }
 
+// Which day week 1 starts on (D9, TR19, 11 Nov 2026). A programme given to the whole gym or a group (a rollout) follows the gym's
+// calendar: week_one is the Monday of the week the rollout started (migration 0167), so everyone on it is on the same week on the same day
+// and the weeks turn over on a Monday, whichever day each member's copy started. A 1:1 programme has no week_one and counts from its own
+// start date. The start date still decides when a programme takes over (latestStartedProgram).
+export function programWeekStart(program: { start_date: string; week_one?: string | null }): string {
+  const weekOne = program.week_one;
+  return weekOne && weekOne <= program.start_date ? weekOne : program.start_date;
+}
+
+// The programme week a date falls in (1 = the first week).
+export function programWeekOn(program: { start_date: string; week_one?: string | null }, dateIso: string): number {
+  return Math.floor(daysBetween(programWeekStart(program), dateIso) / 7) + 1;
+}
+
 export function resolveActiveProgram(
   programs: WorkoutProgramRow[],
   todayIso: string
@@ -44,7 +58,7 @@ export function resolveActiveProgram(
   const program = latestStartedProgram(programs, todayIso);
   if (!program) return null;
 
-  const weekNum = Math.floor(daysBetween(program.start_date, todayIso) / 7) + 1;
+  const weekNum = programWeekOn(program, todayIso);
   const maxWeek = programWeekCount(program);
   if (weekNum > maxWeek) return null; // block has ended, nothing new assigned -- empty
 

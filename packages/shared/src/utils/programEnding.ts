@@ -3,15 +3,15 @@
 // "Last week of this programme: your coach is setting up the next one". Programmes used to run out with no warning: members
 // were shown "this block has finished" with nothing next, and the coach's dashboard showed them as fine.
 //
-// The end is read from the same programme and the same week count as resolveActiveProgram (./checkin.ts): weeks
-// count from the copy's own start date, so the last day is start + 7 x weeks - 1, and resolveActiveProgram stops finding a
-// week the day after it. Whether a gym-wide programme should follow one gym calendar instead (TR19) is not decided; if
-// that changes, it changes in checkin.ts and this follows.
+// The end is read from the same programme and the same week count as resolveActiveProgram (./checkin.ts): weeks count from
+// programWeekStart, which is the copy's own start date for a 1:1 programme and the Monday of the rollout's first week for one given to the
+// whole gym or a group (D9). So the last day is week 1's first day + 7 x weeks - 1 (the Sunday of the last week for a gym programme), and
+// resolveActiveProgram stops finding a week the day after it.
 //
 // Twin of lib/utils/programEnding.ts (the web): keep the two the same.
 
 import { addDays, daysBetween, toIsoDate } from './dates';
-import { latestStartedProgram, programWeekCount } from './checkin';
+import { latestStartedProgram, programWeekCount, programWeekStart } from './checkin';
 
 // The last 7 days of a programme (its last week): the coach's To do and the member's notice both start here.
 export const ENDING_SOON_DAYS = 7;
@@ -25,6 +25,8 @@ export interface ProgrammeForEnding {
   id: string;
   name: string;
   start_date: string | null;
+  // The gym calendar's week 1 for a whole-gym or group programme (D9); null or missing for a 1:1 programme.
+  week_one?: string | null;
   workout_program_days: { week_num: number }[];
 }
 
@@ -49,7 +51,7 @@ export function programmeEnd(programs: ProgrammeForEnding[], todayIso: string): 
   if (!program) return null;
   const totalWeeks = programWeekCount(program);
   if (totalWeeks <= 0) return null;
-  const lastDay = toIsoDate(addDays(new Date(`${program.start_date}T00:00:00Z`), totalWeeks * 7 - 1));
+  const lastDay = toIsoDate(addDays(new Date(`${programWeekStart(program)}T00:00:00Z`), totalWeeks * 7 - 1));
   const nextStart =
     programs
       .map((p) => p.start_date)

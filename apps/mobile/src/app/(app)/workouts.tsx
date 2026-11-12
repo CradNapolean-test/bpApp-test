@@ -59,7 +59,7 @@ export default function Workouts() {
 
   // Which programme week is current (null once the block has finished).
   const active = resolveActiveProgram(
-    [{ id: current.id, start_date: current.start_date, workout_program_days: o.days } as unknown as WorkoutProgramRow],
+    [{ id: current.id, start_date: current.start_date, week_one: current.week_one, workout_program_days: o.days } as unknown as WorkoutProgramRow],
     todayIso,
   );
   const currentWeek = active?.weekNum ?? null;
@@ -67,7 +67,7 @@ export default function Workouts() {
   const notice = memberProgrammeNotice(
     programmeEnd(
       [
-        { id: current.id, name: current.name, start_date: current.start_date, workout_program_days: o.days },
+        { id: current.id, name: current.name, start_date: current.start_date, week_one: current.week_one, workout_program_days: o.days },
         ...o.upcoming.map((u) => ({ ...u, workout_program_days: [] })),
       ],
       todayIso,

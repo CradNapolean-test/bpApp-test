@@ -1,13 +1,15 @@
 -- Workout programmes (live review decisions of 11 Nov 2026). Each part has its own before/after below:
 --   1. D8 (LB1, TR18): a template shows how many members are on it, and the coach can copy the template's changes into everyone's copy on a
 --      rollout, for the weeks they haven't reached yet.
+--   2. D9 (TR19): a programme given to the whole gym or a group follows the gym's calendar; a 1:1 programme keeps its own start date.
+--   Part 2's column comes first in the file because part 1 counts weeks with it.
 --
 -- 1. Today a rollout gives each member their own copy of the template on the start date (instantiate_template_core, 0152), and nothing links
 --    the copy back afterwards: a fix made to the template later never reaches them. Live on 6 Nov, the 4 copies from the 10 Oct rollout of
 --    "October Weeks 5-8" were an older, unfinished version (week 1 Tuesday empty where the template has 16 exercises).
 --    New: _rollout_live_copies(rollout) (internal), the copies on a rollout that are still running or not yet started: the member has not
 --      started a later programme since, and the copy's last week has not finished. The week a member is on is counted from the copy's
---      start date in the gym's timezone (as the app does).
+--      first day (week_one, part 2, or its start date) in the gym's timezone, as the app does.
 --    New: programme_rollout_usage(), for the coach's template list: each given-out rollout at the coach's gym with members still on it, and
 --      how many. Signed-in coaches only, their own gym only, counts only (no names).
 --    New: apply_template_to_rollout(rollout, dry_run). For each live copy on the rollout, for each week after the one the member is on now
@@ -21,6 +23,21 @@
 --      everyone at the gym needs a gym admin, as starting one does (0133). A member's own changes to a future day are replaced: the confirm
 --      says so.
 --
+-- 2. Every programme counted its weeks from its own start date (resolveActiveProgram, lib/utils/checkin.ts and the phone's twin), so members on
+--    the same class programme were on different weeks: October copies started 10, 12, 19 and 24 Oct (TR19), and a rollout started on a
+--    Tuesday turned its weeks over on Tuesdays while the gym's week starts on Monday.
+--    New: workout_programs.week_one (date, a Monday or empty): where week 1 starts for a programme given out by a rollout ("everyone at the
+--      gym" or chosen members / a group, programme_rollouts.audience 'all' or 'selected'). That is how a gym or group programme is told from
+--      a 1:1 one: a rollout copy has rollout_id, a programme started for one member from their page has none. The app counts weeks from
+--      week_one when it is set (programWeekStart), else from the start date as before. The start date still decides when the copy takes
+--      over from the member's last programme, so a member whose copy starts on the Tuesday still has their old programme on the Monday.
+--    New: trigger workout_programs_week_one sets week_one to the Monday of the start date's week when a rollout copy is made, and again when
+--      its start date is changed. It is kept if the rollout is later deleted (rollout_id goes empty), so a member's weeks don't jump.
+--    Backfill: every existing rollout copy with a start date gets week_one. Before -> after on 12 Nov 2026, the only copies still running
+--      are the 17 from November Weeks 9-11 (Tue 10 Nov, everyone): week 2 now starts Mon 16 Nov (was Tue 17 Nov), and the last day is
+--      Sun 29 Nov (was Mon 30 Nov), so the coach's "ends soon" To do and the member's last-week notice move a day earlier too. Copies
+--      started on a Monday (October Weeks 5-8 of 19 Oct) don't change. 1:1 programmes don't change.
+--
 -- Guard: the migration stops before changing anything ("... is missing") unless the tables and columns it reads are there (rollouts from
 -- 0094, block_config from 0152, workout_block_choices from 0095, day feedback from 0020) and local_date (0129).
 --
@@ -30,6 +47,11 @@
 --          to_regprocedure('public.local_date(text, timestamptz)') is not null as local_date,
 --          to_regprocedure('public.apply_template_to_rollout(uuid, boolean)') is not null as already_applied;
 -- Expected before: true, true, true, true, true, false.
+--
+--   -- 2. Rollout copies by the weekday they started (isodow 1 = Monday), and how many already have week_one (none before):
+--   select extract(isodow from wp.start_date) as isodow, count(*) as copies
+--   from public.workout_programs wp where wp.rollout_id is not null and wp.start_date is not null group by 1 order by 1;
+-- Expected on 12 Nov 2026: 1 -> 4 (19 Oct), 2 -> 17 (10 Nov), 6 -> 5 (3 and 10 Oct), 7 -> 1 (4 Oct): 27 copies.
 --
 --   -- 1. Members on each rollout copy today, and how many of those copies are still running (what "In use by" will show):
 --   select r.program_name, r.start_date, r.audience, count(wp.id) as copies
@@ -46,7 +68,18 @@
 --   select count(*) from public.workout_program_days d join public.workout_programs wp on wp.id = d.program_id where wp.rollout_id is not null;
 -- Expected: the same number before and after.
 --
--- ROLLBACK: drop function public.apply_template_to_rollout(uuid, boolean); drop function public.programme_rollout_usage();
+--   -- 2. Every rollout copy has a Monday week_one in the week it started, and nothing else has one:
+--   select count(*) filter (where week_one is not null) as with_week_one,
+--          count(*) filter (where rollout_id is not null and start_date is not null and week_one is null) as missing,
+--          count(*) filter (where week_one is not null and (extract(isodow from week_one) <> 1 or week_one > start_date or start_date - week_one > 6)) as wrong
+--   from public.workout_programs;
+-- Expected: 27, 0, 0 (with_week_one = the copies counted before).
+--   select wp.start_date, wp.week_one, count(*) from public.workout_programs wp where wp.rollout_id is not null group by 1, 2 order by 1;
+-- Expected: 3 Oct -> 28 Sep, 4 Oct -> 28 Sep, 10 Oct -> 5 Oct, 19 Oct -> 19 Oct, 10 Nov -> 9 Nov.
+--
+-- ROLLBACK: drop trigger workout_programs_week_one on public.workout_programs; drop function public.set_programme_week_one();
+--           alter table public.workout_programs drop column week_one (the app then counts from start dates again);
+--           drop function public.apply_template_to_rollout(uuid, boolean); drop function public.programme_rollout_usage();
 --           drop function public._slot_kept(uuid, integer, integer, text); drop function public._program_day_has_activity(uuid);
 --           drop function public._rollout_live_copies(uuid).
 
@@ -62,6 +95,39 @@ begin
   if to_regprocedure('public.local_date(text, timestamptz)') is null then raise exception 'local_date is missing (migration 0129)'; end if;
 end;
 $guard$;
+
+
+-- 2. D9 (first: part 1 counts weeks with week_one) -------------------------------------------------------------------------------------------
+
+alter table workout_programs add column if not exists week_one date;
+alter table workout_programs drop constraint if exists workout_programs_week_one_monday;
+alter table workout_programs add constraint workout_programs_week_one_monday check (week_one is null or extract(isodow from week_one) = 1);
+comment on column workout_programs.week_one is
+  'Where week 1 starts (a Monday) for a programme given out by a rollout: its weeks follow the gym calendar. Empty for a 1:1 programme, which counts from start_date (D9, migration 0167).';
+
+-- A rollout copy follows the gym's week: week 1 is the Monday-to-Sunday week it starts in.
+create or replace function public.set_programme_week_one()
+returns trigger
+language plpgsql
+set search_path = public
+as $fn$
+begin
+  if new.rollout_id is not null and new.start_date is not null
+     and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then
+    new.week_one := new.start_date - (extract(isodow from new.start_date)::integer - 1);
+  end if;
+  return new;
+end;
+$fn$;
+
+drop trigger if exists workout_programs_week_one on workout_programs;
+create trigger workout_programs_week_one
+  before insert or update of start_date on workout_programs
+  for each row execute function public.set_programme_week_one();
+
+update workout_programs
+set week_one = start_date - (extract(isodow from start_date)::integer - 1)
+where rollout_id is not null and start_date is not null and week_one is null;
 
 
 -- 1. D8 ------------------------------------------------------------------------------------------------------------------------------------
@@ -80,7 +146,9 @@ as $fn$
   cross join lateral (select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) as today) t
   join workout_programs wp on wp.rollout_id = r.id and wp.start_date is not null
   cross join lateral (
-    select case when wp.start_date > t.today then 0 else (t.today - wp.start_date) / 7 + 1 end as current_week
+    -- as programWeekStart in the app: week_one when it is set and not after the start date, else the start date
+    select case when wp.start_date > t.today then 0
+                else (t.today - least(coalesce(wp.week_one, wp.start_date), wp.start_date)) / 7 + 1 end as current_week
   ) w
   where r.id = p_rollout_id
     -- the member has not started a later programme since

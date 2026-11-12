@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveActiveProgram } from './checkin';
+import { programWeekOn, programWeekStart, resolveActiveProgram } from './checkin';
 import {
   ENDED_FOLLOW_UP_DAYS,
   coachProgrammeEndLine,
@@ -156,5 +156,44 @@ describe('memberProgrammeNotice', () => {
     const next = prog('next', '2026-11-16', 4);
     expect(memberProgrammeNotice(programmeEnd([lucy, next], '2026-11-06'), fmt)).toBeNull();
     expect(memberProgrammeNotice(programmeEnd([lucy, next], '2026-11-10'), fmt)).toEqual({ stage: 'ended', text: 'This programme has finished.', detail: null });
+  });
+});
+
+// D9 (TR19): a programme given to the whole gym or a group follows the gym's calendar from week_one, the Monday of its first week.
+describe('gym calendar (week_one)', () => {
+  // November Weeks 9-11 was given to everyone at the gym on Tue 10 Nov 2026 (3 weeks). Migration 0167 sets week_one to Mon 9 Nov.
+  const gym = { ...prog('November Weeks 9-11', '2026-11-10', 3), start_date: '2026-11-10', week_one: '2026-11-09' };
+  const oneToOne = { ...prog('November Weeks 9-11', '2026-11-10', 3), start_date: '2026-11-10' };
+
+  it('turns the week over on the Monday for everyone on the rollout, whichever day it started', () => {
+    expect(programWeekOn(gym, '2026-11-10')).toBe(1);
+    expect(programWeekOn(gym, '2026-11-15')).toBe(1);
+    expect(programWeekOn(gym, '2026-11-16')).toBe(2);
+    expect(resolveActiveProgram([asRow(gym)], '2026-11-16')?.weekNum).toBe(2);
+  });
+
+  it('keeps a 1:1 programme counting from its own start date', () => {
+    expect(programWeekStart(oneToOne)).toBe('2026-11-10');
+    expect(resolveActiveProgram([asRow(oneToOne)], '2026-11-16')?.weekNum).toBe(1);
+    expect(resolveActiveProgram([asRow(oneToOne)], '2026-11-17')?.weekNum).toBe(2);
+  });
+
+  it('ends on the Sunday of the last gym week, and resolveActiveProgram agrees', () => {
+    const end = programmeEnd([gym], '2026-11-12')!;
+    expect(end.lastDay).toBe('2026-11-29');
+    expect(resolveActiveProgram([asRow(gym)], '2026-11-29')?.weekNum).toBe(3);
+    expect(resolveActiveProgram([asRow(gym)], '2026-11-30')).toBeNull();
+    expect(programmeEnd([oneToOne], '2026-11-12')!.lastDay).toBe('2026-11-30');
+  });
+
+  it('still takes over on its own start date, not on week_one', () => {
+    const before = prog('October', '2026-10-19', 4);
+    expect(resolveActiveProgram([asRow(before), asRow(gym)], '2026-11-09')?.program.name).toBe('October');
+    expect(resolveActiveProgram([asRow(before), asRow(gym)], '2026-11-10')?.program.name).toBe('November Weeks 9-11');
+  });
+
+  it('ignores a week_one after the start date (counts from the start date)', () => {
+    expect(programWeekStart({ start_date: '2026-11-10', week_one: '2026-11-16' })).toBe('2026-11-10');
+    expect(programWeekStart({ start_date: '2026-11-10', week_one: null })).toBe('2026-11-10');
   });
 });
