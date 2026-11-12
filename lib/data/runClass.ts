@@ -5,7 +5,7 @@ import { getRoster } from './classes';
 import { getMyClients, type CoachClientRow } from './coach';
 import { raise } from './errors';
 import { describeChoices } from '@/lib/workoutSections';
-import { daysBetween } from '@/lib/utils/dates';
+import { programWeekOn } from '@/lib/utils/checkin';
 import { trackingOf } from '@/lib/workoutTracking';
 import type { HistorySet, PastBlockResult } from '@/lib/runClassHistory';
 import type { RosterEntry, WorkoutExerciseRow, WorkoutProgramRow } from './types';
@@ -57,7 +57,9 @@ function resolveDay(programs: WorkoutProgramRow[], date: string, weekday: number
     .filter((p) => startOf(p) <= date)
     .sort((a, b) => startOf(b).localeCompare(startOf(a)) || b.created_at.localeCompare(a.created_at))[0];
   if (!current) return null;
-  const weekNum = Math.floor(daysBetween(startOf(current), date) / 7) + 1;
+  // The same week count as the member's own workout screen: a gym or group rollout follows the gym's week (week_one, D9),
+  // a 1:1 programme counts from its own start.
+  const weekNum = programWeekOn({ start_date: startOf(current), week_one: current.week_one ?? null }, date);
   const day = current.workout_program_days.find((d) => d.week_num === weekNum && d.day_position === weekday);
   return day ? { program: current, day, weekNum } : null;
 }
