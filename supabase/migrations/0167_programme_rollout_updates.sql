@@ -2,6 +2,7 @@
 --   1. D8 (LB1, TR18): a template shows how many members are on it, and the coach can copy the template's changes into everyone's copy on a
 --      rollout, for the weeks they haven't reached yet.
 --   2. D9 (TR19): a programme given to the whole gym or a group follows the gym's calendar; a 1:1 programme keeps its own start date.
+--   3. D26 (LB6): programme and template rows typed by name are linked to the library exercise with the same name (one-off data fix).
 --   Part 2's column comes first in the file because part 1 counts weeks with it.
 --
 -- 1. Today a rollout gives each member their own copy of the template on the start date (instantiate_template_core, 0152), and nothing links
@@ -38,6 +39,22 @@
 --      Sun 29 Nov (was Mon 30 Nov), so the coach's "ends soon" To do and the member's last-week notice move a day earlier too. Copies
 --      started on a Monday (October Weeks 5-8 of 19 Oct) don't change. 1:1 programmes don't change.
 --
+-- 3. An exercise typed straight into a template or programme ("+ Add ... as its own exercise", a rename, or an import) has no
+--    exercise_library_id, so it shows no video, can't work out a weight from a % of 1RM, and takes no tracking type from the library.
+--    The builder now links a typed name that is a library exercise (ExerciseEditor, lib/libraryMatch.ts); this links the rows typed before.
+--    Rule (the same as the app's): an exercise row (block_type 'exercise', not instructions) with no library link whose name is exactly the
+--    name of ONE active library exercise, ignoring case and extra spaces. Names two library exercises share are left alone ("Deadlift" and
+--    "DEADLIFT" are both in the library). The row's own name, sets, reps, loads and notes don't change. It gets:
+--      * exercise_library_id (so % of 1RM finds the member's max, and the video follows the library);
+--      * the library's video, only when the row has none;
+--      * the library's tracking type only when the row still has the default, weight x reps, with no target time, distance or calories,
+--        and (programme rows) no set logged on it yet. A tracking type a coach chose is never changed.
+--    Read-only check on 12 Nov 2026: 84 template rows and 84 programme rows match (26 library names, e.g. BENCH PRESS, INCLINE DB PRESS,
+--    WALL SIT); all 84 + 84 get a video; 0 tracking types change; 6 + 6 rows named "Deadlift" are skipped (two library exercises). Most
+--    typed names have no library exercise at all and stay as they are: Erg (400 programme rows), Wall Balls (278), Ankle Taps (200),
+--    Gorilla Row, Cable Pull Through, MB Shoulder Toss, Erg Sprint, Bicycle Crunch, Row or Ski (100 each), Ball Slams, Kcals (78) ...
+--    Adding those to the library (with exactly the same name) and running this part's two updates again would link them.
+--
 -- Guard: the migration stops before changing anything ("... is missing") unless the tables and columns it reads are there (rollouts from
 -- 0094, block_config from 0152, workout_block_choices from 0095, day feedback from 0020) and local_date (0129).
 --
@@ -52,6 +69,30 @@
 --   select extract(isodow from wp.start_date) as isodow, count(*) as copies
 --   from public.workout_programs wp where wp.rollout_id is not null and wp.start_date is not null group by 1 order by 1;
 -- Expected on 12 Nov 2026: 1 -> 4 (19 Oct), 2 -> 17 (10 Nov), 6 -> 5 (3 and 10 Oct), 7 -> 1 (4 Oct): 27 copies.
+--
+--   -- 3. Rows the link fix would change: linked, getting a video, getting a tracking type, and skipped as a shared library name.
+--   with lib as (
+--     select lower(regexp_replace(btrim(name), '\s+', ' ', 'g')) as k, count(*) as n, min(video_url) as video_url, min(tracking_type) as tracking_type
+--     from public.exercise_library where coalesce(is_active, true) group by 1
+--   ), r as (
+--     select 'template' as kind, x.id, x.video_url, x.tracking_type, x.target_seconds, x.target_distance, x.target_calories, false as logged,
+--            lower(regexp_replace(btrim(x.name), '\s+', ' ', 'g')) as k
+--     from public.program_template_exercises x where x.exercise_library_id is null and x.block_type = 'exercise'
+--     union all
+--     select 'programme', x.id, x.video_url, x.tracking_type, x.target_seconds, x.target_distance, x.target_calories,
+--            exists (select 1 from public.workout_logs l where l.exercise_id = x.id), lower(regexp_replace(btrim(x.name), '\s+', ' ', 'g'))
+--     from public.workout_exercises x where x.exercise_library_id is null and x.block_type = 'exercise'
+--   )
+--   select r.kind, count(*) filter (where lib.n = 1) as linked,
+--          count(*) filter (where lib.n = 1 and nullif(btrim(r.video_url), '') is null and lib.video_url is not null) as gets_video,
+--          count(*) filter (where lib.n = 1 and r.tracking_type = 'weight_reps' and lib.tracking_type <> 'weight_reps' and not r.logged
+--                             and r.target_seconds is null and r.target_distance is null and r.target_calories is null) as gets_tracking,
+--          count(*) filter (where lib.n > 1) as skipped_shared_name
+--   from r join lib on lib.k = r.k group by 1 order by 1;
+-- Expected on 12 Nov 2026: programme 84, 84, 0, 6; template 84, 84, 0, 6.
+--   -- and the rows already linked, to compare after:
+--   select (select count(*) from public.workout_exercises where exercise_library_id is not null) as programme_linked,
+--          (select count(*) from public.program_template_exercises where exercise_library_id is not null) as template_linked;
 --
 --   -- 1. Members on each rollout copy today, and how many of those copies are still running (what "In use by" will show):
 --   select r.program_name, r.start_date, r.audience, count(wp.id) as copies
@@ -77,6 +118,11 @@
 --   select wp.start_date, wp.week_one, count(*) from public.workout_programs wp where wp.rollout_id is not null group by 1, 2 order by 1;
 -- Expected: 3 Oct -> 28 Sep, 4 Oct -> 28 Sep, 10 Oct -> 5 Oct, 19 Oct -> 19 Oct, 10 Nov -> 9 Nov.
 --
+--   -- 3. Part 3's check above again: linked, gets_video and gets_tracking are now 0, skipped_shared_name is still 6 and 6; and the
+--   --    "already linked" counts are each 84 higher than before.
+--
+-- ROLLBACK, part 3 (a data fix): before applying, save the ids part 3's check counts as linked; to undo, set exercise_library_id back to
+--           null on those rows (the videos it filled in are the library's and can stay).
 -- ROLLBACK: drop trigger workout_programs_week_one on public.workout_programs; drop function public.set_programme_week_one();
 --           alter table public.workout_programs drop column week_one (the app then counts from start dates again);
 --           drop function public.apply_template_to_rollout(uuid, boolean); drop function public.programme_rollout_usage();
@@ -342,3 +388,48 @@ $fn$;
 
 revoke all on function public.apply_template_to_rollout(uuid, boolean) from public, anon;
 grant execute on function public.apply_template_to_rollout(uuid, boolean) to authenticated;
+
+
+-- 3. D26 -----------------------------------------------------------------------------------------------------------------------------------
+-- One-off: link exercise rows typed by name to the one active library exercise with the same name (case and extra spaces ignored).
+
+with lib as (
+  select lower(regexp_replace(btrim(name), '\s+', ' ', 'g')) as k, min(id::text)::uuid as id, min(video_url) as video_url, min(tracking_type) as tracking_type
+  from exercise_library
+  where coalesce(is_active, true)
+  group by 1
+  having count(*) = 1
+)
+update program_template_exercises x
+set exercise_library_id = lib.id,
+    video_url = coalesce(nullif(btrim(x.video_url), ''), lib.video_url),
+    tracking_type = case
+      when x.tracking_type = 'weight_reps' and x.target_seconds is null and x.target_distance is null and x.target_calories is null
+        then lib.tracking_type
+      else x.tracking_type
+    end
+from lib
+where x.exercise_library_id is null
+  and x.block_type = 'exercise'
+  and lower(regexp_replace(btrim(x.name), '\s+', ' ', 'g')) = lib.k;
+
+with lib as (
+  select lower(regexp_replace(btrim(name), '\s+', ' ', 'g')) as k, min(id::text)::uuid as id, min(video_url) as video_url, min(tracking_type) as tracking_type
+  from exercise_library
+  where coalesce(is_active, true)
+  group by 1
+  having count(*) = 1
+)
+update workout_exercises x
+set exercise_library_id = lib.id,
+    video_url = coalesce(nullif(btrim(x.video_url), ''), lib.video_url),
+    tracking_type = case
+      when x.tracking_type = 'weight_reps' and x.target_seconds is null and x.target_distance is null and x.target_calories is null
+           and not exists (select 1 from workout_logs l where l.exercise_id = x.id)
+        then lib.tracking_type
+      else x.tracking_type
+    end
+from lib
+where x.exercise_library_id is null
+  and x.block_type = 'exercise'
+  and lower(regexp_replace(btrim(x.name), '\s+', ' ', 'g')) = lib.k;

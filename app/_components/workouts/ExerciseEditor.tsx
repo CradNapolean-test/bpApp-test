@@ -28,6 +28,7 @@ import { allowedImageHosts, isAllowedImage } from '@/lib/imageHosts';
 import type { BlockType, ClientExerciseMaxRow, ExerciseLibraryRow, PrescriptionType } from '@/lib/data/types';
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
 import { guessTrackingType } from '@/lib/trackingGuess';
+import { exerciseNameKey, findLibraryMatch } from '@/lib/libraryMatch';
 
 // An exercise's picture is a link a coach pasted. It loads only from the gym's own storage and the hosts named in NEXT_PUBLIC_IMAGE_HOSTS
 // (comma separated), never sends a referrer, and otherwise the muscle-group icon shows instead (R23).
@@ -283,6 +284,14 @@ function ExerciseSheet<T extends EditableExercise>({
       fields.block_no = blockNo;
       fields.block_part = part;
     }
+    // Renamed to a library exercise's name: link it, so it gets the library's video and % of 1RM (D26). The tracking type stays as set here.
+    if (!isCircuit && !linked && fields.name) {
+      const match = findLibraryMatch(library, fields.name);
+      if (match) {
+        fields.exercise_library_id = match.id;
+        if (!fields.video_url) fields.video_url = match.video_url ?? null;
+      }
+    }
     await run(() => onSave(fields), { success: 'Saved', onDone: onClose });
   }
 
@@ -464,12 +473,13 @@ function ExercisePickerSheet({
   const [added, setAdded] = useState<Record<string, number>>({});
 
   const muscles = Array.from(new Set(library.map((l) => l.muscle_group).filter((m): m is string => !!m))).sort();
-  const q = query.trim().toLowerCase();
+  const q = exerciseNameKey(query);
   const matches = library.filter(
-    (l) => (!muscle || l.muscle_group === muscle) && (!q || l.name.toLowerCase().includes(q))
+    (l) => (!muscle || l.muscle_group === muscle) && (!q || exerciseNameKey(l.name).includes(q))
   );
   const shown = matches.slice(0, 40);
-  const exact = library.some((l) => l.name.toLowerCase() === q);
+  // A typed name that is already in the library is picked from the list, not added as its own exercise (D26).
+  const exact = library.some((l) => exerciseNameKey(l.name) === q);
   const addedCount = Object.values(added).reduce((a, b) => a + b, 0);
 
   return (
@@ -1097,6 +1107,9 @@ export function ExerciseEditor<T extends EditableExercise>({
   // An exercise typed by name: what it records is read from the name (a bike is calories, a plank is time), and like a library
   // exercise it only starts with sets and reps in Lift and Strong.
   function addCustom(key: string, name: string) {
+    // A typed name that is a library exercise is added as that exercise (D26).
+    const match = findLibraryMatch(library, name);
+    if (match) return addFromLibrary(key, match);
     const { section } = parseBlockKey(key);
     const setsAndReps = section === 'lift' || section === 'strong';
     const tracking = guessTrackingType(name) ?? 'weight_reps';
