@@ -445,6 +445,7 @@ export function ExerciseLibraryManager({
             return (
               <div
                 key={ex.id}
+                data-stagger
                 className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10"
               >
                 <div className="flex items-start justify-between gap-2">

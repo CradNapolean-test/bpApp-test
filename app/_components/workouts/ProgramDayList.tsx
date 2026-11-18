@@ -68,7 +68,7 @@ export function ProgramDayList({
   onChangeWeek?: (week: number) => void;
   // The programme's current week, marked with a dot on its pill.
   currentWeek?: number;
-  // Slide the days across when another week is picked (the member's screen; the coach's builder stays still).
+  // Slide the days across when the week changes.
   animateWeeks?: boolean;
   // The coach's screens (the board): the week's days side by side from a tablet up, instead of one under another.
   columns?: boolean;
@@ -76,11 +76,16 @@ export function ProgramDayList({
   const weekNums = Array.from(new Set(days.map((d) => d.weekNum))).sort((a, b) => a - b);
   const [internalActiveWeek, setInternalActiveWeek] = useState<number | null>(null);
   const activeWeek = controlledActiveWeek ?? internalActiveWeek ?? weekNums[0] ?? 1;
-  // The member's screen: after a week is picked, its days slide in from the side of the week chosen (left for an earlier week). Not on
-  // first showing, where the whole screen already rises in.
+  // When the week changes, its days slide in from that side (left for an earlier week): a week picked here, or one chosen from outside
+  // (the coach's Add week). Not on first showing, where the whole screen already rises in. The week shown last is kept in state and
+  // compared during render (React's pattern for state that follows a prop), so no effect is needed.
   const [slide, setSlide] = useState<'none' | 'left' | 'right'>('none');
+  const [shownWeek, setShownWeek] = useState(activeWeek);
+  if (animateWeeks && shownWeek !== activeWeek) {
+    setShownWeek(activeWeek);
+    setSlide(activeWeek < shownWeek ? 'left' : 'right');
+  }
   function setActiveWeek(week: number) {
-    if (animateWeeks && week !== activeWeek) setSlide(week < activeWeek ? 'left' : 'right');
     if (onChangeWeek) onChangeWeek(week);
     else setInternalActiveWeek(week);
   }
@@ -104,8 +109,8 @@ export function ProgramDayList({
   if (weekNums.length === 0) return null;
 
   return (
-    <div className="mt-3">
-      <div className="flex items-center gap-1">
+    <div className="mt-3" data-program={ownerId}>
+      <div data-week-chooser className="flex items-center gap-1">
         <button
           type="button"
           aria-label="Previous week"
@@ -119,6 +124,7 @@ export function ProgramDayList({
           {weekNums.map((week) => (
             <button
               key={`${ownerId}:${week}`}
+              data-week={week}
               type="button"
               aria-current={week === currentWeek ? 'date' : undefined}
               onClick={() => setActiveWeek(week)}
@@ -150,7 +156,8 @@ export function ProgramDayList({
         </button>
       </div>
 
-      <DayListFrame key={slide === 'none' ? 'still' : activeWeek} slide={slide} columns={columns}>
+      {/* Keyed by whether the week has days yet too: a week just added slides in when its days arrive, not while it is empty. */}
+      <DayListFrame key={slide === 'none' ? 'still' : `${activeWeek}:${days_.length > 0}`} slide={slide} columns={columns}>
         {days_.map((day) => {
           const Icon = iconFor(day);
           const weekday = day.dayPosition != null ? WEEKDAY_SHORT[day.dayPosition] : null;

@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { pop, useGSAP } from '@/app/_components/motion/gsap';
 import { MessageSquare } from 'lucide-react';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -128,13 +129,7 @@ export function ConversationList({
                       <span className={`truncate text-[15px] text-black dark:text-zinc-50 ${c.unread_count > 0 ? 'font-extrabold' : 'font-bold'}`}>{c.client_name}</span>
                       <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-zinc-500">
                         {c.last_message_at && relativeTime(c.last_message_at)}
-                        {c.unread_count > 0 && (
-                          <>
-                            {/* The dot is the picture; the text is what is announced (a label on a plain span is not). */}
-                            <span className="sr-only">Unread</span>
-                            <span aria-hidden className="h-2 w-2 rounded-full bg-accent" />
-                          </>
-                        )}
+                        <UnreadDot count={c.unread_count} />
                       </span>
                     </div>
                     <p className={`truncate text-[13px] ${c.unread_count > 0 ? 'font-semibold text-zinc-800 dark:text-zinc-200' : 'text-zinc-500 dark:text-zinc-400'}`}>
@@ -174,5 +169,26 @@ export function ConversationList({
         )}
       </nav>
     </div>
+  );
+}
+
+// A conversation's unread dot. It pops when the count goes up while the list is open (a message arriving live), not when the list first
+// shows. It stays mounted at zero (drawing nothing) so it can tell the difference.
+function UnreadDot({ count }: { count: number }) {
+  const dot = useRef<HTMLSpanElement>(null);
+  const last = useRef<number | null>(null);
+  useGSAP(
+    () => {
+      if (last.current != null && count > last.current) pop(dot.current, 0.2);
+      last.current = count;
+    },
+    { dependencies: [count] }
+  );
+  return (
+    <>
+      {/* The dot is the picture; the text is what is announced (a label on a plain span is not). */}
+      {count > 0 && <span className="sr-only">Unread</span>}
+      <span ref={dot} aria-hidden className={count > 0 ? 'h-2 w-2 rounded-full bg-accent' : 'hidden'} />
+    </>
   );
 }

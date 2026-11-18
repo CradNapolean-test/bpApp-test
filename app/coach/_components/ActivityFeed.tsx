@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import Link from 'next/link';
 import { Activity } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -28,9 +29,12 @@ export function ActivityFeed({
     [clients, extraNames]
   );
   const items = useMemo(() => groupActivity(events).slice(0, 5), [events]);
+  // The rows settle in one after another when the dashboard opens (GSAP).
+  const root = useRef<HTMLElement>(null);
+  useStaggerIn(root, '[data-stagger]', null, 0.3);
 
   return (
-    <section className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+    <section ref={root} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
       <h2 className="px-5 pb-3.5 pt-[18px] text-lg font-extrabold text-black sm:px-6 dark:text-zinc-50">Latest activity</h2>
       {items.length === 0 ? (
         <EmptyState icon={Activity} title="Nothing recent" hint="Client activity will show up here as it happens." compact />
@@ -45,6 +49,7 @@ export function ActivityFeed({
               const name = nameById.get(item.clientId) ?? 'A client';
               return (
                 <Link
+                  data-stagger
                   href={`/coach/clients/${item.clientId}`}
                   className="flex min-h-11 items-start gap-3 rounded-xl border-t border-black/[.07] px-3 py-2.5 text-sm hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/5"
                 >

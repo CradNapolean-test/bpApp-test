@@ -1,6 +1,9 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import AnimatedContent from '@/app/_components/motion/AnimatedContent';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import Link from 'next/link';
 import { Ban, CalendarDays, Check, Dumbbell, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
@@ -78,6 +81,15 @@ export function SessionsView({
   const { run: runRestore, busy: restoring } = useAction();
 
   const open = occurrences.find((o) => occKey(o) === openKey) ?? null;
+  // Picking another day slides its sessions in from that side (an earlier day from the left); the capacity bars fill each time.
+  const [slide, setSlide] = useState<'none' | 'left' | 'right'>('none');
+  function pickDay(d: string | null) {
+    const to = d ?? defaultDate;
+    if (to && selectedDate && to !== selectedDate) setSlide(to < selectedDate ? 'left' : 'right');
+    setPickedDate(d);
+  }
+  const dayList = useRef<HTMLElement>(null);
+  useGrowIn(dayList, 0.15, selectedDate);
   const daySessions = occurrences.filter((o) => o.date === selectedDate).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const needsMarking = occurrences
     .filter((o) => (o.unmarkedCount ?? 0) > 0)
@@ -254,7 +266,7 @@ export function SessionsView({
               <button
                 ref={active ? activeChip : undefined}
                 type="button"
-                onClick={() => setPickedDate(d)}
+                onClick={() => pickDay(d)}
                 aria-pressed={active}
                 aria-label={longDay(d)}
                 className={`relative flex w-[7.5rem] shrink-0 flex-col items-start gap-0.5 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
@@ -286,7 +298,7 @@ export function SessionsView({
         })}
       </div>
 
-      <section className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+      <section ref={dayList} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
       {selectedDate && (
         <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3.5 pt-[18px] sm:px-6">
           <div>
@@ -305,14 +317,14 @@ export function SessionsView({
             )}
           </div>
           {selectedDate !== defaultDate && (
-            <button type="button" onClick={() => setPickedDate(null)} className="min-h-11 shrink-0 text-sm font-bold text-accent">
+            <button type="button" onClick={() => pickDay(null)} className="min-h-11 shrink-0 text-sm font-bold text-accent">
               Back to today
             </button>
           )}
         </div>
       )}
 
-      <div>
+      <DayListSlide key={slide === 'none' ? 'still' : selectedDate ?? 'none'} slide={slide}>
         {daySessions.map((o) => {
           const full = o.bookedCount >= o.capacity;
           const fill = Math.min(100, Math.round((o.bookedCount / o.capacity) * 100));
@@ -342,7 +354,7 @@ export function SessionsView({
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
                   <span className="flex items-center gap-2.5">
                     <span className="hidden h-2 w-24 overflow-hidden rounded-full bg-black/10 sm:block dark:bg-white/15">
-                      <span className={`block h-full rounded-full ${full ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${fill}%` }} />
+                      <span data-grow="bar" className={`block h-full rounded-full ${full ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${fill}%` }} />
                     </span>
                     <span className={`text-sm font-bold ${full ? 'text-danger' : 'text-black dark:text-zinc-50'}`}>
                       {o.bookedCount}
@@ -366,7 +378,7 @@ export function SessionsView({
             <EmptyState icon={CalendarDays} title="No sessions this day" compact />
           </div>
         )}
-      </div>
+      </DayListSlide>
       </section>
 
       {open && (
@@ -584,5 +596,15 @@ export function SessionsView({
         </BottomSheet>
       )}
     </div>
+  );
+}
+
+// The day's sessions: still on first showing, sliding in from the side of the day picked after that.
+function DayListSlide({ slide, children }: { slide: 'none' | 'left' | 'right'; children: ReactNode }) {
+  if (slide === 'none') return <div>{children}</div>;
+  return (
+    <AnimatedContent direction="horizontal" distance={28} reverse={slide === 'left'} duration={0.4}>
+      {children}
+    </AnimatedContent>
   );
 }

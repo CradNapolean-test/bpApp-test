@@ -3,7 +3,7 @@
 import 'lenis/dist/lenis.css';
 import { ReactLenis } from 'lenis/react';
 
-// Smooth scrolling for the member screens (Lenis). It eases mouse-wheel and trackpad scrolling on a laptop or tablet; a finger on a phone
+// Smooth scrolling for the member, coach and owner screens (Lenis). It eases mouse-wheel and trackpad scrolling on a laptop or tablet; a finger on a phone
 // keeps the phone's own scrolling (Lenis leaves touch alone unless syncTouch is on). Lenis also turns its smoothing off for people who
 // ask their device for less motion.
 //

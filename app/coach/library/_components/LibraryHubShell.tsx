@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -73,6 +74,8 @@ export function LibraryHubShell({
 }) {
   const searchParams = useSearchParams();
   const [tab, setTabState] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Exercises');
+  const paneRef = useRef<HTMLDivElement>(null);
+  useStaggerIn(paneRef, '[data-stagger]', tab);
   const setTab = (next: Tab) => {
     setTabState(next);
     writeTabToUrl(TAB_SLUG[next]);
@@ -121,6 +124,8 @@ export function LibraryHubShell({
         />
       </div>
 
+      {/* Each section's rows settle in one after another when it opens (GSAP). */}
+      <div ref={paneRef}>
       {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} usage={exerciseUsage} />}
       {tab === 'Program templates' && (
         <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} rollouts={rollouts} />
@@ -128,6 +133,7 @@ export function LibraryHubShell({
       {tab === 'Education' && <EducationPane initialCourses={initialCourses} members={members} groups={groups} rollup={courseRollup} otherGyms={otherGyms} />}
       {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}
       {tab === 'Foods' && <FoodsPane />}
+      </div>
     </AppShell>
     </ClientOnly>
   );

@@ -189,7 +189,7 @@ export function FoodsPane() {
       ) : (
         <ul className="divide-y divide-black/[.07] overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:divide-white/10 dark:border-white/10">
           {foods.map((f) => (
-            <li key={f.id} className="px-5 py-3 sm:px-6">
+            <li key={f.id} data-stagger className="px-5 py-3 sm:px-6">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2">

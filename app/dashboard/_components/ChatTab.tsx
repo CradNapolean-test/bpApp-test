@@ -492,7 +492,7 @@ export function ChatTab({
   // ...and only a new newest message (or one of your own waiting to send) scrolls to the bottom.
   const newestKey = messages.at(-1)?.id ?? '';
 
-  // The member's chat: a message that arrives while it is open (theirs sent, or the coach's coming in) springs up from its own side.
+  // A message that arrives while the chat is open (one sent, or the other side's coming in live) springs up from its own side.
   // Only a new newest message: not the thread loading, not older messages coming in above, and not "Sending…" being swapped for the
   // saved copy (the count stays the same then).
   const seenIds = useRef<Set<string> | null>(null);
@@ -500,7 +500,7 @@ export function ChatTab({
     const before = seenIds.current;
     seenIds.current = new Set(messages.map((m) => m.id));
     const newest = messages.at(-1);
-    if (!member || !before || !newest || before.has(newest.id) || messages.length <= before.size) return;
+    if (!before || !newest || before.has(newest.id) || messages.length <= before.size) return;
     const row = listRef.current?.lastElementChild;
     if (!row || prefersReducedMotion()) return;
     const mine = newest.sender_id === currentUserId;
@@ -509,7 +509,7 @@ export function ChatTab({
       { y: 14, scale: 0.94, opacity: 0, transformOrigin: mine ? '100% 100%' : '0% 100%' },
       { y: 0, scale: 1, opacity: 1, duration: 0.42, ease: 'back.out(1.6)', clearProps: 'transform,opacity,transformOrigin' }
     );
-  }, [messages, member, currentUserId]);
+  }, [messages, currentUserId]);
   useEffect(() => {
     // Scroll just the message list (scrollIntoView would also scroll the whole page).
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });

@@ -256,6 +256,13 @@ select optgroup {
 [data-ui='member'] .text-accent {
   color: var(--accent-strong);
 }
+/* A segmented control whose white highlight slides (useSlidingThumb): once the highlight is in place, the picked option stops drawing
+   its own, so the two never show at once. Before that (no JavaScript yet) the option draws its own as before. */
+[data-thumb='on'] > [data-active='true'] {
+  background-color: transparent;
+  box-shadow: none;
+}
+
 /* A screen's main action is black on the member boards; teal is kept for booking, signing in, Log score and Send. */
 [data-ui='member'] .bp-btn-primary {
   background-color: #1d1d1b;

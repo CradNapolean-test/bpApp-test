@@ -31,6 +31,10 @@ import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from 
 import { formatClassTime, formatLongDate } from '@/lib/utils/dates';
 import CountUp from '@/app/_components/motion/CountUp';
 import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
+import { useSlidingThumb } from '@/app/_components/motion/useSlidingThumb';
+import ClickSpark, { type ClickSparkHandle } from '@/app/_components/motion/ClickSpark';
+import { foldAway, pop } from '@/app/_components/motion/gsap';
 import { CoachPageHeader, CoachSection, CoachStatStrip, coachBtnOutline, coachBtnPrimary, coachBtnSoft, coachLink, coachRow } from './CoachUi';
 import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
 import type { CheckReason, CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
@@ -89,6 +93,31 @@ interface TodoGroup {
   onOpen?: () => void;
 }
 
+// Nothing left to do. When the coach has just cleared the list (the page opened with things to do), the tick pops and throws a few
+// sparks (React Bits ClickSpark); on a day that started clear it simply says so.
+function AllClear({ celebrate }: { celebrate: boolean }) {
+  const sparks = useRef<ClickSparkHandle>(null);
+  const area = useRef<HTMLParagraphElement>(null);
+  const tick = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!celebrate) return;
+    pop(tick.current, 0.4);
+    const box = area.current?.getBoundingClientRect();
+    const at = tick.current?.getBoundingClientRect();
+    if (box && at) sparks.current?.spark(at.left - box.left + at.width / 2, at.top - box.top + at.height / 2);
+  }, [celebrate]);
+  return (
+    <ClickSpark ref={sparks} clickToSpark={false} sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={12} sparkRadius={40} sparkSize={10} shape="star" duration={700}>
+      <p ref={area} className={`${coachRow} py-4 text-sm text-zinc-500`}>
+        All clear. Nothing needs you right now.{' '}
+        <span ref={tick} className="inline-block font-bold text-accent">
+          ✓
+        </span>
+      </p>
+    </ClickSpark>
+  );
+}
+
 function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; onToggle: () => void }) {
   const Icon = group.icon;
   const tone = TONE[group.tone];
@@ -105,8 +134,11 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
         <button
           type="button"
           disabled={busy}
-          onClick={() => run(async () => item.review!(), { success: 'Marked as reviewed' })}
-          className="shrink-0 rounded-full bg-accent/15 px-3 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
+          onClick={(e) => {
+            const row = e.currentTarget.closest('li');
+            void foldAway(row, () => run(async () => item.review!(), { success: 'Marked as reviewed' }));
+          }}
+          className="h-9 shrink-0 rounded-xl bg-accent-soft px-3 text-[13px] font-bold text-accent disabled:opacity-50"
         >
           Reviewed
         </button>
@@ -119,7 +151,7 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
   const header = (
     <>
       <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-extrabold ${tone.chip}`}>
-        {group.count ?? group.items.length}
+        <CountUp to={group.count ?? group.items.length} duration={0.6} />
       </span>
       <span className="min-w-0 flex-1 text-left">
         <span className="flex items-center gap-1.5 text-[15px] font-bold text-black dark:text-zinc-50">
@@ -140,7 +172,7 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
     </>
   );
   return (
-    <div className={coachRow}>
+    <div data-stagger className={coachRow}>
       {single ? (
         <Link href={group.items[0].href} className="flex min-h-[64px] items-center gap-3 py-3">
           {header}
@@ -160,7 +192,7 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
                 type="button"
                 disabled={busy}
                 onClick={() => run(async () => group.extra!.markAll!(), { success: 'Marked as reviewed' })}
-                className="shrink-0 rounded-full px-2 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
+                className="h-9 shrink-0 rounded-lg px-2.5 text-[13px] font-bold text-accent disabled:opacity-50"
               >
                 Mark all reviewed
               </button>
@@ -181,6 +213,14 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
   // The booking bars and the week's bars fill when the dashboard opens.
   const screen = useRef<HTMLDivElement>(null);
   useGrowIn(screen, 0.25);
+  // The to-do groups settle in when the dashboard opens.
+  useStaggerIn(screen, '[data-stagger]', null, 0.2);
+  const scopeTrack = useRef<HTMLDivElement>(null);
+  // The highlight moves the moment a scope is tapped, not a second later when the new figures arrive: the scope tapped is shown while
+  // the page still holds the one it was tapped from.
+  const [picked, setPicked] = useState<{ key: DashboardScope; from: DashboardScope } | null>(null);
+  const shownScope = picked && picked.from === data.scope ? picked.key : data.scope;
+  useSlidingThumb(scopeTrack, shownScope);
   // "Happening now / Up next" follows the gym's clock: it used to be worked out once, when the page loaded, and then sat there (CC3).
   const [clockMs, setClockMs] = useState(() => Date.now());
   useEffect(() => {
@@ -433,6 +473,8 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
   const bookedToday = today.reduce((n, s) => n + s.bookedCount, 0);
   const capacityToday = today.reduce((n, s) => n + s.capacity, 0);
   const needsYou = groups.reduce((n, g) => n + (g.count ?? g.items.length), 0);
+  // Whether there were things to do when the page opened: clearing the last one then gets a small celebration (not on a quiet day).
+  const [startedWithTodos] = useState(() => needsYou > 0);
   const quietCount = data.toCheck.filter((m) => m.reasons.some((r) => r.kind === 'quiet')).length;
   const greeting = (() => {
     const h = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false, timeZone: data.timezone }));
@@ -452,7 +494,8 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
           <>
             <FindMember names={data.nameById} />
             {isAdmin && (
-              <div role="group" aria-label="Whose members" className="flex rounded-xl bg-black/[.06] p-1 dark:bg-white/10">
+              <div ref={scopeTrack} role="group" aria-label="Whose members" className="relative flex rounded-xl bg-black/[.06] p-1 dark:bg-white/10">
+                <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
                 {([
                   ['mine', 'My members'],
                   ['gym', 'Whole gym'],
@@ -461,10 +504,14 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
                   <button
                     key={key}
                     type="button"
-                    aria-pressed={scope === key}
-                    onClick={() => router.push(key === 'coach' ? scopeHref('coach', selectedCoachId ?? coaches[0]?.id) : scopeHref(key))}
-                    className={`h-9 whitespace-nowrap rounded-lg px-3 text-sm font-bold transition-colors ${
-                      scope === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
+                    aria-pressed={shownScope === key}
+                    data-active={shownScope === key}
+                    onClick={() => {
+                      if (key !== scope) setPicked({ key, from: scope });
+                      router.push(key === 'coach' ? scopeHref('coach', selectedCoachId ?? coaches[0]?.id) : scopeHref(key));
+                    }}
+                    className={`relative h-9 whitespace-nowrap rounded-lg px-3 text-sm font-bold transition-colors ${
+                      shownScope === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
                     }`}
                   >
                     {label}
@@ -622,7 +669,7 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
           {/* ---- Needs you (the to-do lists) ---- */}
           <CoachSection title="Needs you" count={needsYou > 0 ? needsYou : undefined} action={groups.length > 0 ? <span className="text-[13px] font-semibold text-zinc-500">Most urgent first</span> : undefined}>
             {groups.length === 0 ? (
-              <p className={`${coachRow} py-4 text-sm text-zinc-500`}>All clear. Nothing needs you right now. ✓</p>
+              <AllClear celebrate={startedWithTodos} />
             ) : (
               <div>
                 {groups.map((g) => (

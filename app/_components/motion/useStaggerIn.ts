@@ -9,7 +9,8 @@ export function useStaggerIn(scope: RefObject<HTMLElement | null>, selector: str
   useGSAP(
     () => {
       if (!scope.current || prefersReducedMotion()) return;
-      const items = gsap.utils.toArray<HTMLElement>(selector).slice(0, 14);
+      // Only items that are showing: a screen can hold a phone list and a laptop table, one of them hidden.
+      const items = gsap.utils.toArray<HTMLElement>(selector).filter((el) => el.getClientRects().length > 0).slice(0, 14);
       if (items.length === 0) return;
       gsap.from(items, { y: 14, opacity: 0, duration: 0.5, delay, ease: 'power3.out', stagger: 0.05, clearProps: 'transform,opacity' });
     },

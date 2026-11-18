@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSlidingThumb } from '@/app/_components/motion/useSlidingThumb';
 import { CoachStatStrip } from '../../_components/CoachUi';
 import Link from 'next/link';
 import { getCoachReports } from '@/lib/data/reports';
@@ -25,9 +26,9 @@ const RANGES = [7, 30, 90] as const;
 
 const cardCls = 'rounded-[20px] border border-black/[.08] bg-card dark:border-white/10';
 // The board's segmented control: white on a grey track.
-const segTrack = 'flex max-w-full gap-1 overflow-x-auto rounded-xl bg-black/[.06] p-1 [scrollbar-width:none] dark:bg-white/10 [&::-webkit-scrollbar]:hidden';
+const segTrack = 'relative flex max-w-full gap-1 overflow-x-auto rounded-xl bg-black/[.06] p-1 [scrollbar-width:none] dark:bg-white/10 [&::-webkit-scrollbar]:hidden';
 const segBtn = (on: boolean) =>
-  `min-h-9 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-sm font-bold transition-colors ${on ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`;
+  `relative min-h-9 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-sm font-bold transition-colors ${on ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`;
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -65,6 +66,14 @@ export function ReportsPane({
   const [loading, setLoading] = useState(true);
   const [showAllSlots, setShowAllSlots] = useState(false);
   const [slotOrder, setSlotOrder] = useState<'busiest' | 'quietest'>('busiest');
+  // The switches' white highlights slide to the option picked (GSAP). The order switch only shows on one section, so it is placed again
+  // when the section changes.
+  const sectionTrack = useRef<HTMLDivElement>(null);
+  const periodTrack = useRef<HTMLDivElement>(null);
+  const orderTrack = useRef<HTMLDivElement>(null);
+  useSlidingThumb(sectionTrack, section);
+  useSlidingThumb(periodTrack, days);
+  useSlidingThumb(orderTrack, `${section}|${slotOrder}`);
 
   // Loads the chosen period and the one before it. The first 30 days arrive with the page; this runs on first view
   // too so the comparison is there.
@@ -136,8 +145,10 @@ export function ReportsPane({
         role="tablist"
         aria-label="Reports"
         onKeyDown={handleTabListKeys}
+        ref={sectionTrack}
         className={`${segTrack} w-max`}
       >
+        <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
         {SECTIONS.map((sec) => (
           <button
             key={sec}
@@ -145,6 +156,7 @@ export function ReportsPane({
             role="tab"
             aria-selected={section === sec}
             tabIndex={section === sec ? 0 : -1}
+            data-active={section === sec}
             onClick={() => setSection(sec)}
             className={segBtn(section === sec)}
           >
@@ -154,12 +166,14 @@ export function ReportsPane({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="group" aria-label="Period" className={segTrack}>
+        <div ref={periodTrack} role="group" aria-label="Period" className={segTrack}>
+          <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
           {RANGES.map((r) => (
             <button
               key={r}
               type="button"
               aria-pressed={days === r}
+              data-active={days === r}
               onClick={() => setDays(r)}
               className={segBtn(days === r)}
             >
@@ -277,12 +291,14 @@ export function ReportsPane({
       {section === 'Busiest' && (
         <div className={`${cardCls} px-5 py-4 sm:px-6`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div role="group" aria-label="Order" className={segTrack}>
+            <div ref={orderTrack} role="group" aria-label="Order" className={segTrack}>
+              <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
               {(['busiest', 'quietest'] as const).map((o) => (
                 <button
                   key={o}
                   type="button"
                   aria-pressed={slotOrder === o}
+                  data-active={slotOrder === o}
                   onClick={() => setSlotOrder(o)}
                   className={`${segBtn(slotOrder === o)} capitalize`}
                 >

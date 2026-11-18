@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { SignOutButton } from './SignOutButton';
+import { SmoothScroll } from './motion/SmoothScroll';
 
 // Shared layout for every page: header (title + sign out), a top-level section bar, then
 // a left sidebar (content depends on which section is active) beside the main content.
@@ -80,6 +81,8 @@ export function AppShell({
       className={coach ? 'lg:pl-[232px]' : undefined}
     >
     {coachSidebar}
+    {/* The coach's and owner's pages scroll smoothly with a mouse wheel or trackpad, as the member screens do (Lenis). */}
+    {coach && !memberUi && <SmoothScroll />}
     <div
       className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${bottomBar ? 'pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-10 md:pb-10' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:py-10'} ${coach ? 'lg:max-w-[1280px] lg:px-10 lg:pt-8' : ''}`}
     >

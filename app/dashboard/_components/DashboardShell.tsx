@@ -105,6 +105,16 @@ type Area = 'Coaching' | 'Classes';
 
 // A member's sub-screen (the food diary, a progress tab, Events...) rises into place when it opens or its tab changes, like the four main
 // tabs do. The key starts it over for each screen. Anything else (the four tabs draw their own; a coach's view) is passed straight through.
+// The coach's view of a member: after a section tab is tapped, the section slides in from that side (still on first showing).
+function CoachSectionSlide({ on, slide, screenKey, children }: { on: boolean; slide: 'none' | 'left' | 'right'; screenKey: string; children: ReactNode }) {
+  if (!on || slide === 'none') return <>{children}</>;
+  return (
+    <AnimatedContent key={screenKey} direction="horizontal" distance={28} reverse={slide === 'left'} duration={0.4}>
+      {children}
+    </AnimatedContent>
+  );
+}
+
 function SubScreenEnter({ on, screenKey, children }: { on: boolean; screenKey: string; children: ReactNode }) {
   if (!on) return <>{children}</>;
   return (
@@ -245,6 +255,8 @@ export function DashboardShell({
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
   const [screen, setScreen] = useState<Screen>('Today');
+  // The coach's view: which way the next section slides in (from the right for a tab further along, from the left for one before).
+  const [coachSlide, setCoachSlide] = useState<'none' | 'left' | 'right'>('none');
   const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen; scroll: number }[]>([]);
   // Set by a coach deep link (?week=): which week of check-ins to open the Weekly Log on.
   const [startWeek, setStartWeek] = useState<string | null>(null);
@@ -528,6 +540,11 @@ export function DashboardShell({
   const coachNavGroups = isCoachView ? coachGroups(disabledScreenSet, nutritionMode) : [];
   const activeGroup = isCoachView ? activeCoachGroup(coachNavGroups, category, effectiveScreen) : undefined;
   function selectCoachTab(t: CoachTab) {
+    const order = coachNavGroups.flatMap((g) => g.tabs);
+    const at = (c: Category, s: Screen) => order.findIndex((x) => x.category === c && x.screen === s);
+    const from = at(category, effectiveScreen);
+    const to = at(t.category, t.screen);
+    if (from >= 0 && to >= 0 && from !== to) setCoachSlide(to < from ? 'left' : 'right');
     setBackStack([]);
     setArea('Coaching');
     setCategory(t.category);
@@ -882,6 +899,7 @@ export function DashboardShell({
         <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
       )}
       {showCoaching && (
+        <CoachSectionSlide on={isCoachView} slide={coachSlide} screenKey={`${category}|${effectiveScreen}`}>
         <SubScreenEnter on={!isCoachView && isSubScreen} screenKey={`${category}|${effectiveScreen}`}>
           {effectiveScreen === 'Today' && isCoachView && (
             <CoachMemberOverview
@@ -1182,6 +1200,7 @@ export function DashboardShell({
             />
           )}
         </SubScreenEnter>
+        </CoachSectionSlide>
       )}
 
       {!isCoachView && area === 'Classes' && (

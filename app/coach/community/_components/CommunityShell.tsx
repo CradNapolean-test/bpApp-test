@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import ClickSpark, { type ClickSparkHandle } from '@/app/_components/motion/ClickSpark';
+import { foldAway } from '@/app/_components/motion/gsap';
 import { formatDateTime } from '@/lib/utils/dates';
 import Link from 'next/link';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -400,20 +402,49 @@ function ToHandOut({ rewards, shirts }: { rewards: RewardOverview[]; shirts: Shi
   return (
     <CoachSection title="To hand out" count={rows.length}>
       {rows.map((r) => (
-        <div key={r.key} className={`${coachRow} flex min-h-[64px] items-center gap-3 py-2.5`}>
-          <Avatar name={r.name} size="md" />
-          <Link href={`/coach/clients/${r.clientId}`} className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-bold text-black hover:underline dark:text-zinc-50">
-              {r.name} {r.what}
-            </span>
-            <span className="block truncate text-[13px] text-zinc-500 dark:text-zinc-400">{r.line}</span>
-          </Link>
-          <button type="button" disabled={busy} onClick={r.give} className={softBtn}>
-            Mark as given
-          </button>
-        </div>
+        <HandOutRow key={r.key} row={r} busy={busy} />
       ))}
     </CoachSection>
+  );
+}
+
+// One person waiting for a reward or a shirt. "Mark as given" throws a few sparks (React Bits ClickSpark) and the row folds away while it
+// saves; it opens again if the save fails.
+function HandOutRow({
+  row,
+  busy,
+}: {
+  row: { name: string; what: string; line: string; clientId: string; give: () => Promise<boolean> };
+  busy: boolean;
+}) {
+  const el = useRef<HTMLDivElement>(null);
+  const sparks = useRef<ClickSparkHandle>(null);
+  return (
+    <div ref={el} className={`${coachRow} flex min-h-[64px] items-center gap-3 py-2.5`}>
+      <Avatar name={row.name} size="md" />
+      <Link href={`/coach/clients/${row.clientId}`} className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-bold text-black hover:underline dark:text-zinc-50">
+          {row.name} {row.what}
+        </span>
+        <span className="block truncate text-[13px] text-zinc-500 dark:text-zinc-400">{row.line}</span>
+      </Link>
+      <div className="shrink-0">
+        <ClickSpark ref={sparks} clickToSpark={false} sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={12} sparkRadius={36} sparkSize={10} shape="star" duration={650}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={(e) => {
+              const box = e.currentTarget.getBoundingClientRect();
+              sparks.current?.spark(box.width / 2, box.height / 2);
+              void foldAway(el.current, row.give);
+            }}
+            className={softBtn}
+          >
+            Mark as given
+          </button>
+        </ClickSpark>
+      </div>
+    </div>
   );
 }
 

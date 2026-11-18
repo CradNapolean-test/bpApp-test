@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, History, Minus, Plus, Sparkles } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
+import CountUp from '@/app/_components/motion/CountUp';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
@@ -337,7 +338,7 @@ export function CreditsTab({
       <div className={`${cardCls} lg:col-start-2 lg:row-start-1`}>
         <h2 className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Balance</h2>
         <p className="mt-0.5 text-[34px] font-extrabold leading-tight text-black dark:text-zinc-50">
-          {creditsBalance}
+          <CountUp to={creditsBalance} duration={0.8} />
           <span className="ml-1 text-[15px] font-bold text-zinc-500"> credit{creditsBalance === 1 ? '' : 's'}</span>
         </p>
         <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">

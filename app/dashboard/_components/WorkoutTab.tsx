@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLenis } from 'lenis/react';
+import { flashWeek, showWeekRow } from '@/app/_components/motion/programWeeks';
 import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
@@ -916,6 +918,7 @@ export function WorkoutTab({
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [editingSet, setEditingSet] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   const toast = useToast();
+  const lenis = useLenis();
 
   useEffect(() => {
     if (!focusDay) return;
@@ -962,6 +965,7 @@ export function WorkoutTab({
           const week = added.to;
           toast.success(`Week ${week} added, copied from week ${added.from}`);
           setActiveWeeks((st) => ({ ...st, [program.id]: week }));
+          showWeekRow(program.id, lenis);
         },
       }
     );
@@ -1039,7 +1043,10 @@ export function WorkoutTab({
         await duplicateProgramDay(day.id, next, day.day_label);
         for (const old of existing) await deleteProgramDay(old.id);
       },
-      { success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week' }
+      {
+        success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week',
+        onDone: () => flashWeek(program.id, next),
+      }
     );
   }
 
@@ -1261,7 +1268,7 @@ export function WorkoutTab({
               ownerId={program.id}
               library={exerciseLibrary}
               showPhaseLabel={!isCoachView}
-              animateWeeks={!isCoachView}
+              animateWeeks
               columns={isCoachView}
               onOpenDay={setOpenDayId}
               activeWeek={shownWeek}

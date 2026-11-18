@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import CountUp from '@/app/_components/motion/CountUp';
 
 // The coach screens' building blocks from the November 2026 mock-ups, so every page draws them the same way: the page heading (a small
 // line above a large title, the page's buttons on the right), the strip of headline figures, and the white section card with its own
@@ -48,6 +49,24 @@ export interface CoachStat {
   href?: string;
 }
 
+// A headline figure counts up when the strip first shows, and from the old figure to the new one when it changes (another scope, another
+// filter). A plain number counts, and so does text that is a number with % or kg after it; anything else ("—", a date) shows as it is.
+function Figure({ value }: { value: ReactNode }) {
+  if (typeof value === 'number' && Number.isFinite(value)) return <CountUp to={value} decimals={Number.isInteger(value) ? 0 : 1} />;
+  if (typeof value === 'string') {
+    const m = /^(\d+(?:\.(\d+))?)(%| ?kg)?$/.exec(value);
+    if (m) {
+      return (
+        <>
+          <CountUp to={Number(m[1])} decimals={m[2]?.length ?? 0} />
+          {m[3] ?? ''}
+        </>
+      );
+    }
+  }
+  return <>{value}</>;
+}
+
 // The headline figures in one white band, divided by hairlines; two to a row on a phone, all in a row from a tablet up.
 export function CoachStatStrip({ label, stats }: { label: string; stats: CoachStat[] }) {
   const cols = stats.length >= 4 ? 'md:grid-cols-4' : stats.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2';
@@ -62,7 +81,7 @@ export function CoachStatStrip({ label, stats }: { label: string; stats: CoachSt
                 s.tone === 'teal' ? 'text-accent' : s.tone === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-black dark:text-zinc-50'
               }`}
             >
-              {s.value}
+              <Figure value={s.value} />
             </span>
             {s.sub && <span className="text-[13px] text-zinc-500 dark:text-zinc-400">{s.sub}</span>}
           </>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronDown, ChevronLeft, Tv, UserPlus, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
@@ -19,6 +19,11 @@ import type { RunClassData, RunClassMember } from '@/lib/data/runClass';
 import type { CoachClientRow } from '@/lib/data/coach';
 import type { AttendanceStatus, WorkoutExerciseRow } from '@/lib/data/types';
 import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { SmoothScroll } from '@/app/_components/motion/SmoothScroll';
+import RollingNumber from '@/app/_components/motion/RollingNumber';
+import DrawnTick from '@/app/_components/motion/DrawnTick';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+import { pop } from '@/app/_components/motion/gsap';
 
 // The coach's screen while a class is on: tick people in, see who picked what, and see what each member
 // lifted on the day's exercises the last few times, so the coach knows roughly what to put on the bar.
@@ -96,6 +101,9 @@ function MemberHistory({ member, exercises }: { member: RunClassMember; exercise
 export function RunClassView({ classId, initial }: { classId: string; initial: RunClassData }) {
   const toast = useToast();
   const [members, setMembers] = useState(initial.members);
+  // The attendance bar fills when the page opens (GSAP), then follows each tap.
+  const rosterRef = useRef<HTMLElement>(null);
+  useGrowIn(rosterRef, 0.2);
   const [openId, setOpenId] = useState<string | null>(null);
   // Adding a walk-in (CS2): the member list is read when the panel first opens.
   const [adding, setAdding] = useState(false);
@@ -167,6 +175,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
     // The coach's desktop sidebar too (the board); on a phone this stays the plain screen for the door.
     <div data-ui="coach" className="lg:pl-[232px]">
     <CoachSidebar />
+    <SmoothScroll />
     <main className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-16 pt-4 lg:pt-8">
       {/* Back to the same day in Sessions, not today (CS2). */}
       <Link href={`/coach/classes?tab=sessions&date=${initial.date}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-bold text-accent hover:underline">
@@ -200,10 +209,11 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
 
       <SessionCoachNote note={initial.coachNote} />
 
-      <section className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+      <section ref={rosterRef} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3.5 pt-[18px]">
         <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">
-          Roster <span className="font-semibold text-zinc-500">· {here} of {booked.length} here</span>
+          {/* The count rolls like a counter wheel as members are marked (after React Bits Counter). */}
+          Roster <span className="font-semibold text-zinc-500">· <RollingNumber value={here} /> of {booked.length} here</span>
         </h2>
         {unmarked.length > 1 && (
           <button
@@ -216,6 +226,12 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
           </button>
         )}
       </div>
+
+      {booked.length > 0 && (
+        <div aria-hidden className="mx-5 mb-3.5 h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/10">
+          <div data-grow="bar" className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${Math.round((here / booked.length) * 100)}%` }} />
+        </div>
+      )}
 
       {notYetHappened && (
         <p className="border-t border-black/[.07] px-5 py-3 text-sm font-semibold text-zinc-500 dark:border-white/10">
@@ -252,12 +268,15 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                       aria-label={`${m.clientName} attended`}
                       aria-pressed={st === 'attended'}
                       disabled={notYetHappened}
-                      onClick={() => setStatus(m, 'attended')}
+                      onClick={(e) => {
+                        if (st !== 'attended') pop(e.currentTarget, 0.88);
+                        void setStatus(m, 'attended');
+                      }}
                       className={`inline-flex h-11 items-center gap-1.5 rounded-xl px-3.5 text-sm font-bold ${
                         st === 'attended' ? 'bg-accent text-accent-foreground' : 'bg-accent-soft text-accent'
                       }`}
                     >
-                      <Check className="h-4 w-4" strokeWidth={2.6} />
+                      <DrawnTick on={st === 'attended'} />
                       {st === 'attended' ? 'Here' : 'Mark here'}
                     </button>
                     <button

@@ -367,6 +367,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
           {initialTemplates.map((t) => (
             <div
               key={t.id}
+              data-stagger
               className="flex min-h-[64px] flex-wrap items-center justify-between gap-2.5 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10"
             >
               <div className="min-w-0">

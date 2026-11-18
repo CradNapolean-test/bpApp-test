@@ -1,12 +1,15 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpDown, MessageSquare, Search, Users } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Avatar } from '@/app/_components/Avatar';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
+import { useSlidingThumb } from '@/app/_components/motion/useSlidingThumb';
+import { useFlipList } from '@/app/_components/motion/useFlipList';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 import { LIST_STEP, remainingAfter, showMore, visibleCount } from '@/lib/paging';
 import { QUIET_DAYS, SLIPPING_DAYS, hasReason, type FollowUp, type FollowUpKind } from '@/lib/followUp';
@@ -90,6 +93,13 @@ export function ClientTable({
   const [managingGroups, setManagingGroups] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>(initialQuick);
   const [legend, setLegend] = useState(false);
+  // Motion (GSAP): the My members / Whole gym highlight slides; the rows settle in when the list first shows and when the scope changes;
+  // and when a filter or the sort changes, the rows that stay glide to their new places (Flip), so the coach sees what moved.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scopeTrack = useRef<HTMLDivElement>(null);
+  useSlidingThumb(scopeTrack, scope);
+  useStaggerIn(rootRef, '[data-flip-id]', scope);
+  const captureFlip = useFlipList(rootRef, `${quick}|${planFilter}|${groupId}|${sortKey}|${asc}`);
   const onHold = useMemo(() => new Set(holdIds), [holdIds]);
   const notSetUp = useMemo(() => new Set(notSetUpIds), [notSetUpIds]);
 
@@ -162,6 +172,7 @@ export function ClientTable({
   const shownRows = rows.slice(0, shownCount);
   const moreRows = remainingAfter(rows.length, shownCount);
   function clearFilters() {
+    captureFlip();
     setQuery('');
     setGroupId('');
     setQuick('all');
@@ -191,6 +202,7 @@ export function ClientTable({
     ) : null;
 
   function toggleSort(key: SortKey) {
+    captureFlip();
     if (key === sortKey) setAsc((v) => !v);
     else {
       setSortKey(key);
@@ -218,13 +230,13 @@ export function ClientTable({
   }
 
 const scopeBtnCls = (active: boolean) =>
-  `min-h-9 rounded-lg px-3.5 text-center text-sm font-bold transition-colors ${
+  `relative min-h-9 rounded-lg px-3.5 text-center text-sm font-bold transition-colors ${
     active ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
   }`;
 
   if (clients.length === 0 && !gymClients) {
     return (
-      <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
+      <div className="rounded-[20px] border border-black/[.08] bg-card p-8 text-center dark:border-white/10">
         <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
         <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients yet</p>
         <p className="mt-1 text-sm text-zinc-500">Add your first client above to get started.</p>
@@ -236,19 +248,20 @@ const scopeBtnCls = (active: boolean) =>
   const sortBtn = 'inline-flex items-center gap-1 uppercase tracking-[0.08em] hover:text-black dark:hover:text-zinc-300';
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3">
       {gymClients && (
-        <div role="group" aria-label="Whose clients" className="grid w-full grid-cols-2 gap-1 rounded-xl bg-black/[.06] p-1 sm:w-max dark:bg-white/10">
-          <button type="button" aria-pressed={scope === 'mine'} onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
+        <div ref={scopeTrack} role="group" aria-label="Whose clients" className="relative grid w-full grid-cols-2 gap-1 rounded-xl bg-black/[.06] p-1 sm:w-max dark:bg-white/10">
+          <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
+          <button type="button" aria-pressed={scope === 'mine'} data-active={scope === 'mine'} onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
             My members
           </button>
-          <button type="button" aria-pressed={scope === 'gym'} onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
+          <button type="button" aria-pressed={scope === 'gym'} data-active={scope === 'gym'} onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
             Whole gym
           </button>
         </div>
       )}
       {scope === 'gym' && activeClients.length === 0 ? (
-        <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-8 text-center dark:border-white/10">
           <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
           <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients at {gymName ?? 'this gym'} yet</p>
         </div>
@@ -269,7 +282,10 @@ const scopeBtnCls = (active: boolean) =>
         {groups.length > 0 && (
           <select
             value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
+            onChange={(e) => {
+              captureFlip();
+              setGroupId(e.target.value);
+            }}
             aria-label="Filter by group"
             className="h-11 max-w-[10rem] rounded-full border border-black/[.14] bg-card px-4 text-sm font-bold dark:border-white/15"
           >
@@ -284,7 +300,10 @@ const scopeBtnCls = (active: boolean) =>
         {planNames.length > 0 && (
           <select
             value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value)}
+            onChange={(e) => {
+              captureFlip();
+              setPlanFilter(e.target.value);
+            }}
             aria-label="Filter by plan"
             className="h-11 max-w-[10rem] rounded-full border border-black/[.14] bg-card px-4 text-sm font-bold dark:border-white/15"
           >
@@ -319,7 +338,10 @@ const scopeBtnCls = (active: boolean) =>
             key={key}
             type="button"
             aria-pressed={quick === key}
-            onClick={() => setQuick(key)}
+            onClick={() => {
+              captureFlip();
+              setQuick(key);
+            }}
             className={`h-11 shrink-0 rounded-full px-4 text-sm font-bold ${
               quick === key
                 ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
@@ -346,6 +368,7 @@ const scopeBtnCls = (active: boolean) =>
             aria-label="Sort by"
             value={sortKey}
             onChange={(e) => {
+              captureFlip();
               setSortKey(e.target.value as SortKey);
               setAsc(true);
             }}
@@ -377,7 +400,7 @@ const scopeBtnCls = (active: boolean) =>
                 : `Active ${health.daysSinceActive}d ago`
             : 'Never logged';
           return (
-            <li key={client.id} className="flex items-stretch">
+            <li key={client.id} data-flip-id={client.id} className="flex items-stretch">
               <Link href={`/coach/clients/${client.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-3">
                 <Avatar name={client.name ?? client.email} size="md" />
                 <div className="min-w-0 flex-1">
@@ -447,6 +470,7 @@ const scopeBtnCls = (active: boolean) =>
             return (
               <tr
                 key={client.id}
+                data-flip-id={client.id}
                 className="border-t border-black/[.07] hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
               >
                 <td className="py-2.5 pl-6 pr-4">

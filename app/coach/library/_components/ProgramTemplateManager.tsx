@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
+import { useLenis } from 'lenis/react';
+import { flashWeek, showWeekRow } from '@/app/_components/motion/programWeeks';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
 import { dayHighlights } from '@/lib/workoutSections';
@@ -175,6 +177,7 @@ export function ProgramTemplateManager({
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const lenis = useLenis();
   const gymId = useActiveGymId();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate, busy: mutating } = useAction();
@@ -315,6 +318,7 @@ export function ProgramTemplateManager({
           if (!added) return;
           toast.success(`Week ${added.to} added, copied from week ${added.from}`);
           setActiveWeek(added.to);
+          showWeekRow(template.id, lenis);
         },
       }
     );
@@ -385,7 +389,10 @@ export function ProgramTemplateManager({
         await duplicateTemplateDay(day.id, next, day.day_label);
         for (const old of existing) await deleteTemplateDay(old.id);
       },
-      { success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week' }
+      {
+        success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week',
+        onDone: () => flashWeek(template.id, next),
+      }
     );
   }
 
@@ -526,6 +533,7 @@ export function ProgramTemplateManager({
           return (
             <div
               key={template.id}
+              data-stagger
               className="flex min-h-[72px] flex-wrap items-center justify-between gap-2.5 border-t border-black/[.07] px-5 py-3 hover:bg-black/[.02] sm:px-6 dark:border-white/10 dark:hover:bg-white/[.03]"
             >
               <button type="button" onClick={() => openTemplate(template.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
@@ -662,6 +670,7 @@ export function ProgramTemplateManager({
 
           <ProgramDayList
             columns
+            animateWeeks
             ownerId={previewTemplate.id}
             library={library.filter((l) => l.is_active !== false)}
             showPhaseLabel={false}

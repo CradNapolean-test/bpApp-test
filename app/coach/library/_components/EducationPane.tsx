@@ -626,7 +626,7 @@ export function EducationPane({
             const finished = people.filter((p) => lessonCount > 0 && p.done >= lessonCount).length;
             const finishedPct = people.length > 0 ? Math.round((finished / people.length) * 100) : 0;
             return (
-              <div key={c.id} className="flex min-h-[72px] flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10">
+              <div key={c.id} data-stagger className="flex min-h-[72px] flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10">
                 <button type="button" onClick={() => setOpenCourseId(c.id)} className="flex min-w-0 flex-1 basis-64 items-center gap-3 text-left">
                   <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
                     <GraduationCap className="h-5 w-5" />

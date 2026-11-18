@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
@@ -147,6 +148,9 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
 
   const names = useMemo(() => [...new Set(classes.map((c) => c.name))].sort(), [classes]);
   const [weekStart, setWeekStart] = useState(() => mondayOf(isoToday()));
+  // The week's classes settle in when the timetable opens and when another week is shown (GSAP).
+  const timetableRef = useRef<HTMLDivElement>(null);
+  useStaggerIn(timetableRef, '[data-stagger]', weekStart);
   const todayIso = isoToday();
   const dateFor = (d: number) => isoAdd(weekStart, (d + 6) % 7);
   const byTime = (a: ClassRow, b: ClassRow) => (a.start_time ?? '').localeCompare(b.start_time ?? '');
@@ -351,7 +355,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
   const weekly = classes.filter((c) => !c.specific_date);
   const weeklySpots = weekly.reduce((n, c) => n + c.capacity, 0);
   return (
-    <div className="space-y-4">
+    <div ref={timetableRef} className="space-y-4">
       <section className="space-y-4 rounded-[20px] border border-black/[.08] bg-card px-4 pb-4 pt-[18px] sm:px-5 dark:border-white/10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -406,7 +410,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
       {classes.length === 0 ? (
         <EmptyState icon={CalendarDays} title="No sessions yet" hint="Add your first session, or tap any slot on the calendar once you have one." compact />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-black/[.08] dark:border-white/10">
+        <div className="overflow-x-auto rounded-[20px] border border-black/[.08] dark:border-white/10">
           <div className="min-w-[21rem]" style={{ display: 'grid', gridTemplateColumns: `2.5rem repeat(${days.length}, minmax(3rem, 1fr))` }}>
             <div className="border-b border-black/[.06] dark:border-white/10" />
             {days.map((d) => (
@@ -488,6 +492,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                     return (
                       <button
                         key={row.id}
+                        data-stagger
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
