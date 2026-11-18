@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLenis } from 'lenis/react';
+import { flashWeek, showWeekRow } from '@/app/_components/motion/programWeeks';
 import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
@@ -16,6 +18,9 @@ import { BottomSheet } from '@/app/_components/BottomSheet';
 import { useToast } from '@/app/_components/ToastProvider';
 import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workouts/ProgramDayList';
 import { VideoDemo } from '@/app/_components/workouts/VideoDemo';
+import ClickSpark from '@/app/_components/motion/ClickSpark';
+import type { ClickSparkHandle } from '@/app/_components/motion/ClickSpark';
+import { gsap, pop, prefersReducedMotion, useGSAP } from '@/app/_components/motion/gsap';
 import {
   addExercise,
   addProgramDay,
@@ -26,6 +31,7 @@ import {
   deleteProgramDay,
   deleteProgramWeek,
   duplicateProgramDay,
+  addProgramWeek,
   logSet,
   reorderExercises,
   updateExercise,
@@ -116,8 +122,8 @@ function StartProgrammeSheet({
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                  mode === m ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
+                className={`h-11 rounded-full px-4 text-sm font-bold ${
+                  mode === m ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                 }`}
               >
                 {m === 'template' ? 'From a template' : 'Build from scratch'}
@@ -149,7 +155,7 @@ function StartProgrammeSheet({
           <input type="date" className={field} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           <p className="text-xs text-zinc-500">Programme weeks run Monday to Sunday. Their current programme carries on until this date, then this one takes over.</p>
         </div>
-        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+        <button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : 'Start programme'}
         </button>
       </form>
@@ -191,7 +197,7 @@ function RecordMaxForm({ clientId, bare = false, forExercise }: { clientId: stri
   return (
     <form
       onSubmit={handleSubmit}
-      className={`space-y-3 ${bare ? '' : 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10'}`}
+      className={`space-y-3 ${bare ? '' : 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10'}`}
     >
       {!forExercise && (
       <div className="space-y-1">
@@ -240,7 +246,7 @@ function RecordMaxForm({ clientId, bare = false, forExercise }: { clientId: stri
           <input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} />
           Estimated
         </label>
-        <button type="submit" disabled={busy} className="h-11 rounded-full bg-accent px-6 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+        <button type="submit" disabled={busy} className="h-11 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-6 text-sm font-bold disabled:opacity-50">
           {busy ? 'Saving…' : 'Save'}
         </button>
       </div>
@@ -252,6 +258,16 @@ function RestTimer({ seconds }: { seconds: number }) {
   // Mounted fresh each time via key={timerKey} in LogSetForm, so the initial state here is
   // always the correct starting point -- no need to also reset it inside the effect.
   const [remaining, setRemaining] = useState(seconds);
+  // The bar empties over the rest, so how long is left reads at a glance between sets. Less motion: no bar, the numbers say it.
+  const bar = useRef<HTMLSpanElement>(null);
+  useGSAP(() => {
+    if (!bar.current) return;
+    if (prefersReducedMotion()) {
+      gsap.set(bar.current.parentElement, { display: 'none' });
+      return;
+    }
+    gsap.fromTo(bar.current, { scaleX: 1 }, { scaleX: 0, duration: seconds, ease: 'none', transformOrigin: '0% 50%' });
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -263,7 +279,14 @@ function RestTimer({ seconds }: { seconds: number }) {
   if (remaining <= 0) return null;
   const mm = Math.floor(remaining / 60);
   const ss = (remaining % 60).toString().padStart(2, '0');
-  return <p className="mt-1 text-xs font-medium text-accent">Rest: {mm}:{ss}</p>;
+  return (
+    <div className="mt-2">
+      <p className="text-xs font-medium text-accent">Rest: {mm}:{ss}</p>
+      <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+        <span ref={bar} className="block h-full rounded-full bg-accent" />
+      </span>
+    </div>
+  );
 }
 
 // The warm-up is done or not done as a whole, so it gets one tick box instead of sets, reps and weight for each exercise. Ticking saves
@@ -304,7 +327,16 @@ function WarmupTick({
   }
   return (
     <label className="mb-3 flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
-      <input type="checkbox" checked={done} disabled={busy} onChange={toggle} className="h-6 w-6 shrink-0 accent-[var(--accent)]" />
+      <input
+        type="checkbox"
+        checked={done}
+        disabled={busy}
+        onChange={(e) => {
+          pop(e.currentTarget, 0.6);
+          toggle();
+        }}
+        className="h-6 w-6 shrink-0 accent-[var(--accent)]"
+      />
       <span className={`text-sm font-semibold ${done ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{done ? 'Warm-up done' : 'Tick when your warm-up is done'}</span>
     </label>
   );
@@ -351,6 +383,9 @@ function LogSetForm({
   const [inputs, setInputs] = useState<SetInputs>(() => inputsFromLog(tracking, seed));
   const [timerKey, setTimerKey] = useState(0);
   const [showLoad, setShowLoad] = useState(!weightless);
+  const sparks = useRef<ClickSparkHandle>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const submit = useRef<HTMLButtonElement>(null);
 
   const draft = readSetInputs(tracking, inputs);
   const heading = setFormHeading(totalSets, setsDone);
@@ -389,13 +424,25 @@ function LogSetForm({
         onDone: () => {
           setInputs((p) => ({ ...p, rpe: '' }));
           if (restSeconds != null) setTimerKey((k) => k + 1);
+          const best = v.load != null && priorBest != null && v.load > priorBest;
+          // Two frames: the new chip is drawn by then.
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              const chips = box.current?.parentElement?.previousElementSibling;
+              if (chips?.hasAttribute('data-set-chips')) pop(chips.lastElementChild, 0.6);
+              const area = box.current?.getBoundingClientRect();
+              const at = submit.current?.getBoundingClientRect();
+              if (best && area && at) sparks.current?.spark(at.left - area.left + at.width / 2, at.top - area.top + at.height / 2);
+            })
+          );
         },
       }
     );
   }
 
   return (
-    <div className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
+    <ClickSpark ref={sparks} clickToSpark={false} sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={14} sparkRadius={52} sparkSize={12} shape="star" duration={750}>
+    <div ref={box} className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className={`whitespace-nowrap text-sm font-bold ${heading.extra ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{heading.title}</span>
         {lastSet && tracking !== 'tick' && hasRecordedValue(tracking, lastSet) && (
@@ -412,15 +459,17 @@ function LogSetForm({
           </button>
         )}
         <button
+          ref={submit}
           type="submit"
           disabled={busy}
-          className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-11 w-full rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-sm font-bold disabled:opacity-50"
         >
           {busy ? 'Logging…' : heading.extra ? 'Log an extra set' : tracking === 'tick' ? `Done — set ${heading.shown}` : `Log set ${heading.shown}`}
         </button>
       </form>
       {restSeconds != null && timerKey > 0 && <RestTimer key={timerKey} seconds={restSeconds} />}
     </div>
+    </ClickSpark>
   );
 }
 
@@ -460,7 +509,7 @@ function SetEditSheet({ log, index, tracking, onClose, onChange }: { log: Workou
         className="space-y-3"
       >
         <SetInputsGrid tracking={tracking} inputs={inputs} onChange={setInputs} />
-        <button type="submit" disabled={busy} className="h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+        <button type="submit" disabled={busy} className="h-11 w-full rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-sm font-bold disabled:opacity-50">
           {busy ? 'Saving…' : 'Save changes'}
         </button>
         <button
@@ -483,6 +532,43 @@ function SetEditSheet({ log, index, tracking, onClose, onChange }: { log: Workou
         </button>
       </form>
     </BottomSheet>
+  );
+}
+
+// How much of the open workout is logged. When the last exercise is logged (not when a finished workout is opened again), "All done"
+// springs in with a burst of sparks.
+function DayProgress({ done, total, pct, allDone }: { done: number; total: number; pct: number; allDone: boolean }) {
+  const sparks = useRef<ClickSparkHandle>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const tick = useRef<HTMLSpanElement>(null);
+  const wasDone = useRef(allDone);
+  useEffect(() => {
+    if (allDone && !wasDone.current) {
+      pop(tick.current, 0.5);
+      const area = root.current?.getBoundingClientRect();
+      const at = tick.current?.getBoundingClientRect();
+      if (area && at) sparks.current?.spark(at.left - area.left + at.width / 2, at.top - area.top + at.height / 2);
+    }
+    wasDone.current = allDone;
+  }, [allDone]);
+  return (
+    <ClickSpark ref={sparks} clickToSpark={false} sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={14} sparkRadius={48} sparkSize={12} shape="star" duration={750}>
+      <div ref={root} className="mb-3">
+        <div className="mb-1 flex items-center justify-between text-xs">
+          <span className="font-semibold text-black dark:text-zinc-50">
+            {done} of {total} exercises logged
+          </span>
+          {allDone && (
+            <span ref={tick} className="font-bold text-success">
+              All done ✓
+            </span>
+          )}
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+          <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </ClickSpark>
   );
 }
 
@@ -552,7 +638,10 @@ function FinishWorkoutPanel({
             key={n}
             type="button"
             aria-pressed={rpe === n}
-            onClick={() => setRpe(rpe === n ? null : n)}
+            onClick={(e) => {
+              pop(e.currentTarget);
+              setRpe(rpe === n ? null : n);
+            }}
             className={`flex h-11 w-11 items-center justify-center rounded-full text-base font-bold transition-colors ${
               rpe === n
                 ? 'bg-accent text-accent-foreground'
@@ -587,7 +676,7 @@ function FinishWorkoutPanel({
         type="button"
         disabled={busy}
         onClick={() => void finish()}
-        className="h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground disabled:opacity-50"
+        className="h-12 w-full rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-[15px] font-bold disabled:opacity-50"
       >
         {busy ? 'Saving…' : 'Finish workout'}
       </button>
@@ -611,7 +700,7 @@ function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | 
   return (
     <select
       title="Day of the week -- a class scheduled the same day auto-links here for client check-in"
-      className="w-20 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      className="w-20 shrink-0 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={initial ?? ''}
       onChange={handleChange}
     >
@@ -662,7 +751,7 @@ function DayNotesField({ dayId, initial }: { dayId: string; initial: string | nu
     <textarea
       placeholder="Workout notes (optional)"
       rows={2}
-      className="mt-2 w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      className="mt-2 w-full rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
@@ -689,14 +778,14 @@ function BatchApplyForm({ dayId }: { dayId: string }) {
     });
   }
 
-  const inputCls = 'rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10';
+  const inputCls = 'rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10';
 
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5">
       <span className="text-[11px] text-zinc-500">Apply to all exercises in this day:</span>
       <input type="number" placeholder="Rest (s)" className={`${inputCls} w-20`} value={restSeconds} onChange={(e) => setRestSeconds(e.target.value === '' ? '' : Number(e.target.value))} />
       <input type="number" placeholder="RPE" className={`${inputCls} w-16`} value={rpe} onChange={(e) => setRpe(e.target.value === '' ? '' : Number(e.target.value))} />
-      <button type="button" disabled={busy} onClick={handleApply} className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium disabled:opacity-50 dark:border-white/10">
+      <button type="button" disabled={busy} onClick={handleApply} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-50">
         Apply
       </button>
     </div>
@@ -731,7 +820,7 @@ function RenameSheet({
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
-        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+        <button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : 'Save'}
         </button>
       </form>
@@ -829,6 +918,7 @@ export function WorkoutTab({
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [editingSet, setEditingSet] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   const toast = useToast();
+  const lenis = useLenis();
 
   useEffect(() => {
     if (!focusDay) return;
@@ -856,19 +946,29 @@ export function WorkoutTab({
   // "make week 1, tap Add week until there are enough", then tweak. An empty programme gets a first
   // blank workout instead.
   async function handleAddWeek(program: WorkoutProgramRow) {
-    const weekNums = program.workout_program_days.map((d) => d.week_num);
-    if (weekNums.length === 0) {
+    if (program.workout_program_days.length === 0) {
       await runMutate(() => addProgramDay(program.id, 1, 'Workout 1', null), {
         onDone: () => setActiveWeeks((st) => ({ ...st, [program.id]: 1 })),
       });
       return;
     }
-    const last = Math.max(...weekNums);
-    const source = program.workout_program_days.filter((d) => d.week_num === last);
-    await runMutate(() => Promise.all(source.map((d) => duplicateProgramDay(d.id, last + 1, d.day_label))), {
-      success: `Week ${last + 1} added, copied from week ${last}`,
-      onDone: () => setActiveWeeks((st) => ({ ...st, [program.id]: last + 1 })),
-    });
+    // Which week is last is read on the server (addProgramWeek), not from this screen: the button comes back before the page has
+    // reloaded, and a second tap used to copy week 1 into week 2 again.
+    let added: { from: number; to: number } | null = null;
+    await runMutate(
+      async () => {
+        added = await addProgramWeek(program.id);
+      },
+      {
+        onDone: () => {
+          if (!added) return;
+          const week = added.to;
+          toast.success(`Week ${week} added, copied from week ${added.from}`);
+          setActiveWeeks((st) => ({ ...st, [program.id]: week }));
+          showWeekRow(program.id, lenis);
+        },
+      }
+    );
   }
 
   async function handleDeleteWeek(program: WorkoutProgramRow, week: number) {
@@ -943,7 +1043,10 @@ export function WorkoutTab({
         await duplicateProgramDay(day.id, next, day.day_label);
         for (const old of existing) await deleteProgramDay(old.id);
       },
-      { success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week' }
+      {
+        success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week',
+        onDone: () => flashWeek(program.id, next),
+      }
     );
   }
 
@@ -1084,7 +1187,7 @@ export function WorkoutTab({
           <button
             type="button"
             onClick={() => setSheet({ kind: 'start' })}
-            className="rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground"
+            className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground"
           >
             Start a programme
           </button>
@@ -1103,7 +1206,7 @@ export function WorkoutTab({
           <button
             type="button"
             onClick={() => setSheet({ kind: 'start', startDate: nextStartDefault })}
-            className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-extrabold text-accent-foreground"
+            className="shrink-0 inline-flex h-10 items-center rounded-xl bg-accent px-4 text-[13px] font-extrabold text-accent-foreground"
           >
             Start the next programme
           </button>
@@ -1128,13 +1231,18 @@ export function WorkoutTab({
         return (
           <div
             key={program.id}
-            className={isCoachView ? 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10' : ''}
+            className={isCoachView ? 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10' : 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10'}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className={isCoachView ? 'truncate text-base font-extrabold text-black dark:text-zinc-50' : 'px-1 text-xl font-black text-black dark:text-zinc-50'}>
+                <h3 className={isCoachView ? 'truncate text-base font-extrabold text-black dark:text-zinc-50' : 'text-base font-extrabold text-black dark:text-zinc-50'}>
                   {program.name}
                 </h3>
+                {!isCoachView && currentWeek(program) > 0 && weeks.length > 0 && (
+                  <p className="text-[13px] font-bold text-accent">
+                    Week {currentWeek(program)} of {Math.max(...weeks)}
+                  </p>
+                )}
                 {isCoachView && <p className="mt-0.5 text-xs text-zinc-500">{progressLine(program)}</p>}
               </div>
               {isCoachView && (
@@ -1160,6 +1268,8 @@ export function WorkoutTab({
               ownerId={program.id}
               library={exerciseLibrary}
               showPhaseLabel={!isCoachView}
+              animateWeeks
+              columns={isCoachView}
               onOpenDay={setOpenDayId}
               activeWeek={shownWeek}
               currentWeek={currentWeek(program) > 0 ? currentWeek(program) : undefined}
@@ -1215,7 +1325,7 @@ export function WorkoutTab({
                   <button
                     type="button"
                     onClick={() => setSheet({ kind: 'addWorkout', programId: program.id, week: shownWeek, count: daysThisWeek })}
-                    className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+                    className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground"
                   >
                     + Add workout
                   </button>
@@ -1226,8 +1336,8 @@ export function WorkoutTab({
                   onClick={() => handleAddWeek(program)}
                   className={
                     weeks.length === 0
-                      ? 'rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40'
-                      : 'rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 disabled:opacity-40 dark:border-white/15 dark:text-zinc-200'
+                      ? 'inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-40'
+                      : 'inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-40'
                   }
                 >
                   {weeks.length === 0 ? '+ Add first workout' : '+ Add week (copy of last)'}
@@ -1236,7 +1346,7 @@ export function WorkoutTab({
                   <button
                     type="button"
                     onClick={() => handleDeleteWeek(program, shownWeek)}
-                    className="rounded-full px-3 py-2 text-sm font-semibold text-danger hover:bg-danger/10"
+                    className="h-11 rounded-xl px-3 text-sm font-bold text-danger hover:bg-danger/10"
                   >
                     Delete week {shownWeek}
                   </button>
@@ -1248,7 +1358,7 @@ export function WorkoutTab({
       })}
 
       {isCoachView && past.length > 0 && (
-        <details className="rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+        <details className="rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-black dark:text-zinc-50">
             Previous programmes ({past.length})
           </summary>
@@ -1306,7 +1416,7 @@ export function WorkoutTab({
       )}
 
       {!isCoachView && (
-        <details className="group rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+        <details className="group rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
           <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold text-black dark:text-zinc-50">
             Record a tested max
             <span className="text-xs font-semibold text-accent group-open:hidden">Add</span>
@@ -1332,6 +1442,7 @@ export function WorkoutTab({
           title={openDay.day_label}
           subtitle={`Week ${openDay.week_num}`}
           onClose={() => setOpenDayId(null)}
+          variant={isCoachView ? 'plain' : 'member'}
         >
           {/* A readable column on a laptop: full width, each set box was 415-610 px wide (TR6). */}
           <div className="mx-auto w-full max-w-2xl">
@@ -1343,19 +1454,9 @@ export function WorkoutTab({
           {!isCoachView && (() => {
             const progress = progressOf(openDay);
             if (progress.total === 0) return null;
-            return (
-              <div className="mb-3">
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-black dark:text-zinc-50">
-                    {progress.done} of {progress.total} exercises logged
-                  </span>
-                  {progress.allDone && <span className="font-bold text-success">All done ✓</span>}
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                  <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${progress.pct}%` }} />
-                </div>
-              </div>
-            );
+            // Its own key per day (resets the "just finished" sparks), not the bare day id: FinishWorkoutPanel below uses that one, and
+            // two siblings with one key made React draw this bar twice.
+            return <DayProgress key={`progress-${openDay.id}`} done={progress.done} total={progress.total} pct={progress.pct} allDone={progress.allDone} />;
           })()}
 
           {isCoachView && (() => {
@@ -1545,7 +1646,7 @@ export function WorkoutTab({
                   {!isCoachView && ex.block_type === 'exercise' && !isWarmup && (
                     <>
                       {logs.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div data-set-chips className="mt-2 flex flex-wrap gap-1.5">
                           {logs.map((l, i) => (
                             <button
                               key={l.id}

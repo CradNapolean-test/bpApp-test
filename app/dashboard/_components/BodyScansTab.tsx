@@ -39,6 +39,9 @@ const longDate = (iso: string) =>
 const shortDate = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
+const headCls = 'text-base font-extrabold text-black dark:text-zinc-50';
+
 const num = (v: string): number | null => (v.trim() === '' ? null : Number(v));
 
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
@@ -81,22 +84,7 @@ export function BodyScansTab({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
-          {latest ? `Last scan ${longDate(latest.scan_date)}` : 'InBody body composition scans'}
-        </p>
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
-          >
-            <Plus className="h-4 w-4" /> Add scan
-          </button>
-        )}
-      </div>
-
+    <div className="space-y-5">
       {scans.length === 0 ? (
         <EmptyState
           icon={ScanLine}
@@ -105,15 +93,54 @@ export function BodyScansTab({
         />
       ) : (
         <>
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <section className="space-y-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className={headCls}>Latest scan</h2>
+              <span className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">{longDate(latest!.scan_date)}</span>
+            </div>
+            <div className={cardCls}>
+              <div className="grid grid-cols-2 gap-2">
+                {STATS.filter((s) => latest?.[s.key] != null).map((s) => {
+                  const value = Number(latest![s.key]);
+                  const prev = previous?.[s.key] != null ? Number(previous[s.key]) : null;
+                  const delta = prev != null ? value - prev : null;
+                  const shown = delta != null && Math.abs(delta) >= Math.pow(10, -s.digits) / 2;
+                  const favourable = s.good == null || delta == null ? null : s.good === 'up' ? delta > 0 : delta < 0;
+                  return (
+                    <div key={s.key} className="rounded-xl bg-black/[.04] px-3 py-2.5 dark:bg-white/[.06]">
+                      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{s.label}</p>
+                      <p className="text-[19px] font-black leading-tight text-black dark:text-zinc-50">
+                        {value.toFixed(s.digits)}
+                        {s.unit && <span className="ml-0.5 text-xs font-bold text-zinc-500">{s.unit === '%' ? '%' : ` ${s.unit}`}</span>}
+                      </p>
+                      {shown && (
+                        <p className={`text-xs font-bold ${favourable == null ? 'text-zinc-500' : favourable ? 'text-accent' : 'text-danger'}`}>
+                          {delta! > 0 ? 'Up' : 'Down'} {Math.abs(delta!).toFixed(s.digits)}
+                          {s.unit === '%' ? '%' : s.unit && s.unit !== 'level' ? ` ${s.unit}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                {previous ? `Compared with your ${longDate(previous.scan_date)} scan.` : 'Your first scan. The next one shows the change.'}
+              </p>
+            </div>
+          </section>
+
+          <section className="space-y-2.5">
+          <h2 className={headCls}>Trend</h2>
+          <div className={cardCls}>
             <div className="flex gap-1.5">
               {CHART_METRICS.map((m) => (
                 <button
                   key={m.key}
                   type="button"
                   onClick={() => setMetric(m.key)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                    metric === m.key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-500 dark:bg-white/10'
+                  aria-pressed={metric === m.key}
+                  className={`min-h-11 rounded-full px-4 text-sm font-bold ${
+                    metric === m.key ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
                   }`}
                 >
                   {m.label}
@@ -121,7 +148,7 @@ export function BodyScansTab({
               ))}
             </div>
             <div className="mt-3">
-              <p className="text-2xl font-bold text-black dark:text-zinc-50">
+              <p className="text-[28px] font-black leading-tight text-black dark:text-zinc-50">
                 {latest?.[metric] != null ? `${Number(latest[metric]).toFixed(1)}${chartMeta.unit}` : '—'}
               </p>
               <TrendChart
@@ -133,39 +160,16 @@ export function BodyScansTab({
               />
             </div>
           </div>
+          </section>
 
-          <div className="grid grid-cols-2 gap-2">
-            {STATS.filter((s) => latest?.[s.key] != null).map((s) => {
-              const value = Number(latest![s.key]);
-              const prev = previous?.[s.key] != null ? Number(previous[s.key]) : null;
-              const delta = prev != null ? value - prev : null;
-              const shown = delta != null && Math.abs(delta) >= Math.pow(10, -s.digits) / 2;
-              const favourable = s.good == null || delta == null ? null : s.good === 'up' ? delta > 0 : delta < 0;
-              return (
-                <div key={s.key} className="rounded-2xl border border-black/[.05] bg-card p-3.5 dark:border-white/10">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{s.label}</p>
-                  <p className="mt-0.5 text-xl font-extrabold text-black dark:text-zinc-50">
-                    {value.toFixed(s.digits)}
-                    {s.unit && <span className="ml-0.5 text-xs font-bold text-zinc-500">{s.unit}</span>}
-                  </p>
-                  {shown && (
-                    <p className={`text-[11px] font-semibold ${favourable == null ? 'text-zinc-500' : favourable ? 'text-success' : 'text-danger'}`}>
-                      {delta! > 0 ? '+' : ''}
-                      {delta!.toFixed(s.digits)} since last scan
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
-            <p className="px-4 pt-3.5 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Scan history</p>
-            <ul className="mt-1 divide-y divide-black/[.05] dark:divide-white/10">
+          <section className="space-y-2.5">
+          <h2 className={headCls}>All scans</h2>
+          <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+            <ul className="divide-y divide-black/[.07] dark:divide-white/10">
               {scans.map((s) => (
                 <li key={s.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-black dark:text-zinc-50">{longDate(s.scan_date)}</p>
+                    <p className="text-[15px] font-bold text-black dark:text-zinc-50">{longDate(s.scan_date)}</p>
                     <p className="truncate text-xs text-zinc-500">
                       {[
                         s.weight_kg != null && `${s.weight_kg}kg`,
@@ -184,7 +188,7 @@ export function BodyScansTab({
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="Open printout"
-                        className="rounded-full bg-black/5 p-2 text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
                       >
                         <FileText className="h-4 w-4" />
                       </a>
@@ -193,14 +197,14 @@ export function BodyScansTab({
                         type="button"
                         aria-label="View printout"
                         onClick={() => setViewing(s.signedPrintoutUrl)}
-                        className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-black/5"
+                        className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-black/5"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={s.signedPrintoutUrl} alt="" className="h-full w-full object-cover" />
                       </button>
                     ))}
                   {!readOnly && (
-                    <button type="button" aria-label="Delete scan" onClick={() => handleDelete(s)} className="rounded-full p-2 text-zinc-400 hover:text-danger">
+                    <button type="button" aria-label={`Delete the scan from ${longDate(s.scan_date)}`} onClick={() => handleDelete(s)} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/10">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   )}
@@ -208,7 +212,18 @@ export function BodyScansTab({
               ))}
             </ul>
           </div>
+          </section>
         </>
+      )}
+
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white dark:bg-zinc-100 dark:text-[#1d1d1b]"
+        >
+          <Plus className="h-[18px] w-[18px]" /> Add a scan
+        </button>
       )}
 
       {adding && <AddScanSheet clientId={clientId} timezone={profile?.timezone} onClose={() => setAdding(false)} />}
@@ -331,7 +346,7 @@ function AddScanSheet({ clientId, timezone, onClose }: { clientId: string; timez
           type="button"
           disabled={busy || uploading}
           onClick={save}
-          className="w-full rounded-full bg-accent py-3 text-sm font-bold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-[#1d1d1b]"
         >
           {uploading ? 'Uploading printout…' : busy ? 'Saving…' : 'Save scan'}
         </button>

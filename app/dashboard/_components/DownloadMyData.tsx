@@ -38,7 +38,7 @@ export function DownloadMyData() {
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <p className="text-sm font-semibold text-black dark:text-zinc-50">Download my data</p>
       <p className="mt-1 text-xs text-zinc-500">
         Get a copy of the information the app holds about you, as a file. Photos and voice notes are listed by name, not copied in.

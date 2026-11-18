@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Checkbox } from '@/app/_components/Checkbox';
 import { Check, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
+import { pop } from '@/app/_components/motion/gsap';
 import { useToast } from '@/app/_components/ToastProvider';
 import { cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
@@ -74,25 +75,39 @@ const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label:
 
 const LIGHT_DOT = { green: 'bg-success', amber: 'bg-warning', red: 'bg-danger' } as const;
 
-const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
+
+// What 1 and 5 mean for each rating, shown beside its name.
+const SCALE_HINT: Record<string, string> = {
+  Hunger: '1 none, 5 starving',
+  Energy: '1 flat, 5 great',
+  Motivation: '1 low, 5 high',
+  Stress: '1 calm, 5 a lot',
+};
 
 function MoodDots({ label, value, onChange, disabled }: { label: string; value: number | null; onChange: (n: number) => void; disabled: boolean }) {
   return (
-    <div className="col-span-2 flex items-center gap-3 sm:col-span-4">
-      <p className="w-20 shrink-0 text-sm text-zinc-500">{label}</p>
-      <div role="group" aria-label={label} className="flex flex-1 gap-1.5">
+    <div className="col-span-2 space-y-1.5 sm:col-span-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-bold text-black dark:text-zinc-50">{label}</p>
+        {SCALE_HINT[label] && <p className="text-xs text-zinc-500 dark:text-zinc-400">{SCALE_HINT[label]}</p>}
+      </div>
+      <div role="group" aria-label={`${label}, 1 to 5`} className="grid grid-cols-5 gap-1.5">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             type="button"
             disabled={disabled}
-            onClick={() => onChange(n)}
+            onClick={(e) => {
+              pop(e.currentTarget);
+              onChange(n);
+            }}
             aria-label={`${label} ${n} of 5`}
             aria-pressed={value === n}
-            className={`h-10 flex-1 rounded-full text-xs font-bold transition-colors disabled:opacity-60 ${
-              value != null && n <= value
-                ? 'bg-accent text-accent-foreground'
-                : 'bg-black/[.04] text-zinc-500 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20'
+            className={`h-11 rounded-xl text-[15px] font-extrabold transition-colors disabled:opacity-60 ${
+              value === n
+                ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                : 'border border-black/[.14] bg-card text-black hover:bg-black/[.04] dark:border-white/15 dark:text-zinc-50 dark:hover:bg-white/10'
             }`}
           >
             {/* the number is the cue that does not depend on colour */}
@@ -329,7 +344,7 @@ function WeekLog({
           <h4 className="text-sm font-bold text-black dark:text-zinc-50">Check-in this week</h4>
           <p className="text-xs text-zinc-500">Average, lowest and highest day for each measure that is switched on.</p>
           <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
-            <div className="grid grid-cols-[1fr_3.5rem_4.5rem_4.5rem] gap-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            <div className="grid grid-cols-[1fr_3.5rem_4.5rem_4.5rem] gap-2 pb-1 text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
               <span>Measure</span>
               <span className="text-right">Avg</span>
               <span className="text-right">Low</span>
@@ -376,8 +391,8 @@ function WeekLog({
               // scrolling strip and made the whole page 460px wide on a 375px phone (CW15).
               className={`relative flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors ${
                 isFocused
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : 'border-black/[.05] text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
+                  ? 'border-transparent bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                  : 'border-black/[.08] bg-card text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
               }`}
             >
               <span className="text-xs font-medium uppercase opacity-80">
@@ -390,8 +405,8 @@ function WeekLog({
                 aria-hidden
                 className={`h-1.5 w-1.5 rounded-full ${
                   light
-                    ? isFocused ? 'bg-accent-foreground' : LIGHT_DOT[light]
-                    : logged ? (isFocused ? 'bg-accent-foreground' : 'bg-zinc-400') : 'bg-transparent'
+                    ? isFocused ? 'bg-white dark:bg-[#1d1d1b]' : LIGHT_DOT[light]
+                    : logged ? (isFocused ? 'bg-white dark:bg-[#1d1d1b]' : 'bg-zinc-400') : 'bg-transparent'
                 }`}
               />
               {/* The dot is sleep, steps and water only, so a coach could see a green week with no food in it (CR3). Calories go under it. */}
@@ -407,7 +422,7 @@ function WeekLog({
 
       <div className={cardCls}>
         <div className="flex items-center justify-between gap-2">
-          <h4 className="font-medium text-black dark:text-zinc-50">
+          <h4 className="text-base font-extrabold text-black dark:text-zinc-50">
             {new Date(focusedDate + 'T00:00:00Z').toLocaleDateString('en-GB', {
               weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC',
             })}
@@ -548,7 +563,7 @@ function WeekLog({
           {scaleFields.length > 0 && (
             <>
           <p className="col-span-2 -mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 sm:col-span-4">
-            How are you feeling? <span className="font-medium normal-case tracking-normal">1 = low, 5 = high</span>
+            How are you feeling?
           </p>
 
           {scaleFields.map(({ key, label }) => (
@@ -778,7 +793,7 @@ export function WeeklyLogTab(
       ) : logs === null ? (
         <div className="py-8 text-center text-sm text-zinc-500">
           <p>We could not load this week.</p>
-          <button type="button" onClick={() => { setFetched(null); setTryAgain((n) => n + 1); }} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-accent-foreground">
+          <button type="button" onClick={() => { setFetched(null); setTryAgain((n) => n + 1); }} className="mt-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-3.5 text-[13px] font-bold">
             Try again
           </button>
         </div>
@@ -931,12 +946,12 @@ function CheckinReply({
           type="button"
           disabled={busy || text.trim() === ''}
           onClick={send}
-          className="rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Sending…' : reviewed ? 'Send' : 'Send and mark reviewed'}
         </button>
         {!reviewed && (
-          <button type="button" disabled={busy} onClick={markOnly} className="rounded-full px-3 py-2.5 text-sm font-bold text-zinc-600 disabled:opacity-50 dark:text-zinc-300">
+          <button type="button" disabled={busy} onClick={markOnly} className="h-11 rounded-xl px-3 text-sm font-bold text-zinc-600 disabled:opacity-50 dark:text-zinc-300">
             Mark reviewed without a reply
           </button>
         )}

@@ -1,16 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { CoachPageHeader } from '@/app/coach/_components/CoachUi';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
-import { HubTabBar } from '@/app/coach/_components/HubTabBar';
+import { LibraryTiles } from './LibraryTiles';
 import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { ExerciseLibraryManager } from './ExerciseLibraryManager';
@@ -28,8 +31,8 @@ import type {
   CourseRollupRow,
 } from '@/lib/data/types';
 
-const TABS = ['Exercises', 'Program templates', 'Education', 'Forms', 'Foods'] as const;
-type Tab = (typeof TABS)[number];
+
+type Tab = 'Exercises' | 'Program templates' | 'Education' | 'Forms' | 'Foods';
 
 // What each tab is called in the address (?tab=...), so a reload or a shared link opens the same tab.
 const TAB_SLUG: Record<Tab, string> = { Exercises: 'exercises', 'Program templates': 'templates', Education: 'education', Forms: 'forms', Foods: 'foods' };
@@ -71,10 +74,16 @@ export function LibraryHubShell({
 }) {
   const searchParams = useSearchParams();
   const [tab, setTabState] = useState<Tab>(() => TAB_PARAM[searchParams.get('tab') ?? ''] ?? 'Exercises');
+  const paneRef = useRef<HTMLDivElement>(null);
+  useStaggerIn(paneRef, '[data-stagger]', tab);
   const setTab = (next: Tab) => {
     setTabState(next);
     writeTabToUrl(TAB_SLUG[next]);
   };
+
+  // The tiles' figures: exercises still to film, and programme rollouts not applied yet.
+  const noVideo = initialExercises.filter((e) => !e.video_url?.startsWith('https://')).length;
+  const rollingOut = rollouts.filter((r) => !r.applied_at).length;
 
   return (
     <ClientOnly fallback={<PageSkeleton />}>
@@ -83,14 +92,40 @@ export function LibraryHubShell({
       topBar={<CoachNav />}
       bottomBar={<CoachBottomTabBar />}
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={email} />}
+      coachSidebar={<CoachSidebar unreadCount={unreadCount} email={email} />}
       mobileHeader={<CoachMobileBrand />}
     >
-      <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">
-        Library
-        <ActiveGymTag />
-      </h1>
-      <HubTabBar label="Library sections" tabs={TABS} active={tab} onSelect={setTab} />
+      <CoachPageHeader
+        eyebrow="What you build workouts, courses and forms from"
+        title={
+          <>
+            Library
+            <ActiveGymTag />
+          </>
+        }
+      />
+      <div className="mb-6 mt-6">
+        <LibraryTiles
+          active={tab}
+          onSelect={setTab}
+          tiles={[
+            {
+              tab: 'Exercises',
+              label: 'Exercises',
+              value: initialExercises.length,
+              sub: noVideo > 0 ? `${noVideo} without a video` : 'All have a video',
+              warn: noVideo > 0,
+            },
+            { tab: 'Program templates', label: 'Templates', value: initialTemplates.length, sub: rollingOut > 0 ? `${rollingOut} rolling out` : 'None rolling out' },
+            { tab: 'Education', label: 'Education', value: initialCourses.length, sub: initialCourses.length === 1 ? 'course' : 'courses' },
+            { tab: 'Forms', label: 'Forms', value: initialFormTemplates.length, sub: initialFormTemplates.length === 1 ? 'form' : 'forms' },
+            { tab: 'Foods', label: 'Foods', sub: 'The food list members log from' },
+          ]}
+        />
+      </div>
 
+      {/* Each section's rows settle in one after another when it opens (GSAP). */}
+      <div ref={paneRef}>
       {tab === 'Exercises' && <ExerciseLibraryManager initialExercises={initialExercises} usage={exerciseUsage} />}
       {tab === 'Program templates' && (
         <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} rollouts={rollouts} />
@@ -98,6 +133,7 @@ export function LibraryHubShell({
       {tab === 'Education' && <EducationPane initialCourses={initialCourses} members={members} groups={groups} rollup={courseRollup} otherGyms={otherGyms} />}
       {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}
       {tab === 'Foods' && <FoodsPane />}
+      </div>
     </AppShell>
     </ClientOnly>
   );

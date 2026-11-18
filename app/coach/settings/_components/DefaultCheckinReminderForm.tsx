@@ -22,7 +22,7 @@ export function DefaultCheckinReminderForm({ initialDays }: { initialDays: numbe
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Default check-in reminder</h3>
+      <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Default check-in reminder</h3>
       <p className="text-xs text-zinc-500">
         How long a new member can go without logging before they get a nudge. It applies when a member&apos;s details are
         first saved. You can change it for one member under their Profile → Credits &amp; plan.

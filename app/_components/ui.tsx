@@ -18,7 +18,7 @@ import type { ReactNode } from 'react';
 // their own smaller styling.
 export const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10';
 
-export const cardBase = 'rounded-2xl border border-black/[.06] bg-card dark:border-white/10';
+export const cardBase = 'bp-card rounded-[20px] border border-black/[.08] bg-card dark:border-white/10';
 
 export function Card({
   children,
@@ -43,7 +43,7 @@ export function Card({
 
 export function SectionLabel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`px-1 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500 ${className}`}>{children}</p>
+    <p className={`bp-section px-1 pb-2 pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500 ${className}`}>{children}</p>
   );
 }
 
@@ -129,7 +129,7 @@ export function ListRow({
       </span>
     </>
   );
-  const cls = `flex w-full items-center justify-between gap-3 border-b border-black/5 px-4 py-3 text-left last:border-b-0 dark:border-white/5 ${
+  const cls = `flex w-full items-center justify-between gap-3 border-b border-black/[.07] px-4 py-3 text-left last:border-b-0 dark:border-white/10 ${
     disabled ? 'opacity-50' : ''
   }`;
   if (href && !disabled) {
@@ -171,7 +171,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={`flex gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10 ${fill ? 'w-full sm:w-max' : 'w-max max-w-full overflow-x-auto'}`}
+      className={`flex gap-1 rounded-xl bg-black/[.06] p-1 dark:bg-white/10 ${fill ? 'w-full sm:w-max' : 'w-max max-w-full overflow-x-auto'}`}
     >
       {options.map((o) => (
         <button
@@ -181,8 +181,8 @@ export function Segmented<T extends string>({
           aria-checked={value === o.value}
           disabled={o.disabled}
           onClick={() => onChange(o.value)}
-          className={`whitespace-nowrap rounded-full text-center font-bold transition-colors disabled:opacity-40 ${size === 'md' ? 'min-h-11 px-3.5 py-2.5 text-sm' : 'min-h-9 px-3.5 py-1.5 text-xs'} ${fill ? 'flex-1' : ''} ${
-            value === o.value ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-200'
+          className={`whitespace-nowrap rounded-lg text-center font-bold transition-colors disabled:opacity-40 ${size === 'md' ? 'min-h-11 px-3.5 py-2.5 text-sm' : 'min-h-9 px-3.5 py-1.5 text-xs'} ${fill ? 'flex-1' : ''} ${
+            value === o.value ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
           }`}
         >
           {o.label}

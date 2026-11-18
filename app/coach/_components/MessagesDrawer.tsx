@@ -85,7 +85,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
           {overviewFailed ? (
             <div className="p-4 text-sm text-zinc-500">
               <p>We could not load your conversations.</p>
-              <button type="button" onClick={retryOverview} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+              <button type="button" onClick={retryOverview} className="mt-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground">
                 Try again
               </button>
             </div>
@@ -112,7 +112,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
           ) : loadError ? (
             <div className="p-4 text-sm text-zinc-500">
               <p>We could not load this conversation.</p>
-              <button type="button" onClick={retryLoad} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+              <button type="button" onClick={retryLoad} className="mt-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground">
                 Try again
               </button>
             </div>

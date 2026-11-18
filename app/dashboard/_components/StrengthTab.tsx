@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useReveal } from '@/app/_components/motion/useReveal';
 import { Dumbbell, Trophy } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useOnDemand } from '@/app/_components/useOnDemand';
@@ -12,7 +13,8 @@ import { trackingOf, TRACKING } from '@/lib/workoutTracking';
 import { bestSession, bestsLine, blockInfoFor, blockSeries, exerciseOptions, measureSessions, topSetText } from '@/lib/workoutProgress';
 import type { ClientProfileRow, WorkoutBlockResultRow, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
-const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10';
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
+const headCls = 'text-base font-extrabold text-black dark:text-zinc-50';
 const shortDate = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
@@ -25,11 +27,14 @@ function PBBadge() {
 }
 
 function TrendLine({ values, label }: { values: number[]; label: string }) {
+  // Draws in from the left when it shows, and again when another exercise is picked.
+  const plot = useRef<SVGSVGElement>(null);
+  useReveal(plot, values.join(','));
   const lo = Math.min(...values);
   const hi = Math.max(...values);
   if (values.length < 2 || !(hi > lo)) return null;
   return (
-    <svg viewBox="0 0 100 40" className="mt-3 h-24 w-full" preserveAspectRatio="none" role="img" aria-label={label}>
+    <svg ref={plot} viewBox="0 0 100 40" className="mt-3 h-24 w-full" preserveAspectRatio="none" role="img" aria-label={label}>
       <polyline
         fill="none"
         stroke="currentColor"
@@ -37,6 +42,27 @@ function TrendLine({ values, label }: { values: number[]; label: string }) {
         vectorEffect="non-scaling-stroke"
         className="text-accent"
         points={values.map((v, i) => `${(i / (values.length - 1)) * 100},${38 - ((v - lo) / (hi - lo)) * 36}`).join(' ')}
+      />
+    </svg>
+  );
+}
+
+// A lift's estimated 1RM over the window, small, beside it in the main lifts list.
+function Sparkline({ values, label }: { values: number[]; label: string }) {
+  const plot = useRef<SVGSVGElement>(null);
+  useReveal(plot, values.join(','), 0.25);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  if (values.length < 2 || !(hi > lo)) return <span className="w-[84px] shrink-0" aria-hidden />;
+  return (
+    <svg ref={plot} viewBox="0 0 84 34" className="h-[34px] w-[84px] shrink-0" role="img" aria-label={label}>
+      <polyline
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={values.map((v, i) => `${(i / (values.length - 1)) * 80 + 2},${31 - ((v - lo) / (hi - lo)) * 28}`).join(' ')}
       />
     </svg>
   );
@@ -99,6 +125,25 @@ export function StrengthTab({
     }, tz);
   }, [blockResults, programs, tz]);
 
+  // "Your main lifts" (the mock-up): the most-logged weight-and-reps lifts, each with its latest top set, its estimated 1RM over the window as
+  // a line, and how far that has moved from the first session in the window. Tapping one shows it in the progression card below.
+  const mainLifts = useMemo(
+    () =>
+      options
+        .filter((o) => o.type === 'weight_reps')
+        .sort((a, b) => b.logs.length - a.logs.length)
+        .slice(0, 5)
+        .map((o) => {
+          const sessions = exerciseHistory(o.logs, tz, Number.POSITIVE_INFINITY);
+          const values = sessions.map((x) => x.best1RM ?? x.topLoad);
+          const last = sessions[sessions.length - 1];
+          const change = values.length > 1 ? Math.round((values[values.length - 1] - values[0]) * 2) / 2 : null;
+          return { key: o.key, name: o.name, values, last, change };
+        })
+        .filter((x) => x.last),
+    [options, tz]
+  );
+
   const [picked, setPicked] = useState<string | null>(null);
   const [pickedBlock, setPickedBlock] = useState<string | null>(null);
   const selected = options.find((o) => o.key === picked) ?? options[0];
@@ -123,9 +168,45 @@ export function StrengthTab({
 
   return (
     <div className="space-y-4">
+      {mainLifts.length > 0 && (
+        <section className="space-y-2.5">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <h2 className="text-base font-extrabold text-black dark:text-zinc-50">Your main lifts</h2>
+            <span className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">Last 90 days</span>
+          </div>
+          <div className="space-y-2">
+            {mainLifts.map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                onClick={() => setPicked(l.key)}
+                aria-pressed={selected?.key === l.key}
+                className={`flex w-full items-center gap-3 rounded-[18px] border bg-card px-3.5 py-3 text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03] ${
+                  selected?.key === l.key ? 'border-accent' : 'border-black/[.08] dark:border-white/10'
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-bold text-black dark:text-zinc-50">{l.name}</span>
+                  <span className="block text-[13px] text-zinc-500 dark:text-zinc-400">
+                    {l.last.topLoad} kg for {l.last.topReps}
+                  </span>
+                </span>
+                <Sparkline values={l.values} label={`${l.name}, estimated one-rep max over time`} />
+                {l.change != null && l.change !== 0 && (
+                  <span className={`flex h-6 shrink-0 items-center rounded-full px-2.5 text-xs font-extrabold ${l.change > 0 ? 'bg-accent-soft text-accent' : 'bg-black/[.06] text-zinc-700 dark:bg-white/10 dark:text-zinc-200'}`}>
+                    {l.change > 0 ? '+' : '−'}
+                    {Math.abs(l.change)} kg
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className={cardCls}>
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Load volume</h3>
+          <h3 className={headCls}>Load volume</h3>
           <p className="text-xs text-zinc-500">Weight x reps, working sets</p>
         </div>
         <p className="mt-2 text-2xl font-black text-accent">{formatKg(thisWeek.volume)}</p>
@@ -152,7 +233,7 @@ export function StrengthTab({
       {selected && (
         <div className={cardCls}>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progression</h3>
+            <h3 className={headCls}>Progression</h3>
             <select value={selected.key} onChange={(e) => setPicked(e.target.value)} aria-label="Exercise" className={selectCls}>
               {options.map((o) => (
                 <option key={o.key} value={o.key}>{o.name}</option>
@@ -168,7 +249,7 @@ export function StrengthTab({
               </p>
 
               <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
-                <div className="grid grid-cols-[4.5rem_1fr_4.5rem_4rem] gap-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <div className="grid grid-cols-[4.5rem_1fr_4.5rem_4rem] gap-1 pb-1 text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
                   <span>Date</span>
                   <span>Top set</span>
                   <span className="text-right">Volume</span>
@@ -200,7 +281,7 @@ export function StrengthTab({
               </p>
 
               <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
-                <div className="grid grid-cols-[4.5rem_1fr_3rem] gap-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <div className="grid grid-cols-[4.5rem_1fr_3rem] gap-1 pb-1 text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
                   <span>Date</span>
                   <span>{selected.type === 'tick' ? 'Result' : 'Top set'}</span>
                   <span className="text-right">Sets</span>
@@ -224,7 +305,7 @@ export function StrengthTab({
       {block && (
         <div className={cardCls}>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Block results</h3>
+            <h3 className={headCls}>Block results</h3>
             <select value={block.key} onChange={(e) => setPickedBlock(e.target.value)} aria-label="Block" className={selectCls}>
               {/* The format alone, with the exercises only when two blocks share a format: the detail is the line below, and it printed
                   twice (TR29). */}

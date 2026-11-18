@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Logo } from './Logo';
 import { SignOutButton } from './SignOutButton';
+import { SmoothScroll } from './motion/SmoothScroll';
 
 // Shared layout for every page: header (title + sign out), a top-level section bar, then
 // a left sidebar (content depends on which section is active) beside the main content.
@@ -21,8 +22,11 @@ export function AppShell({
   isCoachView,
   mobileHeader,
   signOutOnMobile,
+  hideMobileHeader,
+  memberUi,
   pageTitle,
   wideSidebar,
+  coachSidebar,
   children,
 }: {
   title: ReactNode;
@@ -50,19 +54,37 @@ export function AppShell({
   mobileHeader?: ReactNode;
   // Keeps the header Sign out button on narrow screens too, for pages (the owner's) with a mobileHeader but no Account screen.
   signOutOnMobile?: boolean;
+  // On a phone, leaves out this header row and the gap under it: the screen draws its own header right at the top (member Home).
+  // From a tablet up the row shows as usual.
+  hideMobileHeader?: boolean;
+  // The member's own screens: stamps data-ui="member" so globals.css can give them the November 2026 redesign's colours (dark text on
+  // teal, the darker teal for links, bold section headings) without touching the coach screens.
+  memberUi?: boolean;
   // The page's name for screen readers, as a visually hidden <h1>. The brand wordmark in the header is not a heading (SH4), so a screen with
   // no visible <h1> of its own passes this. A screen that draws its own <h1> must not.
   pageTitle?: string;
   // A wider left column, for a sidebar that is a list to read (the coach's conversations) rather than a short menu.
   wideSidebar?: boolean;
+  // The coach's screens (the November 2026 mock-ups): the black column of sections down the left from the laptop width up, which takes
+  // over from the header row and the row of sections along the top there. It also stamps data-ui="coach" for the coach colours
+  // (dark text on teal, the darker teal for links).
+  coachSidebar?: ReactNode;
   children: ReactNode;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const coach = coachSidebar != null;
 
   return (
     <div
       data-view={isCoachView ? 'coach' : undefined}
-      className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${bottomBar ? 'pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-10 md:pb-10' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:py-10'}`}
+      data-ui={memberUi ? 'member' : coach ? 'coach' : undefined}
+      className={coach ? 'lg:pl-[232px]' : undefined}
+    >
+    {coachSidebar}
+    {/* The coach's and owner's pages scroll smoothly with a mouse wheel or trackpad, as the member screens do (Lenis). */}
+    {coach && !memberUi && <SmoothScroll />}
+    <div
+      className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${bottomBar ? 'pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:pt-10 md:pb-10' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:py-10'} ${coach ? 'lg:max-w-[1280px] lg:px-10 lg:pt-8' : ''}`}
     >
       {/* First stop for a keyboard or screen-reader user: jump past the header and the navigation to the page (SH4). */}
       <a
@@ -72,13 +94,17 @@ export function AppShell({
         Skip to content
       </a>
       <div className={`flex flex-col ${topBar ? 'gap-4' : ''}`}>
-        <div className={`flex items-center justify-between gap-3 ${mobileHeader ? 'order-2 md:order-1' : ''}`}>
+        {/* The coach's own pages leave this row to the sidebar on a laptop (brand, messages, account, sign out are all there). A coach's
+            view of one member keeps it: it names the member. */}
+        <div
+          className={`items-center justify-between gap-3 ${hideMobileHeader ? 'hidden md:flex' : 'flex'} ${mobileHeader ? 'order-2 md:order-1' : ''} ${coach ? 'lg:hidden' : ''}`}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {sidebar && !bottomBar && (
               <button
                 onClick={() => setDrawerOpen(true)}
                 aria-label="Open menu"
-                className="-ml-1 rounded-md p-1.5 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
+                className="-ml-1 rounded-lg p-2 text-zinc-500 hover:bg-black/5 md:hidden dark:hover:bg-white/5"
               >
                 <Menu className="h-5 w-5" />
               </button>
@@ -101,18 +127,18 @@ export function AppShell({
         </div>
 
         {topBar && (
-          <div className={`overflow-x-auto ${mobileHeader ? 'order-1 md:order-2' : ''}`}>{topBar}</div>
+          <div className={`overflow-x-auto ${mobileHeader ? 'order-1 md:order-2' : ''} ${coach ? 'lg:hidden' : ''}`}>{topBar}</div>
         )}
       </div>
 
       {coachSummary}
       {banner}
 
-      <div className="mt-6 flex gap-6">
+      <div className={`flex gap-6 ${hideMobileHeader ? 'md:mt-6' : 'mt-6'} ${coach ? 'lg:mt-0' : ''}`}>
         {sidebar && (
           <aside
             aria-label="Section menu"
-            className={`hidden shrink-0 space-y-1 rounded-2xl bg-black/[.02] p-3 md:block dark:bg-white/[.03] ${wideSidebar ? 'w-72 lg:w-80' : 'w-52'}`}
+            className={`hidden shrink-0 space-y-1 md:block ${coach ? 'self-start rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10' : 'rounded-2xl bg-black/[.02] p-3 dark:bg-white/[.03]'} ${wideSidebar ? 'w-72 lg:w-80' : 'w-52'}`}
           >
             {sidebar}
           </aside>
@@ -131,7 +157,7 @@ export function AppShell({
               <button
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close menu"
-                className="rounded-md p-1 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
+                className="rounded-lg p-1.5 text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -145,6 +171,7 @@ export function AppShell({
       )}
 
       {bottomBar}
+    </div>
     </div>
   );
 }

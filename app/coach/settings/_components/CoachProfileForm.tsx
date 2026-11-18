@@ -43,7 +43,7 @@ export function CoachProfileForm({ initialName, logoUrl }: { initialName: string
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Coach profile</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Coach profile</h3>
         <p className="text-xs text-zinc-500">
           Shown to your clients in place of &quot;Your coach&quot;.
         </p>
@@ -61,7 +61,7 @@ export function CoachProfileForm({ initialName, logoUrl }: { initialName: string
       </form>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Logo</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Logo</h3>
         <p className="text-xs text-zinc-500">Shown in place of the wordmark in your header. PNG, JPEG or WebP, 1 MB at most.</p>
         <div className="flex flex-wrap items-center gap-3">
           {logoUrl ? (

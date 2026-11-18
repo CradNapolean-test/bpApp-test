@@ -30,6 +30,7 @@ export function CheckInButton({
   timezone,
   date,
   attended = false,
+  onAccent = false,
 }: {
   classRow: ClassRow | null;
   programs: WorkoutProgramRow[];
@@ -39,6 +40,8 @@ export function CheckInButton({
   date?: string;
   // The booking is already marked attended (checked in, or marked by the coach).
   attended?: boolean;
+  // Drawn on the solid teal next-session tile (member Home): dark text and a white button in place of teal on white.
+  onAccent?: boolean;
 }) {
   const { run, busy } = useAction();
   const tz = timezone ?? DEFAULT_TIMEZONE;
@@ -63,9 +66,9 @@ export function CheckInButton({
   if (attended) {
     return (
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-success">Checked in ✓</p>
-        {dayId && (
-          <button type="button" onClick={() => onCheckIn(dayId)} className="text-xs font-bold text-accent">
+        <p className={onAccent ? 'text-[13px] font-bold' : 'text-xs font-semibold text-success'}>Checked in ✓</p>
+        {dayId && !onAccent && (
+          <button type="button" onClick={() => onCheckIn(dayId)} className={onAccent ? 'min-h-9 text-[13px] font-extrabold underline underline-offset-2' : 'text-xs font-bold text-accent'}>
             {resolution.status === 'already_logged' ? 'View workout' : "Open today's workout"}
           </button>
         )}
@@ -79,10 +82,10 @@ export function CheckInButton({
   const startMs = Date.parse(`${date ?? todayIso}T00:00:00Z`) + (h * 60 + (m || 0)) * 60_000;
   const gate = checkinWindow(hasTime ? startMs : null, nowLocalMs(tz));
   if (gate.state === 'not_yet') {
-    return <p className="text-xs text-zinc-500">Check-in opens at {formatClock(new Date(gate.opensAtMs).toISOString().slice(11, 16))}</p>;
+    return <p className={onAccent ? 'text-[13px] font-semibold' : 'text-xs text-zinc-500'}>Check-in opens at {formatClock(new Date(gate.opensAtMs).toISOString().slice(11, 16))}</p>;
   }
   if (gate.state === 'closed') {
-    return <p className="text-xs text-zinc-500">Check-in has closed for this session.</p>;
+    return <p className={onAccent ? 'text-[13px] font-semibold' : 'text-xs text-zinc-500'}>Check-in has closed for this session.</p>;
   }
 
   return (
@@ -97,11 +100,11 @@ export function CheckInButton({
             onDone: () => dayId && onCheckIn(dayId),
           })
         }
-        className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-60"
+        className={onAccent ? 'h-11 w-full rounded-xl bg-white px-4 text-sm font-extrabold text-[#041f1f] disabled:opacity-60' : 'inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-60'}
       >
         {busy ? 'Checking in…' : dayId ? "Check in & open today's workout" : 'Check in'}
       </button>
-      {reason && <p className="text-xs text-zinc-500">{reason}</p>}
+      {reason && <p className={onAccent ? 'text-xs font-medium' : 'text-xs text-zinc-500'}>{reason}</p>}
     </div>
   );
 }

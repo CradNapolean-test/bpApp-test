@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import CountUp from '@/app/_components/motion/CountUp';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import { Check, ChevronRight, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { useAction } from '@/app/_components/useAction';
@@ -64,7 +66,8 @@ export function TierScale({ count }: { count: number }) {
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
         {Array.from({ length: total }, (_, i) => {
           const z = zoneOf(i + 1);
-          return <div key={i} className={`h-2.5 rounded-full ${i < count ? z.fill : z.faint}`} />;
+          // Reached segments carry data-grow, so a screen that calls useGrowIn fills the scale one standard after another.
+          return <div key={i} data-grow={i < count ? 'bar' : undefined} className={`h-2.5 rounded-full ${i < count ? z.fill : z.faint}`} />;
         })}
       </div>
       <div className="mt-1.5 grid gap-1" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
@@ -219,7 +222,7 @@ function ScoreSheet({
               type="button"
               aria-pressed={banded}
               onClick={() => setBanded((b) => !b)}
-              className={`h-12 shrink-0 rounded-xl px-4 text-sm font-bold ${banded ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/10 dark:text-zinc-300'}`}
+              className={`h-12 shrink-0 rounded-xl px-4 text-sm font-bold ${banded ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'}`}
             >
               Banded
             </button>
@@ -245,7 +248,7 @@ function ScoreSheet({
         type="button"
         disabled={busy || value == null}
         onClick={save}
-        className="mt-3 h-12 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+        className="mt-3 h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
       >
         {busy ? 'Saving…' : mode === 'coach' ? 'Record verified score' : 'Log score'}
       </button>
@@ -320,6 +323,8 @@ export function BigDogTab({
   // Targets follow the sex on the member's profile -- no switch to flip.
   const gender: BigDogGender = genderFromProfile(profile?.gender);
   const [editing, setEditing] = useState<string | null>(null);
+  const screen = useRef<HTMLDivElement>(null);
+  useGrowIn(screen, 0.2);
   const [resultText, setResultText] = useState('');
   const [sheetFor, setSheetFor] = useState<string | null>(null);
 
@@ -341,23 +346,25 @@ export function BigDogTab({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-2xl border border-accent/30 bg-card px-3.5 py-3">
-        <div>
-          <p className="text-sm font-extrabold text-black dark:text-zinc-50">{TIER_TITLE[tier]}</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500">{nextTierLabel(count)}</p>
+    <div ref={screen} className="space-y-3">
+      <div className="flex items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card px-4 py-3.5 dark:border-white/10">
+        <div className="min-w-0">
+          <p className="text-[15px] font-extrabold text-black dark:text-zinc-50">{TIER_TITLE[tier]}</p>
+          <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">{nextTierLabel(count)}</p>
         </div>
-        <div className="text-right">
-          <p className="text-xl font-black leading-none text-accent">{count}</p>
-          <p className="text-[11px] text-zinc-500">of {EXERCISES.length} at Big Dog</p>
+        <div className="shrink-0 text-right">
+          <p className="text-[28px] font-black leading-none text-accent">
+            <CountUp to={count} delay={0.15} />
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">of {EXERCISES.length} at Big Dog</p>
         </div>
       </div>
 
       <TierScale count={count} />
 
-      <div className="flex items-center justify-between gap-2 px-1">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">All exercises</p>
-        <p className="text-[11px] text-zinc-500">
+      <div className="flex items-baseline justify-between gap-2 pt-2">
+        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">All exercises</h2>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Targets for {gender === 'male' ? 'men' : 'women'}
           {!profile?.gender && ' · set your sex in your profile'}
         </p>
@@ -366,7 +373,7 @@ export function BigDogTab({
         <p className="px-1 text-xs text-zinc-500">Tap a standard to log your peak week score. Your coach confirms it before it counts towards your T-shirt.</p>
       )}
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {EXERCISES.map((ex) => {
           const std = ex[gender];
           const mine = results.filter((r) => r.exercise_key === ex.key);
@@ -384,14 +391,14 @@ export function BigDogTab({
           return (
             <div
               key={ex.key}
-              className={`rounded-2xl border p-3 ${
-                verifiedLevel === 'big_dog' ? 'border-accent/30 bg-accent-soft' : 'border-black/[.06] bg-card dark:border-white/10'
+              className={`rounded-[20px] border p-3.5 ${
+                verifiedLevel === 'big_dog' ? 'border-accent/30 bg-accent-soft' : 'border-black/[.08] bg-card dark:border-white/10'
               }`}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-xs font-extrabold text-black dark:text-zinc-50">{ex.name}</p>
-                  <p className="text-[11px] text-zinc-500">{ex.category}</p>
+                  <p className="text-sm font-extrabold text-black dark:text-zinc-50">{ex.name}</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{ex.category}</p>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${LEVEL_BADGE[verifiedLevel]}`}>
                   {LEVEL_LABEL[verifiedLevel]}
@@ -438,7 +445,7 @@ export function BigDogTab({
                   <button
                     type="button"
                     onClick={() => setSheetFor(ex.key)}
-                    className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-extrabold text-accent-foreground"
+                    className="shrink-0 inline-flex h-10 items-center rounded-xl bg-accent px-4 text-[13px] font-extrabold text-accent-foreground"
                   >
                     {canRecord ? (pending ? 'Verify' : 'Record') : 'Log score'}
                   </button>

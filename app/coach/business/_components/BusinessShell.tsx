@@ -6,6 +6,8 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { CoachPageHeader } from '@/app/coach/_components/CoachUi';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
@@ -116,13 +118,24 @@ export function BusinessShell({
         topBar={<CoachNav />}
         bottomBar={<CoachBottomTabBar />}
         headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={email} />}
+      coachSidebar={<CoachSidebar unreadCount={unreadCount} email={email} />}
         mobileHeader={<CoachMobileBrand />}
       >
-        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">
-          Business
-          <ActiveGymTag />
-        </h1>
-        <p className={`${!canEdit && ADMIN_ONLY_TABS.includes(tab) ? 'mb-1' : 'mb-4'} text-sm text-zinc-500`}>{BLURB[tab]}</p>
+        <CoachPageHeader
+          eyebrow={BLURB[tab]}
+          title={
+            <>
+              Business
+              <ActiveGymTag />
+            </>
+          }
+          actions={
+            <div className="hidden sm:block">
+              <HubTabBar label="Business sections" tabs={tabs} active={tab} onSelect={setTab} />
+            </div>
+          }
+        />
+        <div className="mt-4" />
         {!canEdit && ADMIN_ONLY_TABS.includes(tab) && <p className="mb-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">{READ_ONLY_NOTE}</p>}
         {/* Six tabs are wider than a phone, and the scrolling row cut the last one to "Feedba" (DB23). On a phone they sit in a grid of
             three a row, all in view; from the sm width up it is the usual tab row. */}
@@ -135,17 +148,15 @@ export function BusinessShell({
               aria-selected={tab === t}
               tabIndex={tab === t ? 0 : -1}
               onClick={() => setTab(t)}
-              className={`min-h-10 rounded-full px-2 text-sm transition-colors ${
-                tab === t ? 'bg-accent font-bold text-accent-foreground' : 'border border-black/10 font-medium text-zinc-600 dark:border-white/10 dark:text-zinc-300'
+              className={`min-h-11 rounded-xl px-2 text-sm font-bold transition-colors ${
+                tab === t ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black dark:border-white/15 dark:text-zinc-50'
               }`}
             >
               {t}
             </button>
           ))}
         </div>
-        <div className="hidden sm:block">
-          <HubTabBar label="Business sections" tabs={tabs} active={tab} onSelect={setTab} />
-        </div>
+        <div className="mb-2" />
 
         {tab === 'Overview' && overview && <OverviewPane data={overview} />}
         {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} canEdit={canEdit} />}

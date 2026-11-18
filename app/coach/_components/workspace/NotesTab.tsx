@@ -58,7 +58,7 @@ function JournalSection({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-black dark:text-zinc-50">
           {label} <span className="font-normal text-zinc-500">({entries.length})</span>
@@ -66,7 +66,7 @@ function JournalSection({
         {!readOnly && (
           <button
             onClick={() => setAdding((v) => !v)}
-            className="rounded-md border border-black/10 px-2.5 py-1 text-xs font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+            className="inline-flex h-10 items-center rounded-xl bg-accent-soft px-3.5 text-[13px] font-bold text-accent"
           >
             {adding ? 'Cancel' : addLabel}
           </button>
@@ -86,7 +86,7 @@ function JournalSection({
           <button
             type="submit"
             disabled={busy || !body.trim()}
-            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-50"
+            className="inline-flex h-10 items-center rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground disabled:opacity-50"
           >
             Save
           </button>
@@ -98,7 +98,7 @@ function JournalSection({
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="flex items-start justify-between gap-2 rounded-md border border-black/5 p-2.5 dark:border-white/5"
+            className="flex items-start justify-between gap-2 rounded-xl border border-black/[.07] p-3 dark:border-white/10"
           >
             <div className="min-w-0">
               {entry.related_date && (
@@ -116,7 +116,7 @@ function JournalSection({
               <button
                 onClick={() => handleDelete(entry.id)}
                 aria-label="Delete"
-                className="shrink-0 rounded-md p-1 text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/5"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/5"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -180,7 +180,7 @@ function AdminDetailsSection({
   if (!profile) return null;
 
   return (
-    <form onSubmit={handleSave} className="rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+    <form onSubmit={handleSave} className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <h3 className="text-sm font-semibold text-black dark:text-zinc-50">Client details</h3>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
@@ -221,7 +221,7 @@ function AdminDetailsSection({
         <button
           type="submit"
           disabled={busy || !notesLoaded}
-          className="mt-3 rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
+          className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           Save
         </button>

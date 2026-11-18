@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { Camera, ChevronLeft, ChevronRight, PencilLine, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -56,6 +57,7 @@ export function PhotoDiaryTab({
   // Today at the member's own timezone (not UTC), kept current past midnight (FT2).
   const todayIso = useTodayIso(profile?.timezone ?? DEFAULT_TIMEZONE);
   const [viewingDate, setViewingDate] = useState(todayIso);
+  const meals = useRef<HTMLDivElement>(null);
   // Today comes straight from props (they refresh after every action); a day browsed back to is
   // fetched and held locally.
   const [other, setOther] = useState<{ logId: string | null; photos: FoodPhotoEntry[] } | null>(null);
@@ -165,9 +167,11 @@ export function PhotoDiaryTab({
   }
 
   const mealGroups = groupByMealSection(photos, sections);
+  // Rises in when the screen opens and when another day has loaded; a photo added to the day does not set the whole list moving again.
+  useStaggerIn(meals, '[data-meal]', `${viewingDate}|${dateLoading}`);
 
   return (
-    <div className="space-y-4">
+    <div ref={meals} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -179,7 +183,7 @@ export function PhotoDiaryTab({
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="text-center">
-          <p className="text-sm font-semibold text-black dark:text-zinc-50">{isToday ? 'Today' : dateLabel}</p>
+          <p className="text-[15px] font-extrabold text-black dark:text-zinc-50">{isToday ? 'Today' : dateLabel}</p>
           {isToday && <p className="text-xs text-zinc-500">{dateLabel}</p>}
         </div>
         <div className="flex items-center gap-1">
@@ -203,7 +207,8 @@ export function PhotoDiaryTab({
       {dayLocked && <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{LOCKED_DAY_MESSAGE}</p>}
 
       {!readOnly && !dayLocked && (
-        <div className="space-y-2">
+        <div className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
+          <p className="text-sm leading-snug text-zinc-600 dark:text-zinc-400">Photograph your meals and your coach looks through them. No weighing or counting.</p>
           <button
             type="button"
             onClick={() => {
@@ -211,14 +216,14 @@ export function PhotoDiaryTab({
               // Straight to the phone's camera/photo picker.
               setTimeout(() => fileRef.current?.click(), 50);
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-sm font-extrabold text-accent-foreground"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white dark:bg-zinc-100 dark:text-[#1d1d1b]"
           >
             <Camera className="h-5 w-5" /> Add a meal photo
           </button>
           <button
             type="button"
             onClick={openSheet}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-black/10 py-3 text-sm font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black hover:bg-black/5 dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
           >
             <PencilLine className="h-4 w-4" /> Add without a photo
           </button>
@@ -230,7 +235,7 @@ export function PhotoDiaryTab({
           type="button"
           disabled={reviewing || reviewedDays.has(viewingDate)}
           onClick={() => void markDayReviewed()}
-          className="w-full rounded-full border border-black/10 py-2 text-sm font-bold text-zinc-600 hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+          className="h-11 w-full rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black hover:bg-black/[.03] disabled:opacity-60 dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
         >
           {reviewedDays.has(viewingDate) ? '✓ Reviewed' : 'Mark day as reviewed'}
         </button>
@@ -256,27 +261,26 @@ export function PhotoDiaryTab({
           {mealGroups.map((group) => (
             <div key={group.section?.id ?? 'none'} className="space-y-3">
               {(mealGroups.length > 1 || group.section) && (
-                <p className="px-1 pt-1 text-xs font-bold uppercase tracking-wide text-zinc-500">{group.section?.label ?? 'Other'}</p>
+                <h2 className="px-1 pt-1 text-base font-extrabold text-black dark:text-zinc-50">{group.section?.label ?? 'Other'}</h2>
               )}
           {group.entries.map((entry) => (
-            <div key={entry.id} className="overflow-hidden rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
-              {/* A meal logged with a description alone has no picture, so no empty picture box either. */}
-              {entry.signedUrl ? (
-                <button type="button" aria-label="View photo" onClick={() => setViewing(entry.signedUrl)} className="block w-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={entry.signedUrl} alt={entry.description ?? 'Food photo'} className="aspect-[4/3] w-full object-cover" />
-                </button>
-              ) : entry.storage_path ? (
-                <div className="aspect-[4/3] w-full bg-black/5 dark:bg-white/5" />
-              ) : null}
-              <div className="space-y-2 p-3.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="whitespace-pre-wrap break-words text-sm font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
-                    <p className="text-xs text-zinc-500">{timeOf(entry.created_at)}</p>
+            <div key={entry.id} data-meal className="space-y-2.5 rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
+                <div className="flex items-start gap-3">
+                  {/* A meal logged with a description alone has no picture, so no picture box either. */}
+                  {entry.signedUrl ? (
+                    <button type="button" aria-label="View photo" onClick={() => setViewing(entry.signedUrl)} className="block h-[88px] w-[88px] shrink-0 overflow-hidden rounded-[14px]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={entry.signedUrl} alt={entry.description ?? 'Food photo'} className="h-full w-full object-cover" />
+                    </button>
+                  ) : entry.storage_path ? (
+                    <div className="h-[88px] w-[88px] shrink-0 rounded-[14px] bg-black/5 dark:bg-white/5" />
+                  ) : null}
+                  <div className="min-w-0 flex-1 self-center">
+                    <p className="whitespace-pre-wrap break-words text-[15px] font-bold text-black dark:text-zinc-50">{entry.description || 'Meal photo'}</p>
+                    <p className="text-[13px] text-zinc-500 dark:text-zinc-400">{timeOf(entry.created_at)}</p>
                   </div>
                   {!readOnly && !dayLocked && (
-                    <button type="button" aria-label={entry.storage_path ? 'Delete photo' : 'Delete meal'} onClick={() => handleDelete(entry.id)} className="shrink-0 rounded-full p-2 text-zinc-400 hover:text-danger">
+                    <button type="button" aria-label={entry.storage_path ? 'Delete photo' : 'Delete meal'} onClick={() => handleDelete(entry.id)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-zinc-400 hover:text-danger">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   )}
@@ -290,7 +294,6 @@ export function PhotoDiaryTab({
                   placeholder="Comment on this meal…"
                   buttonLabel="Comment on this meal"
                 />
-              </div>
             </div>
           ))}
             </div>
@@ -359,7 +362,7 @@ export function PhotoDiaryTab({
               type="button"
               disabled={!!validateMealEntry(!!file, description) || uploading}
               onClick={handleUpload}
-              className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+              className="h-12 w-full rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-[15px] font-bold disabled:opacity-50"
             >
               {uploading ? 'Adding…' : 'Add to my diary'}
             </button>

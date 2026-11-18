@@ -67,8 +67,8 @@ export function BrowseExercisesModal({
         <div className="mt-2 flex flex-wrap gap-1.5">
           <button
             onClick={() => setGroupFilter('')}
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-              groupFilter === '' ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+            className={`h-11 rounded-full px-4 text-sm font-bold ${
+              groupFilter === '' ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
             }`}
           >
             All
@@ -77,8 +77,8 @@ export function BrowseExercisesModal({
             <button
               key={g}
               onClick={() => setGroupFilter(g === groupFilter ? '' : g)}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                groupFilter === g ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+              className={`h-11 rounded-full px-4 text-sm font-bold ${
+                groupFilter === g ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
               }`}
             >
               {g}
@@ -94,7 +94,7 @@ export function BrowseExercisesModal({
                 onPick(entry);
                 onClose();
               }}
-              className="rounded-2xl border border-black/[.05] bg-card p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,.02)] hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+              className="rounded-[20px] border border-black/[.08] bg-card p-3.5 text-left hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
             >
               <p className="font-bold text-black dark:text-zinc-50">{entry.name}</p>
               <p className="mt-0.5 text-sm text-zinc-500">

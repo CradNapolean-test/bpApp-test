@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { fail, ok } from '@/lib/data/result';
 import { checkCurrentPassword, newPasswordProblem } from '@/lib/currentPassword';
 
-const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
+const inputCls = 'w-full rounded-xl border border-black/[.16] bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10';
 
 // Shared by the owner's, a coach's and a member's account screens. Asks for the current password first (SE22).
 export function ChangePasswordForm() {
@@ -45,7 +45,7 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Change password</h3>
+      <h3 className="text-base font-extrabold text-black dark:text-zinc-50">Change password</h3>
       <input
         type="password"
         placeholder="Current password"

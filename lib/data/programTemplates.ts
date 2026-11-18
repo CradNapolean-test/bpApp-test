@@ -6,6 +6,7 @@ import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
+import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type {
   ProgrammeRolloutRow,
   ProgramTemplateDayRow,
@@ -267,6 +268,21 @@ export async function duplicateTemplateDay(dayId: string, weekNum: number, dayLa
     const { error: insertExercisesError } = await supabase.from('program_template_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);
   }
+}
+
+// "Add week (copy of last)": copies the template's last week, as the database has it now, into the week after it. Null when the template
+// has no workouts yet. The weeks are read here, not taken from the screen, which may not have reloaded since the last tap (nextWeekCopy).
+export async function addTemplateWeek(templateId: string): Promise<{ from: number; to: number } | null> {
+  const supabase = await createClient();
+  const { data: days, error } = await supabase
+    .from('program_template_days')
+    .select('id, week_num, day_label, day_position')
+    .eq('template_id', templateId);
+  if (error) raise(error);
+  const copy = nextWeekCopy(days ?? []);
+  if (!copy) return null;
+  await Promise.all(copy.source.map((d) => duplicateTemplateDay(d.id, copy.to, d.day_label)));
+  return { from: copy.from, to: copy.to };
 }
 
 // Bulk-applies the same field values across every exercise in a template day in one round

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Segmented } from '@/app/_components/ui';
@@ -8,12 +8,19 @@ import { WEEKLY_METRICS, buildWeeklyAverages, formatMetric, weekChange } from '@
 import { weightGoalProgress } from '@/lib/weightGoal';
 import type { WeekAverages, WeeklyMetric } from '@/lib/weeklyAverages';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
+import { weeklyTarget } from '@/lib/calculations';
+import { dayTargetFor, isCyclingTarget } from '@/lib/utils/dayTarget';
+import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+import { useReveal } from '@/app/_components/motion/useReveal';
+import CountUp from '@/app/_components/motion/CountUp';
 
 function shortDate(iso: string) {
   return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
-const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
+const headCls = 'text-base font-extrabold text-black dark:text-zinc-50';
 
 // Plain inline SVG (same custom-SVG-over-a-charting-library precedent as ProgressRing). Shows the
 // weekly averages as a line with dots, the high/low values on the left and the week dates below.
@@ -30,6 +37,9 @@ export function TrendChart({
   formatter: (v: number) => string;
   emptyText?: string;
 }) {
+  // The line draws in from the left when the chart shows, and again when it is given other numbers (another measure).
+  const plot = useRef<HTMLDivElement>(null);
+  useReveal(plot, values.join(','));
   if (values.length < 2) {
     return <div className="flex h-16 items-center text-xs text-zinc-400">{emptyText}</div>;
   }
@@ -55,7 +65,7 @@ export function TrendChart({
           <span>{formatter(min)}</span>
         </div>
         {/* The line is stretched to the width of the card (preserveAspectRatio none); the dot is drawn on top as an ordinary element so it stays round. */}
-        <div className="relative h-24 w-full">
+        <div ref={plot} className="relative h-24 w-full">
         <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={summary} className="h-24 w-full overflow-visible">
           <line x1="0" x2={width} y1="8" y2="8" stroke="currentColor" strokeOpacity={0.08} />
           <line x1="0" x2={width} y1={height - 8} y2={height - 8} stroke="currentColor" strokeOpacity={0.08} />
@@ -99,7 +109,7 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
         options={WEEKLY_METRICS.map((m) => ({ value: m.key, label: m.tab }))}
       />
       <div className="mt-4 flex items-center justify-between gap-2">
-        <h3 className="font-bold text-black dark:text-zinc-50">{info.title}</h3>
+        <h3 className="text-[15px] font-extrabold text-black dark:text-zinc-50">{info.title}</h3>
         {delta != null && Math.abs(delta) > 0.001 && (
           <span className={`text-sm font-bold ${favorable == null ? 'text-zinc-500' : favorable ? 'text-success' : 'text-danger'}`}>
             {delta > 0 ? '+' : '-'}
@@ -108,7 +118,7 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
           </span>
         )}
       </div>
-      <p className="mt-1 text-2xl font-bold text-black dark:text-zinc-50">
+      <p className="mt-1 text-[28px] font-black leading-tight text-black dark:text-zinc-50">
         {current != null ? fmt(current) : '—'}
         {info.unit && current != null ? info.unit : null}
       </p>
@@ -123,15 +133,18 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
             Weekly average{points.length >= 2 ? ` · last ${points.length} weeks` : ''}
             {delta != null ? ' · change vs the week before' : ''}
           </p>
-          <div className="mt-3 divide-y divide-black/[.05] dark:divide-white/10">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <div className="mt-3">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-2 pb-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               <span>Week of</span>
               <span className="w-12 text-right">Days</span>
               <span className="w-20 text-right">Average</span>
             </div>
-            {recent.map((w) => (
-              <div key={w.weekStart} className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5 text-sm">
-                <span className="text-zinc-500">{shortDate(w.weekStart)}</span>
+            {recent.map((w, i) => (
+              <div
+                key={w.weekStart}
+                className={`grid grid-cols-[1fr_auto_auto] gap-3 rounded-lg px-2 py-2 text-sm ${i === 0 ? 'bg-accent-soft font-bold' : 'border-t border-black/[.06] dark:border-white/10'}`}
+              >
+                <span className={i === 0 ? 'text-black dark:text-zinc-50' : 'text-zinc-500'}>{shortDate(w.weekStart)}</span>
                 <span className="w-12 text-right text-zinc-500">{w.days[metric]}</span>
                 <span className="w-20 text-right font-semibold text-black dark:text-zinc-50">
                   {fmt(w.avg[metric] as number)}
@@ -153,11 +166,13 @@ function WeightGoalCard({
   latest,
   latestDate,
   coachView,
+  programWeek,
 }: {
   profile: ClientProfileRow | null;
   latest: number | null;
   latestDate: string | null;
   coachView: boolean;
+  programWeek?: number;
 }) {
   const start = profile?.start_weight ?? null;
   const goal = profile?.goal_weight ?? null;
@@ -169,50 +184,101 @@ function WeightGoalCard({
   const toGo = Math.max(0, Math.abs(now - goal) * (((now - goal) * (start - goal)) > 0 ? 1 : 0));
   // The coach is told when the member is further from the goal than at the start, instead of a quiet "0% there" (CR3).
   const away = coachView && latest != null ? weightGoalProgress(start, goal, latest) : null;
+  const way = start > goal ? 'down' : 'up';
   return (
     <div className={cardCls}>
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="font-bold text-black dark:text-zinc-50">{coachView ? 'Goal' : 'Your goal'}</h3>
-        {away?.movingAway ? (
-          <span className="text-sm font-bold text-danger">Moving away from goal</span>
-        ) : (
-          <span className="text-sm font-bold text-accent">{pct}% there</span>
-        )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[15px] font-bold text-black dark:text-zinc-50">
+            {/* Counts from the start weight to today's, so the change is seen as well as read. */}
+            <CountUp to={now} from={start} decimals={1} delay={0.15} className="text-[28px] font-black leading-none" /> kg{' '}
+            {latest != null ? 'now' : 'at the start'}
+          </p>
+          <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+            {latest != null ? `Started at ${start} kg${latestDate ? ` · weighed ${shortDate(latestDate)}` : ''}` : 'No weigh-in logged yet'}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{coachView ? 'Goal' : 'Your goal'}</p>
+          <p className="text-[17px] font-extrabold text-black dark:text-zinc-50">{goal} kg</p>
+        </div>
       </div>
-      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/10">
-        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="mt-2 flex justify-between text-sm">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Start</p>
-          <p className="font-bold text-black dark:text-zinc-50">{start}kg</p>
-        </div>
-        <div className="text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Now</p>
-          <p className="font-bold text-black dark:text-zinc-50">{latest != null ? `${latest.toFixed(1)}kg` : '—'}</p>
-          {latest != null && latestDate && <p className="text-[11px] text-zinc-400">on {shortDate(latestDate)}</p>}
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Goal</p>
-          <p className="font-bold text-black dark:text-zinc-50">{goal}kg</p>
-        </div>
+      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${pct}% of the way to the goal weight`}>
+        <div data-grow="bar" className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
       </div>
       {away?.movingAway ? (
         <p className="mt-2 text-xs font-semibold text-danger">
-          {away.awayKg.toFixed(1)}kg further from the goal than at the start, {toGo.toFixed(1)}kg from the goal. Check the start weight is right.
+          Moving away from goal: {away.awayKg.toFixed(1)}kg further from the goal than at the start, {toGo.toFixed(1)}kg from the goal. Check the start weight is right.
         </p>
       ) : (
-        <p className="mt-2 text-xs text-zinc-500">
-          {toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : coachView ? 'Goal weight reached.' : 'Goal weight reached — nice work.'}
-        </p>
+        <div className="mt-2 flex items-baseline justify-between gap-3">
+          <p className="text-[13px] text-zinc-600 dark:text-zinc-400">
+            {toGo > 0
+              ? `${done > 0 ? `${done.toFixed(1)} kg ${way}, ` : ''}${toGo.toFixed(1)} kg to go.`
+              : coachView
+                ? 'Goal weight reached.'
+                : 'Goal weight reached — nice work.'}
+            {!coachView && programWeek ? ` Week ${programWeek} of your plan.` : ''}
+          </p>
+          <span className="shrink-0 text-sm font-extrabold text-accent">{pct}%</span>
+        </div>
       )}
     </div>
   );
 }
 
-export function OverviewTab({ historyLogs, profile, isCoachView = false }: { historyLogs: DailyLogRow[]; profile: ClientProfileRow | null; isCoachView?: boolean }) {
+function TargetsCard({ profile, programWeek }: { profile: ClientProfileRow | null; programWeek: number }) {
+  const engine = toMemberEngineProfile(profile, false);
+  const week = engine ? weeklyTarget(engine, programWeek) : null;
+  // A calorie-cycling member sees the normal (low) day; high days are marked in the food diary.
+  const day = dayTargetFor(week, null);
+  if (!day) return null;
+  const boxes = [
+    { label: 'kcal', value: Math.round(day.calories), unit: '' },
+    { label: 'Protein', value: Math.round(day.protein), unit: ' g' },
+    { label: 'Carbs', value: Math.round(day.carbs), unit: ' g' },
+    { label: 'Fat', value: Math.round(day.fat), unit: ' g' },
+  ];
+  return (
+    <section className="space-y-2.5">
+      <h2 className={headCls}>Your targets</h2>
+      <div className={cardCls}>
+        <div className="grid grid-cols-4 gap-2">
+          {boxes.map((b, i) => (
+            <div key={b.label} className="rounded-xl bg-black/[.04] px-1 py-2.5 text-center dark:bg-white/[.06]">
+              <p className="text-[15px] font-black leading-tight text-black dark:text-zinc-50">
+                <CountUp to={b.value} delay={0.2 + i * 0.08} />
+                {b.unit}
+              </p>
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{b.label}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+          Each day in week {programWeek} of your plan
+          {isCyclingTarget(week) && week?.dailyHigh ? `. High days are ${Math.round(week.dailyHigh.calories).toLocaleString('en-GB')} kcal.` : '.'}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+export function OverviewTab({
+  historyLogs,
+  profile,
+  programWeek,
+  isCoachView = false,
+}: {
+  historyLogs: DailyLogRow[];
+  profile: ClientProfileRow | null;
+  programWeek?: number;
+  isCoachView?: boolean;
+}) {
   const weeks = buildWeeklyAverages(historyLogs).slice(-8);
   const latestWeighIn = [...historyLogs].reverse().find((l) => l.bodyweight != null) ?? null;
+  // The goal bar fills when the screen opens.
+  const screen = useRef<HTMLDivElement>(null);
+  useGrowIn(screen, 0.15);
 
   if (weeks.length === 0) {
     return (
@@ -225,9 +291,19 @@ export function OverviewTab({ historyLogs, profile, isCoachView = false }: { his
   }
 
   return (
-    <div className="space-y-4">
-      <WeightGoalCard profile={profile} latest={latestWeighIn?.bodyweight ?? null} latestDate={latestWeighIn?.log_date ?? null} coachView={isCoachView} />
-      <WeeklyAverages weeks={weeks} />
+    <div ref={screen} className="space-y-5">
+      <WeightGoalCard
+        profile={profile}
+        latest={latestWeighIn?.bodyweight ?? null}
+        latestDate={latestWeighIn?.log_date ?? null}
+        coachView={isCoachView}
+        programWeek={programWeek}
+      />
+      {!isCoachView && programWeek != null && <TargetsCard profile={profile} programWeek={programWeek} />}
+      <section className="space-y-2.5">
+        {!isCoachView && <h2 className={headCls}>Week by week</h2>}
+        <WeeklyAverages weeks={weeks} />
+      </section>
     </div>
   );
 }

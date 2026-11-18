@@ -60,7 +60,7 @@ export function HighDayControl({
         <button
           type="button"
           onClick={onRetry}
-          className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/10 dark:border-white/15"
+          className="shrink-0 inline-flex h-10 items-center justify-center rounded-xl bg-accent-soft px-3.5 text-[13px] font-bold text-accent"
         >
           Try again
         </button>
@@ -70,7 +70,7 @@ export function HighDayControl({
           type="button"
           onClick={onToggle}
           disabled={busy || !loaded}
-          className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50 dark:border-white/15"
+          className="shrink-0 inline-flex h-10 items-center justify-center rounded-xl bg-accent-soft px-3.5 text-[13px] font-bold text-accent disabled:opacity-50"
         >
           {isHigh ? 'Make it a normal day' : 'Make this a high day'}
         </button>

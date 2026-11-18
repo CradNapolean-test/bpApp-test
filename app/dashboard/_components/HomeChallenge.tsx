@@ -29,7 +29,7 @@ function ChoiceRow({ icon, title, subtitle, onClick }: { icon: typeof Dumbbell; 
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[.06] bg-card px-3.5 py-3 text-left transition-colors hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
+      className="flex w-full items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card px-3.5 py-3 text-left transition-colors hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
     >
       <span className="flex min-w-0 items-center gap-3">
         <IconChip icon={icon} size="sm" />

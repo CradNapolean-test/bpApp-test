@@ -3,16 +3,18 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 
-// Mirrors ToastProvider/ConfirmProvider/MessagesDrawerProvider's pattern -- mounted once in
-// app/coach/layout.tsx so every coach page's <CoachBrand /> can read the logo without each
-// page threading it through individually. Just a plain value (no API object needed, unlike
-// MessagesDrawerContext) since there's nothing to call, only to read.
-const CoachBrandingContext = createContext<string | null>(null);
+// The coach's uploaded logo (0047) and their name, resolved once in app/coach/layout.tsx so every page's brand and the desktop sidebar
+// can read them without each page fetching them itself.
+const CoachBrandingContext = createContext<{ logoUrl: string | null; coachName: string | null }>({ logoUrl: null, coachName: null });
 
 export function useCoachLogoUrl(): string | null {
-  return useContext(CoachBrandingContext);
+  return useContext(CoachBrandingContext).logoUrl;
 }
 
-export function CoachBrandingProvider({ logoUrl, children }: { logoUrl: string | null; children: ReactNode }) {
-  return <CoachBrandingContext.Provider value={logoUrl}>{children}</CoachBrandingContext.Provider>;
+export function useCoachName(): string | null {
+  return useContext(CoachBrandingContext).coachName;
+}
+
+export function CoachBrandingProvider({ logoUrl, coachName = null, children }: { logoUrl: string | null; coachName?: string | null; children: ReactNode }) {
+  return <CoachBrandingContext.Provider value={{ logoUrl, coachName }}>{children}</CoachBrandingContext.Provider>;
 }

@@ -19,12 +19,16 @@ export function FocusOverlay({
   subtitle,
   onClose,
   headerActions,
+  variant = 'plain',
   children,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   headerActions?: ReactNode;
+  // 'member': the November 2026 redesign's black header (a round back button, the subtitle above a large title), for the member's own
+  // screens. The coach's builder keeps the plain bar.
+  variant?: 'plain' | 'member';
   children: ReactNode;
 }) {
   const [titleId] = useState(() => nextDialogId('overlay-title'));
@@ -33,6 +37,28 @@ export function FocusOverlay({
 
   return (
     <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 z-[55] flex flex-col bg-[var(--background)]">
+      {variant === 'member' ? (
+        <div className="rounded-b-[28px] bg-[#1d1d1b] px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-zinc-100 dark:border-b dark:border-white/10">
+          <div className="mx-auto flex w-full max-w-2xl items-center gap-3">
+            <button
+              type="button"
+              data-dialog-close
+              onClick={onClose}
+              aria-label="Back"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-zinc-100 hover:bg-white/10"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              {subtitle && <p className="truncate text-[13px] text-zinc-400">{subtitle}</p>}
+              <p id={titleId} className="truncate text-2xl font-extrabold leading-tight tracking-tight">
+                {title}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
+          </div>
+        </div>
+      ) : (
       <div className="flex items-center justify-between gap-2 border-b border-black/10 p-4 pt-[max(1rem,env(safe-area-inset-top))] dark:border-white/10">
         <button
           type="button"
@@ -51,6 +77,7 @@ export function FocusOverlay({
         </div>
         <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
       </div>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
     </div>
   );

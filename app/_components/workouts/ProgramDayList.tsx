@@ -5,6 +5,18 @@ import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { DefaultMuscleGroupIcon, MUSCLE_GROUP_ICONS } from './muscleGroups';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
+import AnimatedContent from '../motion/AnimatedContent';
+
+// The day list: still, or sliding in from one side after a week is picked (the member's screen).
+function DayListFrame({ slide, columns, children }: { slide: 'none' | 'left' | 'right'; columns: boolean; children: React.ReactNode }) {
+  const cls = columns ? 'mt-3 grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3' : 'mt-3 space-y-2.5';
+  if (slide === 'none') return <div className={cls}>{children}</div>;
+  return (
+    <AnimatedContent direction="horizontal" distance={28} reverse={slide === 'left'} duration={0.4} className={cls}>
+      {children}
+    </AnimatedContent>
+  );
+}
 
 export interface ProgramDaySummary {
   id: string;
@@ -40,6 +52,8 @@ export function ProgramDayList({
   activeWeek: controlledActiveWeek,
   onChangeWeek,
   currentWeek,
+  animateWeeks = false,
+  columns = false,
 }: {
   ownerId: string;
   days: ProgramDaySummary[];
@@ -54,10 +68,23 @@ export function ProgramDayList({
   onChangeWeek?: (week: number) => void;
   // The programme's current week, marked with a dot on its pill.
   currentWeek?: number;
+  // Slide the days across when the week changes.
+  animateWeeks?: boolean;
+  // The coach's screens (the board): the week's days side by side from a tablet up, instead of one under another.
+  columns?: boolean;
 }) {
   const weekNums = Array.from(new Set(days.map((d) => d.weekNum))).sort((a, b) => a - b);
   const [internalActiveWeek, setInternalActiveWeek] = useState<number | null>(null);
   const activeWeek = controlledActiveWeek ?? internalActiveWeek ?? weekNums[0] ?? 1;
+  // When the week changes, its days slide in from that side (left for an earlier week): a week picked here, or one chosen from outside
+  // (the coach's Add week). Not on first showing, where the whole screen already rises in. The week shown last is kept in state and
+  // compared during render (React's pattern for state that follows a prop), so no effect is needed.
+  const [slide, setSlide] = useState<'none' | 'left' | 'right'>('none');
+  const [shownWeek, setShownWeek] = useState(activeWeek);
+  if (animateWeeks && shownWeek !== activeWeek) {
+    setShownWeek(activeWeek);
+    setSlide(activeWeek < shownWeek ? 'left' : 'right');
+  }
   function setActiveWeek(week: number) {
     if (onChangeWeek) onChangeWeek(week);
     else setInternalActiveWeek(week);
@@ -82,8 +109,8 @@ export function ProgramDayList({
   if (weekNums.length === 0) return null;
 
   return (
-    <div className="mt-3">
-      <div className="flex items-center gap-1">
+    <div className="mt-3" data-program={ownerId}>
+      <div data-week-chooser className="flex items-center gap-1">
         <button
           type="button"
           aria-label="Previous week"
@@ -97,13 +124,14 @@ export function ProgramDayList({
           {weekNums.map((week) => (
             <button
               key={`${ownerId}:${week}`}
+              data-week={week}
               type="button"
               aria-current={week === currentWeek ? 'date' : undefined}
               onClick={() => setActiveWeek(week)}
-              className={`relative shrink-0 rounded-full px-4 py-2 text-sm font-bold transition-colors ${
+              className={`relative h-11 shrink-0 rounded-xl px-4 text-sm font-bold transition-colors ${
                 week === activeWeek
-                  ? 'bg-accent text-accent-foreground'
-                  : 'border border-black/[.08] bg-card text-zinc-700 hover:bg-black/5 dark:border-white/[.12] dark:text-zinc-300 dark:hover:bg-white/5'
+                  ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                  : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50 dark:hover:bg-white/5'
               }`}
             >
               Week {week}
@@ -111,7 +139,7 @@ export function ProgramDayList({
                 <>
                   {/* The text is what is announced; the dot is only the picture of it (a label on a plain span is never read out). */}
                   <span className="sr-only"> (current week)</span>
-                  <span aria-hidden className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${week === activeWeek ? 'bg-accent-foreground' : 'bg-accent'}`} />
+                  <span aria-hidden className={`ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${week === activeWeek ? 'bg-accent' : 'bg-accent-strong'}`} />
                 </>
               )}
             </button>
@@ -128,7 +156,8 @@ export function ProgramDayList({
         </button>
       </div>
 
-      <div className="mt-3 space-y-2.5">
+      {/* Keyed by whether the week has days yet too: a week just added slides in when its days arrive, not while it is empty. */}
+      <DayListFrame key={slide === 'none' ? 'still' : `${activeWeek}:${days_.length > 0}`} slide={slide} columns={columns}>
         {days_.map((day) => {
           const Icon = iconFor(day);
           const weekday = day.dayPosition != null ? WEEKDAY_SHORT[day.dayPosition] : null;
@@ -138,8 +167,8 @@ export function ProgramDayList({
           return (
             <div
               key={day.id}
-              className={`rounded-2xl border p-3 ${
-                day.isToday ? 'border-accent/50 bg-accent-soft' : 'border-black/[.06] bg-card dark:border-white/10'
+              className={`rounded-[18px] border p-3.5 ${
+                day.isToday ? 'border-accent/50 bg-accent-soft' : 'border-black/[.08] bg-card dark:border-white/10'
               }`}
             >
               <button type="button" onClick={() => onOpenDay(day.id)} className="flex w-full items-center gap-3 text-left">
@@ -186,8 +215,8 @@ export function ProgramDayList({
             </div>
           );
         })}
-        {days_.length === 0 && <p className="mt-3 text-sm text-zinc-500">No days in this week yet.</p>}
-      </div>
+        {days_.length === 0 && <p className="text-sm text-zinc-500">No days in this week yet.</p>}
+      </DayListFrame>
     </div>
   );
 }

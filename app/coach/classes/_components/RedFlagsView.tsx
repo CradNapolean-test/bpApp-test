@@ -34,8 +34,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-        active ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+      className={`h-11 rounded-full px-4 text-sm font-bold ${
+        active ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
       }`}
     >
       {children}
@@ -71,7 +71,7 @@ function FlagRow({
   const coach = coaches.find((c) => c.id === entry.coach_id);
 
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-3.5 text-left">
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${entry.tier ? TIER_DOT[entry.tier] : 'bg-zinc-300 dark:bg-zinc-600'}`} />
         <span className="min-w-0 flex-1">
@@ -166,13 +166,13 @@ function FlagRow({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/coach/clients/${entry.client_id}?open=messages`}
-              className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+              className="inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground"
             >
               Message
             </Link>
             <Link
               href={`/coach/clients/${entry.client_id}`}
-              className="rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 dark:border-white/15 dark:text-zinc-200"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
             >
               Open member
             </Link>
@@ -290,7 +290,7 @@ function ThresholdsSheet({
               onClose();
             } else toast.error(r.error);
           }}
-          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
@@ -445,7 +445,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
       )}
 
       {notGenerated && (
-        <div className="rounded-2xl border border-black/[.06] bg-card p-4 text-sm text-zinc-700 dark:border-white/10 dark:text-zinc-300">
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-4 text-sm text-zinc-700 dark:border-white/10 dark:text-zinc-300">
           <p className="font-bold text-black dark:text-zinc-50">No list has been written for this week yet.</p>
           <p className="mt-1 text-xs text-zinc-500">
             {week === latest
@@ -457,7 +457,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
               type="button"
               disabled={generating}
               onClick={() => runGenerate(() => generateLatestRedFlagWeek(gymId), { success: 'List written', onDone: () => setReload((n) => n + 1) })}
-              className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
+              className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
             >
               {generating ? 'Writing…' : 'Write the list now'}
             </button>
@@ -485,7 +485,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
                 Some bookings this week were never marked attended or no-show, so a few of these members may have come after all.
               </p>
               {onOpenAttendance && (
-                <button type="button" onClick={onOpenAttendance} className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm font-bold text-accent-foreground">
+                <button type="button" onClick={onOpenAttendance} className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground">
                   Mark attendance
                 </button>
               )}
@@ -530,7 +530,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
             {report.master.members.length === 0 ? (
               <EmptyState compact title="Nobody has been flagged in the last six weeks." />
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+              <div className="overflow-x-auto rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
                 <table className="w-full min-w-[420px] border-collapse text-sm">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-zinc-400">
@@ -577,7 +577,7 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
           </section>
 
           {leftOut.length > 0 && (
-            <details className="rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+            <details className="rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
               <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-black dark:text-zinc-50">
                 Left out this week ({leftOut.length})
                 <span className="ml-2 text-xs font-medium text-zinc-500">new starters, on hold, ended</span>

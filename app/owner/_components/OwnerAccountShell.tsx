@@ -1,7 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Building2, UserRound } from 'lucide-react';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+
+const OWNER_NAV = [
+  { href: '/owner', label: 'Gyms', Icon: Building2 },
+  { href: '/owner/account', label: 'Account', Icon: UserRound },
+] as const;
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -14,7 +20,7 @@ import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
 import { brandParts } from '@/lib/gymNames';
 import type { ThemePreference } from '@/app/_components/theme';
 
-const card = 'rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10';
+const card = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
 
 // The owner's account page (R37): the same password, email and theme controls a coach has, and a Sign out that works on a phone.
 export function OwnerAccountShell({ email, themePreference, orgName }: { email: string; themePreference: ThemePreference; orgName: string | null }) {
@@ -33,6 +39,7 @@ export function OwnerAccountShell({ email, themePreference, orgName }: { email: 
             Overview
           </Link>
         }
+        coachSidebar={<CoachSidebar email={email} nav={OWNER_NAV} roleLabel="Owner" settingsHref="/owner/account" homeHref="/owner" />}
         mobileHeader={
           <Link href="/owner" className="flex min-w-0 items-center gap-2.5" aria-label="Back to the overview">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
@@ -43,7 +50,7 @@ export function OwnerAccountShell({ email, themePreference, orgName }: { email: 
         }
       >
         <div className="mx-auto max-w-xl space-y-4">
-          <h1 className="text-2xl font-bold text-black dark:text-zinc-50">Account</h1>
+          <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.015em] text-black sm:text-[32px] dark:text-zinc-50">Account</h1>
 
           <div className={`flex items-center gap-3 ${card}`}>
             <Avatar name={email} size="lg" variant="self" />
@@ -62,10 +69,10 @@ export function OwnerAccountShell({ email, themePreference, orgName }: { email: 
             <ChangeEmailForm currentEmail={email} />
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">Appearance</p>
+          <section className={`${card} space-y-3`}>
+            <h2 className="text-base font-extrabold text-black dark:text-zinc-50">Appearance</h2>
             <ThemeToggle initial={themePreference} />
-          </div>
+          </section>
 
           <SignOutButton variant="danger-soft" className="w-full py-3" />
 

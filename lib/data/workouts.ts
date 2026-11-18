@@ -2,6 +2,7 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
+import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type { SetType, StrengthBest, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramDayRow, WorkoutProgramRow } from './types';
 
 export async function getPrograms(clientId: string): Promise<WorkoutProgramRow[]> {
@@ -185,6 +186,22 @@ export async function duplicateProgramDay(dayId: string, weekNum: number, dayLab
     const { error: insertExercisesError } = await supabase.from('workout_exercises').insert(copies);
     if (insertExercisesError) raise(insertExercisesError);
   }
+}
+
+// "Add week (copy of last)" on a member's programme: copies the last week, as the database has it now, into the week after it. Null when
+// the programme has no workouts yet. The weeks are read here, not taken from the screen, which may not have reloaded since the last tap
+// (nextWeekCopy).
+export async function addProgramWeek(programId: string): Promise<{ from: number; to: number } | null> {
+  const supabase = await createClient();
+  const { data: days, error } = await supabase
+    .from('workout_program_days')
+    .select('id, week_num, day_label, day_position')
+    .eq('program_id', programId);
+  if (error) raise(error);
+  const copy = nextWeekCopy(days ?? []);
+  if (!copy) return null;
+  await Promise.all(copy.source.map((d) => duplicateProgramDay(d.id, copy.to, d.day_label)));
+  return { from: copy.from, to: copy.to };
 }
 
 // Bulk-applies the same field values across every exercise in a day in one round trip --

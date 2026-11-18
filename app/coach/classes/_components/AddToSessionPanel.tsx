@@ -101,7 +101,7 @@ export function AddToSessionPanel({
             type="button"
             disabled={busy || (noCredits && !full && !topUp)}
             onClick={() => (topUp ? onAddWithCredits!(chosen.id, short) : onAdd(chosen.id))}
-            className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+            className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
           >
             {busy ? 'Adding…' : full ? 'Add to waitlist' : topUp ? `Add ${short} credit${short === 1 ? '' : 's'} and book` : 'Add to session'}
           </button>

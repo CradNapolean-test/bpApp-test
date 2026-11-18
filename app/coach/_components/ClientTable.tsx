@@ -1,12 +1,15 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpDown, MessageSquare, Search, Users } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Avatar } from '@/app/_components/Avatar';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
+import { useSlidingThumb } from '@/app/_components/motion/useSlidingThumb';
+import { useFlipList } from '@/app/_components/motion/useFlipList';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
 import { LIST_STEP, remainingAfter, showMore, visibleCount } from '@/lib/paging';
 import { QUIET_DAYS, SLIPPING_DAYS, hasReason, type FollowUp, type FollowUpKind } from '@/lib/followUp';
@@ -28,6 +31,14 @@ const REASON_CLS: Record<FollowUpKind, string> = {
   stalled: 'bg-accent/15 text-accent',
 };
 const NOT_SET_UP = { label: 'Not set up', cls: 'text-zinc-400' };
+// The same words and colours as pills on the wide table (the board's Status column).
+const PILL: Record<string, string> = {
+  Red: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  Amber: 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300',
+  Green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+  'On hold': 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300',
+};
+const pillCls = (label: string) => PILL[label] ?? 'bg-black/[.06] text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
 
 // The Logging column (D10): how recently the member logged anything, as a colour word. It measures logging only, not attendance or
 // progress, hence the name (it was "Status", CL5). The bands are lib/followUp.ts's: red is exactly "Gone quiet" (D11).
@@ -82,6 +93,13 @@ export function ClientTable({
   const [managingGroups, setManagingGroups] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>(initialQuick);
   const [legend, setLegend] = useState(false);
+  // Motion (GSAP): the My members / Whole gym highlight slides; the rows settle in when the list first shows and when the scope changes;
+  // and when a filter or the sort changes, the rows that stay glide to their new places (Flip), so the coach sees what moved.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scopeTrack = useRef<HTMLDivElement>(null);
+  useSlidingThumb(scopeTrack, scope);
+  useStaggerIn(rootRef, '[data-flip-id]', scope);
+  const captureFlip = useFlipList(rootRef, `${quick}|${planFilter}|${groupId}|${sortKey}|${asc}`);
   const onHold = useMemo(() => new Set(holdIds), [holdIds]);
   const notSetUp = useMemo(() => new Set(notSetUpIds), [notSetUpIds]);
 
@@ -154,6 +172,7 @@ export function ClientTable({
   const shownRows = rows.slice(0, shownCount);
   const moreRows = remainingAfter(rows.length, shownCount);
   function clearFilters() {
+    captureFlip();
     setQuery('');
     setGroupId('');
     setQuick('all');
@@ -183,6 +202,7 @@ export function ClientTable({
     ) : null;
 
   function toggleSort(key: SortKey) {
+    captureFlip();
     if (key === sortKey) setAsc((v) => !v);
     else {
       setSortKey(key);
@@ -210,15 +230,13 @@ export function ClientTable({
   }
 
 const scopeBtnCls = (active: boolean) =>
-  `min-h-10 rounded-full px-4 py-1.5 text-center text-xs font-bold transition-colors ${
-    active
-      ? 'bg-accent text-accent-foreground'
-      : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
+  `relative min-h-9 rounded-lg px-3.5 text-center text-sm font-bold transition-colors ${
+    active ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
   }`;
 
   if (clients.length === 0 && !gymClients) {
     return (
-      <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
+      <div className="rounded-[20px] border border-black/[.08] bg-card p-8 text-center dark:border-white/10">
         <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
         <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients yet</p>
         <p className="mt-1 text-sm text-zinc-500">Add your first client above to get started.</p>
@@ -226,44 +244,50 @@ const scopeBtnCls = (active: boolean) =>
     );
   }
 
-  const headerCls = 'p-3 text-left font-medium';
-  const sortBtn = 'inline-flex items-center gap-1 hover:text-black dark:hover:text-zinc-300';
+  const headerCls = 'px-4 py-3 text-left font-bold first:pl-6';
+  const sortBtn = 'inline-flex items-center gap-1 uppercase tracking-[0.08em] hover:text-black dark:hover:text-zinc-300';
 
   return (
-    <div className="space-y-2">
+    <div ref={rootRef} className="space-y-3">
       {gymClients && (
-        <div role="group" aria-label="Whose clients" className="grid w-full grid-cols-2 gap-1 rounded-full border border-black/10 p-0.5 sm:w-max dark:border-white/10">
-          <button type="button" aria-pressed={scope === 'mine'} onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
-            My clients
+        <div ref={scopeTrack} role="group" aria-label="Whose clients" className="relative grid w-full grid-cols-2 gap-1 rounded-xl bg-black/[.06] p-1 sm:w-max dark:bg-white/10">
+          <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
+          <button type="button" aria-pressed={scope === 'mine'} data-active={scope === 'mine'} onClick={() => setScope('mine')} className={scopeBtnCls(scope === 'mine')}>
+            My members
           </button>
-          <button type="button" aria-pressed={scope === 'gym'} onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
+          <button type="button" aria-pressed={scope === 'gym'} data-active={scope === 'gym'} onClick={() => setScope('gym')} className={scopeBtnCls(scope === 'gym')}>
             Whole gym
           </button>
         </div>
       )}
       {scope === 'gym' && activeClients.length === 0 ? (
-        <div className="rounded-2xl border border-black/10 p-8 text-center dark:border-white/10">
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-8 text-center dark:border-white/10">
           <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
           <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients at {gymName ?? 'this gym'} yet</p>
         </div>
       ) : (
       <>
-      <div className="flex items-center gap-2">
-        <div className="relative min-w-0 flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 basis-56 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <input
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search clients"
-            className="w-full rounded-xl border border-black/10 bg-transparent py-2 pl-9 pr-3 text-sm dark:border-white/10"
+            aria-label="Search clients"
+            className="h-11 w-full rounded-xl border border-black/[.16] bg-card pl-9 pr-3 text-[15px] dark:border-white/15"
           />
         </div>
         {groups.length > 0 && (
           <select
             value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
+            onChange={(e) => {
+              captureFlip();
+              setGroupId(e.target.value);
+            }}
             aria-label="Filter by group"
-            className="max-w-[8.5rem] rounded-xl border border-black/10 bg-transparent px-2.5 py-2 text-sm dark:border-white/10"
+            className="h-11 max-w-[10rem] rounded-full border border-black/[.14] bg-card px-4 text-sm font-bold dark:border-white/15"
           >
             <option value="">All groups</option>
             {groups.map((g) => (
@@ -276,9 +300,12 @@ const scopeBtnCls = (active: boolean) =>
         {planNames.length > 0 && (
           <select
             value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value)}
+            onChange={(e) => {
+              captureFlip();
+              setPlanFilter(e.target.value);
+            }}
             aria-label="Filter by plan"
-            className="max-w-[8.5rem] rounded-xl border border-black/10 bg-transparent px-2.5 py-2 text-sm dark:border-white/10"
+            className="h-11 max-w-[10rem] rounded-full border border-black/[.14] bg-card px-4 text-sm font-bold dark:border-white/15"
           >
             <option value="">All plans</option>
             {planNames.map((n) => (
@@ -311,18 +338,23 @@ const scopeBtnCls = (active: boolean) =>
             key={key}
             type="button"
             aria-pressed={quick === key}
-            onClick={() => setQuick(key)}
-            className={`min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold ${
-              quick === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+            onClick={() => {
+              captureFlip();
+              setQuick(key);
+            }}
+            className={`h-11 shrink-0 rounded-full px-4 text-sm font-bold ${
+              quick === key
+                ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
             }`}
           >
             {label}
-            {key !== 'all' && count > 0 ? ` · ${count}` : ''}
+            {count > 0 ? <span className={quick === key ? 'ml-1.5 opacity-70' : 'ml-1.5 text-zinc-500'}>{count}</span> : null}
           </button>
         ))}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="text-xs text-zinc-500">
+        <p className="text-sm text-zinc-500">
           {/* Says whose members the list and the counts above are for: they change with My clients / Whole gym (CL16). */}
           {rows.length === activeClients.length ? `${rows.length} ${whose}` : `Showing ${rows.length} of ${activeClients.length} ${whose}`}
           {filtersOn && (
@@ -336,17 +368,18 @@ const scopeBtnCls = (active: boolean) =>
             aria-label="Sort by"
             value={sortKey}
             onChange={(e) => {
+              captureFlip();
               setSortKey(e.target.value as SortKey);
               setAsc(true);
             }}
-            className="min-h-9 rounded-lg border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+            className="h-11 rounded-full border border-black/[.14] bg-card px-4 text-sm font-bold dark:border-white/15"
           >
             <option value="name">Name A–Z</option>
             <option value="lastActive">Most inactive first</option>
             <option value="status">Logging, red first</option>
             <option value="credits">Fewest credits first</option>
           </select>
-          <button type="button" onClick={() => setLegend(true)} className="min-h-9 shrink-0 px-1 text-xs font-bold text-accent">
+          <button type="button" onClick={() => setLegend(true)} className="min-h-11 shrink-0 px-1 text-sm font-bold text-accent">
             Colour key
           </button>
         </div>
@@ -355,7 +388,7 @@ const scopeBtnCls = (active: boolean) =>
         <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
       )}
       {/* Phone: one card per client (the table needs ~34rem of width). */}
-      <ul className="space-y-2 md:hidden">
+      <ul className="divide-y divide-black/[.07] overflow-hidden rounded-[20px] border border-black/[.08] bg-card md:hidden dark:divide-white/10 dark:border-white/10">
         {shownRows.map(({ client, health }) => {
           const status = statusFor(client.id, health);
           const unread = unreadByClient[client.id] ?? 0;
@@ -367,7 +400,7 @@ const scopeBtnCls = (active: boolean) =>
                 : `Active ${health.daysSinceActive}d ago`
             : 'Never logged';
           return (
-            <li key={client.id} className="flex items-stretch rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+            <li key={client.id} data-flip-id={client.id} className="flex items-stretch">
               <Link href={`/coach/clients/${client.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-3">
                 <Avatar name={client.name ?? client.email} size="md" />
                 <div className="min-w-0 flex-1">
@@ -391,7 +424,7 @@ const scopeBtnCls = (active: boolean) =>
               <Link
                 href={`/coach/clients/${client.id}?open=messages`}
                 aria-label={unread > 0 ? `Message ${client.name ?? client.email} (${unread} unread)` : `Message ${client.name ?? client.email}`}
-                className="relative flex w-12 shrink-0 items-center justify-center rounded-r-2xl border-l border-black/[.06] text-zinc-500 dark:border-white/10"
+                className="relative my-2 mr-2 flex w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"
               >
                 <MessageSquare className="h-5 w-5" />
                 {unread > 0 && <span className="absolute right-2.5 top-3 h-2.5 w-2.5 rounded-full bg-accent" />}
@@ -401,10 +434,10 @@ const scopeBtnCls = (active: boolean) =>
         })}
         {rows.length === 0 && <li className="p-3 text-center text-sm text-zinc-500">{emptyText}</li>}
       </ul>
-      <div className="hidden overflow-x-auto rounded-2xl border border-black/10 shadow-sm md:block dark:border-white/10">
-        <table className="w-full min-w-[34rem] text-sm">
+      <div className="hidden overflow-x-auto rounded-[20px] border border-black/[.08] bg-card md:block dark:border-white/10">
+        <table className="w-full min-w-[40rem] text-sm">
         <thead>
-          <tr className="border-b border-black/10 text-zinc-500 dark:border-white/10">
+          <tr className="text-xs uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
             <th className={headerCls}>
               <button onClick={() => toggleSort('name')} className={sortBtn}>
                 Client <ArrowUpDown className="h-3 w-3" />
@@ -416,6 +449,7 @@ const scopeBtnCls = (active: boolean) =>
                 Logging <ArrowUpDown className="h-3 w-3" />
               </button>
             </th>
+            <th className={headerCls}>Plan</th>
             <th className={headerCls}>
               <button onClick={() => toggleSort('lastActive')} className={sortBtn}>
                 Last active <ArrowUpDown className="h-3 w-3" />
@@ -426,6 +460,9 @@ const scopeBtnCls = (active: boolean) =>
                 Credits <ArrowUpDown className="h-3 w-3" />
               </button>
             </th>
+            <th className={headerCls}>
+              <span className="sr-only">Message</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -433,16 +470,17 @@ const scopeBtnCls = (active: boolean) =>
             return (
               <tr
                 key={client.id}
-                className="border-b border-black/5 last:border-0 hover:bg-black/[.02] dark:border-white/5 dark:hover:bg-white/[.03]"
+                data-flip-id={client.id}
+                className="border-t border-black/[.07] hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
               >
-                <td className="p-3">
-                  <div className="flex items-center gap-2.5">
-                    <Avatar name={client.name ?? client.email} size="sm" />
+                <td className="py-2.5 pl-6 pr-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={client.name ?? client.email} size="md" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <Link
                           href={`/coach/clients/${client.id}`}
-                          className="font-medium text-black hover:underline dark:text-zinc-50"
+                          className="text-[15px] font-bold text-black hover:underline dark:text-zinc-50"
                         >
                           {client.name ?? client.email}
                         </Link>
@@ -458,20 +496,23 @@ const scopeBtnCls = (active: boolean) =>
                           </Link>
                         )}
                       </div>
-                      <p className="truncate text-xs text-zinc-500">{client.planName ?? 'No plan'} · {client.email}</p>
+                      <p className="truncate text-xs text-zinc-500">{client.email}</p>
                       {reasonChips(client.id)}
                     </div>
                   </div>
                 </td>
                 {scope === 'gym' && (
-                  <td className="p-3 text-zinc-500">
+                  <td className="px-4 py-2.5 text-zinc-500">
                     {'coachName' in client ? (client.isOwnClient ? 'You' : client.coachName) : ''}
                   </td>
                 )}
-                <td className="p-3">
-                  <span className={`font-semibold ${statusFor(client.id, health).cls}`}>{statusFor(client.id, health).label}</span>
+                <td className="px-4 py-2.5">
+                  <span className={`inline-flex h-6 items-center whitespace-nowrap rounded-full px-2.5 text-xs font-extrabold ${pillCls(statusFor(client.id, health).label)}`}>
+                    {statusFor(client.id, health).label}
+                  </span>
                 </td>
-                <td className="whitespace-nowrap p-3 text-zinc-500">
+                <td className="px-4 py-2.5 text-black dark:text-zinc-50">{client.planName ?? <span className="text-zinc-500">No plan</span>}</td>
+                <td className="whitespace-nowrap px-4 py-2.5 text-zinc-600 dark:text-zinc-400">
                   {health?.lastActiveDate
                     ? health.daysSinceActive === 0
                       ? 'Today'
@@ -480,13 +521,22 @@ const scopeBtnCls = (active: boolean) =>
                         : `${health.daysSinceActive}d ago`
                     : 'Never logged'}
                 </td>
-                <td className={`p-3 font-semibold ${creditCls(client)}`}>{client.balance}</td>
+                <td className={`px-4 py-2.5 text-[15px] font-bold ${creditCls(client)}`}>{client.balance}</td>
+                <td className="py-2 pl-2 pr-4 text-right">
+                  <Link
+                    href={`/coach/clients/${client.id}?open=messages`}
+                    aria-label={`Message ${client.name ?? client.email}`}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent"
+                  >
+                    <MessageSquare className="h-[18px] w-[18px]" />
+                  </Link>
+                </td>
               </tr>
             );
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={scope === 'gym' ? 5 : 4} className="p-3 text-center text-zinc-500">
+              <td colSpan={scope === 'gym' ? 7 : 6} className="border-t border-black/[.07] p-4 text-center text-zinc-500 dark:border-white/10">
                 {emptyText}
               </td>
             </tr>
@@ -498,7 +548,7 @@ const scopeBtnCls = (active: boolean) =>
         <button
           type="button"
           onClick={() => setPaging({ key: listKey, count: showMore(shownCount, rows.length) })}
-          className="w-full rounded-full border border-black/10 py-2.5 text-sm font-bold text-zinc-700 hover:bg-black/5 dark:border-white/15 dark:text-zinc-200 dark:hover:bg-white/5"
+          className="h-11 w-full rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black hover:bg-black/[.03] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
         >
           Show more ({moreRows} left)
         </button>

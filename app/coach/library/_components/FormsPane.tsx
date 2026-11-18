@@ -165,7 +165,7 @@ function FormEditorOverlay({
 
         <div className="space-y-3 border-t border-black/10 pt-3 dark:border-white/10">
           {questions.map((q, i) => (
-            <div key={q.key} className="space-y-2 rounded-md border border-black/10 p-3 dark:border-white/10">
+            <div key={q.key} className="space-y-2 rounded-2xl border border-black/[.08] p-4 dark:border-white/10">
               <div className="flex gap-2">
                 <input
                   placeholder="Question text"
@@ -215,7 +215,7 @@ function FormEditorOverlay({
                     aria-label="Move question up"
                     disabled={i === 0}
                     onClick={() => setQuestions((qs) => moveQuestion(qs, i, -1))}
-                    className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+                    className="rounded-lg p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
                   >
                     <ArrowUp className="h-4 w-4" />
                   </button>
@@ -224,7 +224,7 @@ function FormEditorOverlay({
                     aria-label="Move question down"
                     disabled={i === questions.length - 1}
                     onClick={() => setQuestions((qs) => moveQuestion(qs, i, 1))}
-                    className="rounded-md p-1.5 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+                    className="rounded-lg p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
                   >
                     <ArrowDown className="h-4 w-4" />
                   </button>
@@ -350,7 +350,7 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
         <button
           type="button"
           onClick={openNew}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground hover:opacity-90"
         >
           + New form
         </button>
@@ -359,28 +359,33 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
       {initialTemplates.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No form templates yet" hint="Add one above, or use the ⋯ menu to start from a ready-made health questionnaire." />
       ) : (
-        <div className="space-y-2">
+        <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+          <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3.5 pt-[18px] sm:px-6">
+            <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Your forms</h2>
+            <span className="text-[13px] font-semibold text-zinc-500">Send one from a member&apos;s Check-in page</span>
+          </div>
           {initialTemplates.map((t) => (
             <div
               key={t.id}
-              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              data-stagger
+              className="flex min-h-[64px] flex-wrap items-center justify-between gap-2.5 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10"
             >
               <div className="min-w-0">
-                <p className="font-bold text-black dark:text-zinc-50">{t.name}</p>
-                <p className="mt-0.5 text-sm text-zinc-500">
+                <p className="text-[15px] font-bold text-black dark:text-zinc-50">{t.name}</p>
+                <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
                   {t.questionCount} question{t.questionCount === 1 ? '' : 's'}
                 </p>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2.5">
                 {t.is_default_onboarding && (
-                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                  <span className="inline-flex h-6 items-center rounded-full bg-accent-soft px-2.5 text-xs font-extrabold text-accent">
                     Default onboarding
                   </span>
                 )}
                 <button
                   type="button"
                   onClick={() => openEdit(t.id)}
-                  className="rounded-full px-2.5 py-1 text-sm font-semibold text-accent hover:bg-accent/10"
+                  className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent"
                 >
                   Edit
                 </button>

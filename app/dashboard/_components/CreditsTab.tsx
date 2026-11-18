@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, History, Minus, Plus, Sparkles } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
+import CountUp from '@/app/_components/motion/CountUp';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
@@ -33,10 +34,17 @@ import { endHold, getActiveHold, startHold } from '@/lib/data/redFlags';
 import { addDays, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientMembershipRow, CreditBucketBalances, CreditPackRow, CreditsLedgerRow, MembershipHoldRow, MembershipPackageRow } from '@/lib/data/types';
 
-const cardCls = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
-const labelCls = 'block text-xs font-medium text-zinc-500';
-const btnCls = 'rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40';
-const ghostBtnCls = 'rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 disabled:opacity-40 dark:border-white/15 dark:text-zinc-200';
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-5 dark:border-white/10';
+const labelCls = 'block text-[13px] font-bold text-zinc-700 dark:text-zinc-300';
+const btnCls = 'inline-flex h-11 items-center justify-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-40';
+const ghostBtnCls =
+  'inline-flex h-11 items-center justify-center rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black disabled:opacity-40 dark:border-white/25 dark:text-zinc-50';
+const headCls = 'text-lg font-extrabold text-black dark:text-zinc-50';
+// The board's pills: black when on, an outline when off.
+const pillCls = (on: boolean) =>
+  `h-11 rounded-full px-4 text-sm font-bold ${
+    on ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
+  }`;
 
 const dayLabel = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -254,19 +262,19 @@ export function CreditsTab({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       {/* ---- membership ---- */}
-      <div className={cardCls}>
+      <div className={`${cardCls} lg:col-start-2 lg:row-start-2`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Membership</p>
+            <h2 className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Membership plan</h2>
             <p className="mt-0.5 truncate text-lg font-extrabold text-black dark:text-zinc-50">{membership ? (membership.package?.name ?? 'Plan (name not available)') : 'No plan set up'}</p>
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${status.tone}`}>{status.label}</span>
         </div>
 
         {membership?.package && (
-          <dl className="mt-3 divide-y divide-black/[.05] text-sm dark:divide-white/10">
+          <dl className="mt-3 divide-y divide-black/[.07] text-sm dark:divide-white/10">
             <div className="flex justify-between py-2">
               <dt className="text-zinc-500">Weekly allowance</dt>
               <dd className="font-semibold text-black dark:text-zinc-50">{membership.package.credits_per_week} credits, reset Saturdays</dd>
@@ -319,7 +327,7 @@ export function CreditsTab({
             </button>
           )}
           {membership && (
-            <button type="button" disabled={busy} onClick={endNow} className="rounded-full px-4 py-2 text-sm font-bold text-danger disabled:opacity-40">
+            <button type="button" disabled={busy} onClick={endNow} className="inline-flex h-11 items-center rounded-xl px-3 text-sm font-bold text-danger disabled:opacity-40">
               End now
             </button>
           )}
@@ -327,27 +335,30 @@ export function CreditsTab({
       </div>
 
       {/* ---- credits ---- */}
-      <div className={cardCls}>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Credits</p>
-        <p className="mt-0.5 text-3xl font-extrabold text-black dark:text-zinc-50">{creditsBalance}</p>
-        <p className="mt-0.5 text-xs text-zinc-500">
+      <div className={`${cardCls} lg:col-start-2 lg:row-start-1`}>
+        <h2 className="text-[13px] font-bold text-zinc-500 dark:text-zinc-400">Balance</h2>
+        <p className="mt-0.5 text-[34px] font-extrabold leading-tight text-black dark:text-zinc-50">
+          <CountUp to={creditsBalance} duration={0.8} />
+          <span className="ml-1 text-[15px] font-bold text-zinc-500"> credit{creditsBalance === 1 ? '' : 's'}</span>
+        </p>
+        <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
           {creditsBuckets.membership} from the weekly allowance · {creditsBuckets.bonus} bonus (carries over)
         </p>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <button type="button" disabled={busy} onClick={extraSession} className="flex flex-col items-center gap-1 rounded-xl bg-accent/12 py-3 text-xs font-bold text-accent disabled:opacity-40">
+          <button type="button" disabled={busy} onClick={extraSession} className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl bg-accent-soft py-3 text-[13px] font-bold text-accent disabled:opacity-40">
             <Sparkles className="h-4 w-4" /> Extra session
           </button>
-          <button type="button" onClick={() => openSheet('add')} className="flex flex-col items-center gap-1 rounded-xl bg-black/[.04] py-3 text-xs font-bold text-zinc-700 dark:bg-white/[.06] dark:text-zinc-200">
+          <button type="button" onClick={() => openSheet('add')} className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl bg-[#1d1d1b] py-3 text-[13px] font-bold text-white dark:bg-zinc-100 dark:text-[#1d1d1b]">
             <Plus className="h-4 w-4" /> Add credits
           </button>
-          <button type="button" onClick={() => openSheet('remove')} className="flex flex-col items-center gap-1 rounded-xl bg-black/[.04] py-3 text-xs font-bold text-zinc-700 dark:bg-white/[.06] dark:text-zinc-200">
+          <button type="button" onClick={() => openSheet('remove')} className="flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl border border-black/[.14] py-3 text-[13px] font-bold text-black dark:border-white/15 dark:text-zinc-50">
             <Minus className="h-4 w-4" /> Remove
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-zinc-500">Extra session = one credit that expires after 7 days.</p>
+        <p className="mt-2 text-xs text-zinc-500">Extra session = one credit that expires after 7 days. No payment is taken in the app.</p>
 
         {creditPacks.length > 0 && (
-          <div className="mt-4 flex items-end gap-2 border-t border-black/[.05] pt-3 dark:border-white/10">
+          <div className="mt-4 flex items-end gap-2 border-t border-black/[.07] pt-4 dark:border-white/10">
             <div className="min-w-0 flex-1 space-y-1">
               <label className={labelCls}>Credit pack</label>
               <select className={inputCls} value={selectedPack} onChange={(e) => setSelectedPack(e.target.value)}>
@@ -367,10 +378,10 @@ export function CreditsTab({
       </div>
 
       {/* ---- history ---- */}
-      <div className={cardCls}>
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-          <History className="h-3.5 w-3.5" /> History
-        </p>
+      <div className={`${cardCls} lg:col-start-1 lg:row-span-3 lg:row-start-1`}>
+        <h2 className={`${headCls} flex items-center gap-2`}>
+          <History className="h-[18px] w-[18px] text-zinc-500" /> Plans
+        </h2>
         {!history ? (
           <p className="mt-2 text-sm text-zinc-500">Loading…</p>
         ) : (
@@ -391,34 +402,37 @@ export function CreditsTab({
                 {loadingMore ? 'Loading…' : 'Load older plans'}
               </button>
             )}
-            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Credit activity</p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Filter credit activity">
+            <div className="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className={headCls}>Credit history</h2>
+              <span className="text-[13px] font-semibold text-zinc-500">Newest first</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Filter credit activity">
               {(Object.keys(CREDIT_FILTER_LABELS) as CreditFilter[]).map((key) => (
                 <button
                   key={key}
                   type="button"
                   aria-pressed={creditFilter === key}
                   onClick={() => setCreditFilter(key)}
-                  className={`rounded-full px-3 py-1 text-xs font-bold ${creditFilter === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'}`}
+                  className={pillCls(creditFilter === key)}
                 >
                   {CREDIT_FILTER_LABELS[key]}
                 </button>
               ))}
             </div>
-            <ul className="mt-1 divide-y divide-black/[.05] dark:divide-white/10">
+            <ul className="mt-3 divide-y divide-black/[.07] border-t border-black/[.07] dark:divide-white/10 dark:border-white/10">
               {history.credits.length === 0 && <li className="py-2 text-sm text-zinc-500">{creditFilter === 'all' ? 'No credit activity yet.' : 'Nothing of this kind yet.'}</li>}
               {history.credits.map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-2">
+                <li key={c.id} className="flex min-h-[56px] items-center justify-between gap-3 py-2">
                   <span className="min-w-0">
-                    <span className="block truncate text-sm text-black dark:text-zinc-50">{friendlyReason(c.reason)}</span>
-                    <span className="block text-xs text-zinc-500">
+                    <span className="block truncate text-[15px] font-semibold text-black dark:text-zinc-50">{friendlyReason(c.reason)}</span>
+                    <span className="block text-[13px] text-zinc-500 dark:text-zinc-400">
                       {dateLabel(c.created_at.slice(0, 10))}
                       {c.expires_at && !c.expired_at ? ` · expires ${dateLabel(c.expires_at.slice(0, 10))}` : ''}
                     </span>
                   </span>
-                  <span className={`shrink-0 text-sm font-bold ${c.delta > 0 ? 'text-success' : c.delta < 0 ? 'text-danger' : 'text-zinc-400'}`}>
-                    {c.delta > 0 ? '+' : ''}
-                    {c.delta === 0 ? '±0' : c.delta}
+                  <span className={`shrink-0 text-base font-extrabold ${c.delta > 0 ? 'text-accent' : c.delta < 0 ? 'text-black dark:text-zinc-50' : 'text-zinc-400'}`}>
+                    {c.delta > 0 ? '+' : c.delta < 0 ? '−' : ''}
+                    {c.delta === 0 ? '±0' : Math.abs(c.delta)}
                   </span>
                 </li>
               ))}
@@ -433,8 +447,8 @@ export function CreditsTab({
       </div>
 
       {/* ---- reminders ---- */}
-      <div className={cardCls}>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Check-in reminders</p>
+      <div className={`${cardCls} lg:col-start-2 lg:row-start-3`}>
+        <h2 className={headCls}>Check-in reminders</h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Nudge this member if they haven&apos;t logged anything in a while. Set to 0 to turn off.
         </p>
@@ -483,7 +497,7 @@ export function CreditsTab({
                     key={key}
                     type="button"
                     onClick={() => setStartMode(key)}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${startMode === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'}`}
+                    className={pillCls(startMode === key)}
                   >
                     {label}
                   </button>

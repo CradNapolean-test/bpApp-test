@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, ChevronDown, GraduationCap, Lock, PlayCircle } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronRight, GraduationCap, Lock, PlayCircle } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -13,6 +13,33 @@ import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { parseVideoEmbedUrl } from '@/lib/utils/videoEmbed';
 import { isHttpsLink } from '@/lib/imageHosts';
 import type { ClientProfileRow, EducationCourseAssignmentWithDetails, EducationLessonRow } from '@/lib/data/types';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card dark:border-white/10';
+const headCls = 'text-base font-extrabold text-black dark:text-zinc-50';
+
+// A course's lessons in the order they are taught (module by module), with how many are done.
+function courseLessons(assignment: EducationCourseAssignmentWithDetails) {
+  const done = new Set(assignment.completions.map((c) => c.lesson_id));
+  const lessons = [...assignment.course.education_modules]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .flatMap((m) => [...m.education_lessons].sort((a, b) => a.sort_order - b.sort_order));
+  return { lessons, done, doneCount: lessons.filter((l) => done.has(l.id)).length };
+}
+
+// "Carry on": the next open lesson in the course already under way (or the first not finished).
+function nextLesson(assignments: EducationCourseAssignmentWithDetails[], todayIso: string) {
+  const ordered = [
+    ...assignments.filter((a) => a.completions.length > 0),
+    ...assignments.filter((a) => a.completions.length === 0),
+  ];
+  for (const a of ordered) {
+    const { lessons, done } = courseLessons(a);
+    const index = lessons.findIndex((l) => !done.has(l.id) && isLessonUnlocked(l, todayIso));
+    if (index >= 0) return { assignment: a, lesson: lessons[index], number: index + 1, total: lessons.length };
+  }
+  return null;
+}
 
 function LessonItem({
   lesson,
@@ -116,19 +143,22 @@ function CourseOverlay({
   isCoachView,
   onClose,
   timezone,
+  startLessonId = null,
 }: {
   assignment: EducationCourseAssignmentWithDetails;
   clientId: string;
   isCoachView: boolean;
   onClose: () => void;
   timezone?: string | null;
+  startLessonId?: string | null;
 }) {
   const todayIso = todayIsoInTz(timezone ?? DEFAULT_TIMEZONE);
   const completedIds = new Set(assignment.completions.map((c) => c.lesson_id));
   const sortedModules = [...assignment.course.education_modules].sort((a, b) => a.sort_order - b.sort_order);
-  const [openLessonId, setOpenLessonId] = useState<string | null>(null);
-  // Modules start collapsed except the first one that still has something left to do.
-  const firstUnfinished = sortedModules.find((m) => m.education_lessons.some((l) => !completedIds.has(l.id)))?.id ?? null;
+  const [openLessonId, setOpenLessonId] = useState<string | null>(startLessonId);
+  // Modules start collapsed except the first one that still has something left to do (or the one holding the lesson it opened on).
+  const startModule = startLessonId ? sortedModules.find((m) => m.education_lessons.some((l) => l.id === startLessonId))?.id : undefined;
+  const firstUnfinished = startModule ?? sortedModules.find((m) => m.education_lessons.some((l) => !completedIds.has(l.id)))?.id ?? null;
   const [openModules, setOpenModules] = useState<Set<string>>(() => new Set(firstUnfinished ? [firstUnfinished] : []));
   const pct = courseCompletionPercent(assignment.course, assignment.completions);
 
@@ -142,14 +172,14 @@ function CourseOverlay({
   }
 
   return (
-    <FocusOverlay title={assignment.course.title} subtitle={assignment.course.description ?? undefined} onClose={onClose}>
+    <FocusOverlay title={assignment.course.title} subtitle={assignment.course.description ?? undefined} onClose={onClose} variant={isCoachView ? 'plain' : 'member'}>
       <div className="space-y-3">
-        <div className="rounded-2xl border border-black/[.05] bg-card p-3 dark:border-white/10">
+        <div className={`${cardCls} p-4`}>
           <div className="flex items-center justify-between text-sm">
-            <span className="font-semibold text-black dark:text-zinc-50">Your progress</span>
+            <span className="font-bold text-black dark:text-zinc-50">Your progress</span>
             <span className="font-bold text-accent">{pct}%</span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
             <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
           </div>
         </div>
@@ -158,11 +188,11 @@ function CourseOverlay({
           const done = sortedLessons.filter((l) => completedIds.has(l.id)).length;
           const isOpen = openModules.has(module.id);
           return (
-            <div key={module.id} className="rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
-              <button type="button" onClick={() => toggleModule(module.id)} className="flex w-full items-center justify-between gap-2 p-3.5 text-left">
+            <div key={module.id} className={cardCls}>
+              <button type="button" onClick={() => toggleModule(module.id)} aria-expanded={isOpen} className="flex min-h-14 w-full items-center justify-between gap-2 px-4 py-3 text-left">
                 <div className="min-w-0">
-                  <h4 className="font-bold text-black dark:text-zinc-50">{module.title}</h4>
-                  <p className="text-xs text-zinc-500">
+                  <h4 className="text-[15px] font-extrabold text-black dark:text-zinc-50">{module.title}</h4>
+                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
                     {done} of {sortedLessons.length} lesson{sortedLessons.length === 1 ? '' : 's'} done
                   </p>
                 </div>
@@ -214,6 +244,12 @@ export function EducationTab({
   const { run, busy: assigning } = useAction();
   const [selectedCourse, setSelectedCourse] = useState('');
   const [openAssignmentId, setOpenAssignmentId] = useState<string | null>(null);
+  const [startLessonId, setStartLessonId] = useState<string | null>(null);
+  const todayIso = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
+  const carryOn = isCoachView ? null : nextLesson(assignments, todayIso);
+  // The course bars fill when the list arrives.
+  const screen = useRef<HTMLDivElement>(null);
+  useGrowIn(screen, 0.1, assignments.length);
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -227,9 +263,9 @@ export function EducationTab({
   const openAssignment = openAssignmentId ? assignments.find((a) => a.id === openAssignmentId) : undefined;
 
   return (
-    <div className="space-y-6">
+    <div ref={screen} className="space-y-6">
       {isCoachView && !readOnly && (
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Assign a course</h3>
           <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
             <select
@@ -247,7 +283,7 @@ export function EducationTab({
             <button
               type="submit"
               disabled={assigning || !selectedCourse}
-              className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+              className="shrink-0 inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
             >
               {assigning ? 'Assigning…' : 'Assign'}
             </button>
@@ -270,6 +306,63 @@ export function EducationTab({
           title="Nothing assigned yet"
           hint={isCoachView ? 'Assign a course above, or build one under Education.' : "Your coach hasn't assigned any courses yet."}
         />
+      ) : !isCoachView ? (
+        <>
+          {carryOn && (
+            <section className="space-y-2.5">
+              <h2 className={headCls}>Carry on</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setStartLessonId(carryOn.lesson.id);
+                  setOpenAssignmentId(carryOn.assignment.id);
+                }}
+                className={`${cardCls} flex w-full flex-col overflow-hidden text-left`}
+              >
+                <span aria-hidden className="flex h-[150px] items-center justify-center bg-[#1d1d1b] text-[#5fd6d6]">
+                  {carryOn.lesson.link_url ? <PlayCircle className="h-11 w-11" strokeWidth={1.6} /> : <GraduationCap className="h-11 w-11" strokeWidth={1.6} />}
+                </span>
+                <span className="flex flex-col gap-1 px-4 pb-3.5 pt-3">
+                  <span className="text-base font-extrabold text-black dark:text-zinc-50">{carryOn.lesson.title}</span>
+                  <span className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                    {carryOn.assignment.course.title} · lesson {carryOn.number} of {carryOn.total}
+                  </span>
+                </span>
+              </button>
+            </section>
+          )}
+          <section className="space-y-2.5">
+            <h2 className={headCls}>Courses</h2>
+            <div className={`${cardCls} divide-y divide-black/[.07] overflow-hidden dark:divide-white/10`}>
+              {assignments.map((a) => {
+                const { lessons, doneCount } = courseLessons(a);
+                const share = lessons.length ? Math.round((doneCount / lessons.length) * 100) : 0;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => {
+                      setStartLessonId(null);
+                      setOpenAssignmentId(a.id);
+                    }}
+                    className="flex min-h-[60px] w-full items-center gap-3 px-3.5 py-2.5 text-left"
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-[15px] font-bold text-black dark:text-zinc-50">{a.course.title}</span>
+                      <span className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                        {lessons.length > 0 && doneCount >= lessons.length ? 'All lessons done' : `${doneCount} of ${lessons.length} lesson${lessons.length === 1 ? '' : 's'} done`}
+                      </span>
+                    </span>
+                    <span className="h-2 w-16 shrink-0 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${doneCount} of ${lessons.length} lessons`}>
+                      <span data-grow="bar" className="block h-2 rounded-full bg-accent" style={{ width: `${share}%` }} />
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </>
       ) : (
         <ul className="space-y-2">
           {assignments.map((a) => {
@@ -278,7 +371,7 @@ export function EducationTab({
               <li key={a.id}>
                 <button
                   onClick={() => setOpenAssignmentId(a.id)}
-                  className="w-full rounded-2xl border border-black/[.05] bg-card p-4 text-left dark:border-white/10"
+                  className="w-full rounded-[20px] border border-black/[.08] bg-card p-4 text-left dark:border-white/10"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-bold text-black dark:text-zinc-50">{a.course.title}</p>
@@ -305,6 +398,7 @@ export function EducationTab({
           isCoachView={isCoachView}
           onClose={() => setOpenAssignmentId(null)}
           timezone={profile?.timezone}
+          startLessonId={startLessonId}
         />
       )}
     </div>

@@ -47,7 +47,7 @@ function EditPackCard({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <form onSubmit={handleSave} className="space-y-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-500">Name</label>
@@ -116,7 +116,7 @@ function AddPackCard({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+    <form onSubmit={handleCreate} className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <div className="space-y-1">
         <label className="text-xs font-medium text-zinc-500">Pack name</label>
         <input required autoFocus className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
@@ -190,7 +190,7 @@ export function CreditPackManager({
           <button
             type="button"
             onClick={() => setAddingPack(true)}
-            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+            className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground hover:opacity-90"
           >
             + Add pack
           </button>
@@ -213,13 +213,13 @@ export function CreditPackManager({
             ) : (
               <div
                 key={p.id}
-                className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                className="flex flex-col rounded-[20px] border border-black/[.08] bg-card p-5 dark:border-white/10"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-bold text-black dark:text-zinc-50">{p.name}</p>
+                  <p className="text-[17px] font-extrabold leading-snug text-black dark:text-zinc-50">{p.name}</p>
                   {canEdit && (
                     <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
-                      <button type="button" onClick={() => setEditingId(p.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
+                      <button type="button" onClick={() => setEditingId(p.id)} className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent">
                         Edit
                       </button>
                       <DropdownMenu
@@ -229,15 +229,16 @@ export function CreditPackManager({
                     </div>
                   )}
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-accent">
-                  {p.credits} <span className="text-sm font-medium text-zinc-500">credits</span>
+                <p className="mt-3 text-[34px] font-extrabold leading-none text-black dark:text-zinc-50">
+                  {p.credits}
+                  <span className="ml-1 text-[15px] font-bold text-zinc-500"> credits</span>
                 </p>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-2 text-[13px] text-zinc-600 dark:text-zinc-400">
                   {p.expires_after_days ? `Expires ${p.expires_after_days} days after granting` : 'Never expires'}
                   {p.description ? ` · ${p.description}` : ''}
                 </p>
                 {usage && (
-                <p className="mt-1 text-xs text-zinc-400">
+                <p className="mt-auto pt-3 text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">
                   {usage[p.id]
                     ? `Given ${usage[p.id].times} time${usage[p.id].times === 1 ? '' : 's'}${usage[p.id].last ? `, last on ${new Date(usage[p.id].last!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}`
                     : 'Not given yet'}

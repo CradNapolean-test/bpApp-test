@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import Link from 'next/link';
 import { Activity } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -28,38 +29,41 @@ export function ActivityFeed({
     [clients, extraNames]
   );
   const items = useMemo(() => groupActivity(events).slice(0, 5), [events]);
+  // The rows settle in one after another when the dashboard opens (GSAP).
+  const root = useRef<HTMLElement>(null);
+  useStaggerIn(root, '[data-stagger]', null, 0.3);
 
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
-      <h3 className="font-bold text-black dark:text-zinc-50">Recent activity</h3>
+    <section ref={root} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+      <h2 className="px-5 pb-3.5 pt-[18px] text-lg font-extrabold text-black sm:px-6 dark:text-zinc-50">Latest activity</h2>
       {items.length === 0 ? (
         <EmptyState icon={Activity} title="Nothing recent" hint="Client activity will show up here as it happens." compact />
       ) : (
-        <div className="mt-2">
+        <div className="px-2 pb-2 sm:px-3">
           <ExpandableList
             items={items}
             phoneLimit={5}
-            className="space-y-1.5"
+            className=""
             itemKey={(item, i) => `${item.clientId}-${i}`}
             render={(item) => {
               const name = nameById.get(item.clientId) ?? 'A client';
               return (
                 <Link
+                  data-stagger
                   href={`/coach/clients/${item.clientId}`}
-                  className="flex min-h-10 items-start gap-2 rounded-lg py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                  className="flex min-h-11 items-start gap-3 rounded-xl border-t border-black/[.07] px-3 py-2.5 text-sm hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/5"
                 >
-                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-black dark:bg-zinc-50" />
                   <p className="min-w-0 flex-1 text-zinc-700 dark:text-zinc-300">
                     <span className="font-bold text-black dark:text-zinc-50">{name}</span>{' '}
                     {item.summary.charAt(0).toLowerCase() + item.summary.slice(1)}
                   </p>
-                  <span className="shrink-0 text-xs text-zinc-400">{formatRelativeTime(item.occurredAt)}</span>
+                  <span className="shrink-0 text-xs font-semibold text-zinc-500">{formatRelativeTime(item.occurredAt)}</span>
                 </Link>
               );
             }}
           />
         </div>
       )}
-    </div>
+    </section>
   );
 }

@@ -58,7 +58,7 @@ export function DetailsConfirmBanner({
       </p>
       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">It takes about a minute: contact details, your goal and how you track food.</p>
       <div className="mt-2.5 flex items-center gap-4">
-        <button type="button" onClick={() => setOpen(true)} className="rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-accent-foreground">
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-3.5 text-[13px] font-bold">
           Check now
         </button>
         <button

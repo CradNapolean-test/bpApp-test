@@ -1,6 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Logo } from '@/app/_components/Logo';
-import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
+import { AuthFrame, authCard } from '@/app/_components/AuthFrame';
 import { JoinForm } from './JoinForm';
 
 export const metadata = { title: 'Join Ballistic Performance' };
@@ -22,29 +21,22 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
     coachName = (coach as { display_name?: string | null } | null)?.display_name?.split(' ')[0] ?? null;
   }
 
+  if (!link?.active) {
+    return <AuthFrame title="This link isn't active" lead="Ask your coach for a new sign-up link." />;
+  }
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 py-8 dark:bg-black">
-      <div className="w-full max-w-sm space-y-5 rounded-2xl border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <Logo variant="full" size={88} />
-          {link?.active ? (
-            <>
-              <h1 className="text-xl font-bold text-black dark:text-zinc-50">Welcome to Ballistic Performance</h1>
-              <p className="text-sm text-zinc-500">
-                {coachName ? `${coachName} has invited you. ` : ''}Create your login, then answer a few quick questions and
-                we&apos;ll set up your plan. It takes about 3 minutes.
-              </p>
-            </>
-          ) : (
-            <>
-              <h1 className="text-xl font-bold text-black dark:text-zinc-50">This link isn&apos;t active</h1>
-              <p className="text-sm text-zinc-500">Ask your coach for a new sign-up link.</p>
-            </>
-          )}
-        </div>
-        {link?.active && <JoinForm token={token} />}
+    <AuthFrame
+      title="Join Ballistic"
+      lead={
+        <>
+          {coachName ? `${coachName} has invited you. ` : ''}Create your login, then answer a few quick questions and we&apos;ll set up your
+          plan. It takes about 3 minutes.
+        </>
+      }
+    >
+      <div className={authCard}>
+        <JoinForm token={token} />
       </div>
-      <LegalFooterLinks />
-    </main>
+    </AuthFrame>
   );
 }

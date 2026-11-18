@@ -103,7 +103,7 @@ export function ImportClientsButton() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/5"
+        className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black hover:bg-black/[.04] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
       >
         <Upload className="h-3.5 w-3.5" />
         Import
@@ -112,7 +112,7 @@ export function ImportClientsButton() {
         <div
           role="dialog"
           aria-label="Import clients"
-          className="absolute right-0 z-20 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-black/[.05] bg-card p-4 shadow-xl dark:border-white/10"
+          className="absolute right-0 z-20 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-[20px] border border-black/[.08] bg-card p-4 shadow-xl dark:border-white/10"
         >
           {results ? (
             <div className="space-y-3">
@@ -144,14 +144,14 @@ export function ImportClientsButton() {
               {notAdded.length > 0 && (
                 <div className="max-h-48 space-y-1.5 overflow-y-auto">
                   {notAdded.map((r, i) => (
-                    <div key={`${r.email}-${i}`} className="rounded-md border border-black/10 p-2 text-xs dark:border-white/10">
+                    <div key={`${r.email}-${i}`} className="rounded-xl border border-black/[.08] p-3 text-xs dark:border-white/10">
                       <p className="break-all font-mono">{r.email || '(blank)'}</p>
                       <p className="text-danger">{r.error}</p>
                     </div>
                   ))}
                 </div>
               )}
-              <button onClick={reset} className="w-full rounded-full bg-accent py-2 text-sm font-bold text-accent-foreground hover:opacity-90">
+              <button onClick={reset} className="h-11 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground hover:opacity-90">
                 Done
               </button>
             </div>
@@ -204,7 +204,7 @@ export function ImportClientsButton() {
                   type="button"
                   disabled={submitting}
                   onClick={handleSubmit}
-                  className="flex-1 rounded-full bg-accent py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 disabled:opacity-50"
+                  className="h-11 flex-1 rounded-xl bg-accent text-sm font-extrabold text-accent-foreground hover:opacity-90 disabled:opacity-50"
                 >
                   {submitting ? 'Importing…' : 'Import'}
                 </button>
@@ -212,7 +212,7 @@ export function ImportClientsButton() {
                   type="button"
                   disabled={submitting}
                   onClick={() => setOpen(false)}
-                  className="rounded-full border border-black/10 px-4 py-2.5 text-sm font-medium dark:border-white/10"
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
                 >
                   Cancel
                 </button>

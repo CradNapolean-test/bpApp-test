@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Logo } from '@/app/_components/Logo';
-import { Button } from '@/app/_components/Button';
+import { AuthFrame, authButton, authCard, authInput, authLabel, authLink } from '@/app/_components/AuthFrame';
 
 // Reached via the link in the password-reset email (supabase.auth.resetPasswordForEmail's
 // redirectTo, set on /login). This app's Supabase browser client (lib/supabase/client.ts,
@@ -108,21 +107,16 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center bg-zinc-50 px-4 dark:bg-black">
-      <div className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <Logo variant="full" size={88} />
-          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Set a new password</h1>
-        </div>
-
+    <AuthFrame title="Set a new password" lead={ready && !done ? 'At least 8 characters.' : undefined}>
+      <div className={authCard}>
         {done ? (
           <>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Your password has been updated.
             </p>
-            <Button variant="primary" className="w-full" onClick={() => router.push('/')}>
+            <button type="button" className={authButton} onClick={() => router.push('/')}>
               Continue
-            </Button>
+            </button>
           </>
         ) : !ready ? (
           <>
@@ -130,15 +124,15 @@ export default function ResetPasswordPage() {
               {error ? error : 'Waiting for a valid reset link — open this page from the link in your reset email.'}
             </p>
             {error && (
-              <Button variant="outline" className="w-full" onClick={() => router.push('/login')}>
-                Back to login
-              </Button>
+              <button type="button" className={authLink} onClick={() => router.push('/login')}>
+                &larr; Back to sign in
+              </button>
             )}
           </>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div className="space-y-1">
-              <label htmlFor="new-password" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label htmlFor="new-password" className={authLabel}>
                 New password
               </label>
               <input
@@ -148,11 +142,11 @@ export default function ResetPasswordPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                className={authInput}
               />
             </div>
             <div className="space-y-1">
-              <label htmlFor="confirm-password" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label htmlFor="confirm-password" className={authLabel}>
                 Confirm new password
               </label>
               <input
@@ -162,18 +156,18 @@ export default function ResetPasswordPage() {
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                className={authInput}
               />
             </div>
 
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-            <Button type="submit" variant="primary" disabled={submitting} className="w-full">
+            <button type="submit" disabled={submitting} className={authButton}>
               {submitting ? 'Updating…' : 'Update password'}
-            </Button>
+            </button>
           </form>
         )}
       </div>
-    </main>
+    </AuthFrame>
   );
 }

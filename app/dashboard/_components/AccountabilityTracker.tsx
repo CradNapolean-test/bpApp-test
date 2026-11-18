@@ -111,7 +111,7 @@ export function AccountabilityTracker({
   const shown = draft ?? (logged ? display : '');
 
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-3.5 dark:border-white/10">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
@@ -185,15 +185,15 @@ export function AccountabilityTracker({
           )}
         </p>
         {metric === 'water' && (
-          <div className="flex gap-0.5 rounded-full border border-black/10 p-0.5 dark:border-white/10">
+          <div className="flex gap-0.5 rounded-xl bg-black/[.06] p-1 dark:bg-white/10">
             {(['L', 'mL'] as const).map((u) => (
               <button
                 key={u}
                 type="button"
                 onClick={() => setWaterUnit(u)}
                 aria-pressed={waterUnit === u}
-                className={`min-h-9 min-w-10 rounded-full px-3 py-1 text-[11px] font-extrabold ${
-                  waterUnit === u ? 'bg-accent text-accent-foreground' : 'text-zinc-500'
+                className={`min-h-9 min-w-10 rounded-lg px-3 text-xs font-extrabold ${
+                  waterUnit === u ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
                 }`}
               >
                 {u}

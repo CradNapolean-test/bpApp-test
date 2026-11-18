@@ -82,7 +82,7 @@ function CompleteScannedFoodForm({
   onCancel: () => void;
   onSave: (macros: { protein: number; carbs: number; fat: number }) => void;
 }) {
-  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
+  const inputCls = 'w-full rounded-lg border border-black/[.16] bg-transparent px-2 py-1.5 text-sm dark:border-white/10';
   const toPer100 = (v: number | null) => (v != null ? String(Math.round(v * 100 * 10) / 10) : '');
   const [protein, setProtein] = useState(toPer100(product.protein));
   const [carbs, setCarbs] = useState(toPer100(product.carbs));
@@ -142,8 +142,9 @@ export function extractBarcode(raw: string): string {
 // Open Food Facts states one, else 100 g) and hand the food back to be added. It used to add 100 g
 // silently (FT7). `panel` is the scanner / "fill in the missing macros" form / quantity sheet / status
 // line to render once anywhere on the screen.
-export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, target: FoodTarget | null) => Promise<unknown> | void) {
-  const [scanTarget, setScanTarget] = useState<FoodTarget | null>(null);
+// `initialTarget` opens the scanner straight away (the "Scan a barcode" button on the member's Coach tab).
+export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, target: FoodTarget | null) => Promise<unknown> | void, initialTarget: FoodTarget | null = null) {
+  const [scanTarget, setScanTarget] = useState<FoodTarget | null>(initialTarget);
   const [status, setStatus] = useState<string | null>(null);
   const [pending, setPending] = useState<{
     barcode: string;
@@ -277,8 +278,8 @@ export function AddFoodButtons({
       <button
         type="button"
         onClick={onAdd}
-        className={`flex flex-1 items-center justify-center gap-1.5 rounded-full text-sm ${
-          prominent ? 'h-11 bg-accent font-extrabold text-accent-foreground' : 'h-10 bg-accent-soft font-bold text-accent'
+        className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl text-sm ${
+          prominent ? 'h-11 bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] font-bold' : 'h-11 bg-accent-soft font-bold text-accent'
         }`}
       >
         <Search className="h-4 w-4" />
@@ -288,8 +289,8 @@ export function AddFoodButtons({
         type="button"
         aria-label={scanLabel}
         onClick={onScan}
-        className={`flex w-12 items-center justify-center rounded-full border border-black/10 text-zinc-600 dark:border-white/10 dark:text-zinc-300 ${
-          prominent ? 'h-11' : 'h-10'
+        className={`flex w-12 items-center justify-center rounded-xl border-[1.5px] border-black/20 text-black dark:border-white/25 dark:text-zinc-50 ${
+          'h-11'
         }`}
       >
         <Barcode className="h-4 w-4" />

@@ -36,7 +36,7 @@ export function SetPasswordLinkCard({
   }
 
   return (
-    <div className="rounded-md border border-emerald-600/30 bg-emerald-50 p-4 text-sm dark:bg-emerald-950/30">
+    <div className="rounded-[20px] border border-emerald-600/30 bg-emerald-50 p-4 text-sm dark:bg-emerald-950/30">
       <p className="font-medium text-emerald-800 dark:text-emerald-300">{title}</p>
       <p className="mt-1 break-all text-zinc-700 dark:text-zinc-300">
         Email: <span className="font-mono">{email}</span>

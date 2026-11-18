@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLenis } from 'lenis/react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bell, MessageSquare, User } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
@@ -20,8 +22,9 @@ import { closeTopOverlay } from '@/app/_components/useBackHandler';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
-import { CoachMemberBottomNav, CoachMemberSideNav, CoachMemberTabs, activeCoachGroup, coachGroups } from './CoachMemberNav';
+import { CoachMemberBottomNav, CoachMemberGroupTabs, CoachMemberTabs, activeCoachGroup, coachGroups } from './CoachMemberNav';
 import type { CoachTab } from './CoachMemberNav';
 import { ClientBottomTabBar } from './ClientBottomTabBar';
 import type { ClientTab } from './ClientBottomTabBar';
@@ -42,11 +45,14 @@ import { EducationTab } from './EducationTab';
 import { RecipesTab } from './RecipesTab';
 import { StrengthTab } from './StrengthTab';
 import { TodayTab } from './TodayTab';
+import { MemberHeader } from './MemberHeader';
+import { SmoothScroll } from '@/app/_components/motion/SmoothScroll';
+import AnimatedContent from '@/app/_components/motion/AnimatedContent';
 import { ChatTab } from './ChatTab';
 import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
-import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
+import { BOTTOM_TAB_CATEGORIES, CLIENT_CATEGORY_TITLE, CLIENT_PILL_CATEGORIES, CLIENT_PILL_LABEL, CLIENT_TAB_CATEGORIES, COACH_HUB_CATEGORIES, SCREEN_TITLE, screensForCategory, toEffectiveDisabledScreenSet } from './categories';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, formatLongDate, todayIsoInTz, toIsoDate } from '@/lib/utils/dates';
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { NotificationsTab } from './NotificationsTab';
@@ -96,6 +102,27 @@ import type {
 } from '@/lib/data/types';
 
 type Area = 'Coaching' | 'Classes';
+
+// A member's sub-screen (the food diary, a progress tab, Events...) rises into place when it opens or its tab changes, like the four main
+// tabs do. The key starts it over for each screen. Anything else (the four tabs draw their own; a coach's view) is passed straight through.
+// The coach's view of a member: after a section tab is tapped, the section slides in from that side (still on first showing).
+function CoachSectionSlide({ on, slide, screenKey, children }: { on: boolean; slide: 'none' | 'left' | 'right'; screenKey: string; children: ReactNode }) {
+  if (!on || slide === 'none') return <>{children}</>;
+  return (
+    <AnimatedContent key={screenKey} direction="horizontal" distance={28} reverse={slide === 'left'} duration={0.4}>
+      {children}
+    </AnimatedContent>
+  );
+}
+
+function SubScreenEnter({ on, screenKey, children }: { on: boolean; screenKey: string; children: ReactNode }) {
+  if (!on) return <>{children}</>;
+  return (
+    <AnimatedContent key={screenKey} distance={16} duration={0.45}>
+      {children}
+    </AnimatedContent>
+  );
+}
 
 export function DashboardShell({
   clientId,
@@ -228,7 +255,9 @@ export function DashboardShell({
   const [area, setArea] = useState<Area>('Coaching');
   const [category, setCategory] = useState<Category>('Home');
   const [screen, setScreen] = useState<Screen>('Today');
-  const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen }[]>([]);
+  // The coach's view: which way the next section slides in (from the right for a tab further along, from the left for one before).
+  const [coachSlide, setCoachSlide] = useState<'none' | 'left' | 'right'>('none');
+  const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen; scroll: number }[]>([]);
   // Set by a coach deep link (?week=): which week of check-ins to open the Weekly Log on.
   const [startWeek, setStartWeek] = useState<string | null>(null);
   const [focusDay, setFocusDay] = useState<{ dayId: string; nonce: number } | null>(null);
@@ -237,6 +266,8 @@ export function DashboardShell({
   // replies, on whatever screen they're on. Seeded from the server count (which refreshes after
   // any action) and bumped by a realtime subscription; viewing the thread clears it.
   const [liveUnread, setLiveUnread] = useState(unreadMessageCount);
+  // Set by "Scan a barcode" on the Coach tab: the food diary then opens with the scanner up, once.
+  const [scanOnOpen, setScanOnOpen] = useState(false);
   const [seenServerUnread, setSeenServerUnread] = useState(unreadMessageCount);
   if (seenServerUnread !== unreadMessageCount) {
     setSeenServerUnread(unreadMessageCount);
@@ -365,6 +396,33 @@ export function DashboardShell({
     return () => window.removeEventListener('keydown', onKey);
   }, [chatOpen]);
 
+  // A member's screen opens at the top: the page used to keep the scroll of the screen before, so a row tapped low on Profile opened its
+  // screen part-way down with the header out of sight. Back puts the screen before where it was left. Lenis does the jump (immediate,
+  // so nothing glides), as it owns the page's scroll and would otherwise carry on from where it was; the coach's view has no Lenis.
+  const lenis = useLenis();
+  const lenisRef = useRef(lenis);
+  useEffect(() => {
+    lenisRef.current = lenis;
+  }, [lenis]);
+  const restoreScroll = useRef<number | null>(null);
+  const shownOnce = useRef(false);
+  const screenKey = `${area}|${category}|${screen}`;
+  useLayoutEffect(() => {
+    if (!shownOnce.current) {
+      shownOnce.current = true;
+      return;
+    }
+    if (isCoachView) return;
+    const to = restoreScroll.current ?? 0;
+    restoreScroll.current = null;
+    const smooth = lenisRef.current;
+    if (smooth) {
+      // The new screen's height, before the jump is measured against it.
+      smooth.resize();
+      smooth.scrollTo(to, { immediate: true, force: true });
+    } else window.scrollTo(0, to);
+  }, [screenKey, isCoachView]);
+
   function handleCategoryClick(c: Category) {
     if (isCoachView && c === 'Messages') {
       openChat();
@@ -387,7 +445,7 @@ export function DashboardShell({
       openChat();
       return;
     }
-    setBackStack((stack) => [...stack, { area, category, screen: effectiveScreen }]);
+    setBackStack((stack) => [...stack, { area, category, screen: effectiveScreen, scroll: window.scrollY }]);
     setArea('Coaching');
     setCategory(c);
     setScreen(s ?? screensForCategory(c, isCoachView, disabledScreenSet, nutritionMode)[0]);
@@ -396,6 +454,7 @@ export function DashboardShell({
   function goBack() {
     const prev = backStack[backStack.length - 1];
     if (prev) {
+      restoreScroll.current = prev.scroll;
       setBackStack((stack) => stack.slice(0, -1));
       setArea(prev.area);
       setCategory(prev.category);
@@ -481,15 +540,19 @@ export function DashboardShell({
   const coachNavGroups = isCoachView ? coachGroups(disabledScreenSet, nutritionMode) : [];
   const activeGroup = isCoachView ? activeCoachGroup(coachNavGroups, category, effectiveScreen) : undefined;
   function selectCoachTab(t: CoachTab) {
+    const order = coachNavGroups.flatMap((g) => g.tabs);
+    const at = (c: Category, s: Screen) => order.findIndex((x) => x.category === c && x.screen === s);
+    const from = at(category, effectiveScreen);
+    const to = at(t.category, t.screen);
+    if (from >= 0 && to >= 0 && from !== to) setCoachSlide(to < from ? 'left' : 'right');
     setBackStack([]);
     setArea('Coaching');
     setCategory(t.category);
     setScreen(t.screen);
   }
 
-  const sidebar = isCoachView ? (
-    <CoachMemberSideNav groups={coachNavGroups} active={activeGroup?.key} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
-  ) : (
+  // The coach's sections are a row of tabs under the member's header now (the November 2026 mock-ups), not a left menu.
+  const sidebar = isCoachView ? undefined : (
     <ClientSideNav
       activeTab={activeClientTab}
       category={category}
@@ -595,42 +658,125 @@ export function DashboardShell({
     </button>
   );
 
+  // Every member screen draws its own black header on a phone (MemberHeader), so the page's own header row is left out there. The four
+  // tabs draw theirs inside the screen; every other screen gets the one below, with a back button. Both keep the message bubble and the
+  // bell top right, so the coach and the notifications are a tap away from any screen (PR #2 review: a sub-screen used to drop them).
+  const ownHeader = !isCoachView;
+  const memberHeader = {
+    unreadMessages: liveUnread,
+    onOpenMessages: () => handleNavigate('Messages'),
+    unreadNotifications: notifications.some((n) => !n.read_at),
+    onOpenNotifications: () => handleNavigate('Notifications'),
+  };
+  // On the Messages screen the bubble would only open the screen it is on, and on Notifications the bell would: each is left out there.
+  const subScreenActions = {
+    ...memberHeader,
+    onOpenMessages: category === 'Messages' ? undefined : memberHeader.onOpenMessages,
+    onOpenNotifications: category === 'Notifications' ? undefined : memberHeader.onOpenNotifications,
+  };
+  const subScreenHeader =
+    !isCoachView && showCoaching && isSubScreen ? (
+      <div className="mb-4">
+        <MemberHeader
+          lead={
+            <button
+              type="button"
+              onClick={goBack}
+              aria-label="Back"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-zinc-100 hover:bg-white/10"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          }
+          eyebrow={
+            category === 'Messages'
+              ? coachName
+                ? 'Your coach'
+                : undefined
+              : category === 'Nutrition' || category === 'Accountability'
+                ? formatLongDate(new Date(), { timeZone: profile?.timezone ?? DEFAULT_TIMEZONE })
+                : undefined
+          }
+          title={mobileHeaderTitle}
+          actions={subScreenActions}
+        >
+          {showPills && (
+            <div
+              role="group"
+              aria-label={`${mobileHeaderTitle} sections`}
+              className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none] sm:-mx-6 sm:px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
+            >
+              {categoryScreens.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setScreen(s)}
+                  aria-pressed={effectiveScreen === s}
+                  className={`h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-sm transition-colors ${
+                    effectiveScreen === s ? 'bg-zinc-100 font-extrabold text-[#1d1d1b]' : 'bg-white/[.08] font-bold text-zinc-300 hover:bg-white/15'
+                  }`}
+                >
+                  {CLIENT_PILL_LABEL[s] ?? s}
+                </button>
+              ))}
+            </div>
+          )}
+        </MemberHeader>
+      </div>
+    ) : null;
+
   const coachSummary = isCoachView && (
     <>
     {profile?.needs_coach_review && !(category === 'Home' && effectiveScreen === 'Today') && (
       <ReviewBanner clientId={clientId} reasons={profile.review_reasons ?? []} canAct={isOwnClient} />
     )}
-    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/10 bg-accent-soft px-3 py-2 dark:border-white/10">
-      <Link
-        href="/coach/clients"
-        className="flex min-h-10 items-center gap-1 text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
-      >
-        &larr; All clients
+    <div className="mt-2 space-y-4 lg:mt-0">
+      <Link href="/coach/clients" className="inline-flex min-h-11 items-center gap-1.5 text-sm font-bold text-accent hover:underline">
+        <ArrowLeft className="h-4 w-4" /> All clients
       </Link>
-      <button
-        type="button"
-        onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
-        aria-pressed={chatOpen}
-        className={`relative flex min-h-10 items-center gap-1.5 rounded-full px-3.5 py-1 text-sm font-bold transition-colors ${
-          chatOpen ? 'bg-accent text-accent-foreground' : 'text-accent hover:bg-accent/10'
-        }`}
-      >
-        <MessageSquare className="h-4 w-4" /> Chat
-        {!chatOpen && perClientUnreadCount > 0 && (
-          <>
-            <span className="sr-only">(unread messages)</span>
-            <span aria-hidden className="h-2 w-2 rounded-full bg-danger" />
-          </>
-        )}
-      </button>
-      {healthStatus && (
-        <span
-          className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
-          title="How long since they last logged anything, against their check-in reminder setting (Credits & plan). Turns amber, then red, the longer they go quiet."
-        >
-          <StatusBadge status={healthStatus.status} />
-        </span>
-      )}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <Avatar name={clientLabel} size="lg" />
+        <div className="min-w-0 flex-1 basis-56">
+          <p className="truncate text-[26px] font-extrabold leading-tight tracking-[-0.015em] text-black sm:text-[32px] dark:text-zinc-50">{clientLabel}</p>
+          <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">
+            {[membership?.package?.name ?? 'No plan', programWeek > 0 ? `Week ${programWeek}` : null].filter(Boolean).join(' · ')}
+          </p>
+          {healthStatus && (
+            <span
+              className="mt-1.5 inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+              title="How long since they last logged anything, against their check-in reminder setting (Credits & plan). Turns amber, then red, the longer they go quiet."
+            >
+              <StatusBadge status={healthStatus.status} />
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
+            aria-pressed={chatOpen}
+            className={`relative inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors ${
+              chatOpen ? 'bg-accent text-accent-foreground' : 'bg-accent-soft text-accent'
+            }`}
+          >
+            <MessageSquare className="h-4 w-4" /> Message
+            {!chatOpen && perClientUnreadCount > 0 && <span className="font-extrabold">· {perClientUnreadCount} new</span>}
+          </button>
+          {isOwnClient && (
+            <button
+              type="button"
+              onClick={() => selectCoachTab({ category: 'Account Settings', screen: 'Credits', label: 'Credits & plan' })}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
+            >
+              Add credits
+            </button>
+          )}
+        </div>
+      </div>
+      {/* The member's sections along the top from a tablet up (a phone has them on the bar at the foot). */}
+      <div className="hidden md:block">
+        <CoachMemberGroupTabs groups={coachNavGroups} active={activeGroup?.key} onSelect={selectCoachTab} />
+      </div>
     </div>
     </>
   );
@@ -681,6 +827,9 @@ export function DashboardShell({
       isCoachView={isCoachView}
       topBar={topBar}
       mobileHeader={mobileHeader}
+      hideMobileHeader={ownHeader}
+      memberUi={!isCoachView}
+      coachSidebar={isCoachView ? <CoachSidebar /> : undefined}
       coachSummary={coachSummary}
       sidebar={sidebar}
       headerAction={
@@ -753,49 +902,13 @@ export function DashboardShell({
         )
       }
     >
-      {showCoaching && !isCoachView && isSubScreen && (
-        <button
-          onClick={goBack}
-          className="mb-3 hidden items-center gap-1 text-sm font-medium text-zinc-500 hover:text-black md:flex dark:hover:text-zinc-300"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-      )}
+      {subScreenHeader}
       {showCoaching && isCoachView && activeGroup && activeGroup.tabs.length > 1 && (
-        <div className="md:hidden">
-          <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
-        </div>
-      )}
-      {showPills && (
-        <div className="mb-3 flex gap-2 overflow-x-auto">
-          {categoryScreens.map((s) => (
-            <button
-              key={s}
-              onClick={() => setScreen(s)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                effectiveScreen === s
-                  ? 'bg-accent text-accent-foreground'
-                  : 'border border-black/[.08] bg-[var(--background)] text-zinc-700 hover:bg-black/5 dark:border-white/[.12] dark:text-zinc-300 dark:hover:bg-white/5'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+        <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
       )}
       {showCoaching && (
-        <>
-          {!isCoachView && effectiveScreen === 'Today' && (
-            <div className="mb-4 empty:hidden">
-              <InstallBanner />
-            </div>
-          )}
-          {!isCoachView && effectiveScreen === 'Today' && profile && (
-            <div className="mb-4 empty:hidden">
-              <DetailsConfirmBanner clientId={clientId} email={currentUserEmail} profile={profile} />
-            </div>
-          )}
+        <CoachSectionSlide on={isCoachView} slide={coachSlide} screenKey={`${category}|${effectiveScreen}`}>
+        <SubScreenEnter on={!isCoachView && isSubScreen} screenKey={`${category}|${effectiveScreen}`}>
           {effectiveScreen === 'Today' && isCoachView && (
             <CoachMemberOverview
               clientId={clientId}
@@ -842,7 +955,6 @@ export function DashboardShell({
               rewards={rewardsData.rewards}
               sessionsAttended={rewardsData.sessions}
               showReferral={referralUrl != null}
-              bigDogResults={bigDogResults}
               events={events}
               dailyCheckinHidden={disabledScreenSet.has('Weekly Log')}
               streakDays={streak}
@@ -850,6 +962,13 @@ export function DashboardShell({
               clientId={clientId}
               coachName={coachName}
               hiddenScreens={disabledScreenSet}
+              header={memberHeader}
+              banners={
+                <>
+                  <InstallBanner />
+                  {profile && <DetailsConfirmBanner clientId={clientId} email={currentUserEmail} profile={profile} />}
+                </>
+              }
             />
           )}
           {effectiveScreen === 'Coaching' && !isCoachView && (
@@ -866,6 +985,13 @@ export function DashboardShell({
               disabledMetrics={disabledMetrics}
               onNavigate={handleNavigate}
               onOpenWorkoutDay={handleCheckIn}
+              onScanBarcode={() => {
+                setScanOnOpen(true);
+                handleNavigate('Nutrition', 'Food Tracking');
+              }}
+              clientId={clientId}
+              coachName={coachName}
+              header={memberHeader}
             />
           )}
           {effectiveScreen === 'Setup' && (
@@ -894,6 +1020,7 @@ export function DashboardShell({
               membershipName={membership?.package?.name ?? null}
               bigDogResults={bigDogResults}
               onNavigate={handleNavigate}
+              header={memberHeader}
             />
           )}
           {effectiveScreen === 'Weekly Log' && (
@@ -949,6 +1076,8 @@ export function DashboardShell({
               canGiveFeedback={isCoachView && isOwnClient}
               feedback={nutritionFeedback}
               recentDays={isCoachView ? recentFoodDays : undefined}
+              scanOnOpen={scanOnOpen}
+              onScanOpened={() => setScanOnOpen(false)}
             />
           )}
           {effectiveScreen === 'Photo Diary' && (
@@ -987,7 +1116,7 @@ export function DashboardShell({
             />
           )}
           {effectiveScreen === 'Insights' && <InsightsTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
-          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} isCoachView={isCoachView} />}
+          {effectiveScreen === 'Overview' && <OverviewTab historyLogs={historyLogs} profile={profile} programWeek={programWeek} isCoachView={isCoachView} />}
           {effectiveScreen === 'Metrics' && (
             <MetricsTab clientId={clientId} historyLogs={historyLogs} profile={profile} programWeek={programWeek} isCoachView={isCoachView} />
           )}
@@ -1040,6 +1169,7 @@ export function DashboardShell({
               creditsBalance={creditsBalance}
               creditsBuckets={creditsBuckets}
               membership={membership}
+              onBook={isCoachView ? undefined : () => setArea('Classes')}
             />
           )}
           {effectiveScreen === 'Info' && isCoachView && (
@@ -1047,7 +1177,7 @@ export function DashboardShell({
           )}
           {effectiveScreen === 'Events' && <EventsTab events={events} readOnly={isCoachView} />}
           {effectiveScreen === 'Rewards' && <RewardsTab data={rewardsData} />}
-          {effectiveScreen === 'FAQs' && <FaqTab clientId={clientId} membership={membership} gymBlackout={gymBlackout} referralUrl={referralUrl} />}
+          {effectiveScreen === 'FAQs' && <FaqTab clientId={clientId} membership={membership} gymBlackout={gymBlackout} referralUrl={referralUrl} onMessageCoach={isCoachView ? undefined : () => handleNavigate('Messages')} />}
           {effectiveScreen === 'Feedback' && <FeedbackTab readOnly={isCoachView} />}
           {effectiveScreen === 'Refer a Friend' && !isCoachView && referralUrl && (
             <ReferTab name={profile?.name ?? clientLabel} referralUrl={referralUrl} />
@@ -1074,9 +1204,11 @@ export function DashboardShell({
               readOnly={isCoachView && !isOwnClient}
               // A half-written message is still there after the member leaves Messages and comes back (MS26), as the coach's is.
               draftKey={`member-${clientId}`}
+              look="member"
             />
           )}
-        </>
+        </SubScreenEnter>
+        </CoachSectionSlide>
       )}
 
       {!isCoachView && area === 'Classes' && (
@@ -1090,9 +1222,11 @@ export function DashboardShell({
           onCheckIn={handleCheckIn}
           timezone={profile?.timezone}
           gymBlackout={gymBlackout}
+          header={memberHeader}
         />
       )}
 
+      {!isCoachView && <SmoothScroll />}
       {!isCoachView && <PushPrompt clientId={clientId} />}
       {!isCoachView && <OfflineSnapshot name={clientLabel} profile={profile} programWeek={programWeek} programs={programs} weekLogs={weekLogs} />}
       {isCoachView && chatMounted && (

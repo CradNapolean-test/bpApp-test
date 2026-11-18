@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
+import { useLenis } from 'lenis/react';
+import { flashWeek, showWeekRow } from '@/app/_components/motion/programWeeks';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
 import { dayHighlights } from '@/lib/workoutSections';
@@ -27,6 +29,7 @@ import {
   deleteTemplateExercise,
   duplicateProgramTemplate,
   duplicateTemplateDay,
+  addTemplateWeek,
   importProgramTemplate,
   cancelProgrammeRollout,
   scheduleProgrammeRollout,
@@ -68,7 +71,7 @@ function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | 
   return (
     <select
       title="Day of the week -- carried onto every program instantiated from this template"
-      className="w-20 shrink-0 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      className="w-20 shrink-0 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={initial ?? ''}
       onChange={handleChange}
     >
@@ -95,7 +98,7 @@ function DayNotesField({ dayId, initial }: { dayId: string; initial: string | nu
     <textarea
       placeholder="Workout notes (optional)"
       rows={2}
-      className="mt-2 w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      className="mt-2 w-full rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
@@ -111,8 +114,8 @@ function WeekdayChips({ value, onChange }: { value: number | null; onChange: (v:
           key={d}
           type="button"
           onClick={() => onChange(value === d ? null : d)}
-          className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-            value === d ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+          className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
+            value === d ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
           }`}
         >
           {WEEKDAY_SHORT[d]}
@@ -174,6 +177,7 @@ export function ProgramTemplateManager({
 }) {
   const confirm = useConfirm();
   const toast = useToast();
+  const lenis = useLenis();
   const gymId = useActiveGymId();
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate, busy: mutating } = useAction();
@@ -298,17 +302,26 @@ export function ProgramTemplateManager({
   // is "make week 1, tap Add week until you have enough", then tweak. An empty template gets a
   // first blank workout instead.
   async function handleAddWeek(template: ProgramTemplateWithDays) {
-    const weekNums = template.program_template_days.map((d) => d.week_num);
-    if (weekNums.length === 0) {
+    if (template.program_template_days.length === 0) {
       await runMutate(() => addTemplateDay(template.id, 1, 'Workout 1'), { onDone: () => setActiveWeek(1) });
       return;
     }
-    const last = Math.max(...weekNums);
-    const source = template.program_template_days.filter((d) => d.week_num === last);
-    await runMutate(() => Promise.all(source.map((d) => duplicateTemplateDay(d.id, last + 1, d.day_label))), {
-      success: `Week ${last + 1} added, copied from week ${last}`,
-      onDone: () => setActiveWeek(last + 1),
-    });
+    // Which week is last is read on the server (addTemplateWeek), not from this screen: the button comes back before the page has
+    // reloaded, and a second tap used to copy week 1 into week 2 again.
+    let added: { from: number; to: number } | null = null;
+    await runMutate(
+      async () => {
+        added = await addTemplateWeek(template.id);
+      },
+      {
+        onDone: () => {
+          if (!added) return;
+          toast.success(`Week ${added.to} added, copied from week ${added.from}`);
+          setActiveWeek(added.to);
+          showWeekRow(template.id, lenis);
+        },
+      }
+    );
   }
 
   async function handleDeleteWeek(template: ProgramTemplateWithDays, week: number) {
@@ -376,7 +389,10 @@ export function ProgramTemplateManager({
         await duplicateTemplateDay(day.id, next, day.day_label);
         for (const old of existing) await deleteTemplateDay(old.id);
       },
-      { success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week' }
+      {
+        success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week',
+        onDone: () => flashWeek(template.id, next),
+      }
     );
   }
 
@@ -457,7 +473,7 @@ export function ProgramTemplateManager({
         <button
           type="button"
           onClick={() => setAddingTemplate(true)}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground hover:opacity-90"
         >
           + New template
         </button>
@@ -469,14 +485,14 @@ export function ProgramTemplateManager({
       </div>
 
       {addingTemplate && (
-        <form onSubmit={handleCreateTemplate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+        <form onSubmit={handleCreateTemplate} className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-500">Template name</label>
+            <label className="text-[13px] font-bold text-zinc-700 dark:text-zinc-300">Template name</label>
             <input
               required
               autoFocus
               placeholder="e.g. 4 week fat loss, 3 days"
-              className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
+              className="h-11 w-full rounded-xl border border-black/[.16] bg-card px-3.5 text-[15px] dark:border-white/15"
               value={newTemplateName}
               onChange={(e) => setNewTemplateName(e.target.value)}
             />
@@ -500,7 +516,15 @@ export function ProgramTemplateManager({
         />
       )}
 
-      <div className="space-y-2">
+      <div className={initialTemplates.length > 0 ? 'overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10' : ''}>
+        {initialTemplates.length > 0 && (
+          <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3.5 pt-[18px] sm:px-6">
+            <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Your templates</h2>
+            <span className="text-[13px] font-semibold text-zinc-500">
+              {initialTemplates.length} template{initialTemplates.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        )}
         {initialTemplates.map((template) => {
           const weekNums = Array.from(new Set(template.program_template_days.map((d) => d.week_num)));
           const perWeek = Math.max(0, ...weekNums.map((w) => template.program_template_days.filter((d) => d.week_num === w).length));
@@ -509,11 +533,12 @@ export function ProgramTemplateManager({
           return (
             <div
               key={template.id}
-              className="flex flex-wrap items-center justify-between gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+              data-stagger
+              className="flex min-h-[72px] flex-wrap items-center justify-between gap-2.5 border-t border-black/[.07] px-5 py-3 hover:bg-black/[.02] sm:px-6 dark:border-white/10 dark:hover:bg-white/[.03]"
             >
               <button type="button" onClick={() => openTemplate(template.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                 <div className="min-w-0">
-                  <p className="font-bold text-black dark:text-zinc-50">{template.name}</p>
+                  <p className="text-[15px] font-bold text-black dark:text-zinc-50">{template.name}</p>
                   {template.description && (
                     <p className="mt-0.5 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
                   )}
@@ -527,7 +552,7 @@ export function ProgramTemplateManager({
                       Starts {longDate(r.start_date)}
                     </p>
                   ))}
-                  <p className="mt-0.5 text-xs text-zinc-500">
+                  <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
                     {weekNums.length === 0
                       ? 'Empty, tap to start building'
                       : `${weekNums.length} week${weekNums.length === 1 ? '' : 's'} · ${perWeek} workout${perWeek === 1 ? '' : 's'} a week · ${exercises} exercise${exercises === 1 ? '' : 's'}`}
@@ -536,7 +561,7 @@ export function ProgramTemplateManager({
                 <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
               </button>
               <div className="ml-auto flex shrink-0 items-center gap-1 text-sm font-semibold">
-                <button type="button" onClick={() => openTemplate(template.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
+                <button type="button" onClick={() => openTemplate(template.id)} className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent">
                   Edit
                 </button>
                 <DropdownMenu
@@ -644,6 +669,8 @@ export function ProgramTemplateManager({
           </div>
 
           <ProgramDayList
+            columns
+            animateWeeks
             ownerId={previewTemplate.id}
             library={library.filter((l) => l.is_active !== false)}
             showPhaseLabel={false}
@@ -694,7 +721,7 @@ export function ProgramTemplateManager({
               <button
                 type="button"
                 onClick={() => setAddWorkout({ label: `Workout ${shownWeekDays.length + 1}`, position: null })}
-                className="rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+                className="inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground"
               >
                 + Add workout
               </button>
@@ -705,8 +732,8 @@ export function ProgramTemplateManager({
               onClick={() => handleAddWeek(previewTemplate)}
               className={
                 previewWeeks.length === 0
-                  ? 'rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-40'
-                  : 'rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 disabled:opacity-40 dark:border-white/15 dark:text-zinc-200'
+                  ? 'inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-40'
+                  : 'inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-40'
               }
             >
               {previewWeeks.length === 0 ? '+ Add first workout' : '+ Add week (copy of last)'}
@@ -793,8 +820,8 @@ export function ProgramTemplateManager({
                         key={a}
                         type="button"
                         onClick={() => setAssignAudience(a)}
-                        className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                          assignAudience === a ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
+                        className={`h-11 rounded-full px-4 text-sm font-bold ${
+                          assignAudience === a ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                         }`}
                       >
                         {a === 'all' ? `Everyone at the gym${gymMemberCount != null ? ` (${gymMemberCount})` : ''}` : 'Choose members'}

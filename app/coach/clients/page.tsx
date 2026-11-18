@@ -10,6 +10,8 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from '../_components/CoachNav';
+import { CoachSidebar } from '../_components/CoachSidebar';
+import { CoachPageHeader } from '../_components/CoachUi';
 import { CoachBottomTabBar } from '../_components/CoachBottomTabBar';
 import { CoachMobileBrand } from '../_components/CoachMobileBrand';
 import { CoachBrand } from '../_components/CoachBrand';
@@ -65,16 +67,20 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
       bottomBar={<CoachBottomTabBar />}
       mobileHeader={<CoachMobileBrand />}
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
+      coachSidebar={<CoachSidebar unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-black dark:text-zinc-50">Clients</h1>
-        <div className="flex items-center gap-2">
-          <ImportClientsButton />
-          <AddClientButton />
-          <ClientsPageMenu />
-        </div>
-      </div>
-      <div className="mt-4">
+      <CoachPageHeader
+        eyebrow={`${clients.length} member${clients.length === 1 ? '' : 's'} with you${gymClients ? `, ${gymClients.length} in the gym` : ''}`}
+        title="Clients"
+        actions={
+          <>
+            <ImportClientsButton />
+            <AddClientButton />
+            <ClientsPageMenu />
+          </>
+        }
+      />
+      <div className="mt-6 space-y-4">
         <ReviewQueue items={reviewQueue} gymName={gym?.name ?? 'the gym'} />
         <ClientTable
           clients={clients}

@@ -88,7 +88,7 @@ export function GymNameForm({ initialName, scope = { kind: 'admin' } }: { initia
       <button
         type="submit"
         disabled={busy || !name.trim() || name.trim() === initialName}
-        className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+        className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
       >
         Save
       </button>
@@ -196,7 +196,7 @@ export function BookingRulesForm({
       <button
         type="submit"
         disabled={busy || !!problem}
-        className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+        className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
       >
         Save booking rules
       </button>
@@ -236,7 +236,7 @@ export function ReferralLinkForm({ initialUrl, scope = { kind: 'admin' } }: { in
         <button
           type="submit"
           disabled={busy || !!problem || unchanged}
-          className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+          className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           Save
         </button>
@@ -389,10 +389,10 @@ function CoachRow({
           <button
             onClick={handleToggle}
             disabled={busy}
-            className={`rounded-full px-4 py-2 text-xs font-bold disabled:opacity-50 ${
+            className={`h-10 rounded-xl px-3.5 text-[13px] font-bold disabled:opacity-50 ${
               isAdmin
                 ? 'bg-accent-soft text-accent'
-                : 'border border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+                : 'border-[1.5px] border-black/20 text-black hover:bg-black/[.03] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5'
             }`}
           >
             {isAdmin ? 'Admin' : 'Make admin'}
@@ -424,7 +424,7 @@ function CoachRow({
               type="button"
               disabled={busy || !receiving}
               onClick={() => void handleMove()}
-              className="rounded-full bg-accent px-4 py-2 text-xs font-bold text-accent-foreground disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground disabled:opacity-50"
             >
               Move members
             </button>
@@ -547,7 +547,7 @@ export function AddCoachForm({ scope = { kind: 'admin' } }: { scope?: GymScope }
         <button
           type="submit"
           disabled={submitting}
-          className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+          className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {submitting ? 'Adding…' : 'Add coach'}
         </button>
@@ -586,27 +586,27 @@ export function GymAdminSection({
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Gym name</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Gym name</h3>
         <GymNameForm initialName={gymName} />
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Booking rules</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Booking rules</h3>
         <BookingRulesForm timezone={timezone} blackoutStart={blackoutStart} blackoutEnd={blackoutEnd} />
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Referral link</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Referral link</h3>
         <ReferralLinkForm initialUrl={referralUrl} />
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Coaches at this gym</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Coaches at this gym</h3>
         <TeamList key={teamKey} team={team} currentUserId={currentUserId} />
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Add a coach</h3>
+        <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Add a coach</h3>
         <AddCoachForm />
       </div>
     </div>

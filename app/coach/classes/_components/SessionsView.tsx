@@ -1,6 +1,9 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import AnimatedContent from '@/app/_components/motion/AnimatedContent';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import Link from 'next/link';
 import { Ban, CalendarDays, Check, Dumbbell, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
@@ -78,6 +81,15 @@ export function SessionsView({
   const { run: runRestore, busy: restoring } = useAction();
 
   const open = occurrences.find((o) => occKey(o) === openKey) ?? null;
+  // Picking another day slides its sessions in from that side (an earlier day from the left); the capacity bars fill each time.
+  const [slide, setSlide] = useState<'none' | 'left' | 'right'>('none');
+  function pickDay(d: string | null) {
+    const to = d ?? defaultDate;
+    if (to && selectedDate && to !== selectedDate) setSlide(to < selectedDate ? 'left' : 'right');
+    setPickedDate(d);
+  }
+  const dayList = useRef<HTMLElement>(null);
+  useGrowIn(dayList, 0.15, selectedDate);
   const daySessions = occurrences.filter((o) => o.date === selectedDate).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
   const needsMarking = occurrences
     .filter((o) => (o.unmarkedCount ?? 0) > 0)
@@ -224,12 +236,12 @@ export function SessionsView({
             setPickedDate(needsMarking[0].date);
             void openSession(needsMarking[0]);
           }}
-          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-left"
+          className="flex min-h-[60px] w-full items-center justify-between gap-3 rounded-[20px] border border-amber-500/30 bg-amber-50 px-5 py-3 text-left dark:bg-amber-500/10"
         >
-          <span className="text-sm font-semibold text-black dark:text-zinc-50">
-            {needsMarking.length} {needsMarking.length === 1 ? 'session needs' : 'sessions need'} marking
+          <span className="text-[15px] font-bold text-black dark:text-zinc-50">
+            {needsMarking.length} {needsMarking.length === 1 ? 'session needs' : 'sessions need'} attendance marking
           </span>
-          <span className="shrink-0 text-xs font-bold text-warning">Mark now</span>
+          <span className="flex h-11 shrink-0 items-center rounded-xl bg-[#1d1d1b] px-4 text-sm font-bold text-white dark:bg-zinc-100 dark:text-[#1d1d1b]">Mark now</span>
         </button>
       )}
 
@@ -240,52 +252,79 @@ export function SessionsView({
           const active = d === selectedDate;
           const past = d < todayIso;
           const unmarked = occurrences.some((o) => o.date === d && (o.unmarkedCount ?? 0) > 0);
+          const ofDay = occurrences.filter((o) => o.date === d && !o.cancelled);
+          const dayBooked = ofDay.reduce((n, o) => n + o.bookedCount, 0);
+          const dayCap = ofDay.reduce((n, o) => n + o.capacity, 0);
           const newMonth = i === 0 || d.slice(0, 7) !== dates[i - 1].slice(0, 7);
           return (
             <Fragment key={d}>
               {newMonth && (
-                <span aria-hidden className="flex shrink-0 items-center px-0.5 text-[11px] font-extrabold uppercase tracking-wide text-zinc-500">
+                <span aria-hidden className="flex shrink-0 items-center px-1 text-xs font-extrabold uppercase tracking-[0.08em] text-zinc-500">
                   {monthShort(d)}
                 </span>
               )}
               <button
                 ref={active ? activeChip : undefined}
                 type="button"
-                onClick={() => setPickedDate(d)}
+                onClick={() => pickDay(d)}
                 aria-pressed={active}
                 aria-label={longDay(d)}
-                className={`flex w-[3.25rem] shrink-0 flex-col items-center gap-0.5 rounded-2xl border py-2.5 transition-colors ${
+                className={`relative flex w-[7.5rem] shrink-0 flex-col items-start gap-0.5 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
                   active
-                    ? 'border-accent bg-accent text-accent-foreground'
+                    ? 'border-[#1d1d1b] bg-[#1d1d1b] text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-[#1d1d1b]'
                     : past
-                      ? 'border-transparent text-zinc-400 dark:text-zinc-600'
-                      : 'border-black/[.06] bg-card text-black dark:border-white/10 dark:text-zinc-100'
+                      ? 'border-black/[.06] bg-card/60 text-zinc-500 dark:border-white/10 dark:text-zinc-500'
+                      : 'border-black/[.08] bg-card text-black dark:border-white/10 dark:text-zinc-100'
                 }`}
               >
-                <span className="text-[11px] font-bold uppercase opacity-80">{WEEKDAY_SHORT[dt.getUTCDay()]}</span>
-                <span className="text-base font-black leading-none">{dt.getUTCDate()}</span>
-                <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${unmarked ? 'bg-warning' : d === todayIso ? (active ? 'bg-accent-foreground' : 'bg-accent') : 'bg-transparent'}`} />
+                <span className="text-[15px] font-extrabold leading-tight">
+                  {WEEKDAY_SHORT[dt.getUTCDay()]} {dt.getUTCDate()}
+                </span>
+                <span className={`text-xs font-semibold ${active ? 'opacity-80' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                  {ofDay.length === 0 ? 'No sessions' : `${ofDay.length} session${ofDay.length === 1 ? '' : 's'}`}
+                </span>
+                {dayCap > 0 && (
+                  <span className={`text-xs ${active ? 'opacity-80' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                    {dayBooked} of {dayCap} booked
+                  </span>
+                )}
+                <span
+                  aria-hidden
+                  className={`absolute right-2.5 top-3 h-2 w-2 rounded-full ${unmarked ? 'bg-warning' : d === todayIso ? 'bg-accent' : 'bg-transparent'}`}
+                />
               </button>
             </Fragment>
           );
         })}
       </div>
 
+      <section ref={dayList} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
       {selectedDate && (
-        <div className="flex items-center justify-between gap-2">
-          <p className="px-1 text-sm font-extrabold text-black dark:text-zinc-50">
-            {selectedDate === todayIso ? 'Today · ' : ''}
-            {longDay(selectedDate)}
-          </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3.5 pt-[18px] sm:px-6">
+          <div>
+            <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">
+              {selectedDate === todayIso ? 'Today · ' : ''}
+              {longDay(selectedDate)}
+            </h2>
+            {daySessions.length > 0 && (
+              <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                {daySessions.filter((o) => !o.cancelled).length} session{daySessions.filter((o) => !o.cancelled).length === 1 ? '' : 's'}
+                {(() => {
+                  const left = daySessions.filter((o) => !o.cancelled).reduce((n, o) => n + Math.max(0, o.capacity - o.bookedCount), 0);
+                  return `, ${left} spot${left === 1 ? '' : 's'} left`;
+                })()}
+              </p>
+            )}
+          </div>
           {selectedDate !== defaultDate && (
-            <button type="button" onClick={() => setPickedDate(null)} className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent dark:border-white/15">
-              Today
+            <button type="button" onClick={() => pickDay(null)} className="min-h-11 shrink-0 text-sm font-bold text-accent">
+              Back to today
             </button>
           )}
         </div>
       )}
 
-      <div className="space-y-2">
+      <DayListSlide key={slide === 'none' ? 'still' : selectedDate ?? 'none'} slide={slide}>
         {daySessions.map((o) => {
           const full = o.bookedCount >= o.capacity;
           const fill = Math.min(100, Math.round((o.bookedCount / o.capacity) * 100));
@@ -296,23 +335,31 @@ export function SessionsView({
               key={occKey(o)}
               type="button"
               onClick={() => openSession(o)}
-              className={`flex w-full items-center justify-between gap-3 rounded-2xl border border-black/[.06] bg-card p-3.5 text-left dark:border-white/10 ${o.cancelled ? 'opacity-60' : ''}`}
+              className={`flex min-h-[64px] w-full items-center justify-between gap-4 border-t border-black/[.07] px-5 py-3 text-left transition-colors hover:bg-black/[.02] sm:px-6 dark:border-white/10 dark:hover:bg-white/[.03] ${o.cancelled ? 'opacity-60' : ''}`}
             >
-              <span className="min-w-0">
-                <span className={`block text-lg font-extrabold leading-tight text-black dark:text-zinc-50 ${o.cancelled ? 'line-through' : ''}`}>{formatClassTime(o.startTime)}</span>
-                <span className="block truncate text-xs text-zinc-500">{o.className}</span>
-                {o.cancelled && o.cancelReason && <span className="mt-0.5 block truncate text-xs text-zinc-500">{o.cancelReason}</span>}
+              <span className="flex min-w-0 items-center gap-4">
+                <span className={`w-16 shrink-0 text-[15px] font-extrabold text-black dark:text-zinc-50 ${o.cancelled ? 'line-through' : ''}`}>{formatClassTime(o.startTime)}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[15px] font-bold text-black dark:text-zinc-50">{o.className}</span>
+                  {o.cancelled && o.cancelReason ? (
+                    <span className="block truncate text-[13px] text-zinc-500">{o.cancelReason}</span>
+                  ) : !o.cancelled && o.coachNote?.trim() ? (
+                    <span className="block truncate text-[13px] text-zinc-500">{o.coachNote}</span>
+                  ) : null}
+                </span>
               </span>
               {o.cancelled ? (
                 <span className="shrink-0 rounded-full bg-danger/10 px-3 py-1 text-xs font-bold text-danger">Cancelled</span>
               ) : (
                 <span className="flex shrink-0 flex-col items-end gap-1.5">
-                  <span className={`text-sm font-bold ${full ? 'text-danger' : 'text-black dark:text-zinc-50'}`}>
-                    {o.bookedCount}
-                    <span className="font-medium text-zinc-500"> / {o.capacity}</span>
-                  </span>
-                  <span className="h-1 w-16 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                    <span className={`block h-full rounded-full ${full ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${fill}%` }} />
+                  <span className="flex items-center gap-2.5">
+                    <span className="hidden h-2 w-24 overflow-hidden rounded-full bg-black/10 sm:block dark:bg-white/15">
+                      <span data-grow="bar" className={`block h-full rounded-full ${full ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${fill}%` }} />
+                    </span>
+                    <span className={`text-sm font-bold ${full ? 'text-danger' : 'text-black dark:text-zinc-50'}`}>
+                      {o.bookedCount}
+                      <span className="font-medium text-zinc-500"> / {o.capacity}</span>
+                    </span>
                   </span>
                   {/* A full session reads 12 / 12 whether nobody or six are waiting (BK15). */}
                   {waiting > 0 && <span className="text-[11px] font-bold text-warning">{waiting} waiting</span>}
@@ -326,8 +373,13 @@ export function SessionsView({
             </button>
           );
         })}
-        {daySessions.length === 0 && <EmptyState icon={CalendarDays} title="No sessions this day" compact />}
-      </div>
+        {daySessions.length === 0 && (
+          <div className="border-t border-black/[.07] dark:border-white/10">
+            <EmptyState icon={CalendarDays} title="No sessions this day" compact />
+          </div>
+        )}
+      </DayListSlide>
+      </section>
 
       {open && (
         <BottomSheet title={`${formatClassTime(open.startTime)} · ${open.className}`} onClose={closeSheet}>
@@ -342,7 +394,7 @@ export function SessionsView({
             <div className="mb-3 space-y-1.5">
               <Link
                 href={`/coach/run/${open.classId}/${open.date}`}
-                className="flex w-full items-center justify-center gap-1.5 rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground"
+                className="flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground"
               >
                 <Dumbbell className="h-4 w-4" /> Run this class
               </Link>
@@ -447,7 +499,7 @@ export function SessionsView({
               type="button"
               onClick={restoreOccurrence}
               disabled={restoring}
-              className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+              className="mt-4 flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
             >
               <RotateCcw className="h-4 w-4" /> Restore this session
             </button>
@@ -469,7 +521,7 @@ export function SessionsView({
                 <button
                   type="button"
                   onClick={() => setAdding(true)}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground"
+                  className="flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground"
                 >
                   <UserPlus className="h-4 w-4" /> Add a client
                 </button>
@@ -528,7 +580,7 @@ export function SessionsView({
               type="button"
               disabled={removing}
               onClick={() => removeMember(true)}
-              className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+              className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
             >
               Remove and refund the credit
             </button>
@@ -544,5 +596,15 @@ export function SessionsView({
         </BottomSheet>
       )}
     </div>
+  );
+}
+
+// The day's sessions: still on first showing, sliding in from the side of the day picked after that.
+function DayListSlide({ slide, children }: { slide: 'none' | 'left' | 'right'; children: ReactNode }) {
+  if (slide === 'none') return <div>{children}</div>;
+  return (
+    <AnimatedContent direction="horizontal" distance={28} reverse={slide === 'left'} duration={0.4}>
+      {children}
+    </AnimatedContent>
   );
 }

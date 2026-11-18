@@ -13,8 +13,8 @@ export function WeekdayChips({ value, onChange }: { value: number | null; onChan
           key={d}
           type="button"
           onClick={() => onChange(value === d ? null : d)}
-          className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-            value === d ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+          className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
+            value === d ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
           }`}
         >
           {WEEKDAY_SHORT[d]}
@@ -60,7 +60,7 @@ export function AddWorkoutSheet({
           type="button"
           disabled={busy}
           onClick={() => onSubmit(label.trim() || 'Workout', weekday)}
-          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Adding…' : 'Add workout'}
         </button>
@@ -109,7 +109,7 @@ export function RenameWorkoutSheet({
             Also rename it in the other {otherWeeks} week{otherWeeks === 1 ? '' : 's'}
           </label>
         )}
-        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+        <button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : 'Save'}
         </button>
       </form>

@@ -1,9 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import CountUp from '@/app/_components/motion/CountUp';
+import { pop } from '@/app/_components/motion/gsap';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { Search } from 'lucide-react';
 import { equivalentMinutesForActivity, STANDARD_STEP_TARGET } from '@/lib/calculations';
-import { Card, inputCls } from '@/app/_components/ui';
+import { inputCls } from '@/app/_components/ui';
 import { useAction } from '@/app/_components/useAction';
 import { updateMinutesPer1000Steps } from '@/lib/data/clientProfile';
 import type { ActivityRow } from '@/lib/data/types';
@@ -51,6 +54,8 @@ export function ActivityTab({
   const [stepTarget, setStepTarget] = useState<number | ''>(STANDARD_STEP_TARGET);
   const [category, setCategory] = useState<Category>('All');
   const [query, setQuery] = useState('');
+  const list = useRef<HTMLDivElement>(null);
+  useStaggerIn(list, 'li', category, 0.05);
 
   const steps = stepTarget === '' ? 0 : stepTarget;
   const mp1000 = minutesPer1000 === '' ? 0 : minutesPer1000;
@@ -95,9 +100,9 @@ export function ActivityTab({
 
   return (
     <div className="space-y-4">
-      <Card tone="accent" className="space-y-3">
+      <div className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
         <div>
-          <p className="text-base font-extrabold text-black dark:text-zinc-50">Can&apos;t get your steps in?</p>
+          <h2 className="text-base font-extrabold text-black dark:text-zinc-50">Can&apos;t get your steps in?</h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
             Swap them for another activity. Each row shows how long gives you the same effort as your step target.
           </p>
@@ -106,11 +111,14 @@ export function ActivityTab({
           {numberField('Minutes per 1,000 steps', 'How long you take to walk 1,000 steps (we\'ll remember it)', minutesPer1000, setMinutesPer1000, '0.5', saveMinutes)}
           {numberField('Step target', 'Our standard daily goal', stepTarget, setStepTarget)}
         </div>
-        <p className="rounded-xl bg-black/[.04] px-3 py-2 text-sm text-zinc-700 dark:bg-white/[.06] dark:text-zinc-300">
+        <p className="rounded-[14px] bg-accent-soft px-3 py-2.5 text-sm text-zinc-700 dark:text-zinc-300">
           <span className="font-bold text-black dark:text-zinc-50">{steps.toLocaleString()} steps</span> is about{' '}
-          <span className="font-bold text-black dark:text-zinc-50">{walkingMinutes} minutes</span> of walking.
+          <span className="font-bold text-black dark:text-zinc-50">
+            <CountUp to={walkingMinutes} duration={0.6} /> minutes
+          </span>{' '}
+          of walking.
         </p>
-      </Card>
+      </div>
 
       <div className="space-y-2.5">
         <div className="relative">
@@ -128,12 +136,15 @@ export function ActivityTab({
             <button
               key={c}
               type="button"
-              onClick={() => setCategory(c)}
+              onClick={(e) => {
+                pop(e.currentTarget, 0.9);
+                setCategory(c);
+              }}
               aria-pressed={category === c}
-              className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${
+              className={`h-11 shrink-0 rounded-full px-4 text-sm font-bold ${
                 category === c
-                  ? 'bg-accent text-accent-foreground'
-                  : 'border border-black/[.08] bg-card text-zinc-700 dark:border-white/[.12] dark:text-zinc-300'
+                  ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                  : 'border border-black/[.14] bg-card text-black dark:border-white/15 dark:text-zinc-50'
               }`}
             >
               {c}
@@ -142,24 +153,28 @@ export function ActivityTab({
         </div>
       </div>
 
+      <div ref={list}>
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-zinc-500">No activities match.</p>
       ) : (
-        <ul className="divide-y divide-black/5 overflow-hidden rounded-2xl border border-black/[.06] bg-card dark:divide-white/5 dark:border-white/10">
+        <ul className="divide-y divide-black/[.07] overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:divide-white/10 dark:border-white/10">
           {rows.map((row) => (
-            <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <li key={row.id} className="flex min-h-[60px] items-center justify-between gap-3 px-4 py-2.5">
               <span className="min-w-0">
-                <span className="block font-bold text-black dark:text-zinc-50">{row.title}</span>
+                <span className="block text-[15px] font-bold text-black dark:text-zinc-50">{row.title}</span>
                 {row.detail && <span className="block text-xs text-zinc-500">{row.detail}</span>}
               </span>
               <span className="shrink-0 whitespace-nowrap text-right">
-                <span className="text-lg font-black text-accent">{Math.round(row.minutes)}</span>
+                <span className="text-lg font-black text-black dark:text-zinc-50">
+                  <CountUp to={Math.round(row.minutes)} duration={0.6} />
+                </span>
                 <span className="ml-1 text-xs font-semibold text-zinc-500">min</span>
               </span>
             </li>
           ))}
         </ul>
       )}
+      </div>
     </div>
   );
 }

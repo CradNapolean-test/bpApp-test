@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { gsap, prefersReducedMotion, useGSAP } from '@/app/_components/motion/gsap';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { useRouter } from 'next/navigation';
 import { ChefHat, ChevronDown, Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
@@ -107,6 +109,17 @@ export function RecipesTab({
   const [name, setName] = useState('');
   const [servings, setServings] = useState('1');
   const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useStaggerIn(list, '[data-recipe]');
+  // An opened recipe's ingredients slide down rather than appearing at once.
+  useGSAP(
+    () => {
+      if (!openRecipeId || prefersReducedMotion()) return;
+      const panel = list.current?.querySelector('[data-recipe-panel]');
+      if (panel) gsap.from(panel, { height: 0, opacity: 0, duration: 0.35, ease: 'power2.out', clearProps: 'height,opacity' });
+    },
+    { scope: list, dependencies: [openRecipeId] }
+  );
   const [addingIngredient, setAddingIngredient] = useState(false);
   const [editingIngredient, setEditingIngredient] = useState<RecipeIngredientRow | null>(null);
   const [addingRecipe, setAddingRecipe] = useState(false);
@@ -171,49 +184,56 @@ export function RecipesTab({
           }
         />
       ) : (
-        <div className="space-y-3">
-          {initialRecipes.map((recipe) => {
+        <div ref={list} className="space-y-3">
+          {initialRecipes.map((recipe, index) => {
             const open = openRecipeId === recipe.id;
             const totals = totalRecipeMacros(recipe.recipe_ingredients);
             const per = recipe.servings || 1;
             const count = recipe.recipe_ingredients.length;
             const weight = recipeServingWeight(recipe.recipe_ingredients, per);
             return (
-              <div key={recipe.id} className="rounded-2xl border border-black/[.05] bg-card dark:border-white/10">
+              <div key={recipe.id} data-recipe className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
                 <button
                   type="button"
                   onClick={() => {
                     setOpenRecipeId(open ? null : recipe.id);
                     setAddingIngredient(false);
                   }}
-                  className="flex w-full items-start justify-between gap-3 p-4 text-left"
+                  aria-expanded={open}
+                  className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]"
                 >
-                  <div className="min-w-0">
-                    <p className="text-base font-extrabold text-black dark:text-zinc-50">{recipe.name}</p>
+                  {/* The mock-up's photo block: recipes have no photos, so a black or teal tile with the recipe icon, alternating down the list. */}
+                  <span
+                    aria-hidden
+                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${index % 2 === 0 ? 'bg-[#1d1d1b] text-[#5fd6d6]' : 'bg-accent text-[#041f1f]'}`}
+                  >
+                    <ChefHat className="h-6 w-6" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-extrabold text-black dark:text-zinc-50">{recipe.name}</p>
                     {count > 0 ? (
                       <>
-                        <p className="mt-0.5 text-sm font-bold text-black dark:text-zinc-50">
-                          {Math.round(totals.calories / per)} <span className="text-xs font-semibold text-zinc-500">kcal per serving</span>
+                        <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                          <span className="font-bold text-black dark:text-zinc-50">{Math.round(totals.calories / per)} kcal</span> · {Math.round(totals.protein / per)} g protein per serving
                         </p>
                         <p className="text-xs font-semibold">
-                          <span style={{ color: MACRO_COLORS.protein }}>P {Math.round(totals.protein / per)}g</span>{' · '}
                           <span style={{ color: MACRO_COLORS.carbs }}>C {Math.round(totals.carbs / per)}g</span>{' · '}
                           <span style={{ color: MACRO_COLORS.fat }}>F {Math.round(totals.fat / per)}g</span>
                         </p>
                       </>
                     ) : (
-                      <p className="mt-0.5 text-xs text-zinc-500">No ingredients yet</p>
+                      <p className="text-[13px] text-zinc-500 dark:text-zinc-400">No ingredients yet</p>
                     )}
-                    <p className="mt-0.5 text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {count} ingredient{count === 1 ? '' : 's'} · makes {per} serving{per === 1 ? '' : 's'}
                     </p>
                     {weight && <p className="text-xs text-zinc-400">{recipeServingText(weight)}</p>}
                   </div>
-                  <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-[18px] w-[18px] shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
                 </button>
 
                 {open && (
-                  <div className="border-t border-black/[.05] px-4 pb-4 dark:border-white/10">
+                  <div data-recipe-panel className="overflow-hidden border-t border-black/[.07] px-4 pb-4 dark:border-white/10">
                     <ul className="divide-y divide-black/5 dark:divide-white/5">
                       {recipe.recipe_ingredients.map((ing) => (
                         <li key={ing.id}>
@@ -265,7 +285,7 @@ export function RecipesTab({
 
       {!readOnly &&
         (addingRecipe ? (
-          <form onSubmit={handleCreate} className="space-y-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <form onSubmit={handleCreate} className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-zinc-500">Recipe name</label>
               <input
@@ -283,10 +303,10 @@ export function RecipesTab({
               <input type="number" inputMode="numeric" min={1} max={100} value={servings} onChange={(e) => setServings(e.target.value)} className={inputCls} />
             </div>
             <div className="flex gap-2">
-              <button type="submit" disabled={creating} className="flex-1 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+              <button type="submit" disabled={creating} className="h-11 flex-1 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-sm font-bold disabled:opacity-50">
                 {creating ? 'Creating…' : 'Create & add ingredients'}
               </button>
-              <button type="button" onClick={() => setAddingRecipe(false)} className="rounded-full px-4 py-2.5 text-sm font-semibold text-zinc-500">
+              <button type="button" onClick={() => setAddingRecipe(false)} className="h-11 rounded-xl px-4 text-sm font-bold text-zinc-600 dark:text-zinc-300">
                 Cancel
               </button>
             </div>
@@ -295,7 +315,7 @@ export function RecipesTab({
           <button
             type="button"
             onClick={() => setAddingRecipe(true)}
-            className="w-full rounded-2xl border-[1.5px] border-dashed border-black/15 py-3 text-sm font-semibold text-zinc-500 dark:border-white/15"
+            className="h-12 w-full rounded-[20px] border-[1.5px] border-dashed border-black/20 text-sm font-bold text-black hover:bg-black/[.03] dark:border-white/20 dark:text-zinc-50 dark:hover:bg-white/[.04]"
           >
             + New recipe
           </button>

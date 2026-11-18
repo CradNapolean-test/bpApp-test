@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   BellOff,
   CalendarCheck,
@@ -15,19 +16,26 @@ import {
   Flag,
   MessageSquare,
   Plus,
+  Search,
   Trophy,
   Utensils,
   Users,
 } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { BottomSheet } from '@/app/_components/BottomSheet';
-import { Card, SectionLabel } from '@/app/_components/ui';
 import { useAction } from '@/app/_components/useAction';
 import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { markAllReviewed } from '@/lib/data/coachDashboard';
 import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from '@/lib/checkinQueue';
-import { formatClassTime } from '@/lib/utils/dates';
+import { formatClassTime, formatLongDate } from '@/lib/utils/dates';
+import CountUp from '@/app/_components/motion/CountUp';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
+import { useSlidingThumb } from '@/app/_components/motion/useSlidingThumb';
+import ClickSpark, { type ClickSparkHandle } from '@/app/_components/motion/ClickSpark';
+import { foldAway, pop } from '@/app/_components/motion/gsap';
+import { CoachPageHeader, CoachSection, CoachStatStrip, coachBtnOutline, coachBtnPrimary, coachBtnSoft, coachLink, coachRow } from './CoachUi';
 import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
 import type { CheckReason, CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
 import type { ScheduleOccurrence } from '@/lib/data/types';
@@ -85,6 +93,31 @@ interface TodoGroup {
   onOpen?: () => void;
 }
 
+// Nothing left to do. When the coach has just cleared the list (the page opened with things to do), the tick pops and throws a few
+// sparks (React Bits ClickSpark); on a day that started clear it simply says so.
+function AllClear({ celebrate }: { celebrate: boolean }) {
+  const sparks = useRef<ClickSparkHandle>(null);
+  const area = useRef<HTMLParagraphElement>(null);
+  const tick = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!celebrate) return;
+    pop(tick.current, 0.4);
+    const box = area.current?.getBoundingClientRect();
+    const at = tick.current?.getBoundingClientRect();
+    if (box && at) sparks.current?.spark(at.left - box.left + at.width / 2, at.top - box.top + at.height / 2);
+  }, [celebrate]);
+  return (
+    <ClickSpark ref={sparks} clickToSpark={false} sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={12} sparkRadius={40} sparkSize={10} shape="star" duration={700}>
+      <p ref={area} className={`${coachRow} py-4 text-sm text-zinc-500`}>
+        All clear. Nothing needs you right now.{' '}
+        <span ref={tick} className="inline-block font-bold text-accent">
+          ✓
+        </span>
+      </p>
+    </ClickSpark>
+  );
+}
+
 function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; onToggle: () => void }) {
   const Icon = group.icon;
   const tone = TONE[group.tone];
@@ -101,8 +134,11 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
         <button
           type="button"
           disabled={busy}
-          onClick={() => run(async () => item.review!(), { success: 'Marked as reviewed' })}
-          className="shrink-0 rounded-full bg-accent/15 px-3 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
+          onClick={(e) => {
+            const row = e.currentTarget.closest('li');
+            void foldAway(row, () => run(async () => item.review!(), { success: 'Marked as reviewed' }));
+          }}
+          className="h-9 shrink-0 rounded-xl bg-accent-soft px-3 text-[13px] font-bold text-accent disabled:opacity-50"
         >
           Reviewed
         </button>
@@ -114,31 +150,41 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
   );
   const header = (
     <>
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.chip}`}>
-        <Icon className="h-[18px] w-[18px]" />
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base font-extrabold ${tone.chip}`}>
+        <CountUp to={group.count ?? group.items.length} duration={0.6} />
       </span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{group.title}</span>
-        <span className="block truncate text-xs text-zinc-500">{group.summary}</span>
+        <span className="flex items-center gap-1.5 text-[15px] font-bold text-black dark:text-zinc-50">
+          <Icon className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+          <span className="truncate">{group.title}</span>
+        </span>
+        {/* Two lines, not one cut short (DB22). */}
+        <span className="line-clamp-2 text-[13px] text-zinc-500 dark:text-zinc-400">{group.summary}</span>
       </span>
-      <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${tone.badge}`}>{group.count ?? group.items.length}</span>
-      {single ? <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />}
+      <span aria-hidden className={`${coachBtnSoft} hidden shrink-0 sm:inline-flex`}>
+        {single ? 'Open' : open ? 'Close' : 'Review'}
+      </span>
+      {single ? (
+        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 sm:hidden" />
+      ) : (
+        <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform sm:hidden ${open ? 'rotate-180' : ''}`} />
+      )}
     </>
   );
   return (
-    <div>
+    <div data-stagger className={coachRow}>
       {single ? (
-        <Link href={group.items[0].href} className="flex items-center gap-3 py-3">
+        <Link href={group.items[0].href} className="flex min-h-[64px] items-center gap-3 py-3">
           {header}
         </Link>
       ) : (
-        <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 py-3">
+        <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-h-[64px] w-full items-center gap-3 py-3">
           {header}
         </button>
       )}
-      {open && !single && group.items.length > 0 && <ul className="mb-2 ml-[52px] space-y-1.5">{group.items.map(renderItem)}</ul>}
+      {open && !single && group.items.length > 0 && <ul className="mb-3 ml-14 space-y-1.5">{group.items.map(renderItem)}</ul>}
       {open && !single && group.extra && (
-        <div className="mb-2 ml-[52px]">
+        <div className="mb-3 ml-14">
           <div className="flex items-center justify-between gap-2 px-1 pb-1.5 pt-1">
             <p className="text-xs font-bold text-zinc-500">{group.extra.label}</p>
             {group.extra.markAll && (
@@ -146,7 +192,7 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
                 type="button"
                 disabled={busy}
                 onClick={() => run(async () => group.extra!.markAll!(), { success: 'Marked as reviewed' })}
-                className="shrink-0 rounded-full px-2 py-1 text-xs font-extrabold text-accent disabled:opacity-50"
+                className="h-9 shrink-0 rounded-lg px-2.5 text-[13px] font-bold text-accent disabled:opacity-50"
               >
                 Mark all reviewed
               </button>
@@ -159,11 +205,22 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
   );
 }
 
-export function CoachDashboard({ data }: { data: CoachDashboardData }) {
+export function CoachDashboard({ data, activity }: { data: CoachDashboardData; activity?: ReactNode }) {
   const router = useRouter();
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showAllToCheck, setShowAllToCheck] = useState(false);
+  // The booking bars and the week's bars fill when the dashboard opens.
+  const screen = useRef<HTMLDivElement>(null);
+  useGrowIn(screen, 0.25);
+  // The to-do groups settle in when the dashboard opens.
+  useStaggerIn(screen, '[data-stagger]', null, 0.2);
+  const scopeTrack = useRef<HTMLDivElement>(null);
+  // The highlight moves the moment a scope is tapped, not a second later when the new figures arrive: the scope tapped is shown while
+  // the page still holds the one it was tapped from.
+  const [picked, setPicked] = useState<{ key: DashboardScope; from: DashboardScope } | null>(null);
+  const shownScope = picked && picked.from === data.scope ? picked.key : data.scope;
+  useSlidingThumb(scopeTrack, shownScope);
   // "Happening now / Up next" follows the gym's clock: it used to be worked out once, when the page loaded, and then sat there (CC3).
   const [clockMs, setClockMs] = useState(() => Date.now());
   useEffect(() => {
@@ -399,7 +456,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   const nowMin = minuteOfDayIn(data.timezone, now);
   const gymToday = todayAtGym(data.timezone, now);
   const today = data.occurrences.filter((o) => o.date === gymToday).sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
-  const { inProgress, upNext } = currentAndNext(today, nowMin);
+  const { inProgress } = currentAndNext(today, nowMin);
   const toMark = data.occurrences.filter((o) => (o.unmarkedCount ?? 0) > 0);
 
   const scopeHref = (s: DashboardScope, coachId?: string) => `/coach?scope=${s}${coachId ? `&coach=${coachId}` : ''}`;
@@ -410,34 +467,75 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
   // "7 / 12 checked in" next to "14 members in total": the 12 leaves out members still setting up, so say so (UX2).
   const notSetUp = Math.max(0, stats.membersTotal - stats.checkinsOf);
 
+  // ---- Figures for the strip ----
+  const pastOf = (s: ScheduleOccurrence) => toMin(s.startTime) + SESSION_MIN <= nowMin;
+  const doneToday = today.filter(pastOf).length;
+  const bookedToday = today.reduce((n, s) => n + s.bookedCount, 0);
+  const capacityToday = today.reduce((n, s) => n + s.capacity, 0);
+  const needsYou = groups.reduce((n, g) => n + (g.count ?? g.items.length), 0);
+  // Whether there were things to do when the page opened: clearing the last one then gets a small celebration (not on a quiet day).
+  const [startedWithTodos] = useState(() => needsYou > 0);
+  const quietCount = data.toCheck.filter((m) => m.reasons.some((r) => r.kind === 'quiet')).length;
+  const greeting = (() => {
+    const h = Number(now.toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false, timeZone: data.timezone }));
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  })();
+  const clockLine = `${formatLongDate(now, { timeZone: data.timezone })}, ${now
+    .toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: data.timezone })
+    .replace(' ', ' ')}`;
+  const toCheckShown = showAllToCheck ? data.toCheck : data.toCheck.slice(0, 6);
+
   return (
-    <div className="space-y-5 pb-20 lg:pb-0">
-      {isAdmin && (
-        <div className="space-y-2">
-          <div role="group" aria-label="Whose members" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
-            {([
-              ['mine', 'My members'],
-              ['gym', 'Whole gym'],
-              ['coach', 'By coach'],
-            ] as [DashboardScope, string][]).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={scope === key}
-                onClick={() => router.push(key === 'coach' ? scopeHref('coach', selectedCoachId ?? coaches[0]?.id) : scopeHref(key))}
-                className={`min-h-10 shrink-0 rounded-full px-4 py-2 text-sm font-bold ${
-                  scope === key ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-500 dark:bg-white/10'
-                }`}
-              >
-                {label}
+    <div ref={screen} className="space-y-6 pb-20 lg:pb-0">
+      <CoachPageHeader
+        eyebrow={clockLine}
+        title={`${greeting}, ${data.firstName || 'Coach'}`}
+        actions={
+          <>
+            <FindMember names={data.nameById} />
+            {isAdmin && (
+              <div ref={scopeTrack} role="group" aria-label="Whose members" className="relative flex rounded-xl bg-black/[.06] p-1 dark:bg-white/10">
+                <span data-thumb-el aria-hidden className="pointer-events-none absolute left-0 top-0 rounded-lg bg-card shadow-sm" />
+                {([
+                  ['mine', 'My members'],
+                  ['gym', 'Whole gym'],
+                  ['coach', 'By coach'],
+                ] as [DashboardScope, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={shownScope === key}
+                    data-active={shownScope === key}
+                    onClick={() => {
+                      if (key !== scope) setPicked({ key, from: scope });
+                      router.push(key === 'coach' ? scopeHref('coach', selectedCoachId ?? coaches[0]?.id) : scopeHref(key));
+                    }}
+                    className={`relative h-9 whitespace-nowrap rounded-lg px-3 text-sm font-bold transition-colors ${
+                      shownScope === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* From a tablet up; a phone has the round + button at the foot. */}
+            <span className="hidden sm:block">
+              <button type="button" onClick={() => setAdding(true)} className={coachBtnPrimary}>
+                <Plus className="h-4 w-4" strokeWidth={2.6} /> Add member
               </button>
-            ))}
-          </div>
+            </span>
+          </>
+        }
+      />
+      {isAdmin && scope !== 'mine' && (
+        <div className="space-y-2">
           {scope === 'coach' && coaches.length > 0 && (
             <select
               value={selectedCoachId ?? ''}
               onChange={(e) => router.push(scopeHref('coach', e.target.value))}
-              className="w-full rounded-xl border border-black/10 bg-card px-3 py-2.5 text-base dark:border-white/10"
+              aria-label="Coach"
+              className="h-11 w-full max-w-sm rounded-xl border border-black/[.16] bg-card px-3 text-base dark:border-white/15"
             >
               {coaches.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -446,193 +544,240 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
               ))}
             </select>
           )}
-          {scope !== 'mine' && (
-            <p className="text-xs text-zinc-500">
+          <p className="text-sm text-zinc-500">
               Showing {scopeLabel}. Messages and the actions that need the member&apos;s own coach (marking things reviewed) stay with that coach.
             </p>
-          )}
         </div>
       )}
 
-      {/* ---- Today ---- */}
-      <div>
-        <SectionLabel>
-          {today.length === 0 ? "Today's classes" : `${inProgress ? 'Happening now' : upNext ? 'Up next' : 'Today'} · ${today.length} session${today.length === 1 ? '' : 's'}`}
-          <ActiveGymTag />
-        </SectionLabel>
-        {today.length === 0 ? (
-          <Card className="text-sm text-zinc-500">No classes scheduled today.</Card>
-        ) : (
-          <div className="space-y-2.5">
-            {upNext ? (
-              // While a class is on, the card opens Run this class itself: it used to be Up next, then the roster, then Run this class
-              // (DB8, CS20). Before it starts it still opens the roster; the times underneath always do.
-              <Link
-                href={inProgress ? runHref(upNext) : sessionHref(upNext)}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4"
-              >
-                <span className="min-w-0">
-                  <span className="block text-3xl font-black leading-tight text-black dark:text-zinc-50">{formatClassTime(upNext.startTime)}</span>
-                  <span className="block truncate text-sm text-zinc-500">{upNext.className}</span>
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-3xl font-black text-accent">
-                    {upNext.bookedCount}
-                    <span className="text-sm font-semibold text-zinc-500"> / {upNext.capacity}</span>
-                  </span>
-                  <span className="text-xs font-bold text-accent">{inProgress ? 'Run this class →' : 'Open roster →'}</span>
-                </span>
+      <CoachStatStrip
+        label="Today at a glance"
+        stats={[
+          {
+            label: 'Sessions today',
+            value: <CountUp to={today.length} />,
+            sub: today.length === 0 ? 'None scheduled' : `${doneToday} done${inProgress ? ', 1 on now' : ''}`,
+          },
+          {
+            label: 'Booked',
+            value: (
+              <>
+                <CountUp to={bookedToday} />
+                <span className="text-lg font-bold text-zinc-500"> / {capacityToday}</span>
+              </>
+            ),
+            sub: capacityToday > 0 ? `${Math.round((bookedToday / capacityToday) * 100)}% full` : 'No places today',
+          },
+          {
+            label: 'Needs you',
+            value: <CountUp to={needsYou} />,
+            sub: groups.length === 0 ? 'All clear' : `In ${groups.length} list${groups.length === 1 ? '' : 's'} below`,
+            tone: needsYou > 0 ? 'amber' : undefined,
+          },
+          {
+            label: 'To check in on',
+            value: <CountUp to={data.toCheck.length} />,
+            sub: quietCount > 0 ? `${quietCount} ${quietCount === 1 ? 'has' : 'have'} gone quiet` : data.toCheck.length > 0 ? 'See them below' : 'Everyone is on track',
+          },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-6">
+          {/* ---- Today on the floor ---- */}
+          <CoachSection
+            title={
+              <>
+                Today on the floor
+                <ActiveGymTag />
+              </>
+            }
+            action={
+              <Link href="/coach/classes?tab=sessions" className={coachLink}>
+                Open timetable
               </Link>
+            }
+          >
+            {today.length === 0 ? (
+              <p className={`${coachRow} py-4 text-sm text-zinc-500`}>No classes scheduled today.</p>
             ) : (
-              <Card className="text-sm text-zinc-500">All of today&apos;s classes are done.</Card>
+              <ul>
+                {today.map((s) => {
+                  const onNow = inProgress != null && s.classId === inProgress.classId && s.date === inProgress.date;
+                  const past = !onNow && pastOf(s);
+                  const left = s.capacity - s.bookedCount;
+                  const pct = s.capacity > 0 ? Math.min(100, (s.bookedCount / s.capacity) * 100) : 0;
+                  return (
+                    <li key={`${s.classId}|${s.date}`} className={`${coachRow} flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-2 py-3`}>
+                      <span className={`w-16 shrink-0 text-[15px] font-extrabold ${past ? 'text-zinc-400' : 'text-black dark:text-zinc-50'}`}>{formatClassTime(s.startTime)}</span>
+                      <span className="min-w-0 flex-1 basis-40">
+                        <span className="flex items-center gap-2">
+                          <Link href={sessionHref(s)} className="truncate text-[15px] font-bold text-black hover:underline dark:text-zinc-50">
+                            {s.className}
+                          </Link>
+                          {onNow && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-extrabold text-accent-foreground">On now</span>}
+                        </span>
+                        <span className="block truncate text-[13px] text-zinc-500 dark:text-zinc-400">
+                          {past
+                            ? `${s.bookedCount} booked`
+                            : left <= 0
+                              ? `Full${s.waitlistCount ? ` · ${s.waitlistCount} waiting` : ''}`
+                              : `${left} spot${left === 1 ? '' : 's'} left`}
+                          {s.coachNote ? ` · ${s.coachNote}` : ''}
+                        </span>
+                      </span>
+                      <span className="flex w-36 shrink-0 items-center gap-2.5">
+                        <span className="h-2 flex-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${s.bookedCount} of ${s.capacity} booked`}>
+                          <span data-grow="bar" className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                        </span>
+                        <span className="w-12 text-right text-[13px] font-bold text-black dark:text-zinc-50">
+                          {s.bookedCount} / {s.capacity}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 justify-end sm:w-40">
+                        {onNow ? (
+                          <Link href={runHref(s)} className={coachBtnPrimary}>
+                            Run this class
+                          </Link>
+                        ) : past ? (
+                          (s.unmarkedCount ?? 0) > 0 ? (
+                            <Link href={sessionHref(s)} className={coachBtnSoft}>
+                              Mark attendance
+                            </Link>
+                          ) : (
+                            <span className="text-[13px] font-semibold text-zinc-500">Done</span>
+                          )
+                        ) : (
+                          <Link href={sessionHref(s)} className={coachBtnOutline}>
+                            Open roster
+                          </Link>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {today.map((s) => {
-                const isNext = upNext && s.classId === upNext.classId && s.date === upNext.date;
-                const past = toMin(s.startTime) + SESSION_MIN <= nowMin;
-                return (
-                  <Link
-                    key={`${s.classId}|${s.date}`}
-                    href={sessionHref(s)}
-                    className={`flex w-[4.5rem] shrink-0 flex-col items-center rounded-2xl border py-2 ${
-                      isNext
-                        ? 'border-accent bg-accent text-accent-foreground'
-                        : past
-                          ? 'border-transparent text-zinc-400 dark:text-zinc-600'
-                          : 'border-black/[.06] bg-card text-black dark:border-white/10 dark:text-zinc-100'
-                    }`}
-                  >
-                    <span className="text-sm font-extrabold">{formatClassTime(s.startTime)}</span>
-                    <span className={`text-xs font-semibold ${isNext ? 'opacity-90' : 'text-zinc-500'}`}>
-                      {s.bookedCount}/{s.capacity}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {toMark.length > 0 && (
-          <Link href={sessionHref(toMark[0])} className="mt-2 flex items-center gap-2 text-sm font-bold text-warning">
-            <CalendarCheck className="h-4 w-4" />
-            {toMark.length} past session{toMark.length === 1 ? '' : 's'} still to mark attendance
-          </Link>
-        )}
-      </div>
-
-      {/* ---- To do ---- */}
-      <div>
-        <SectionLabel>To do{groups.length > 0 ? ` · ${groups.length}` : ''}</SectionLabel>
-        <Card className="!py-1">
-          {groups.length === 0 ? (
-            <p className="py-3 text-sm text-zinc-500">All clear. Nothing needs you right now. ✓</p>
-          ) : (
-            <div className="divide-y divide-black/5 dark:divide-white/10">
-              {groups.map((g) => (
-                <TodoRow key={g.key} group={g} open={openKey === g.key} onToggle={() => setOpenKey(openKey === g.key ? null : g.key)} />
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* ---- Members to check in on ---- */}
-      {/* The same list, with the same reasons, as Clients → Check in on (CL16). */}
-      {data.toCheck.length > 0 && (
-        <div>
-          <div className="flex items-baseline justify-between gap-2">
-            <SectionLabel>Members to check in on · {data.toCheck.length}</SectionLabel>
-            {scope !== 'coach' && (
-              <Link href={`/coach/clients?filter=check${scope === 'gym' ? '&scope=gym' : ''}`} className="shrink-0 text-xs font-bold text-accent">
-                On Clients →
+            {toMark.length > 0 && (
+              <Link href={sessionHref(toMark[0])} className={`${coachRow} flex items-center gap-2 py-3 text-sm font-bold text-warning`}>
+                <CalendarCheck className="h-4 w-4" />
+                {toMark.length} past session{toMark.length === 1 ? '' : 's'} still to mark attendance
               </Link>
             )}
-          </div>
-          <div className={showAllToCheck ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3' : '-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden'}>
-            {(showAllToCheck ? data.toCheck : data.toCheck.slice(0, 12)).map((m) => (
-              <div key={m.clientId} className={`${showAllToCheck ? '' : 'w-40 shrink-0'} rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10`}>
-                <Link href={`/coach/clients/${m.clientId}`} className="block">
-                  <Avatar name={m.name} size="md" />
-                  <span className="mt-2 block truncate text-sm font-bold text-black dark:text-zinc-50">{m.name}</span>
-                  <span className="mt-1 flex flex-wrap gap-1">
-                    {m.reasons.map((r) => (
-                      <span
-                        key={r.kind}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${REASON_CLS[r.kind]}`}
-                      >
-                        {r.label}
-                      </span>
-                    ))}
-                  </span>
-                  <span className="mt-1.5 block truncate text-[11px] text-zinc-500">{m.detail}</span>
-                </Link>
-                <Link
-                  href={`/coach/clients/${m.clientId}?open=messages`}
-                  className="mt-2 flex min-h-10 items-center justify-center gap-1 rounded-full bg-accent/15 py-1.5 text-xs font-bold text-accent"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" /> Message
-                </Link>
-              </div>
-            ))}
-          </div>
-          {data.toCheck.length > 12 && (
-            <button type="button" onClick={() => setShowAllToCheck((v) => !v)} className="mt-2 px-1 text-sm font-bold text-accent">
-              {showAllToCheck ? 'Show fewer' : `See all ${data.toCheck.length}`}
-            </button>
-          )}
-        </div>
-      )}
+          </CoachSection>
 
-      {/* ---- This week ---- */}
-      <div>
-        <SectionLabel>This week · {scopeLabel}</SectionLabel>
-        <div className="grid grid-cols-2 gap-2.5">
-          <Link href="/coach/classes?tab=sessions" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
-            <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.sessionsAttended}</p>
-            <p className="text-xs text-zinc-500">sessions attended</p>
-            {stats.sessionsAttendedSameTimeLastWeek > 0 || stats.sessionsAttended > 0 ? (
-              <p className={`mt-0.5 text-[11px] font-bold ${deltaLast === 0 ? 'text-zinc-500' : deltaLast > 0 ? 'text-success' : 'text-danger'}`}>
-                {deltaLast === 0 ? 'Same as' : `${deltaLast > 0 ? '▲' : '▼'} ${Math.abs(deltaLast)} vs`} this time last week
+          {/* ---- Needs you (the to-do lists) ---- */}
+          <CoachSection title="Needs you" count={needsYou > 0 ? needsYou : undefined} action={groups.length > 0 ? <span className="text-[13px] font-semibold text-zinc-500">Most urgent first</span> : undefined}>
+            {groups.length === 0 ? (
+              <AllClear celebrate={startedWithTodos} />
+            ) : (
+              <div>
+                {groups.map((g) => (
+                  <TodoRow key={g.key} group={g} open={openKey === g.key} onToggle={() => setOpenKey(openKey === g.key ? null : g.key)} />
+                ))}
+              </div>
+            )}
+          </CoachSection>
+        </div>
+
+        <div className="min-w-0 space-y-6">
+          {/* ---- Check in on: the same list, with the same reasons, as Clients → Check in on (CL16) ---- */}
+          <CoachSection
+            title="Check in on"
+            count={data.toCheck.length > 0 ? data.toCheck.length : undefined}
+            action={
+              scope !== 'coach' && data.toCheck.length > 0 ? (
+                <Link href={`/coach/clients?filter=check${scope === 'gym' ? '&scope=gym' : ''}`} className={coachLink}>
+                  See all
+                </Link>
+              ) : undefined
+            }
+          >
+            {data.toCheck.length === 0 ? (
+              <p className={`${coachRow} py-4 text-sm text-zinc-500`}>Everyone is on track.</p>
+            ) : (
+              <ul>
+                {toCheckShown.map((m) => (
+                  <li key={m.clientId} className={`${coachRow} flex min-h-[60px] items-center gap-3 py-2`}>
+                    <Avatar name={m.name} size="md" />
+                    <Link href={`/coach/clients/${m.clientId}`} className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-bold text-black hover:underline dark:text-zinc-50">{m.name}</span>
+                      <span className="flex flex-wrap items-center gap-1">
+                        {m.reasons.map((r) => (
+                          <span key={r.kind} className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${REASON_CLS[r.kind]}`}>
+                            {r.label}
+                          </span>
+                        ))}
+                      </span>
+                    </Link>
+                    <Link
+                      href={`/coach/clients/${m.clientId}?open=messages`}
+                      aria-label={`Message ${m.name}`}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"
+                    >
+                      <MessageSquare className="h-[18px] w-[18px]" />
+                    </Link>
+                  </li>
+                ))}
+                {data.toCheck.length > 6 && (
+                  <li className={coachRow}>
+                    <button type="button" onClick={() => setShowAllToCheck((v) => !v)} className={`${coachLink} min-h-11`}>
+                      {showAllToCheck ? 'Show fewer' : `Show all ${data.toCheck.length}`}
+                    </button>
+                  </li>
+                )}
+              </ul>
+            )}
+          </CoachSection>
+
+          {activity}
+
+          {/* ---- This week ---- */}
+          <CoachSection title="This week" action={<span className="text-[13px] font-semibold text-zinc-500">{scopeLabel}</span>} bodyClassName="grid grid-cols-2 gap-px border-t border-black/[.07] bg-black/[.07] dark:border-white/10 dark:bg-white/10">
+            <Link href="/coach/classes?tab=sessions" className="block bg-card px-5 py-4 hover:bg-black/[.02] dark:hover:bg-white/[.03]">
+              <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{stats.sessionsAttended}</p>
+              <p className="text-[13px] text-zinc-500">sessions attended</p>
+              {stats.sessionsAttendedSameTimeLastWeek > 0 || stats.sessionsAttended > 0 ? (
+                <p className={`mt-0.5 text-xs font-bold ${deltaLast === 0 ? 'text-zinc-500' : deltaLast > 0 ? 'text-success' : 'text-danger'}`}>
+                  {deltaLast === 0 ? 'Same as' : `${deltaLast > 0 ? '▲' : '▼'} ${Math.abs(deltaLast)} vs`} this time last week
+                </p>
+              ) : null}
+            </Link>
+            {/* Fill is about which sessions are full or empty: the Busiest report, not the Red flags list it used to open on (UX3). */}
+            <Link href="/coach/classes?tab=reports&section=busiest" className="block bg-card px-5 py-4 hover:bg-black/[.02] dark:hover:bg-white/[.03]">
+              <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{stats.avgFillPct != null ? `${stats.avgFillPct}%` : '—'}</p>
+              <p className="text-[13px] text-zinc-500">average class fill</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+                <div data-grow="bar" className="h-full rounded-full bg-accent" style={{ width: `${stats.avgFillPct ?? 0}%` }} />
+              </div>
+            </Link>
+            <Link href="/coach/clients" className="block bg-card px-5 py-4 hover:bg-black/[.02] dark:hover:bg-white/[.03]">
+              <p className="text-2xl font-extrabold text-black dark:text-zinc-50">
+                {stats.checkinsIn}
+                <span className="text-sm font-semibold text-zinc-500"> / {stats.checkinsOf}</span>
               </p>
-            ) : null}
-          </Link>
-          {/* Fill is about which sessions are full or empty: the Busiest report, not the Red flags list it used to open on (UX3). */}
-          <Link href="/coach/classes?tab=reports&section=busiest" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
-            <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.avgFillPct != null ? `${stats.avgFillPct}%` : '—'}</p>
-            <p className="text-xs text-zinc-500">
-              average class fill, all classes
-              <ActiveGymTag />
-            </p>
-            <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${stats.avgFillPct ?? 0}%` }} />
-            </div>
-          </Link>
-          <Link href="/coach/clients" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
-            <p className="text-2xl font-black text-black dark:text-zinc-50">
-              {stats.checkinsIn}
-              <span className="text-sm font-semibold text-zinc-500"> / {stats.checkinsOf}</span>
-            </p>
-            <p className="text-xs text-zinc-500">members checked in</p>
-            <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${checkinPct}%` }} />
-            </div>
-            {notSetUp > 0 && <p className="mt-1 text-[11px] font-semibold text-zinc-500">{notSetUp} not set up yet</p>}
-          </Link>
-          <Link href="/coach/clients" className="block rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
-            <p className="text-2xl font-black text-black dark:text-zinc-50">{stats.newMembers}</p>
-            {/* "Joined", so it can't be read against "New members to review", which counts members waiting for a look (UX2). */}
-            <p className="text-xs text-zinc-500">joined this week</p>
-            <p className="mt-0.5 text-[11px] font-semibold text-zinc-500">{stats.membersTotal} members in total</p>
-          </Link>
+              <p className="text-[13px] text-zinc-500">members checked in</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+                <div data-grow="bar" className="h-full rounded-full bg-accent" style={{ width: `${checkinPct}%` }} />
+              </div>
+              {notSetUp > 0 && <p className="mt-1 text-xs font-semibold text-zinc-500">{notSetUp} not set up yet</p>}
+            </Link>
+            <Link href="/coach/clients" className="block bg-card px-5 py-4 hover:bg-black/[.02] dark:hover:bg-white/[.03]">
+              <p className="text-2xl font-extrabold text-black dark:text-zinc-50">{stats.newMembers}</p>
+              {/* "Joined", so it can't be read against "New members to review", which counts members waiting for a look (UX2). */}
+              <p className="text-[13px] text-zinc-500">joined this week</p>
+              <p className="mt-0.5 text-xs font-semibold text-zinc-500">{stats.membersTotal} members in total</p>
+            </Link>
+          </CoachSection>
         </div>
       </div>
 
-      {/* Quick add, phone only (wide screens have the Add client card beside this). */}
+      {/* Quick add, phone only (from a tablet up it is the Add member button in the header). */}
       <button
         type="button"
         aria-label="Add a member"
         onClick={() => setAdding(true)}
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-xl lg:hidden"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-xl sm:hidden"
       >
         <Plus className="h-7 w-7" />
       </button>
@@ -644,6 +789,49 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
             <Users className="h-4 w-4" /> Send a broadcast to members
           </Link>
         </BottomSheet>
+      )}
+    </div>
+  );
+}
+
+// "Find a member": the names this dashboard already has, matched as they are typed, each opening that member.
+function FindMember({ names }: { names: Record<string, string> }) {
+  const [q, setQ] = useState('');
+  const term = q.trim().toLowerCase();
+  const matches = term
+    ? Object.entries(names)
+        .filter(([, n]) => n.toLowerCase().includes(term))
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .slice(0, 6)
+    : [];
+  return (
+    <div className="relative w-full sm:w-64">
+      <label className="flex h-11 items-center gap-2 rounded-xl border border-black/[.16] bg-card px-3 dark:border-white/15">
+        <Search className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+        <span className="sr-only">Find a member</span>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Find a member"
+          className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-zinc-500"
+        />
+      </label>
+      {term && (
+        <ul className="absolute inset-x-0 top-12 z-20 overflow-hidden rounded-xl border border-black/[.08] bg-card py-1 shadow-xl dark:border-white/10">
+          {matches.length === 0 ? (
+            <li className="px-3 py-2.5 text-sm text-zinc-500">No member called that.</li>
+          ) : (
+            matches.map(([id, n]) => (
+              <li key={id}>
+                <Link href={`/coach/clients/${id}`} className="flex min-h-11 items-center gap-2.5 px-3 text-[15px] font-semibold text-black hover:bg-black/[.04] dark:text-zinc-50 dark:hover:bg-white/[.06]">
+                  <Avatar name={n} size="sm" />
+                  {n}
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
       )}
     </div>
   );

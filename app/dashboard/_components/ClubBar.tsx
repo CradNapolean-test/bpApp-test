@@ -13,7 +13,7 @@ export function ClubBar({ progress }: { progress: ClubProgress }) {
       <div className="flex gap-[3px]" role="img" aria-label={`${progress.toGo} sessions to the ${progress.next} club`}>
         {progress.segments.map((s, i) => (
           <div key={s.to} className="h-[7px] overflow-hidden rounded-full" style={{ width: `${s.widthPct}%`, backgroundColor: `color-mix(in srgb, ${colour(i)} 22%, transparent)` }}>
-            <div className="h-full rounded-full" style={{ width: `${s.fill * 100}%`, backgroundColor: colour(i) }} />
+            <div data-grow="bar" className="h-full rounded-full" style={{ width: `${s.fill * 100}%`, backgroundColor: colour(i) }} />
           </div>
         ))}
       </div>

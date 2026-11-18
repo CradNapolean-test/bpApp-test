@@ -10,6 +10,8 @@ import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { Avatar } from '@/app/_components/Avatar';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { CoachPageHeader } from '@/app/coach/_components/CoachUi';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { HubTabBar } from '@/app/coach/_components/HubTabBar';
 import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
@@ -100,14 +102,26 @@ export function MessagesHubShell({
 
   // On a phone the title and tabs step aside while a conversation is open, so the thread has the screen (MS27); "All conversations"
   // goes back to them.
+  // "3 unread from 2 members", or that all is read.
+  const unreadThreads = localOverview.filter((c) => c.unread_count > 0);
+  const unreadTotal = unreadThreads.reduce((n, c) => n + c.unread_count, 0);
+  const unreadLine =
+    unreadTotal === 0
+      ? 'All read'
+      : `${unreadTotal} unread from ${unreadThreads.length} member${unreadThreads.length === 1 ? '' : 's'}`;
   const header = (
-    <div className={phoneThread ? 'hidden md:block' : undefined}>
-      <h1 className="mb-4 mt-3 text-2xl font-bold text-black md:mt-0 dark:text-zinc-50">Messages</h1>
-      <HubTabBar
-        label="Messages sections"
-        tabs={['Conversations', 'Broadcasts'] as const}
-        active={TAB_LABEL[tab] as 'Conversations' | 'Broadcasts'}
-        onSelect={(t) => setTab(t === 'Broadcasts' ? 'broadcasts' : 'inbox')}
+    <div className={`mb-6 mt-3 md:mt-0 ${phoneThread ? 'hidden md:block' : ''}`}>
+      <CoachPageHeader
+        eyebrow={unreadLine}
+        title="Messages"
+        actions={
+          <HubTabBar
+            label="Messages sections"
+            tabs={['Conversations', 'Broadcasts'] as const}
+            active={TAB_LABEL[tab] as 'Conversations' | 'Broadcasts'}
+            onSelect={(t) => setTab(t === 'Broadcasts' ? 'broadcasts' : 'inbox')}
+          />
+        }
       />
     </div>
   );
@@ -119,6 +133,7 @@ export function MessagesHubShell({
         topBar={<CoachNav />}
         bottomBar={<CoachBottomTabBar />}
         headerAction={headerExtras}
+      coachSidebar={<CoachSidebar email={email} />}
         banner={header}
         mobileHeader={<CoachMobileBrand />}
         wideSidebar
@@ -177,7 +192,7 @@ export function MessagesHubShell({
               ) : loadError ? (
                 <div className="text-sm text-zinc-500">
                   <p>We could not load this conversation.</p>
-                  <button type="button" onClick={retryLoad} className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-bold text-white">
+                  <button type="button" onClick={retryLoad} className="mt-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground">
                     Try again
                   </button>
                 </div>

@@ -52,12 +52,12 @@ export function QuantitySheet({
             type="button"
             disabled={!(value > 0) || problem != null}
             onClick={() => onSave(value)}
-            className="flex-1 rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-40"
+            className="h-12 flex-1 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-[15px] font-bold disabled:opacity-40"
           >
             Save
           </button>
           {onDelete && (
-            <button type="button" onClick={onDelete} className="rounded-full border border-danger/30 px-5 py-3 text-sm font-bold text-danger">
+            <button type="button" onClick={onDelete} className="h-12 rounded-xl border-[1.5px] border-danger/30 px-5 text-sm font-bold text-danger">
               Remove
             </button>
           )}

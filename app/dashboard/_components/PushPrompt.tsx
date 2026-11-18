@@ -94,11 +94,11 @@ export function PushPrompt({ clientId }: { clientId: string }) {
           type="button"
           disabled={busy}
           onClick={turnOn}
-          className="flex-1 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground disabled:opacity-60"
+          className="h-11 flex-1 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-sm font-bold disabled:opacity-60"
         >
           {busy ? 'Turning on…' : 'Turn on notifications'}
         </button>
-        <button type="button" onClick={notNow} className="rounded-full px-4 py-2.5 text-sm font-semibold text-zinc-500">
+        <button type="button" onClick={notNow} className="h-11 rounded-xl px-4 text-sm font-bold text-zinc-600 dark:text-zinc-300">
           Not now
         </button>
       </div>

@@ -1,11 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { CalendarDays, Check, Clock, Info, MessageSquare, Ticket } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { CalendarDays, Clock, MessageSquare, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useOnDemand } from '@/app/_components/useOnDemand';
 import { EmptyState } from '@/app/_components/EmptyState';
-import { Badge, Card, Segmented } from '@/app/_components/ui';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { bookClass, cancelBooking, getMemberTimetable } from '@/lib/data/classes';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
@@ -13,6 +12,11 @@ import { bookSheetNote, cancelDeadline, cancelNote, nowLocalMs } from '@/lib/uti
 import { cancelSummary, nextResetDate, startMs } from '@/lib/utils/booking';
 import { cancellationPolicyText } from '@/lib/bookingRules';
 import { CheckInButton } from './CheckInButton';
+import { MemberHeader } from './MemberHeader';
+import type { HeaderActions } from './MemberHeader';
+import AnimatedContent from '@/app/_components/motion/AnimatedContent';
+import CountUp from '@/app/_components/motion/CountUp';
+import { gsap, prefersReducedMotion, useGSAP } from '@/app/_components/motion/gsap';
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 // The member's booking screen. Two views -- "Book" (browse a day, tap a session) and "My bookings"
@@ -53,6 +57,19 @@ function SummaryRow({ label, value, tone }: { label: string; value: string; tone
   );
 }
 
+// "6:00pm" as a big "6:00" over a small "pm".
+function TimeColumn({ time }: { time: string | null | undefined }) {
+  const text = formatClassTime(time);
+  const m = /^(.*?)\s*(am|pm)$/i.exec(text);
+  const [big, half] = m ? [m[1], m[2].toLowerCase()] : [text, ''];
+  return (
+    <div className="w-14 shrink-0">
+      <p className="text-lg font-extrabold leading-tight text-black dark:text-zinc-50">{big}</p>
+      {half && <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{half}</p>}
+    </div>
+  );
+}
+
 export function ClassesArea({
   clientId,
   bookings,
@@ -63,6 +80,7 @@ export function ClassesArea({
   onCheckIn,
   timezone,
   gymBlackout = null,
+  header,
 }: {
   clientId: string;
   bookings: BookingRow[];
@@ -75,6 +93,8 @@ export function ClassesArea({
   // The gym's own overnight window. Without it the screen used to read it from the first scheduled session, which is nothing when the
   // timetable is empty (L5).
   gymBlackout?: { start: string | null; end: string | null } | null;
+  // The message bubble and the bell in the header.
+  header?: HeaderActions;
 }) {
   // The timetable is read when this screen opens (R13/M1: it was 32 KB of every dashboard page), and again after a booking or a cancel.
   const timetable = useOnDemand(() => getMemberTimetable(clientId), clientId);
@@ -84,6 +104,16 @@ export function ClassesArea({
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [showPolicy, setShowPolicy] = useState(false);
+  // The day chips pop in left to right when the timetable opens.
+  const dayStrip = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      // No strip on the My bookings view: without this, the selector would look across the whole page.
+      if (!dayStrip.current || prefersReducedMotion()) return;
+      gsap.from('[data-chip]', { scale: 0.6, opacity: 0, duration: 0.4, ease: 'back.out(2)', stagger: 0.025, delay: 0.1, clearProps: 'transform,opacity' });
+    },
+    { scope: dayStrip, dependencies: [view], revertOnUpdate: true }
+  );
 
   // Must match the timezone dashboardBundle used server-side to resolve booking/occurrence dates
   // (see lib/data/dashboardBundle.ts) -- a raw `toIsoDate(new Date())` is the UTC date, which
@@ -149,6 +179,16 @@ export function ClassesArea({
 
   // ---- rendering ------------------------------------------------------------------------------
 
+  const tag = 'inline-flex h-6 items-center rounded-full px-2.5 text-xs font-extrabold';
+  const tagGood = `${tag} bg-accent-soft text-accent-strong`;
+  const tagWarn = `${tag} bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300`;
+  // Near-black on the teal: white on this teal is too faint to read.
+  const tagBooked = `${tag} bg-accent text-[#041f1f]`;
+  const slotBtn = 'flex h-11 shrink-0 items-center rounded-xl px-4 text-sm';
+  const outlineBtn = `${slotBtn} border-[1.5px] border-black/20 font-bold text-black hover:bg-black/5 dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5`;
+  const slotCard = 'rounded-[18px] border border-black/[.08] bg-card dark:border-white/10';
+  const bookedCard = 'rounded-[18px] border-2 border-accent bg-accent-soft';
+
   function renderSlot(occ: ScheduleOccurrence) {
     const key = `${occ.classId}|${occ.date}`;
     const existing = bookingByKey.get(key);
@@ -156,60 +196,36 @@ export function ClassesArea({
     const full = spots <= 0;
     const booked = existing?.status === 'booked';
     const waitlisted = existing?.status === 'waitlist';
-    const fill = Math.min(100, Math.round((occ.bookedCount / occ.capacity) * 100));
 
     let action: React.ReactNode;
-    if (booked && existing) {
+    if ((booked || waitlisted) && existing) {
       action = (
-        <button
-          type="button"
-          onClick={() => setSheet({ kind: 'cancel', booking: existing })}
-          className="flex items-center gap-1.5 rounded-full bg-success/15 px-3.5 py-2 text-sm font-bold text-success"
-        >
-          <Check className="h-4 w-4" /> Booked
-        </button>
-      );
-    } else if (waitlisted && existing) {
-      action = (
-        <button
-          type="button"
-          onClick={() => setSheet({ kind: 'cancel', booking: existing })}
-          className="rounded-full bg-warning/15 px-3.5 py-2 text-sm font-bold text-warning"
-        >
-          On waitlist
+        <button type="button" onClick={() => setSheet({ kind: 'cancel', booking: existing })} className={outlineBtn}>
+          {waitlisted ? 'Leave' : 'Cancel'}
         </button>
       );
     } else {
       action = (
-        <button
-          type="button"
-          onClick={() => setSheet({ kind: 'book', occ })}
-          className={`rounded-full px-5 py-2 text-sm font-bold ${
-            full ? 'border border-warning/40 text-warning' : 'bg-accent text-accent-foreground'
-          }`}
-        >
+        <button type="button" onClick={() => setSheet({ kind: 'book', occ })} className={full ? outlineBtn : `${slotBtn} bg-accent font-extrabold text-[#041f1f]`}>
           {full ? 'Waitlist' : 'Book'}
         </button>
       );
     }
 
     return (
-      <div
-        key={key}
-        className={`flex items-center justify-between gap-3 rounded-2xl border p-3.5 ${
-          booked ? 'border-success/30 bg-success/5' : 'border-black/[.06] bg-card dark:border-white/10'
-        }`}
-      >
-        <div className="min-w-0">
-          <p className="text-lg font-extrabold leading-tight text-black dark:text-zinc-50">{formatClassTime(occ.startTime)}</p>
-          <p className="truncate text-xs text-zinc-500">{occ.className}</p>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="h-1 w-14 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-              <span className={`block h-full rounded-full ${full ? 'bg-danger' : spots <= 3 ? 'bg-warning' : 'bg-accent'}`} style={{ width: `${fill}%` }} />
-            </span>
-            <span className={`text-xs font-semibold ${full ? 'text-danger' : spots <= 3 ? 'text-warning' : 'text-zinc-500'}`}>
-              {full ? 'Full' : `${spots} left`}
-            </span>
+      <div key={key} className={`flex min-h-[70px] items-center gap-3 py-3 pl-4 pr-3 ${booked ? bookedCard : slotCard}`}>
+        <TimeColumn time={occ.startTime} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-bold text-black dark:text-zinc-50">{occ.className}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {booked ? (
+              <span className={tagBooked}>Booked</span>
+            ) : waitlisted ? (
+              <span className={tagWarn}>On the waitlist</span>
+            ) : (
+              <span className={full || spots <= 3 ? tagWarn : tagGood}>{full ? 'Full' : `${spots} left`}</span>
+            )}
+            {occ.creditCost !== 1 && <span className="text-xs text-zinc-500 dark:text-zinc-400">{occ.creditCost} credits</span>}
           </div>
         </div>
         {action}
@@ -219,124 +235,139 @@ export function ClassesArea({
 
   const bookSheet = sheet?.kind === 'book' ? sheet.occ : null;
   const cancelSheet = sheet?.kind === 'cancel' ? sheet.booking : null;
+  const bookedAhead = upcoming.filter((b) => b.status === 'booked').length;
 
   return (
     <div className="space-y-4">
-      <Card tone="accent" className="flex items-center justify-between !px-4 !py-3">
-        <div className="flex items-center gap-3">
-          <Ticket className="h-5 w-5 text-accent" />
-          <div>
-            <p className="text-2xl font-black leading-none text-accent">{creditsBalance}</p>
-            <p className="text-xs text-zinc-500">credit{creditsBalance === 1 ? '' : 's'} left</p>
+      <MemberHeader
+        eyebrow={parseDay(todayIso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}
+        title="Book a session"
+        actions={header}
+      >
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-white/[.07] px-3.5 py-2.5">
+          <p className="text-sm font-semibold text-zinc-200">
+            <CountUp to={creditsBalance} className="text-xl font-black text-[#5fd6d6]" delay={0.15} /> credit{creditsBalance === 1 ? '' : 's'} left
+          </p>
+          <div className="min-w-0 text-right">
+            <p className="truncate text-sm font-bold">{membership?.package?.name ?? 'No membership'}</p>
+            {membership?.package && (
+              <p className="text-xs text-zinc-400">
+                {membership.package.credits_per_week}/week · resets {parseDay(nextReset).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })}
+              </p>
+            )}
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-bold text-black dark:text-zinc-50">{membership?.package?.name ?? 'No membership'}</p>
-          {membership?.package && (
-            <p className="text-xs text-zinc-500">
-              {membership.package.credits_per_week}/week · resets{' '}
-              {parseDay(nextReset).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })}
-            </p>
-          )}
-        </div>
-      </Card>
 
-      <div className="flex items-center justify-between gap-2">
-        <Segmented<View>
-          label="Booking view"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: 'book', label: 'Book a session' },
-            { value: 'mine', label: upcoming.length > 0 ? `My bookings (${upcoming.length})` : 'My bookings' },
-          ]}
-        />
-        <button
-          type="button"
-          onClick={() => setShowPolicy((v) => !v)}
-          aria-expanded={showPolicy}
-          aria-label="Cancellation policy"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Info className="h-4 w-4" />
-        </button>
-      </div>
-
-      {showPolicy && (
-        <div className="flex gap-2.5 rounded-2xl border border-black/[.06] bg-card-muted p-3.5 text-xs leading-relaxed text-zinc-600 dark:border-white/10 dark:text-zinc-400">
-          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-          <p>{policyText}</p>
-        </div>
-      )}
-
-      {view === 'book' && (
-        <div className="space-y-3">
-          <div>
-            <p className="mb-1.5 px-1 text-xs font-semibold text-zinc-500">
-              {parseDay(selectedDate).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
-            </p>
-            <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {view === 'book' && (
+          <div className="space-y-2">
+            <div ref={dayStrip} className="-mx-5 flex gap-1.5 overflow-x-auto px-5 pb-0.5 [scrollbar-width:none] sm:-mx-6 sm:px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
               {days.map((d) => {
                 const dt = parseDay(d);
                 const active = d === selectedDate;
                 const hasSessions = sessionDates.has(d);
+                const isBooked = bookedDates.has(d);
                 return (
                   <button
                     key={d}
                     type="button"
                     onClick={() => setPickedDate(d)}
                     aria-pressed={active}
-                    className={`relative flex w-[3.25rem] shrink-0 flex-col items-center gap-0.5 rounded-2xl border py-2.5 transition-colors ${
-                      active
-                        ? 'border-accent bg-accent text-accent-foreground'
-                        : hasSessions
-                          ? 'border-black/[.06] bg-card text-black dark:border-white/10 dark:text-zinc-100'
-                          : 'border-transparent text-zinc-400 dark:text-zinc-600'
-                    }`}
+                    aria-label={`${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}${isBooked ? ', booked' : ''}${hasSessions ? '' : ', no sessions'}`}
+                    className="flex w-11 shrink-0 flex-col items-center gap-1.5"
                   >
-                    <span className="text-[11px] font-bold uppercase opacity-80">{WEEKDAY_SHORT[dt.getUTCDay()]}</span>
-                    <span className="text-base font-black leading-none">{dt.getUTCDate()}</span>
-                    <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${bookedDates.has(d) ? (active ? 'bg-accent-foreground' : 'bg-accent') : 'bg-transparent'}`} />
+                    <span className={`text-[11px] ${active ? 'font-bold text-zinc-100' : hasSessions ? 'font-semibold text-zinc-400' : 'font-semibold text-zinc-600'}`}>
+                      {WEEKDAY_SHORT[dt.getUTCDay()]}
+                    </span>
+                    <span
+                      data-chip
+                      className={`flex h-9 w-9 items-center justify-center rounded-full text-sm ${
+                        active
+                          ? 'bg-zinc-100 font-extrabold text-[#1d1d1b]'
+                          : isBooked
+                            ? 'border-2 border-accent font-bold text-[#5fd6d6]'
+                            : hasSessions
+                              ? 'bg-white/[.07] font-semibold text-zinc-200'
+                              : 'font-semibold text-zinc-600'
+                      }`}
+                    >
+                      {dt.getUTCDate()}
+                    </span>
                   </button>
                 );
               })}
             </div>
+            <p className="text-xs text-zinc-400">
+              {bookedAhead === 0 ? 'Nothing booked yet.' : `${bookedAhead} session${bookedAhead === 1 ? '' : 's'} booked. The ringed days are yours.`}
+            </p>
           </div>
+        )}
 
-          <p className="px-1 text-sm font-extrabold text-black dark:text-zinc-50">{dayLabel(selectedDate, todayIso)}</p>
+        <div role="group" aria-label="Booking view" className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[.08] p-1">
+          {(
+            [
+              ['book', 'Timetable'],
+              ['mine', upcoming.length > 0 ? `My bookings (${upcoming.length})` : 'My bookings'],
+            ] as [View, string][]
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`h-11 rounded-xl text-sm ${view === v ? 'bg-zinc-100 font-extrabold text-[#1d1d1b]' : 'font-bold text-zinc-300 hover:bg-white/10'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </MemberHeader>
 
-          {dayOccurrences.length === 0 ? (
-            <EmptyState
-              icon={CalendarDays}
-              title={timetable.data == null ? (timetable.error ? 'Could not load the sessions' : 'Loading sessions…') : occurrences.length === 0 ? 'No sessions scheduled' : 'Nothing on this day'}
-              hint={timetable.data == null ? (timetable.error ? 'Check your connection and open this screen again.' : undefined) : occurrences.length === 0 ? 'Check back once your coach adds sessions.' : 'Pick another day above — days with sessions are brighter.'}
-              compact
-            />
-          ) : (
-            <div className="space-y-4">
-              {morning.length > 0 && (
-                <div className="space-y-2">
-                  <p className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400">Morning</p>
-                  {morning.map(renderSlot)}
-                </div>
-              )}
-              {evening.length > 0 && (
-                <div className="space-y-2">
-                  <p className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-400">Afternoon &amp; evening</p>
-                  {evening.map(renderSlot)}
-                </div>
-              )}
-            </div>
-          )}
+      <div className="flex items-baseline justify-between gap-2 px-1">
+        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">{view === 'book' ? dayLabel(selectedDate, todayIso) : 'My bookings'}</h2>
+        <button type="button" onClick={() => setShowPolicy((v) => !v)} aria-expanded={showPolicy} className="min-h-9 text-[13px] font-bold text-accent-strong">
+          Cancellation policy
+        </button>
+      </div>
+
+      {showPolicy && (
+        <div className="flex gap-2.5 rounded-[18px] border border-black/[.08] bg-card-muted p-3.5 text-xs leading-relaxed text-zinc-600 dark:border-white/10 dark:text-zinc-400">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-accent-strong" />
+          <p>{policyText}</p>
         </div>
       )}
 
+      {view === 'book' &&
+        (dayOccurrences.length === 0 ? (
+          <EmptyState
+            icon={CalendarDays}
+            title={timetable.data == null ? (timetable.error ? 'Could not load the sessions' : 'Loading sessions…') : occurrences.length === 0 ? 'No sessions scheduled' : 'Nothing on this day'}
+            hint={timetable.data == null ? (timetable.error ? 'Check your connection and open this screen again.' : undefined) : occurrences.length === 0 ? 'Check back once your coach adds sessions.' : 'Pick another day above — days with sessions are brighter.'}
+            compact
+          />
+        ) : (
+          <div className="space-y-4">
+            {/* The cards rise in, one after another, each time a day is picked (the key starts them over). */}
+            {morning.length > 0 && (
+              <AnimatedContent key={`am-${selectedDate}`} className="space-y-2" distance={16} duration={0.45} stagger={0.05}>
+                <p className="px-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Morning</p>
+                {morning.map(renderSlot)}
+              </AnimatedContent>
+            )}
+            {evening.length > 0 && (
+              <AnimatedContent key={`pm-${selectedDate}`} className="space-y-2" distance={16} duration={0.45} stagger={0.05} delay={morning.length > 0 ? 0.12 : 0}>
+                <p className="px-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Afternoon &amp; evening</p>
+                {evening.map(renderSlot)}
+              </AnimatedContent>
+            )}
+          </div>
+        ))}
+
       {view === 'mine' && (
-        <div className="space-y-2">
+        <AnimatedContent className="space-y-2" distance={16} duration={0.45} stagger={0.05}>
           {upcoming.length === 0 ? (
             <div className="space-y-3">
               <EmptyState icon={Ticket} title="No upcoming bookings" hint="Book a session and it will show up here." />
-              <button type="button" onClick={() => setView('book')} className="mx-auto block rounded-full bg-accent px-5 py-2 text-sm font-bold text-accent-foreground">
+              <button type="button" onClick={() => setView('book')} className="mx-auto flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-[#041f1f]">
                 Book a session
               </button>
             </div>
@@ -346,26 +377,24 @@ export function ClassesArea({
               const showDay = i === 0 || upcoming[i - 1].booking_date !== b.booking_date;
               return (
                 <div key={b.id}>
-                  {showDay && <p className="mb-1.5 mt-3 px-1 text-xs font-bold uppercase tracking-[0.14em] text-zinc-500 first:mt-0">{dayLabel(b.booking_date, todayIso)}</p>}
-                  <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-lg font-extrabold leading-tight text-black dark:text-zinc-50">{formatClassTime(b.class?.start_time)}</p>
-                        <p className="truncate text-xs text-zinc-500">{b.class?.name}</p>
+                  {showDay && (
+                    <p className="mb-1.5 mt-3 px-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-zinc-500 first:mt-0 dark:text-zinc-400">{dayLabel(b.booking_date, todayIso)}</p>
+                  )}
+                  <div className={`py-3 pl-4 pr-3 ${waitlisted ? slotCard : bookedCard}`}>
+                    <div className="flex items-center gap-3">
+                      <TimeColumn time={b.class?.start_time} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[15px] font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
+                        <div className="mt-1">
+                          <span className={waitlisted ? tagWarn : tagBooked}>{waitlisted ? 'On the waitlist' : 'Booked'}</span>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Badge tone={waitlisted ? 'warning' : 'success'}>{waitlisted ? 'Waitlist' : 'Booked'}</Badge>
-                        <button
-                          type="button"
-                          onClick={() => setSheet({ kind: 'cancel', booking: b })}
-                          className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
-                        >
-                          {waitlisted ? 'Leave' : 'Cancel'}
-                        </button>
-                      </div>
+                      <button type="button" onClick={() => setSheet({ kind: 'cancel', booking: b })} className={outlineBtn}>
+                        {waitlisted ? 'Leave' : 'Cancel'}
+                      </button>
                     </div>
                     {deadline && (
-                      <p className={`mt-2 text-xs ${late ? 'text-danger' : 'text-zinc-500'}`}>
+                      <p className={`mt-2 text-xs ${late ? 'font-semibold text-danger' : 'text-zinc-600 dark:text-zinc-400'}`}>
                         {refundUntilStart
                           ? 'You came off the waitlist after the cancel deadline: cancel any time before it starts for a full refund'
                           : late
@@ -383,7 +412,7 @@ export function ClassesArea({
               );
             })
           )}
-        </div>
+        </AnimatedContent>
       )}
 
       {bookSheet && (() => {
@@ -431,7 +460,7 @@ export function ClassesArea({
               <button
                 type="button"
                 onClick={() => setSheet(null)}
-                className="flex-1 rounded-full border border-black/10 py-3 text-sm font-bold text-zinc-700 dark:border-white/10 dark:text-zinc-300"
+                className="h-12 flex-1 rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
               >
                 Not now
               </button>
@@ -439,7 +468,7 @@ export function ClassesArea({
                 type="button"
                 disabled={busy || (!full && !enough)}
                 onClick={() => confirmBook(bookSheet)}
-                className="flex-[1.4] rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+                className="h-12 flex-[1.4] rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
               >
                 {busy ? 'Working…' : full ? 'Join waitlist' : 'Confirm booking'}
               </button>
@@ -470,7 +499,7 @@ export function ClassesArea({
               <button
                 type="button"
                 onClick={() => setSheet(null)}
-                className="flex-1 rounded-full border border-black/10 py-3 text-sm font-bold text-zinc-700 dark:border-white/10 dark:text-zinc-300"
+                className="h-12 flex-1 rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
               >
                 Keep it
               </button>
@@ -478,7 +507,7 @@ export function ClassesArea({
                 type="button"
                 disabled={busy}
                 onClick={() => confirmCancel(cancelSheet)}
-                className="flex-[1.4] rounded-full bg-danger py-3 text-sm font-extrabold text-white disabled:opacity-50"
+                className="h-12 flex-[1.4] rounded-xl bg-danger text-sm font-extrabold text-white disabled:opacity-50"
               >
                 {busy ? 'Working…' : waitlisted ? 'Leave waitlist' : late ? 'Cancel anyway' : 'Cancel booking'}
               </button>

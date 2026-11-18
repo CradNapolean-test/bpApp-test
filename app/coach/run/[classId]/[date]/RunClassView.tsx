@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronDown, ChevronLeft, Tv, UserPlus, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
@@ -18,6 +18,12 @@ import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz } from '@/lib/utils/dat
 import type { RunClassData, RunClassMember } from '@/lib/data/runClass';
 import type { CoachClientRow } from '@/lib/data/coach';
 import type { AttendanceStatus, WorkoutExerciseRow } from '@/lib/data/types';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { SmoothScroll } from '@/app/_components/motion/SmoothScroll';
+import RollingNumber from '@/app/_components/motion/RollingNumber';
+import DrawnTick from '@/app/_components/motion/DrawnTick';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+import { pop } from '@/app/_components/motion/gsap';
 
 // The coach's screen while a class is on: tick people in, see who picked what, and see what each member
 // lifted on the day's exercises the last few times, so the coach knows roughly what to put on the bar.
@@ -95,6 +101,9 @@ function MemberHistory({ member, exercises }: { member: RunClassMember; exercise
 export function RunClassView({ classId, initial }: { classId: string; initial: RunClassData }) {
   const toast = useToast();
   const [members, setMembers] = useState(initial.members);
+  // The attendance bar fills when the page opens (GSAP), then follows each tap.
+  const rosterRef = useRef<HTMLElement>(null);
+  useGrowIn(rosterRef, 0.2);
   const [openId, setOpenId] = useState<string | null>(null);
   // Adding a walk-in (CS2): the member list is read when the panel first opens.
   const [adding, setAdding] = useState(false);
@@ -163,28 +172,32 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
   const tvHref = `/coach/run/${classId}/${initial.date}/tv`;
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-4 px-4 pb-16 pt-4">
+    // The coach's desktop sidebar too (the board); on a phone this stays the plain screen for the door.
+    <div data-ui="coach" className="lg:pl-[232px]">
+    <CoachSidebar />
+    <SmoothScroll />
+    <main className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-16 pt-4 lg:pt-8">
       {/* Back to the same day in Sessions, not today (CS2). */}
-      <Link href={`/coach/classes?tab=sessions&date=${initial.date}`} className="inline-flex items-center gap-1 text-sm font-semibold text-zinc-500">
+      <Link href={`/coach/classes?tab=sessions&date=${initial.date}`} className="inline-flex min-h-11 items-center gap-1.5 text-sm font-bold text-accent hover:underline">
         <ChevronLeft className="h-4 w-4" /> Sessions
       </Link>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-black text-black dark:text-zinc-50">
-            {formatClassTime(initial.startTime)} · {initial.className}
-          </h1>
-          <p className="text-sm text-zinc-500">{heading}</p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {heading} · {formatClassTime(initial.startTime)}
+          </p>
+          <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.015em] text-black sm:text-[32px] dark:text-zinc-50">{initial.className}</h1>
         </div>
         <a
           href={tvHref}
-          className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-sm font-extrabold text-accent-foreground"
+          className="inline-flex h-11 items-center gap-2 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
         >
           <Tv className="h-4 w-4" /> Show on TV
         </a>
-      </div>
+      </header>
 
-      <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+      <div className="rounded-[20px] border border-black/[.08] bg-card px-5 py-4 dark:border-white/10">
         {initial.workout ? (
           <p className="text-sm text-zinc-600 dark:text-zinc-300">
             <b className="text-black dark:text-zinc-50">{initial.workout.dayLabel}</b> · Week {initial.workout.weekNum} · {initial.workout.programName}
@@ -196,40 +209,52 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
 
       <SessionCoachNote note={initial.coachNote} />
 
-      <div className="flex items-center justify-between px-1">
-        <p className="text-sm font-extrabold text-black dark:text-zinc-50">
-          {here} of {booked.length} here
-        </p>
+      <section ref={rosterRef} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3.5 pt-[18px]">
+        <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">
+          {/* The count rolls like a counter wheel as members are marked (after React Bits Counter). */}
+          Roster <span className="font-semibold text-zinc-500">· <RollingNumber value={here} /> of {booked.length} here</span>
+        </h2>
         {unmarked.length > 1 && (
           <button
             type="button"
             disabled={notYetHappened}
             onClick={() => unmarked.forEach((m) => void setStatus(m, 'attended'))}
-            className="rounded-full border border-success/40 bg-success/10 px-3.5 py-2 text-xs font-bold text-success disabled:opacity-40"
+            className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent disabled:opacity-40"
           >
-            Mark everyone attended
+            Mark everyone here
           </button>
         )}
       </div>
 
+      {booked.length > 0 && (
+        <div aria-hidden className="mx-5 mb-3.5 h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/10">
+          <div data-grow="bar" className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out" style={{ width: `${Math.round((here / booked.length) * 100)}%` }} />
+        </div>
+      )}
+
       {notYetHappened && (
-        <p className="px-1 text-xs font-semibold text-zinc-500">
+        <p className="border-t border-black/[.07] px-5 py-3 text-sm font-semibold text-zinc-500 dark:border-white/10">
           This session hasn&apos;t happened yet, so attendance can&apos;t be marked. It opens on the day.
         </p>
       )}
 
-      {members.length === 0 && <EmptyState icon={Check} title="Nobody booked in" compact />}
+      {members.length === 0 && (
+        <div className="border-t border-black/[.07] dark:border-white/10">
+          <EmptyState icon={Check} title="Nobody booked in" compact />
+        </div>
+      )}
 
-      <div className="space-y-2">
+      <div>
         {[...booked, ...waitlist].map((m) => {
           const st = statusOf(m);
           const open = openId === m.bookingId;
           return (
-            <div key={m.bookingId} className="rounded-2xl border border-black/[.06] bg-card p-3 dark:border-white/10">
+            <div key={m.bookingId} className="border-t border-black/[.07] px-5 py-3 dark:border-white/10">
               <div className="flex items-center gap-3">
-                <Avatar name={m.clientName} size="sm" />
+                <Avatar name={m.clientName} size="md" />
                 <div className="min-w-0 flex-1">
-                  <Link href={`/coach/clients/${m.clientId}`} className="block truncate text-base font-bold text-black dark:text-zinc-50">
+                  <Link href={`/coach/clients/${m.clientId}`} className="block truncate text-[15px] font-bold text-black hover:underline dark:text-zinc-50">
                     {m.clientName}
                   </Link>
                   <p className={`truncate text-xs ${m.picks?.switched ? 'font-semibold text-accent' : 'text-zinc-500'}`}>
@@ -243,10 +268,16 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                       aria-label={`${m.clientName} attended`}
                       aria-pressed={st === 'attended'}
                       disabled={notYetHappened}
-                      onClick={() => setStatus(m, 'attended')}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full ${st === 'attended' ? 'bg-success text-white' : 'bg-black/5 text-zinc-500 dark:bg-white/10'}`}
+                      onClick={(e) => {
+                        if (st !== 'attended') pop(e.currentTarget, 0.88);
+                        void setStatus(m, 'attended');
+                      }}
+                      className={`inline-flex h-11 items-center gap-1.5 rounded-xl px-3.5 text-sm font-bold ${
+                        st === 'attended' ? 'bg-accent text-accent-foreground' : 'bg-accent-soft text-accent'
+                      }`}
                     >
-                      <Check className="h-5 w-5" />
+                      <DrawnTick on={st === 'attended'} />
+                      {st === 'attended' ? 'Here' : 'Mark here'}
                     </button>
                     <button
                       type="button"
@@ -254,7 +285,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                       aria-pressed={st === 'no_show'}
                       disabled={notYetHappened}
                       onClick={() => setStatus(m, 'no_show')}
-                      className={`flex h-11 w-11 items-center justify-center rounded-full ${st === 'no_show' ? 'bg-danger text-white' : 'bg-black/5 text-zinc-500 dark:bg-white/10'}`}
+                      className={`flex h-11 w-11 items-center justify-center rounded-xl ${st === 'no_show' ? 'bg-danger text-white' : 'border border-black/[.14] text-zinc-500 dark:border-white/15'}`}
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -268,7 +299,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                     type="button"
                     onClick={() => setOpenId(open ? null : m.bookingId)}
                     aria-expanded={open}
-                    className="mt-2 flex w-full items-center justify-between rounded-xl px-1 py-1.5 text-xs font-bold text-accent"
+                    className="mt-1 flex min-h-11 w-full items-center justify-between rounded-xl px-1 text-sm font-bold text-accent"
                   >
                     Last weights
                     <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -283,7 +314,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
 
       {canAdd &&
         (adding ? (
-          <div className="space-y-2 rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+          <div className="space-y-2 border-t border-black/[.07] px-5 py-4 dark:border-white/10">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-extrabold text-black dark:text-zinc-50">Add a walk-in</p>
               <button type="button" onClick={() => setAdding(false)} className="rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-500">
@@ -304,11 +335,13 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
           <button
             type="button"
             onClick={openAdd}
-            className="flex w-full items-center justify-center gap-1.5 rounded-full border border-accent py-3 text-sm font-extrabold text-accent"
+            className="flex min-h-[56px] w-full items-center gap-2 border-t border-black/[.07] px-5 text-[15px] font-bold text-accent hover:bg-black/[.02] dark:border-white/10 dark:hover:bg-white/[.03]"
           >
-            <UserPlus className="h-4 w-4" /> Add a walk-in
+            <UserPlus className="h-4 w-4" /> Add a member or walk-in
           </button>
         ))}
+      </section>
     </main>
+    </div>
   );
 }

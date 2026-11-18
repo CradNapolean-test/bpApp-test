@@ -76,7 +76,7 @@ export function FeedbackThread({
 
       {canGive &&
         (open ? (
-          <form onSubmit={send} className="space-y-2 rounded-2xl border border-black/[.05] bg-card p-3 dark:border-white/10">
+          <form onSubmit={send} className="space-y-2 rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -87,16 +87,16 @@ export function FeedbackThread({
             />
             <p className="text-xs text-zinc-500">The member sees this and gets a notification.</p>
             <div className="flex gap-2">
-              <button type="submit" disabled={busy || !body.trim()} className="rounded-full bg-accent px-5 py-2 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+              <button type="submit" disabled={busy || !body.trim()} className="inline-flex h-11 items-center rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-5 text-sm font-bold disabled:opacity-50">
                 {busy ? 'Sending…' : 'Send'}
               </button>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-full px-4 py-2 text-sm font-semibold text-zinc-500">
+              <button type="button" onClick={() => setOpen(false)} className="h-11 rounded-xl px-4 text-sm font-bold text-zinc-600 dark:text-zinc-300">
                 Cancel
               </button>
             </div>
           </form>
         ) : (
-          <button type="button" onClick={() => setOpen(true)} className="rounded-full border border-black/10 px-4 py-1.5 text-xs font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300">
+          <button type="button" onClick={() => setOpen(true)} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50">
             {buttonLabel}
           </button>
         ))}

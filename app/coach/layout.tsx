@@ -22,6 +22,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   } = await supabase.auth.getUser();
 
   let logoUrl: string | null = null;
+  let coachName: string | null = null;
   let gyms: Awaited<ReturnType<typeof getMyGyms>> = [];
   let mismatch: GymMismatch | null = null;
   if (user) {
@@ -29,14 +30,15 @@ export default async function CoachLayout({ children }: { children: React.ReactN
     gyms = await getMyGyms().catch(() => []);
     // Whether the coach's members are in a gym other than the one being viewed (R38); only a coach in several gyms can have this.
     if (gyms.length > 1) mismatch = await getClientGymMismatch(gyms).catch(() => null);
-    const { data: profile } = await supabase.from('profiles').select('logo_path').eq('id', user.id).maybeSingle();
+    const { data: profile } = await supabase.from('profiles').select('logo_path, display_name').eq('id', user.id).maybeSingle();
+    coachName = (profile as { display_name?: string | null } | null)?.display_name ?? null;
     if (profile?.logo_path) {
       logoUrl = supabase.storage.from('coach-branding').getPublicUrl(profile.logo_path).data.publicUrl;
     }
   }
 
   return (
-    <CoachBrandingProvider logoUrl={logoUrl}>
+    <CoachBrandingProvider logoUrl={logoUrl} coachName={coachName}>
       <CoachGymsProvider gyms={gyms} mismatch={mismatch}>
         <MessagesDrawerProvider currentUserId={user?.id ?? ''}>
           <GymMismatchBanner />

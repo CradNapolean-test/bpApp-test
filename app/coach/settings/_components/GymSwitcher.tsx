@@ -19,7 +19,7 @@ export function GymSwitcher({ gyms }: { gyms: MyGymRow[] }) {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Your gyms</h3>
+      <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Your gyms</h3>
       <div className="space-y-2">
         {gyms.map((gym) => (
           <button
