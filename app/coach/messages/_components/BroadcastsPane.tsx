@@ -13,7 +13,18 @@ import { Segmented } from '@/app/_components/ui';
 import { composeCommunication, deleteCommunication } from '@/lib/data/communications';
 import { deleteMessageTemplate, saveMessageTemplate } from '@/lib/data/messageTemplates';
 import { FIRST_NAME_TOKEN, STARTER_MESSAGES } from '@/lib/broadcastMessages';
-import { broadcastConfirmation, formatInZone, isPastSchedule, nowAsWallTime, wallTimeToIso, weekdayInZone } from '@/lib/broadcastSend';
+import {
+  broadcastConfirmation,
+  broadcastReach,
+  formatInZone,
+  gymAudienceNote,
+  isPastSchedule,
+  nowAsWallTime,
+  reachLine,
+  wallTimeToIso,
+  weekdayInZone,
+  type AudienceCounts,
+} from '@/lib/broadcastSend';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { nextRunLabel } from '@/lib/communicationsSchedule';
 import { emailStatusLabel } from '@/lib/emailOutcome';
@@ -123,7 +134,7 @@ export function BroadcastsPane({
   groups: ClientGroupWithMembers[];
   communications: ScheduledCommunicationRow[];
   templates: MessageTemplateRow[];
-  counts: { mine: number; gym: number };
+  counts: AudienceCounts;
   // The gym's own timezone; dates and times are shown and scheduled in it, not in the browser's.
   timezone?: string | null;
   // Why the app cannot send email right now (null when it can).
@@ -150,7 +161,9 @@ export function BroadcastsPane({
   const [channel, setChannel] = useState<Channel>('message');
   const [showTemplates, setShowTemplates] = useState(false);
 
-  const audienceCount = target === 'my_clients' ? counts.mine : target === 'gym' ? counts.gym : (groups.find((g) => g.id === groupId)?.memberIds.length ?? 0);
+  // Who it reaches, channel by channel: a whole-gym message goes only into the coach's own clients' chats (D21).
+  const reach = broadcastReach({ target, channel, counts, groupCount: groups.find((g) => g.id === groupId)?.memberIds.length ?? 0 });
+  const audienceCount = reach.total;
   const scheduleIso = scheduleAt ? wallTimeToIso(scheduleAt, GYM_TZ) : null;
   const weekday = scheduleIso ? weekdayInZone(scheduleIso, GYM_TZ) : null;
 
@@ -283,7 +296,7 @@ export function BroadcastsPane({
               </select>
             )}
           </div>
-          {target === 'gym' && <p className="text-xs text-zinc-500">Includes other coaches&apos; clients, handy when a coach is away.</p>}
+          {target === 'gym' && <p className="text-xs text-zinc-500">{gymAudienceNote(channel)}</p>}
         </div>
 
         <div className="space-y-1.5">
@@ -349,12 +362,7 @@ export function BroadcastsPane({
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-zinc-500">
-            {repeat ? 'Goes to ' : 'This will message '}
-            {audienceCount} client{audienceCount === 1 ? '' : 's'}
-            {target === 'gym' && gymLabel ? ` at ${gymLabel}` : ''}
-            {repeat ? ' each week.' : '.'}
-          </p>
+          <p className="text-xs text-zinc-500">{reachLine({ target, channel, reach, repeat: timing === 'later' && repeat, gymName: gymLabel })}</p>
           <button type="submit" disabled={!canSubmit} className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
             {timing === 'now' ? 'Send now' : repeat ? 'Start repeating' : 'Schedule'}
           </button>

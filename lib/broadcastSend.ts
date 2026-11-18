@@ -5,9 +5,61 @@ export type BroadcastChannel = 'message' | 'email' | 'both';
 export type BroadcastTarget = 'my_clients' | 'gym' | 'group';
 
 const people = (n: number) => `${n} member${n === 1 ? '' : 's'}`;
+const clients = (n: number) => `${n} client${n === 1 ? '' : 's'}`;
 
 export function channelPhrase(channel: BroadcastChannel): string {
   return channel === 'message' ? 'by message' : channel === 'email' ? 'by email' : 'by message and email';
+}
+
+// How many people each audience holds, for the Broadcasts screen: the coach's own clients (any gym), everyone at the gym being worked in,
+// and the coach's own clients at that gym.
+export interface AudienceCounts {
+  mine: number;
+  gym: number;
+  mineAtGym: number;
+}
+
+export interface BroadcastReach {
+  // In the app (a chat message).
+  messaged: number;
+  emailed: number;
+  // Everyone it reaches one way or the other.
+  total: number;
+}
+
+// Who a broadcast reaches, channel by channel (D21, migration 0160): a whole-gym broadcast is EMAILED to everyone at the gym, but its
+// in-app message only goes into the sender's own clients' chats there, so it no longer lands in other coaches' threads as an unread message
+// drawn as the member's. "My clients" and groups reach the same people both ways.
+export function broadcastReach(input: { target: BroadcastTarget; channel: BroadcastChannel; counts: AudienceCounts; groupCount: number }): BroadcastReach {
+  const { target, channel, counts, groupCount } = input;
+  const everyone = target === 'my_clients' ? counts.mine : target === 'gym' ? counts.gym : groupCount;
+  const messaged = channel === 'email' ? 0 : target === 'gym' ? counts.mineAtGym : everyone;
+  const emailed = channel === 'message' ? 0 : everyone;
+  return { messaged, emailed, total: Math.max(messaged, emailed) };
+}
+
+// The line under "Whole gym" that says who gets what.
+export function gymAudienceNote(channel: BroadcastChannel): string {
+  if (channel === 'message') {
+    return "In the app, a whole-gym message only goes into your own clients' chats. Choose Email or Both to reach everyone, other coaches' clients too.";
+  }
+  if (channel === 'email') return "The email goes to everyone at the gym, other coaches' clients too.";
+  return "The email goes to everyone at the gym, other coaches' clients too. The in-app message only goes into your own clients' chats.";
+}
+
+// "This will message 12 clients." above the send button (or "Goes to … each week." for a repeating one).
+export function reachLine(input: { target: BroadcastTarget; channel: BroadcastChannel; reach: BroadcastReach; repeat: boolean; gymName?: string | null }): string {
+  const { target, channel, reach, repeat, gymName } = input;
+  const at = target === 'gym' && gymName ? ` at ${gymName}` : '';
+  const weekly = repeat ? ' each week' : '';
+  if (target === 'gym' && channel === 'both') {
+    return repeat
+      ? `Each week this emails ${clients(reach.emailed)}${at} and messages your own ${reach.messaged} in the app.`
+      : `This will email ${clients(reach.emailed)}${at} and message your own ${reach.messaged} in the app.`;
+  }
+  const count = channel === 'email' ? reach.emailed : reach.messaged;
+  const verb = repeat ? 'Goes to' : channel === 'email' ? 'This will email' : 'This will message';
+  return `${verb} ${clients(count)}${at}${weekly}.`;
 }
 
 export interface BroadcastConfirmation {
@@ -28,9 +80,15 @@ export function broadcastConfirmation(input: {
   gymName?: string | null;
 }): BroadcastConfirmation {
   const { count, channel, target, groupName, gymName } = input;
+  const gym = gymName ?? 'the gym';
+  // D21: in the app, a whole-gym broadcast only goes into the coach's own clients' chats; the email goes to everyone.
   const audience =
     target === 'gym'
-      ? `everyone at ${gymName ?? 'the gym'}, including other coaches' clients`
+      ? channel === 'message'
+        ? `your own clients at ${gym} only: other coaches' clients do not get a whole-gym message in the app`
+        : channel === 'email'
+          ? `everyone at ${gym}, including other coaches' clients`
+          : `everyone at ${gym} by email, including other coaches' clients, and into your own clients' chats in the app`
       : target === 'group'
         ? `the group "${groupName ?? 'selected'}"`
         : 'your own clients';

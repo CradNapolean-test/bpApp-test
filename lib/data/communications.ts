@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { sendPersonalisedEmails } from '@/lib/email';
 import { emailNotice } from '@/lib/emailOutcome';
 import { recordEmailOutcome } from '@/lib/emailRecord';
+import type { AudienceCounts } from '@/lib/broadcastSend';
 import type { ScheduledCommunicationRow } from './types';
 
 // A broadcast is also a chat message to each member, and a chat message is limited to 4,000 characters (migration 0108). The database
@@ -27,7 +28,8 @@ export async function getCommunications(): Promise<ScheduledCommunicationRow[]> 
 // Creates a broadcast. The database does the work (create_communication, migration 0097): it works out who the
 // audience is (a coach's own clients, the whole gym, or a group), posts the in-app message to each of them when the
 // time is now, and otherwise schedules it (once, or repeating weekly). Email can't be sent from the database, so for
-// an immediate send the people it reached come back and the email goes out here.
+// an immediate send the people it reached come back and the email goes out here. A whole-gym broadcast's in-app message
+// only goes into the sender's own members' chats (D21, migration 0160); the list that comes back is still everyone, for the email.
 export async function composeCommunication(input: {
   message: string;
   target: 'my_clients' | 'gym' | 'group';
@@ -89,19 +91,21 @@ export async function composeCommunication(input: {
 // How many clients each audience reaches, for the "This will message N" line: the coach's own, and the whole gym. "Whole gym" is the
 // MEMBERS who belong to the gym being worked in (by their own gym), the same people communication_recipients picks (migration 0130).
 // It used to count the members of the coaches whose active gym was this one, so a coach in two gyms was told "90 clients" at a gym
-// with none (R38).
-export async function getAudienceCounts(): Promise<{ mine: number; gym: number }> {
+// with none (R38). `mineAtGym` is the coach's own clients at that gym: the people a whole-gym broadcast messages in the app (D21,
+// migration 0160; everyone at the gym still gets the email).
+export async function getAudienceCounts(): Promise<AudienceCounts> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { mine: 0, gym: 0 };
+  if (!user) return { mine: 0, gym: 0, mineAtGym: 0 };
   const gymId = await resolveScopingGymId(supabase);
-  const [{ count: mine }, { count: gym }] = await Promise.all([
+  const [{ count: mine }, { count: gym }, { count: mineAtGym }] = await Promise.all([
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('coach_id', user.id),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('gym_id', gymId),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('gym_id', gymId).eq('coach_id', user.id),
   ]);
-  return { mine: mine ?? 0, gym: gym ?? 0 };
+  return { mine: mine ?? 0, gym: gym ?? 0, mineAtGym: mineAtGym ?? 0 };
 }
 
 export async function deleteCommunication(id: string): Promise<void> {

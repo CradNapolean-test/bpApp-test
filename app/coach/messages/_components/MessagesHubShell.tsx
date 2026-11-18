@@ -25,6 +25,7 @@ import { useFitToWindow } from '@/app/coach/_components/useFitToWindow';
 import { BroadcastsPane } from './BroadcastsPane';
 import type { ChatOverviewRow, ClientGroupWithMembers, MessageTemplateRow, ScheduledCommunicationRow } from '@/lib/data/types';
 import type { EmailSkipReason } from '@/lib/emailConfig';
+import type { AudienceCounts } from '@/lib/broadcastSend';
 
 type Tab = 'inbox' | 'broadcasts';
 
@@ -46,7 +47,7 @@ export function MessagesHubShell({
   groups: ClientGroupWithMembers[];
   communications: ScheduledCommunicationRow[];
   templates: MessageTemplateRow[];
-  counts: { mine: number; gym: number };
+  counts: AudienceCounts;
   // The gym's own timezone, for scheduling and for the dates shown (R25).
   timezone: string | null;
   email: string;

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { broadcastConfirmation, formatInZone, isPastSchedule, nowAsWallTime, wallTimeToIso, weekdayInZone } from './broadcastSend';
+import {
+  broadcastConfirmation,
+  broadcastReach,
+  formatInZone,
+  gymAudienceNote,
+  isPastSchedule,
+  nowAsWallTime,
+  reachLine,
+  wallTimeToIso,
+  weekdayInZone,
+} from './broadcastSend';
 
 describe('broadcastConfirmation (R25)', () => {
   it('asks with the count and the channel, even for a coach\'s own clients', () => {
@@ -21,9 +31,53 @@ describe('broadcastConfirmation (R25)', () => {
   });
 
   it('names the gym for a coach who works in more than one', () => {
-    const c = broadcastConfirmation({ count: 40, channel: 'message', target: 'gym', gymName: 'Northside' });
+    const c = broadcastConfirmation({ count: 40, channel: 'email', target: 'gym', gymName: 'Northside' });
     expect(c.body).toMatch(/everyone at Northside/);
-    expect(broadcastConfirmation({ count: 40, channel: 'message', target: 'gym' }).body).toMatch(/everyone at the gym/);
+    expect(broadcastConfirmation({ count: 40, channel: 'email', target: 'gym' }).body).toMatch(/everyone at the gym/);
+  });
+
+  it('says a whole-gym message only reaches the coach\'s own clients in the app (D21)', () => {
+    const message = broadcastConfirmation({ count: 12, channel: 'message', target: 'gym', gymName: 'Northside' });
+    expect(message.title).toBe('Send to 12 members by message?');
+    expect(message.body).toMatch(/your own clients at Northside only/);
+    expect(message.body).not.toMatch(/everyone/);
+    const both = broadcastConfirmation({ count: 40, channel: 'both', target: 'gym' });
+    expect(both.body).toMatch(/everyone at the gym by email/);
+    expect(both.body).toMatch(/your own clients' chats in the app/);
+  });
+});
+
+describe('broadcastReach and its wording (D21)', () => {
+  const counts = { mine: 15, gym: 40, mineAtGym: 12 };
+
+  it('a whole-gym message reaches only the coach\'s own clients at the gym in the app', () => {
+    expect(broadcastReach({ target: 'gym', channel: 'message', counts, groupCount: 0 })).toEqual({ messaged: 12, emailed: 0, total: 12 });
+  });
+
+  it('a whole-gym email reaches everyone; both = everyone by email and the coach\'s own in the app', () => {
+    expect(broadcastReach({ target: 'gym', channel: 'email', counts, groupCount: 0 })).toEqual({ messaged: 0, emailed: 40, total: 40 });
+    expect(broadcastReach({ target: 'gym', channel: 'both', counts, groupCount: 0 })).toEqual({ messaged: 12, emailed: 40, total: 40 });
+  });
+
+  it('own clients and groups reach the same people both ways', () => {
+    expect(broadcastReach({ target: 'my_clients', channel: 'both', counts, groupCount: 0 })).toEqual({ messaged: 15, emailed: 15, total: 15 });
+    expect(broadcastReach({ target: 'group', channel: 'message', counts, groupCount: 7 })).toEqual({ messaged: 7, emailed: 0, total: 7 });
+  });
+
+  it('the note under Whole gym follows the channel', () => {
+    expect(gymAudienceNote('message')).toMatch(/only goes into your own clients' chats/);
+    expect(gymAudienceNote('email')).toMatch(/everyone at the gym/);
+    expect(gymAudienceNote('email')).not.toMatch(/in-app/);
+    expect(gymAudienceNote('both')).toMatch(/everyone at the gym.*in-app message only goes into your own/);
+  });
+
+  it('the count line says who is messaged and who is emailed', () => {
+    const reach = (target: 'gym' | 'my_clients', channel: 'message' | 'email' | 'both') => broadcastReach({ target, channel, counts, groupCount: 0 });
+    expect(reachLine({ target: 'gym', channel: 'message', reach: reach('gym', 'message'), repeat: false, gymName: 'Worsley' })).toBe('This will message 12 clients at Worsley.');
+    expect(reachLine({ target: 'gym', channel: 'email', reach: reach('gym', 'email'), repeat: false })).toBe('This will email 40 clients.');
+    expect(reachLine({ target: 'gym', channel: 'both', reach: reach('gym', 'both'), repeat: false })).toBe('This will email 40 clients and message your own 12 in the app.');
+    expect(reachLine({ target: 'gym', channel: 'both', reach: reach('gym', 'both'), repeat: true })).toBe('Each week this emails 40 clients and messages your own 12 in the app.');
+    expect(reachLine({ target: 'my_clients', channel: 'message', reach: reach('my_clients', 'message'), repeat: true })).toBe('Goes to 15 clients each week.');
   });
 });
 

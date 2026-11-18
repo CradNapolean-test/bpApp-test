@@ -44,7 +44,8 @@ export function mergeOverview<T extends OverviewRowLike>(onScreen: T[], fresh: T
 }
 
 // Who wrote the newest message in a conversation, as the coach's list shows it: the member, the coach looking at the list, or someone
-// else in the team (a gym-wide broadcast from another coach lands in every member's thread). Null when there is no message.
+// else in the team (a group broadcast from another coach, or a whole-gym one sent before D21 kept those to the sender's own members'
+// chats, migration 0160). Null when there is no message.
 export type LastSender = 'member' | 'me' | 'team' | null;
 
 export function lastSender(row: { client_id: string; last_message_at: string | null; last_sender_id: string | null }, me: string): LastSender {
