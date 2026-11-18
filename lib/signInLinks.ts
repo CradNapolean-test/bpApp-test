@@ -6,9 +6,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 //
 // Not a 'use server' module on purpose: nothing here may be called straight from the browser.
 
+// 'member': a member's link, whether made when a coach adds or imports them or later from the member's page. 'new_coach': a new coach's.
 export type SignInLinkKind = 'member' | 'new_coach';
 
 export const LINK_NOT_RECORDED = 'The sign-in link could not be recorded, so it was not made. Please try again.';
+
+// When a member was added but their first link could not be recorded: the link is not given out, and one can be made later.
+export const LINK_NOT_RECORDED_NEW_MEMBER =
+  'The member was added, but their sign-in link could not be recorded, so it is not shown. Use "Send password reset link" on their page.';
 
 // Records one link, with the service role (nobody signed in can write the table). Called after the caller's checks and BEFORE the link is
 // shown or emailed: false means it was not recorded, and the link must not be given out.

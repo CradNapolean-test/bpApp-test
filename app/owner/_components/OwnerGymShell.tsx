@@ -166,8 +166,9 @@ export function OwnerGymShell({
                 <section>
                   <h2 className={h2}>Sign-in links made</h2>
                   <p className="mb-3 text-sm text-zinc-500">
-                    Every one-time password link made here: by a member&apos;s coach or an admin from the member&apos;s page, or for a new coach. The person
-                    who makes one can see it, so it is listed. Only you and this gym&apos;s admins see this list.
+                    Every one-time password link made here: for a new member when a coach adds or imports them, by a member&apos;s coach or an admin
+                    from the member&apos;s page, or for a new coach. The person who makes one can see it, so it is listed. Only you and this gym&apos;s
+                    admins see this list.
                   </p>
                   <SignInLinkList links={signInLinks} />
                 </section>

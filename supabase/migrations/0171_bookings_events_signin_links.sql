@@ -67,11 +67,12 @@
 --    coach can't change.
 --
 -- 4. D22 (SE8). A member's coach or a gym admin can make a one-time "choose a new password" link for a member, and is shown it (kept, by
---    decision); whoever adds a new coach is shown that coach's link. Nothing recorded either. New table sign_in_links: one row per link
---    (gym, made_by, made_for, kind 'member' or 'new_coach', created_at), written only by the web server with the service role, after its
---    checks and BEFORE the link is shown or emailed (if the row can't be written, no link is given out). Row Level Security: the gym's
---    admins and the owner read it; nobody signed in can add, change or remove a row. gym_sign_in_links(gym, limit) lists the recent
---    ones with names for the owner's gym page, Team tab.
+--    decision); a coach who adds or imports members is shown each new member's link; whoever adds a new coach is shown that coach's link.
+--    None of them recorded. New table sign_in_links: one row per link (gym, made_by, made_for, kind 'member' (a new member's or one made
+--    from the member's page) or 'new_coach', created_at), written only by the web server with the service role, after its checks and
+--    BEFORE the link is shown or emailed (if the row can't be written, no link is given out; the member or coach is still added). Row
+--    Level Security: the gym's admins and the owner read it; nobody signed in can add, change or remove a row. gym_sign_in_links(gym,
+--    limit) lists the recent ones with names for the owner's gym page, Team tab.
 --
 -- Guard: before changing anything, the migration checks that each function it replaces is the one from the migration named below (or
 -- already this file's), comparing the bodies with spaces and line breaks squeezed out. If one has been changed some other way since, nothing
@@ -157,7 +158,8 @@
 --      "Added by another coach"; A edits it (a member signed up is told) and deletes it. Then switch Admin on for B (owner -> gym ->
 --      Team): B sees Edit and Delete on A's events.
 --   6. D22: on a test member's page, "send a password link" still shows the link; the owner's gym page, Team tab, lists it under "Sign-in
---      links made" with the coach's and the member's names. Signed in as a coach who is not an admin,
+--      links made" with the coach's and the member's names. Adding a test member from Clients (and importing one) shows their link, and
+--      the Team tab lists that too. Signed in as a coach who is not an admin,
 --      select count(*) from public.sign_in_links;  -> 0 (no rows readable).
 --
 -- REVERSE: run, from the migration named in the guard, the definitions of clear_membership_credits (0088), top_up_membership_credits and
@@ -1056,10 +1058,11 @@ grant execute on function public.notify_event_signups(uuid, text) to authenticat
 -- 4. D22 (SE8): every sign-in link made is recorded
 -- =====================================================================================================================================
 
--- One row per one-time "choose a password" link: a member's, made by their coach or a gym admin (the member page), or a new coach's,
--- made by whoever added them (Team, "Add a coach"). Who made it, for whom, at which gym, when. Written only by the web server (the
--- service role) after its own checks, and before the link is shown or emailed; nobody signed in can add, change or remove a row. Read by
--- the gym's admins and the owner (can_manage_gym_business, 0161); the owner sees the recent ones on the gym's Team tab.
+-- One row per one-time "choose a password" link: a member's, made when a coach adds or imports them (Clients) or by their coach or a gym
+-- admin (the member page), or a new coach's, made by whoever added them (Team, "Add a coach"). Who made it, for whom, at which gym, when.
+-- Written only by the web server (the service role) after its own checks, and before the link is shown or emailed; nobody signed in can
+-- add, change or remove a row. Read by the gym's admins and the owner (can_manage_gym_business, 0161); the owner sees the recent ones on
+-- the gym's Team tab.
 create table if not exists public.sign_in_links (
   id uuid primary key default gen_random_uuid(),
   gym_id uuid references public.gyms(id) on delete set null,

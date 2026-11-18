@@ -496,4 +496,32 @@ describe('D22: every sign-in link made is recorded, readable by gym admins and t
     expect(recordAt).toBeLessThan(route.lastIndexOf('link: link.link'));
     expect(route.slice(recordAt)).toMatch(/if \(!recorded\) \{[\s\S]*?link: null,/);
   });
+
+  it('a new member\'s link is recorded before it is shown, whether a coach adds one member or imports several', () => {
+    const call = "await recordSignInLink(admin, { gymId: callerProfile.gym_id, madeBy: user.id, madeFor: created.id, kind: 'member' })";
+
+    const single = read('app/api/coach/create-client/route.ts');
+    const singleAt = single.indexOf(call);
+    expect(singleAt).toBeGreaterThan(single.indexOf('await makePasswordSetLink('));
+    expect(singleAt).toBeLessThan(single.lastIndexOf('link: link.link'));
+    expect(single.slice(singleAt)).toMatch(/if \(!recorded\) \{[\s\S]*?link: null, warning: LINK_NOT_RECORDED_NEW_MEMBER/);
+
+    const bulk = read('app/api/coach/import-clients/route.ts');
+    const bulkAt = bulk.indexOf(call);
+    expect(bulkAt).toBeGreaterThan(bulk.indexOf('await makePasswordSetLink('));
+    expect(bulkAt).toBeLessThan(bulk.lastIndexOf('link: link.link'));
+    // A row whose link could not be recorded gets an error and no link, so the link is not in the coach's file.
+    expect(bulk.slice(bulkAt)).toMatch(/if \(!recorded\) \{[\s\S]*?results\.push\(\{ email, error: [^}]*\}\);\s+continue;/);
+  });
+
+  it('every file in app/ that makes a sign-in link also records it', () => {
+    const makers = (fs.readdirSync(path.join(root, 'app'), { recursive: true }) as string[])
+      .filter((f) => /\.(ts|tsx)$/.test(f))
+      .map((f) => path.join('app', f))
+      .filter((f) => read(f).includes('await makePasswordSetLink('));
+    expect(makers.length).toBeGreaterThanOrEqual(4);
+    for (const f of makers) {
+      expect({ file: f, records: read(f).includes('await recordSignInLink(admin') }).toEqual({ file: f, records: true });
+    }
+  });
 });

@@ -5,9 +5,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { GYM_CHANGED_MESSAGE, gymMatches } from '@/lib/data/gymGuard';
 import { createAccountWithRollback, isValidEmail, normaliseEmail } from '@/lib/accountCreation';
 import { authSteps, makePasswordSetLink, requestOrigin } from '@/lib/accountsServer';
+import { LINK_NOT_RECORDED_NEW_MEMBER, recordSignInLink } from '@/lib/signInLinks';
 
 // A coach adds one member (CM2). No password is made up and shown: the login is created with a random password nobody sees, and the coach
-// is given a one-time link the member opens to choose their own. If the profile cannot be written the login is deleted again.
+// is given a one-time link the member opens to choose their own (recorded first, D22). If the profile cannot be written the login is
+// deleted again.
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -86,6 +88,13 @@ export async function POST(request: Request) {
   if ('error' in link) {
     // The account exists and cannot be used yet: the coach can make a link from the member's page ("Send password reset link").
     return NextResponse.json({ email, clientId: created.id, link: null, warning: link.error });
+  }
+  // Every sign-in link is recorded before it is shown (D22, sign_in_links, migration 0171): the coach could open it before the member
+  // does. The member is added either way; a link that cannot be recorded is not shown.
+  const recorded = await recordSignInLink(admin, { gymId: callerProfile.gym_id, madeBy: user.id, madeFor: created.id, kind: 'member' });
+  if (!recorded) {
+    Sentry.captureMessage('create-client: could not record a sign-in link', { level: 'error', tags: { area: 'accounts' } });
+    return NextResponse.json({ email, clientId: created.id, link: null, warning: LINK_NOT_RECORDED_NEW_MEMBER });
   }
   return NextResponse.json({ email, clientId: created.id, link: link.link });
 }

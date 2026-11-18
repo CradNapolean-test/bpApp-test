@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { GYM_CHANGED_MESSAGE, gymMatches } from '@/lib/data/gymGuard';
 import { IMPORT_BATCH_SIZE, createAccountWithRollback, isValidEmail, normaliseEmail, type ImportRow } from '@/lib/accountCreation';
 import { authSteps, makePasswordSetLink, requestOrigin } from '@/lib/accountsServer';
+import { recordSignInLink } from '@/lib/signInLinks';
 
 // Bulk version of create-client/route.ts's single-account flow -- same steps, looped, with per-row success/failure instead of failing the
 // whole batch on one bad row (a coach pasting 40 emails from a spreadsheet shouldn't lose the other 39 because one already exists).
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
 
   const results: ImportRow[] = [];
   const seen = new Set<string>();
+  let unrecorded = 0;
 
   for (const raw of emails as unknown[]) {
     const email = normaliseEmail(raw);
@@ -93,8 +95,23 @@ export async function POST(request: Request) {
     }
 
     const link = await makePasswordSetLink(admin, email, origin);
-    results.push('error' in link ? { email, error: 'Added, but the sign-in link failed. Use "Send password reset link" on the member\'s page.' } : { email, link: link.link });
+    if ('error' in link) {
+      results.push({ email, error: 'Added, but the sign-in link failed. Use "Send password reset link" on the member\'s page.' });
+      continue;
+    }
+    // Every sign-in link is recorded before it goes into the coach's file (D22, sign_in_links, migration 0171). The member is added
+    // either way; a link that cannot be recorded is left out of the file.
+    const recorded = await recordSignInLink(admin, { gymId: callerProfile.gym_id, madeBy: user.id, madeFor: created.id, kind: 'member' });
+    if (!recorded) {
+      unrecorded += 1;
+      results.push({ email, error: 'Added, but the sign-in link could not be recorded, so it is not in the file. Use "Send password reset link" on the member\'s page.' });
+      continue;
+    }
+    results.push({ email, link: link.link });
   }
 
+  if (unrecorded > 0) {
+    Sentry.captureMessage(`import-clients: could not record ${unrecorded} sign-in link(s)`, { level: 'error', tags: { area: 'accounts' } });
+  }
   return NextResponse.json({ results });
 }
