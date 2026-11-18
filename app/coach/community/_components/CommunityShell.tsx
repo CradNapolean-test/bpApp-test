@@ -11,6 +11,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { createEvent, deleteEvent, getEventAttendees, updateEvent } from '@/lib/data/community';
+import { mayChangeEvent } from '@/lib/eventPermissions';
 import { createReward, deleteReward, markRewardGiven, unmarkRewardGiven } from '@/lib/data/rewards';
 import { getScoresExport, setShirtGiven } from '@/lib/data/bigDog';
 import { gridCsv, scoresCsv } from '@/lib/bigDogExport';
@@ -95,7 +96,9 @@ function EventForm({ event, onDone }: { event?: EventWithSignup; onDone: () => v
   );
 }
 
-function EventRow({ event, past = false }: { event: EventWithSignup; past?: boolean }) {
+// mayChange: the coach added this event, or is an admin of the gym (decision of 11 Nov; the database checks it again). Otherwise the row
+// has no Edit or Delete and says another coach added it.
+function EventRow({ event, past = false, mayChange }: { event: EventWithSignup; past?: boolean; mayChange: boolean }) {
   const { run } = useAction();
   const gymId = useActiveGymId();
   const confirm = useConfirm();
@@ -155,16 +158,19 @@ function EventRow({ event, past = false }: { event: EventWithSignup; past?: bool
           <span className="hidden h-6 shrink-0 items-center rounded-full bg-amber-100 px-2.5 text-xs font-extrabold text-amber-800 sm:inline-flex dark:bg-amber-400/15 dark:text-amber-300">Full</span>
         )}
         <div className="flex shrink-0 items-center">
-          {!past && (
+          {mayChange && !past && (
             <button onClick={() => setEditing(true)} aria-label={`Edit ${event.title}`} className={iconBtn}>
               <Pencil className="h-4 w-4" />
             </button>
           )}
-          <button onClick={remove} aria-label={`Delete ${event.title}`} className={`${iconBtn} hover:text-danger`}>
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {mayChange && (
+            <button onClick={remove} aria-label={`Delete ${event.title}`} className={`${iconBtn} hover:text-danger`}>
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
+      {!mayChange && <p className="ml-[72px] mt-0.5 text-xs text-zinc-500">Added by another coach. Only they, a gym admin or the owner can change it.</p>}
       {event.description && <p className="ml-[72px] mt-1 text-sm text-zinc-600 dark:text-zinc-400">{event.description}</p>}
       {attendees && (
         <ul className="ml-[72px] mt-2 flex flex-wrap gap-1.5">
@@ -302,7 +308,18 @@ function RewardCard({ reward, canEdit, handOut }: { reward: RewardOverview; canE
   );
 }
 
-export function EventsPane({ events, past = [] }: { events: EventWithSignup[]; past?: EventWithSignup[] }) {
+// Any coach adds events. Edit and Delete show on the coach's own events, and on every event for a gym admin (canManageAll).
+export function EventsPane({
+  events,
+  past = [],
+  userId,
+  canManageAll,
+}: {
+  events: EventWithSignup[];
+  past?: EventWithSignup[];
+  userId: string;
+  canManageAll: boolean;
+}) {
   const [adding, setAdding] = useState(false);
   return (
     <section className="max-w-3xl space-y-6">
@@ -321,13 +338,13 @@ export function EventsPane({ events, past = [] }: { events: EventWithSignup[]; p
             <EmptyState icon={CalendarDays} title="No upcoming events" hint="Create one and members can sign up from their app." compact />
           </div>
         ) : (
-          events.map((e) => <EventRow key={e.id} event={e} />)
+          events.map((e) => <EventRow key={e.id} event={e} mayChange={mayChangeEvent(e, userId, canManageAll)} />)
         )}
       </CoachSection>
       {past.length > 0 && (
         <CoachSection title="Past events" count={past.length}>
           {past.map((e) => (
-            <EventRow key={e.id} event={e} past />
+            <EventRow key={e.id} event={e} past mayChange={mayChangeEvent(e, userId, canManageAll)} />
           ))}
         </CoachSection>
       )}

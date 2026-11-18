@@ -51,6 +51,7 @@ export default async function CoachBusinessPage() {
       shirts={shirts}
       overview={overview}
       canEdit={canEdit}
+      userId={user.id}
       unreadCount={unreadCount}
       email={user.email ?? 'Coach'}
     />

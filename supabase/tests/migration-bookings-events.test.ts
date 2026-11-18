@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ModelMember } from './creditWeekModel';
+import { replayPolicies } from './replayPolicies';
 
 // Static checks on migration 0171 (no database): D13a, D13b, events and sign-in links. They read the LATEST definition of each function
 // after every migration is replayed in order. The week-boundary rules of D13b are also run on creditWeekModel.ts, a step-for-step copy
@@ -399,5 +400,61 @@ describe('D13b week boundaries (model of the 0171 SQL)', () => {
     expect(first.weeklyCredits).toBe(1);
     n.startWeek(NEXT_WEEK); // the job on the start date
     expect(n.balance('membership')).toBe(1);
+  });
+});
+
+describe('Events: any coach adds them and changes their own; admins and the owner change anyone\'s', () => {
+  const policies = replayPolicies();
+  const sqlNoComments = migration.replace(/--.*$/gm, '');
+  const policyBody = (name: string) => {
+    const at = sqlNoComments.indexOf(`create policy "${name}"`);
+    expect(at, name).toBeGreaterThan(-1);
+    return sqlNoComments.slice(at, sqlNoComments.indexOf(';', at));
+  };
+
+  it('gym_events ends with one policy per action, and none for all', () => {
+    expect(Object.fromEntries(policies.get('gym_events') ?? new Map())).toEqual({
+      'gym reads gym_events': 'select',
+      'gym coaches add gym_events': 'insert',
+      'event author or gym admins change gym_events': 'update',
+      'event author or gym admins remove gym_events': 'delete',
+    });
+  });
+
+  it('a coach adds an event at their gym, always as themself', () => {
+    expect(policyBody('gym coaches add gym_events')).toMatch(/with check \(created_by = auth\.uid\(\) and \(gym_id = public\.my_gym_id\(\) or public\.can_manage_gym_business\(gym_id\)\)\)/);
+  });
+
+  it('changing or deleting is for the author at that gym, a gym admin or the owner', () => {
+    const body = code('may_manage_gym_event');
+    expect(body).toMatch(/p_created_by = auth\.uid\(\) and coalesce\(p_gym = public\.my_gym_id\(\) or public\.is_coach_in_gym\(p_gym\), false\)/);
+    expect(body).toMatch(/or coalesce\(public\.can_manage_gym_business\(p_gym\), false\)/);
+    expect(policyBody('event author or gym admins change gym_events')).toMatch(
+      /using \(public\.may_manage_gym_event\(gym_id, created_by\)\)\s+with check \(public\.may_manage_gym_event\(gym_id, created_by\)\)/
+    );
+    expect(policyBody('event author or gym admins remove gym_events')).toMatch(/using \(public\.may_manage_gym_event\(gym_id, created_by\)\)/);
+  });
+
+  it('an edit keeps the event\'s author and gym', () => {
+    expect(code('gym_event_keep_author')).toMatch(/new\.created_by := old\.created_by;\s+new\.gym_id := old\.gym_id;/);
+    expect(sqlNoComments).toMatch(/drop trigger if exists gym_event_keep_author on public\.gym_events;\s+create trigger gym_event_keep_author\s+before update on public\.gym_events/);
+  });
+
+  it('messaging the people signed up follows the same rule', () => {
+    const body = code('notify_event_signups');
+    expect(body).toMatch(/if not public\.may_manage_gym_event\(v_event\.gym_id, v_event\.created_by\) then\s+raise exception/);
+    expect(body.indexOf('may_manage_gym_event')).toBeLessThan(body.indexOf('insert into notifications'));
+  });
+
+  it('admins and the owner can read the gym\'s events and sign-ups; members and the gym\'s coaches still can', () => {
+    expect(policyBody('gym reads gym_events')).toMatch(/gym_id = public\.my_gym_id\(\) or gym_id = public\.client_gym_id\(auth\.uid\(\)\) or public\.can_manage_gym_business\(gym_id\)/);
+    expect(policyBody('read own or gym event_signups')).toMatch(/public\.is_self\(client_id\)/);
+    expect(policyBody('read own or gym event_signups')).toMatch(/e\.gym_id = public\.my_gym_id\(\) or public\.can_manage_gym_business\(e\.gym_id\)/);
+  });
+
+  it('the rule is callable by signed-in people (the policies use it); the trigger function is not', () => {
+    expect(access(latest('may_manage_gym_event'))).toEqual({ anon: false, authenticated: true });
+    expect(access(latest('gym_event_keep_author'))).toEqual({ anon: false, authenticated: false });
+    expect(access(latest('notify_event_signups'))).toEqual({ anon: false, authenticated: true });
   });
 });

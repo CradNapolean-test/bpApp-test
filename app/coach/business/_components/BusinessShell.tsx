@@ -78,6 +78,7 @@ export function BusinessShell({
   shirts,
   overview,
   canEdit,
+  userId,
   unreadCount,
   email,
 }: {
@@ -95,6 +96,8 @@ export function BusinessShell({
   overview: BusinessOverview | null;
   // An admin of this gym (or the owner): may add, edit and delete plans, credit packs and rewards.
   canEdit: boolean;
+  // The signed-in coach: Edit and Delete show on the events they added (and on every event when canEdit, decision of 11 Nov).
+  userId: string;
   unreadCount: number;
   email: string;
 }) {
@@ -161,7 +164,7 @@ export function BusinessShell({
         {tab === 'Overview' && overview && <OverviewPane data={overview} />}
         {tab === 'Plans' && <PackageManager initialPackages={packages} memberCounts={planCounts} countsById={planCountsById} canEdit={canEdit} />}
         {tab === 'Credit packs' && <CreditPackManager initialPacks={creditPacks} usage={packUsage} canEdit={canEdit} />}
-        {tab === 'Events' && <EventsPane events={events} past={pastEvents} />}
+        {tab === 'Events' && <EventsPane events={events} past={pastEvents} userId={userId} canManageAll={canEdit} />}
         {tab === 'Rewards' && <RewardsPane rewards={rewards} shirts={shirts} canEdit={canEdit} />}
         {tab === 'Feedback' && <FeedbackPane feedback={feedback} />}
       </AppShell>

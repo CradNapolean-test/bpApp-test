@@ -1,6 +1,7 @@
 -- Bookings, events and sign-in links (live review decisions of 11 Nov 2026). Four parts, each with its own before/after below:
 --   1. D13a (BK11, RO9b): when a plan ends, its member's upcoming bookings are cancelled and refunded.
 --   2. D13b (BK10, RO9a): a booking's credit counts in the week the session runs, not the week it was booked in.
+--   3. Events: any coach adds them and changes their own; only gym admins and the owner change or delete others' or message their sign-ups.
 --
 -- Apply the WHOLE file in one go, after 0167. It must be applied BEFORE the web app that goes with it is deployed: the Book screens ask
 -- member_session_credits (part 2) what each day's sessions can be paid with.
@@ -56,6 +57,12 @@
 --      top_up_membership_credits and replenish_due_memberships (through start_credit_week).
 --    The web Book screen, the phone Book screen and the coach's "add to session" panel check a session's own week before booking.
 --
+-- 3. Events (decision of 11 Nov). One policy (0065) let any coach at the gym change or delete any event, and notify_event_signups (0135)
+--    let any of them message anyone's sign-ups. Now any coach at the gym adds events (as themself) and changes, deletes or messages the
+--    sign-ups of their OWN; a gym admin of that gym or the owner (can_manage_gym_business, 0161) does it for anyone's. The admins and the
+--    owner can also read the gym's events and sign-ups. An event keeps its author and gym (trigger gym_event_keep_author). The rule is
+--    may_manage_gym_event(gym, author); the web's server actions check it first, and the Events tab hides Edit and Delete on events the
+--    coach can't change.
 -- Guard: before changing anything, the migration checks that each function it replaces is the one from the migration named below (or
 -- already this file's), comparing the bodies with spaces and line breaks squeezed out. If one has been changed some other way since, nothing
 -- is changed and it stops with "... is not the one from migration ...". Then send the PRE-FLIGHT's results to the developer instead.
@@ -63,13 +70,13 @@
 -- PRE-FLIGHT (read-only):
 --   select p.proname, md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) as body_md5
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace
---     and p.proname in ('book_class', 'book_class_for_client', 'clear_membership_credits', 'promote_from_waitlist', 'refund_booking_credits',
---                       'replenish_due_memberships', 'top_up_membership_credits')
+--     and p.proname in ('book_class', 'book_class_for_client', 'clear_membership_credits', 'notify_event_signups', 'promote_from_waitlist',
+--                       'refund_booking_credits', 'replenish_due_memberships', 'top_up_membership_credits')
 --   order by 1;
 -- Expected before (one row each): book_class e2b0c419b0b19d6c9b2ad4154fd1649a (0132), book_class_for_client 270fb63ff2e3fd54d21b295fb1f4a1da
--- (0132), clear_membership_credits 9483ea3b336f92c5782a64761083e605 (0088), promote_from_waitlist 9fc7b15cf12a122b341485bd76bac407 (0158),
--- refund_booking_credits 1012d9b77036d76674168aa35f86a0e5 (0132), replenish_due_memberships 39d57cc8c876aa4555c9d2d89042b47f (0144),
--- top_up_membership_credits 5421724d514d7888bd0895a4f3618733 (0144).
+-- (0132), clear_membership_credits 9483ea3b336f92c5782a64761083e605 (0088), notify_event_signups a1f6463fe410d59274e8f92b881cdc62 (0135),
+-- promote_from_waitlist 9fc7b15cf12a122b341485bd76bac407 (0158), refund_booking_credits 1012d9b77036d76674168aa35f86a0e5 (0132),
+-- replenish_due_memberships 39d57cc8c876aa4555c9d2d89042b47f (0144), top_up_membership_credits 5421724d514d7888bd0895a4f3618733 (0144).
 --
 --   -- 1. Upcoming bookings that ending a plan would cancel today: members with no open plan, and bookings after a planned last day.
 --   select count(*) filter (where cm.client_id is null) as no_open_plan,
@@ -89,19 +96,32 @@
 --   select last_reset_week, count(*) from public.client_memberships where ended_at is null group by 1 order by 1;
 -- Live on 18 Nov 2026: 0; 15 plans, all 2026-11-14.
 --
+--   -- 3. The events policies today, and events by author:
+--   select tablename, policyname, cmd from pg_policies where schemaname = 'public' and tablename in ('gym_events', 'event_signups') order by 1, 2;
+--   select e.gym_id, count(*) as events, count(*) filter (where e.created_by is null) as no_author, count(distinct e.created_by) as authors
+--   from public.gym_events e group by 1;
+-- Expected before: event_signups "member leaves event" DELETE, "member signs up for gym event" INSERT, "read own or gym event_signups"
+-- SELECT; gym_events "gym coaches manage gym_events" ALL, "gym reads gym_events" SELECT. An event with no author can then be changed by
+-- admins and the owner only.
+--
 -- AFTER (read-only):
 --   (the PRE-FLIGHT's first query again)
 -- Expected after (this file's bodies): book_class a036ea14d2d41fdb4536a532caa468a0, book_class_for_client 6cfad2f3ee0675e7a8b3a2aac7ed17b6,
--- clear_membership_credits 216799244135448524bd8309db709627, promote_from_waitlist 0b3ac0cbc60ba30bd9f15abc0ca08aa7,
--- refund_booking_credits 4322efbcdd73c453183fd02b49afa736, replenish_due_memberships b3bf7a41c4fb73ce65584ae7d4312e0c,
--- top_up_membership_credits cf4bc960cdab6a80b45101f33e3b0c45.
+-- clear_membership_credits 216799244135448524bd8309db709627, notify_event_signups bf7f98bb5f245ed6c0a7025cf369fda7,
+-- promote_from_waitlist 0b3ac0cbc60ba30bd9f15abc0ca08aa7, refund_booking_credits 4322efbcdd73c453183fd02b49afa736,
+-- replenish_due_memberships b3bf7a41c4fb73ce65584ae7d4312e0c, top_up_membership_credits cf4bc960cdab6a80b45101f33e3b0c45.
+--   (the events policies query again) -> event_signups as before; gym_events "event author or gym admins change gym_events" UPDATE,
+--   "event author or gym admins remove gym_events" DELETE, "gym coaches add gym_events" INSERT, "gym reads gym_events" SELECT.
+--   select tgname from pg_trigger where tgrelid = 'public.gym_events'::regclass and not tgisinternal;  -> gym_event_keep_author
 --
 --   select p.proname, has_function_privilege('authenticated', p.oid, 'execute') as signed_in, has_function_privilege('anon', p.oid, 'execute') as anyone
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace
 --     and p.proname in ('cancel_bookings_for_ended_plan', 'clear_membership_credits', 'session_credit_sources', 'charge_booking',
---                       'start_credit_week', 'refund_booking_credits', 'member_session_credits', 'book_class')
+--                       'start_credit_week', 'refund_booking_credits', 'member_session_credits', 'book_class', 'may_manage_gym_event',
+--                       'gym_event_keep_author', 'notify_event_signups')
 --   order by 1;
--- Expected: book_class and member_session_credits true, false; every other one false, false (only other database functions call them).
+-- Expected: book_class, may_manage_gym_event, member_session_credits and notify_event_signups true, false; every other one false, false
+-- (only other database functions, or the trigger, call them).
 --   select column_name, data_type, column_default, is_nullable from information_schema.columns
 --   where table_schema = 'public' and table_name = 'bookings' and column_name = 'weekly_credits';
 -- Expected: integer, 0, NO. And every existing booking has 0: select count(*) from public.bookings where weekly_credits <> 0;  -> 0
@@ -116,11 +136,17 @@
 --      weekly balance is 3 less those bookings. A next-week session cancelled after its deadline shows as "Booked ... (cancelled, no
 --      refund)" there, not in the week it was cancelled in.
 --   4. Set a planned last day; booking a session after it is refused ("Your plan ends on ...").
+--   5. Events, with two test coaches at one gym (neither an admin): coach A adds a test event; coach B sees it without Edit or Delete and
+--      "Added by another coach"; A edits it (a member signed up is told) and deletes it. Then switch Admin on for B (owner -> gym ->
+--      Team): B sees Edit and Delete on A's events.
 --
 -- REVERSE: run, from the migration named in the guard, the definitions of clear_membership_credits (0088), top_up_membership_credits and
 -- replenish_due_memberships (0144), book_class, book_class_for_client and refund_booking_credits (0132), and promote_from_waitlist
 -- (0158). Held bookings (weekly_credits > 0 with no membership row in credits_ledger) are then never charged: charge them first, or cancel
 -- them. The new functions and the column can stay (nothing else uses them).
+-- Events: run notify_event_signups from 0135 and the gym_events / event_signups policies from 0065, drop the policies "gym coaches add
+-- gym_events", "event author or gym admins change gym_events" and "event author or gym admins remove gym_events", and drop trigger
+-- gym_event_keep_author on public.gym_events.
 --
 -- Safe to run again. No temporary tables.
 
@@ -137,7 +163,8 @@ begin
       ('book_class', '0132', array['e2b0c419b0b19d6c9b2ad4154fd1649a', 'a036ea14d2d41fdb4536a532caa468a0']),
       ('book_class_for_client', '0132', array['270fb63ff2e3fd54d21b295fb1f4a1da', '6cfad2f3ee0675e7a8b3a2aac7ed17b6']),
       ('promote_from_waitlist', '0158', array['9fc7b15cf12a122b341485bd76bac407', '0b3ac0cbc60ba30bd9f15abc0ca08aa7']),
-      ('refund_booking_credits', '0132', array['1012d9b77036d76674168aa35f86a0e5', '4322efbcdd73c453183fd02b49afa736'])
+      ('refund_booking_credits', '0132', array['1012d9b77036d76674168aa35f86a0e5', '4322efbcdd73c453183fd02b49afa736']),
+      ('notify_event_signups', '0135', array['a1f6463fe410d59274e8f92b881cdc62', 'bf7f98bb5f245ed6c0a7025cf369fda7'])
     ) as t(name, migration, accepted)
   loop
     select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_md5
@@ -879,3 +906,126 @@ $fn$;
 
 revoke execute on function public.member_session_credits(uuid, date[]) from public, anon;
 grant execute on function public.member_session_credits(uuid, date[]) to authenticated;
+
+-- =====================================================================================================================================
+-- 3. Events: any coach at the gym adds them and changes their own; gym admins and the owner change anyone's
+-- =====================================================================================================================================
+
+-- May the signed-in person change, delete or message the sign-ups of an event at p_gym added by p_created_by? The coach who added it,
+-- while they work at that gym, or a gym admin of that gym or the owner (can_manage_gym_business, 0161). An event with no author (none
+-- today) is for admins and the owner only. Used by the policies below and notify_event_signups.
+create or replace function public.may_manage_gym_event(p_gym uuid, p_created_by uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $fn$
+  select p_gym is not null
+    and auth.uid() is not null
+    and (
+      (p_created_by = auth.uid() and coalesce(p_gym = public.my_gym_id() or public.is_coach_in_gym(p_gym), false))
+      or coalesce(public.can_manage_gym_business(p_gym), false)
+    );
+$fn$;
+
+revoke execute on function public.may_manage_gym_event(uuid, uuid) from public, anon;
+grant execute on function public.may_manage_gym_event(uuid, uuid) to authenticated;
+
+-- One policy for everything ("gym coaches manage gym_events", 0065) let any coach at the gym change or delete any event. Now:
+drop policy if exists "gym coaches manage gym_events" on public.gym_events;
+
+-- Read: the gym's coaches and members as before, plus the gym's admins and the owner (who have no active gym there).
+drop policy if exists "gym reads gym_events" on public.gym_events;
+create policy "gym reads gym_events"
+  on public.gym_events for select to authenticated
+  using (gym_id = public.my_gym_id() or gym_id = public.client_gym_id(auth.uid()) or public.can_manage_gym_business(gym_id));
+
+-- Add: any coach at their active gym, or an admin or the owner; always as themself.
+drop policy if exists "gym coaches add gym_events" on public.gym_events;
+create policy "gym coaches add gym_events"
+  on public.gym_events for insert to authenticated
+  with check (created_by = auth.uid() and (gym_id = public.my_gym_id() or public.can_manage_gym_business(gym_id)));
+
+-- Change and delete: the coach who added it, a gym admin or the owner.
+drop policy if exists "event author or gym admins change gym_events" on public.gym_events;
+create policy "event author or gym admins change gym_events"
+  on public.gym_events for update to authenticated
+  using (public.may_manage_gym_event(gym_id, created_by))
+  with check (public.may_manage_gym_event(gym_id, created_by));
+
+drop policy if exists "event author or gym admins remove gym_events" on public.gym_events;
+create policy "event author or gym admins remove gym_events"
+  on public.gym_events for delete to authenticated
+  using (public.may_manage_gym_event(gym_id, created_by));
+
+-- An event keeps its author and its gym: an edit cannot hand an event to someone else (or take it to another gym) to get round the
+-- rule above.
+create or replace function public.gym_event_keep_author()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  new.created_by := old.created_by;
+  new.gym_id := old.gym_id;
+  return new;
+end;
+$fn$;
+
+revoke execute on function public.gym_event_keep_author() from public, anon, authenticated;
+
+drop trigger if exists gym_event_keep_author on public.gym_events;
+create trigger gym_event_keep_author
+  before update on public.gym_events
+  for each row execute function public.gym_event_keep_author();
+
+-- Who signed up: the member themself, the gym's coaches (the "who is in" list, as before), and now the gym's admins and the owner.
+drop policy if exists "read own or gym event_signups" on public.event_signups;
+create policy "read own or gym event_signups"
+  on public.event_signups for select
+  using (
+    public.is_self(client_id)
+    or exists (
+      select 1 from gym_events e
+      where e.id = event_id and (e.gym_id = public.my_gym_id() or public.can_manage_gym_business(e.gym_id))
+    )
+  );
+
+-- notify_event_signups: the 0135 definition. Telling the people signed up (a changed time or place, a cancelled event) is now for whoever
+-- may change the event: the coach who added it, a gym admin or the owner (before: any coach at the gym).
+create or replace function public.notify_event_signups(p_event uuid, p_message text)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event gym_events;
+  v_message text := btrim(coalesce(p_message, ''));
+  v_count integer;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authorized';
+  end if;
+  select * into v_event from gym_events where id = p_event;
+  if v_event is null or not coalesce(public.is_coach_in_gym(v_event.gym_id) or public.can_manage_gym_business(v_event.gym_id), false) then
+    raise exception 'Event not found';
+  end if;
+  if not public.may_manage_gym_event(v_event.gym_id, v_event.created_by) then
+    raise exception 'Only the coach who added this event, a gym admin or the owner can message the people signed up.';
+  end if;
+  if char_length(v_message) < 1 or char_length(v_message) > 300 then
+    raise exception 'The message must be 1 to 300 characters.';
+  end if;
+
+  insert into notifications (client_id, message)
+  select s.client_id, v_message from event_signups s where s.event_id = p_event;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke execute on function public.notify_event_signups(uuid, text) from public, anon;
+grant execute on function public.notify_event_signups(uuid, text) to authenticated;
