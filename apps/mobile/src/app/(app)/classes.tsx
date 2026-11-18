@@ -9,7 +9,7 @@ import { addDays, formatClassTime, isoDateInTz, toIsoDate } from '@ballistic/sha
 import { BookSheet, CancelSheet, CreditsHeader, DayStrip, dayLabel, MyBookingCard, SessionSlot } from '@/components/classes';
 import { CardsSkeleton } from '@/components/skeleton';
 import { AppText, Button, Card, Screen, ScrollScreen, Segmented } from '@/components/ui';
-import { useBookClass, useCancelBooking, useMyBookings, useSchedule } from '@/lib/classes';
+import { useBookClass, useCancelBooking, useMyBookings, useSchedule, useSessionCredits } from '@/lib/classes';
 import { timezoneOf, useClientProfile, useCredits, useNow } from '@/lib/today';
 import { useMe } from '@/lib/useMe';
 import { spacing, useTheme } from '@/theme';
@@ -36,6 +36,9 @@ export default function Classes() {
   // The profile holds the timezone that decides "today", so nothing date-specific is fetched before it is known.
   const scheduleQ = useSchedule(gymId, todayIso, weeksAhead, !!profile);
   const bookingsQ = useMyBookings(todayIso, !!profile);
+  // Each bookable day's credits: a session is paid from the week it runs in (D13b), not from what is left this week.
+  const windowDates = Array.from({ length: Math.min(windowDays, 61) + 1 }, (_, i) => toIsoDate(addDays(new Date(`${todayIso}T00:00:00Z`), i)));
+  const sessionCreditsQ = useSessionCredits(windowDates, !!profile);
   const book = useBookClass();
   const cancel = useCancelBooking();
 
@@ -173,7 +176,7 @@ export default function Classes() {
       </ScrollScreen>
 
       {sheet?.kind === 'book' ? (
-        <BookSheet occ={sheet.occ} balance={creditsQ.data?.balance ?? 0} nowMs={nowMs} busy={book.isPending} error={book.error?.message ?? null} onConfirm={() => confirmBook(sheet.occ)} onClose={() => setSheet(null)} />
+        <BookSheet occ={sheet.occ} balance={creditsQ.data?.balance ?? 0} credit={sessionCreditsQ.data?.[sheet.occ.date]} todayIso={todayIso} nowMs={nowMs} busy={book.isPending} error={book.error?.message ?? null} onConfirm={() => confirmBook(sheet.occ)} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.kind === 'cancel' ? (
         <CancelSheet booking={sheet.booking} nowMs={nowMs} blackoutStart={blackoutStart} blackoutEnd={blackoutEnd} busy={cancel.isPending} error={cancel.error?.message ?? null} onConfirm={() => confirmCancel(sheet.booking)} onClose={() => setSheet(null)} />

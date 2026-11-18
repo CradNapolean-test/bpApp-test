@@ -6,10 +6,10 @@ import { useAction } from '@/app/_components/useAction';
 import { useOnDemand } from '@/app/_components/useOnDemand';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { BottomSheet } from '@/app/_components/BottomSheet';
-import { bookClass, cancelBooking, getMemberTimetable } from '@/lib/data/classes';
+import { bookClass, cancelBooking, getMemberTimetable, getSessionCredits } from '@/lib/data/classes';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { bookSheetNote, cancelDeadline, cancelNote, nowLocalMs } from '@/lib/utils/cancelDeadline';
-import { cancelSummary, nextResetDate, startMs } from '@/lib/utils/booking';
+import { cancelSummary, nextResetDate, sessionPayment, shortDayLabel, startMs } from '@/lib/utils/booking';
 import { cancellationPolicyText } from '@/lib/bookingRules';
 import { CheckInButton } from './CheckInButton';
 import { MemberHeader } from './MemberHeader';
@@ -141,6 +141,9 @@ export function ClassesArea({
   // Every day in the window, not just days with sessions -- it reads like a calendar, and a day
   // with nothing on is shown dimmed rather than silently missing.
   const days = Array.from({ length: windowDays + 1 }, (_, i) => toIsoDate(addDays(parseDay(todayIso), i)));
+  // What each day's sessions can be paid with: a credit counts in the week the session runs (D13b, migration 0171), so a session next
+  // week is paid from next week's credits. Read with the timetable, and again after a booking or a cancel.
+  const sessionCredits = useOnDemand(() => getSessionCredits(clientId, days), `${clientId}|${todayIso}|${days.length}`);
   const firstWithSessions = days.find((d) => sessionDates.has(d)) ?? days[0];
   const selectedDate = pickedDate && days.includes(pickedDate) ? pickedDate : firstWithSessions;
 
@@ -418,7 +421,9 @@ export function ClassesArea({
       {bookSheet && (() => {
         const full = bookSheet.bookedCount >= bookSheet.capacity;
         const cost = bookSheet.creditCost;
-        const enough = creditsBalance >= cost;
+        const pay = sessionPayment(bookSheet.date, cost, todayIso, sessionCredits.data?.[bookSheet.date], creditsBalance);
+        const enough = pay.enough;
+        const credits = (n: number) => `${n} credit${n === 1 ? '' : 's'}`;
         const note = bookSheetNote(
           cancelDeadline(bookSheet.date, bookSheet.startTime, bookSheet.cutoffHours, bookSheet.blackoutStart, bookSheet.blackoutEnd),
           nowMs
@@ -428,12 +433,12 @@ export function ClassesArea({
             <div className="divide-y divide-black/5 dark:divide-white/10">
               <SummaryRow label="Session" value={bookSheet.className} />
               <SummaryRow label="When" value={`${longDay(bookSheet.date)} · ${formatClassTime(bookSheet.startTime)}`} />
-              {!full && (
+              {!full && !pay.afterPlanEnd && (
                 <>
-                  <SummaryRow label="Cost" value={`${cost} credit${cost === 1 ? '' : 's'}`} />
+                  <SummaryRow label="Cost" value={credits(cost)} />
                   <SummaryRow
-                    label="You'll have left"
-                    value={enough ? `${creditsBalance - cost} credit${creditsBalance - cost === 1 ? '' : 's'}` : `Only ${creditsBalance}`}
+                    label={pay.laterWeek ? `Left for the week of ${shortDayLabel(pay.weekStart)}` : "You'll have left"}
+                    value={pay.available == null || pay.left == null ? 'Checked when you book' : enough ? credits(pay.left) : `Only ${pay.available}`}
                     tone={enough ? undefined : 'warn'}
                   />
                 </>
@@ -444,10 +449,34 @@ export function ClassesArea({
                 ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit — nothing is used until then."
                 : note.text}
             </p>
-            {/* Top-ups are manual, so the way on is the coach (BK3). A full page load: the dashboard opens Messages from ?open=messages. */}
-            {!full && !enough && (
+            {pay.laterWeek && !full && !pay.afterPlanEnd && (
+              <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
+                Credits count in the week the session runs. This one comes out of the credits for the week starting {shortDayLabel(pay.weekStart)}, not this
+                week&apos;s.
+              </p>
+            )}
+            {pay.afterPlanEnd && sessionCredits.data?.[bookSheet.date]?.planLastDay && (
               <div className="mt-2 rounded-xl bg-warning/10 p-3">
-                <p className="text-xs font-semibold text-warning">You don&apos;t have enough credits for this session. Ask your coach to top up.</p>
+                <p className="text-xs font-semibold text-warning">
+                  Your plan ends on {shortDayLabel(sessionCredits.data[bookSheet.date].planLastDay as string)}, so you can&apos;t book after that yet. Ask your
+                  coach what&apos;s next.
+                </p>
+                <a
+                  href="/dashboard?open=messages"
+                  className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-card px-4 py-2 text-xs font-bold text-black dark:text-zinc-50"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-accent" /> Message your coach
+                </a>
+              </div>
+            )}
+            {/* Top-ups are manual, so the way on is the coach (BK3). A full page load: the dashboard opens Messages from ?open=messages. */}
+            {!full && !enough && !pay.afterPlanEnd && (
+              <div className="mt-2 rounded-xl bg-warning/10 p-3">
+                <p className="text-xs font-semibold text-warning">
+                  {pay.laterWeek
+                    ? `You don't have enough credits for the week starting ${shortDayLabel(pay.weekStart)}. Ask your coach to top up.`
+                    : "You don't have enough credits for this session. Ask your coach to top up."}
+                </p>
                 <a
                   href="/dashboard?open=messages"
                   className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-card px-4 py-2 text-xs font-bold text-black dark:text-zinc-50"
@@ -466,7 +495,7 @@ export function ClassesArea({
               </button>
               <button
                 type="button"
-                disabled={busy || (!full && !enough)}
+                disabled={busy || pay.afterPlanEnd || (!full && !enough)}
                 onClick={() => confirmBook(bookSheet)}
                 className="h-12 flex-[1.4] rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
               >

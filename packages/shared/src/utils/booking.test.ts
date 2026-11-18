@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ScheduleOccurrence } from '../data/types';
-import { bookableOccurrences, bookingWindowDays, bookSummary, cancelSummary, creditWeekStart, isMorning, nextResetDate, slotState, spots, startMs } from './booking';
+import { bookableOccurrences, bookingWindowDays, bookSummary, cancelSummary, creditWeekStart, isMorning, nextResetDate, sessionPayment, shortDayLabel, slotState, spots, startMs } from './booking';
 
 const occ = (over: Partial<ScheduleOccurrence> = {}): ScheduleOccurrence => ({
   classId: 'c', className: 'Strength', date: '2026-10-12', startTime: '06:00', capacity: 12, creditCost: 1, bookedCount: 0,
@@ -121,5 +121,45 @@ describe('nextResetDate', () => {
   });
   it('points a week ahead on a Saturday, because that day\'s reset has already run', () => {
     expect(nextResetDate('2026-10-17')).toBe('2026-10-24');
+  });
+});
+
+// Same cases as lib/utils/booking.test.ts. A credit counts in the week the session runs (D13b, migration 0171). Today is Friday
+// 20 Nov 2026; the next credit week starts Sat 21 Nov.
+describe('sessionPayment', () => {
+  const today = '2026-11-20';
+  const week = (weeklyLeft: number, bonus = 0, planLastDay: string | null = null) => ({ weeklyLeft, bonus, planLastDay });
+
+  it('a session next week is paid from next week\'s credits, not what is left this week', () => {
+    const p = sessionPayment('2026-11-23', 1, today, week(3), 0);
+    expect(p).toMatchObject({ laterWeek: true, weekStart: '2026-11-21', available: 3, enough: true, left: 2, afterPlanEnd: false });
+    expect(sessionPayment('2026-11-23', 1, today, week(0), 3).enough).toBe(false);
+  });
+
+  it('Friday is this week and Saturday the next', () => {
+    expect(sessionPayment('2026-11-20', 1, today, week(1), 1).laterWeek).toBe(false);
+    expect(sessionPayment('2026-11-21', 1, today, week(1), 1).laterWeek).toBe(true);
+  });
+
+  it('bonus credits count in any week', () => {
+    expect(sessionPayment('2026-11-23', 2, today, week(1, 1), 0)).toMatchObject({ available: 2, enough: true, left: 0 });
+    expect(sessionPayment('2026-11-23', 1, today, week(0, -2), 0)).toMatchObject({ available: 0, enough: false });
+  });
+
+  it('a session after the plan\'s planned last day cannot be booked', () => {
+    expect(sessionPayment('2026-11-23', 1, today, week(0, 5, '2026-11-22'), 0)).toMatchObject({ afterPlanEnd: true, enough: false });
+    expect(sessionPayment('2026-11-22', 1, today, week(1, 0, '2026-11-22'), 0)).toMatchObject({ afterPlanEnd: false, enough: true });
+  });
+
+  it('before the numbers load: this week uses the balance on screen, a later week is left to the database', () => {
+    expect(sessionPayment('2026-11-20', 1, today, undefined, 0)).toMatchObject({ available: 0, enough: false });
+    expect(sessionPayment('2026-11-23', 1, today, undefined, 0)).toMatchObject({ available: null, enough: true, left: null });
+  });
+});
+
+describe('shortDayLabel', () => {
+  it('is the short weekday, day and month', () => {
+    expect(shortDayLabel('2026-11-21')).toBe('Sat 21 Nov');
+    expect(shortDayLabel('2027-01-01')).toBe('Fri 1 Jan');
   });
 });

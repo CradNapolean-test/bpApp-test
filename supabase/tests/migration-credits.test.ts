@@ -232,11 +232,14 @@ describe('weekly credits reset on Saturday (credit weeks run Saturday to Friday)
   it('the daily job still resets once per credit week and the two functions stay closed to the API', () => {
     const body = code('replenish_due_memberships');
     expect(body).toMatch(/cm\.last_reset_week is null or cm\.last_reset_week < v_current_week/);
-    expect(body).toMatch(/'membership reset: week of ' \|\| v_current_week/);
+    // Since 0171 both reset through start_credit_week, which writes the same reason and records the Saturday.
+    expect(body).toMatch(/start_credit_week\(v_membership\.id, v_current_week\)/);
+    expect(code('start_credit_week')).toMatch(/'membership reset: week of ' \|\| p_week/);
     expect(latest('replenish_due_memberships').securityDefiner).toBe(true);
     expect(access(latest('replenish_due_memberships'))).toEqual({ anon: false, authenticated: false });
     expect(access(latest('top_up_membership_credits'))).toEqual({ anon: false, authenticated: false });
     // A plan started or changed mid-week must record the same Saturday, or the next daily run would reset the member again.
-    expect(code('top_up_membership_credits')).toMatch(/set last_reset_week = v_week/);
+    expect(code('top_up_membership_credits')).toMatch(/start_credit_week\(p_membership_id, public\.credit_week_start\(current_date\)\)/);
+    expect(code('start_credit_week')).toMatch(/set last_reset_week = p_week/);
   });
 });

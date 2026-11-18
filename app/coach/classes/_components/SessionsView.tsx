@@ -513,6 +513,7 @@ export function SessionsView({
                   excludeIds={bookedIds}
                   full={sessionFull}
                   creditCost={open.creditCost}
+                  date={open.date}
                   busy={booking}
                   onAdd={addClient}
                   onAddWithCredits={addClient}

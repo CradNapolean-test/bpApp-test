@@ -2,7 +2,7 @@ import { Link, useRouter } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@ballistic/shared/data/types';
-import { bookSummary, cancelSummary, slotState, spots } from '@ballistic/shared/utils/booking';
+import { bookSummary, cancelSummary, sessionPayment, shortDayLabel, slotState, spots, type SessionCredit } from '@ballistic/shared/utils/booking';
 import { bookSheetNote, cancelDeadline, cancelNote } from '@ballistic/shared/utils/cancelDeadline';
 import { addDays, formatClassTime, toIsoDate, WEEKDAY_SHORT } from '@ballistic/shared/utils/dates';
 
@@ -117,9 +117,13 @@ function SummaryRow({ label, value, tone }: { label: string; value: string; tone
   );
 }
 
-export function BookSheet({ occ, balance, nowMs, busy, error, onConfirm, onClose }: { occ: ScheduleOccurrence; balance: number; nowMs: number; busy: boolean; error: string | null; onConfirm: () => void; onClose: () => void }) {
+// A credit counts in the week the session runs (D13b, migration 0171): `credit` is what that day's week can pay with (useSessionCredits),
+// and sessionPayment says the same as the web booking sheet. Until it loads, a session this week uses the balance on screen.
+export function BookSheet({ occ, balance, credit, todayIso, nowMs, busy, error, onConfirm, onClose }: { occ: ScheduleOccurrence; balance: number; credit: SessionCredit | undefined; todayIso: string; nowMs: number; busy: boolean; error: string | null; onConfirm: () => void; onClose: () => void }) {
   const router = useRouter();
   const s = bookSummary(occ, balance);
+  const pay = sessionPayment(occ.date, occ.creditCost, todayIso, credit, balance);
+  const canConfirm = !pay.afterPlanEnd && (s.full || pay.enough);
   // After the cancel deadline the sheet says the credit won't come back, instead of "Cancel by ..." (BK21).
   const note = bookSheetNote(cancelDeadline(occ.date, occ.startTime, occ.cutoffHours, occ.blackoutStart, occ.blackoutEnd), nowMs);
   return (
@@ -127,20 +131,48 @@ export function BookSheet({ occ, balance, nowMs, busy, error, onConfirm, onClose
       <View>
         <SummaryRow label="Session" value={occ.className} />
         <SummaryRow label="When" value={`${longDay(occ.date)} · ${formatClassTime(occ.startTime)}`} />
-        {!s.full ? (
+        {!s.full && !pay.afterPlanEnd ? (
           <>
             <SummaryRow label="Cost" value={plural(s.cost, 'credit')} />
-            <SummaryRow label="You'll have left" value={s.enough ? plural(s.left, 'credit') : `Only ${balance}`} tone={s.enough ? undefined : 'warn'} />
+            <SummaryRow
+              label={pay.laterWeek ? `Left for the week of ${shortDayLabel(pay.weekStart)}` : "You'll have left"}
+              value={pay.available == null || pay.left == null ? 'Checked when you book' : pay.enough ? plural(pay.left, 'credit') : `Only ${pay.available}`}
+              tone={pay.enough ? undefined : 'warn'}
+            />
           </>
         ) : null}
       </View>
       <AppText variant="small" color={!s.full && note.late ? 'warning' : 'muted'} style={!s.full && note.late ? { fontWeight: '600' } : undefined}>
         {s.full ? "This session is full. You'll be booked in automatically if a spot opens and you have a credit. Nothing is used until then." : note.text}
       </AppText>
-      {/* Top-ups are manual, so the way on is the coach (BK3, as on the web). */}
-      {!s.full && !s.enough ? (
+      {pay.laterWeek && !s.full && !pay.afterPlanEnd ? (
+        <AppText variant="small" color="muted">
+          Credits count in the week the session runs. This one comes out of the credits for the week starting {shortDayLabel(pay.weekStart)}, not this week&apos;s.
+        </AppText>
+      ) : null}
+      {pay.afterPlanEnd && credit?.planLastDay ? (
         <View style={{ gap: spacing.sm }}>
-          <AppText color="warning" style={{ fontWeight: '600' }}>You don&apos;t have enough credits for this session. Ask your coach to top up.</AppText>
+          <AppText color="warning" style={{ fontWeight: '600' }}>
+            Your plan ends on {shortDayLabel(credit.planLastDay)}, so you can&apos;t book after that yet. Ask your coach what&apos;s next.
+          </AppText>
+          <Button
+            title="Message your coach"
+            variant="secondary"
+            onPress={() => {
+              onClose();
+              router.navigate('/chat');
+            }}
+          />
+        </View>
+      ) : null}
+      {/* Top-ups are manual, so the way on is the coach (BK3, as on the web). */}
+      {!s.full && !pay.enough && !pay.afterPlanEnd ? (
+        <View style={{ gap: spacing.sm }}>
+          <AppText color="warning" style={{ fontWeight: '600' }}>
+            {pay.laterWeek
+              ? `You don't have enough credits for the week starting ${shortDayLabel(pay.weekStart)}. Ask your coach to top up.`
+              : "You don't have enough credits for this session. Ask your coach to top up."}
+          </AppText>
           <Button
             title="Message your coach"
             variant="secondary"
@@ -154,7 +186,7 @@ export function BookSheet({ occ, balance, nowMs, busy, error, onConfirm, onClose
       {error ? <AppText color="danger">{error}</AppText> : null}
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <View style={{ flex: 1 }}><Button title="Not now" variant="secondary" onPress={onClose} /></View>
-        <View style={{ flex: 1.4 }}><Button title={s.full ? 'Join waitlist' : 'Confirm booking'} loading={busy} disabled={!s.canConfirm} onPress={onConfirm} /></View>
+        <View style={{ flex: 1.4 }}><Button title={s.full ? 'Join waitlist' : 'Confirm booking'} loading={busy} disabled={!canConfirm} onPress={onConfirm} /></View>
       </View>
     </SheetFrame>
   );

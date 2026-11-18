@@ -326,6 +326,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
               excludeIds={new Set(members.map((m) => m.clientId))}
               full={booked.length >= initial.capacity}
               creditCost={initial.creditCost}
+              date={initial.date}
               busy={addingBusy}
               onAdd={addWalkIn}
               onAddWithCredits={addWalkIn}

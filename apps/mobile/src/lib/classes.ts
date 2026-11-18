@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { BookingRow, ClassRow, CreditBucketBalances, CreditsLedgerRow, ScheduleOccurrence } from '@ballistic/shared/data/types';
+import type { SessionCredit } from '@ballistic/shared/utils/booking';
 import { applyExceptionsAndCounts, generateOccurrences } from '@ballistic/shared/utils/schedule';
 
 import { useSession } from '@/lib/session';
@@ -84,6 +85,27 @@ export function useCreditBuckets() {
   });
 }
 
+// What the member can pay for a session on each day (member_session_credits, migration 0171, D13b): a credit counts in the week the
+// session runs, so a session next week is paid from next week's credits. Same reader as the web Book screen. An error (the function not
+// there yet) gives an empty answer, which leaves the Book sheet on the balance it already shows; booking still asks the database.
+export function useSessionCredits(dates: string[], enabled: boolean) {
+  const userId = useUserId();
+  const wanted = [...new Set(dates)].sort().slice(0, 62);
+  return useQuery({
+    queryKey: ['session-credits', userId, wanted.join(',')],
+    enabled: enabled && wanted.length > 0,
+    queryFn: async (): Promise<Record<string, SessionCredit>> => {
+      const { data, error } = await supabase.rpc('member_session_credits', { p_client: userId, p_dates: wanted });
+      if (error) return {};
+      const out: Record<string, SessionCredit> = {};
+      for (const r of (data ?? []) as { session_date: string; weekly_left: number; bonus: number; plan_last_day: string | null }[]) {
+        out[r.session_date] = { weeklyLeft: r.weekly_left, bonus: r.bonus, planLastDay: r.plan_last_day };
+      }
+      return out;
+    },
+  });
+}
+
 // The member's credit history, newest first, 20 at a time.
 const LEDGER_PAGE = 20;
 export function useCreditLedger() {
@@ -115,6 +137,7 @@ function useRefreshAfterBooking() {
     qc.invalidateQueries({ queryKey: ['credits', userId] });
     qc.invalidateQueries({ queryKey: ['credit-buckets', userId] });
     qc.invalidateQueries({ queryKey: ['credit-ledger', userId] });
+    qc.invalidateQueries({ queryKey: ['session-credits', userId] });
   };
 }
 

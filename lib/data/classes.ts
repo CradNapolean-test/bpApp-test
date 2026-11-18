@@ -13,6 +13,7 @@ import { notifyWaitlistPromotion, waitlistBeforeCancel } from '@/lib/waitlistPro
 import { countSessionBookings } from '@/lib/classSessionCounts';
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { addDays, DEFAULT_TIMEZONE, nextDateForWeekday, toIsoDate } from '@/lib/utils/dates';
+import type { SessionCredit } from '@/lib/utils/booking';
 import type {
   AttendanceStatus,
   BookingRow,
@@ -220,6 +221,23 @@ export async function grantCreditsAndBook(
   const booked = await bookClassForClient(classId, clientId, bookingDate);
   if (booked.ok) return booked;
   return { ok: false, error: `${credits} credit${credits === 1 ? ' was' : 's were'} added, but the booking didn't go through: ${booked.error}` };
+}
+
+// What a member can pay for a session on each of these days (member_session_credits, migration 0171, D13b): the weekly credits left for
+// the credit week each day is in, bonus credits, and the plan's planned last day. For the member's Book screen and a coach's "add to
+// session" panel; the database checks the caller is the member, their coach or a coach at their gym. An empty answer (the function is
+// not there yet, or nothing could be read) leaves the screens on the balance they already show; booking still asks the database.
+export async function getSessionCredits(clientId: string, dates: string[]): Promise<Record<string, SessionCredit>> {
+  const wanted = [...new Set((Array.isArray(dates) ? dates : []).filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)))].slice(0, 62);
+  if (!clientId || wanted.length === 0) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('member_session_credits', { p_client: clientId, p_dates: wanted });
+  if (error) return {};
+  const out: Record<string, SessionCredit> = {};
+  for (const r of (data ?? []) as { session_date: string; weekly_left: number; bonus: number; plan_last_day: string | null }[]) {
+    out[r.session_date] = { weeklyLeft: r.weekly_left, bonus: r.bonus, planLastDay: r.plan_last_day };
+  }
+  return out;
 }
 
 export async function getCreditsBalance(clientId: string): Promise<number> {
