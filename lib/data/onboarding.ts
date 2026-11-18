@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { after } from 'next/server';
+import { notifyPlanReady } from '@/lib/memberNotify';
 import { ageFromDob, ageProblem, buildOnboardingPlan, isActivityLevel, isMissingColumnError, TRACKING_OPTIONS } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { fail, ok } from './result';
@@ -370,9 +372,11 @@ export async function getClientsNeedingReview(gymId?: string | null): Promise<Re
     .map(({ updatedAt: _updatedAt, ...item }) => item); // eslint-disable-line @typescript-eslint/no-unused-vars
 }
 
-// A coach marks a new member's plan as reviewed (clears the flag).
+// A coach marks a new member's plan as reviewed (clears the flag). When the flag was up, the member is told their plan is ready (D20),
+// in the app and by push, once.
 export async function clearReviewFlag(clientId: string): Promise<ActionResult> {
   const supabase = await createClient();
+  const { data: before } = await supabase.from('client_profiles').select('needs_coach_review').eq('client_id', clientId).maybeSingle();
   const { data, error } = await supabase
     .from('client_profiles')
     .update({ needs_coach_review: false, review_reasons: [] })
@@ -380,5 +384,11 @@ export async function clearReviewFlag(clientId: string): Promise<ActionResult> {
     .select('client_id');
   if (error) return fail(error, 'Could not clear the flag');
   if (!data?.length) return fail(null, 'Could not clear the flag');
+  if (before?.needs_coach_review) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user && user.id !== clientId) after(() => notifyPlanReady(clientId));
+  }
   return ok();
 }

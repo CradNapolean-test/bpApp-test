@@ -508,6 +508,8 @@ export function DashboardShell({
       else if (open === 'book') handleClientTab('Book');
       else if (open === 'checkin') handleCategoryClick('Accountability');
       else if (open === 'nutrition') handleCategoryClick('Nutrition');
+      // The "New programme" notification (D20).
+      else if (open === 'training') handleCategoryClick('Training');
       url.searchParams.delete('open');
       url.searchParams.delete('week');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);

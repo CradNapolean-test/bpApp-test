@@ -122,3 +122,17 @@ describe('MS10: "No reply needed"', () => {
     expect(sql).toMatch(/no_reply_at timestamptz\s*\)/);
   });
 });
+
+describe('D20: session reminders are recorded once per booking', () => {
+  it('session_reminders is keyed by the booking, goes with it, and is service-role only', () => {
+    expect(sql).toMatch(/create table if not exists public\.session_reminders \(\s*booking_id uuid primary key references public\.bookings\(id\) on delete cascade/);
+    expect(sql).toMatch(/alter table public\.session_reminders enable row level security;/);
+    expect(sql).toMatch(/revoke all on table public\.session_reminders from anon, authenticated;/);
+    expect(sql).not.toMatch(/create\s+policy[^;]*session_reminders/i);
+  });
+
+  it('leaves the booking and credit functions and tables alone', () => {
+    expect(sql).not.toMatch(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?\w*(?:book|credit|cancel|waitlist|refund)\w*\s*\(/i);
+    expect(sql).not.toMatch(/alter\s+table\s+(?:public\.)?(?:bookings|credits_ledger|classes)\b/i);
+  });
+});

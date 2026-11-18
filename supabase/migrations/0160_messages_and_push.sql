@@ -3,6 +3,7 @@
 --      send_due_communications).
 --   2. MS10: a coach can mark a conversation "No reply needed" (chat_threads.coach_no_reply_at, set_chat_no_reply,
 --      get_coach_chat_overview).
+--   3. D20: session_reminders, so the reminder before a booked session never goes twice for the same booking.
 --
 -- 1. D21 (MS7, MS8). A broadcast is saved as a chat message from the coach who sent it. A whole-gym one went into every member's thread at
 --   the gym, so every other coach saw it in their own members' threads drawn as the member's message, and counted as unread (unread means
@@ -28,6 +29,13 @@
 --   get_coach_chat_overview (last defined in migration 0086) gives the coach's list; it returns one more column, no_reply_at. Adding an
 --     output column needs a drop and create, so its execute rights are set again as they were (signed-in users only, 0105). The rows, the
 --     last message and the unread count are unchanged, and still only for the caller's own members.
+--
+-- 3. D20. A push about 2 hours before a booked session (the evening before for an early class), sent by a new hourly job
+--   (/api/cron/session-reminders, called by the GitHub Actions workflow that already runs every hour). New table session_reminders: one
+--   row per booking reminded (booking_id is the primary key, so a second run, or two at once, cannot remind the same booking again). It
+--   is gone with the booking (on delete cascade), and the job removes rows older than 30 days. Written and read by the job's service role
+--   only: Row Level Security is on with no rule, and members and coaches have no access to it. Nothing about bookings, credits or their
+--   functions changes. The other D20 pushes (plan ready, programme assigned, credits added) are sent by the app and need nothing here.
 --
 -- Guard: before changing anything, the migration checks each function it replaces is the expected current one (or already this file's),
 -- comparing their bodies with spaces and line breaks squeezed out. If one has been changed some other way since, nothing is changed and it
@@ -59,6 +67,10 @@
 --   where table_schema = 'public' and table_name = 'chat_threads' order by ordinal_position;
 --   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'chat_threads';
 --
+--   -- 3. Booked sessions in the next day with a start time (each will get a reminder once push is switched on):
+--   select count(*) from bookings b join classes c on c.id = b.class_id
+--   where b.status = 'booked' and c.start_time is not null and b.booking_date between current_date and current_date + 1;
+--
 -- AFTER (read-only):
 --   (the PRE-FLIGHT's first query again)
 -- Expected after: create_communication e428390440a2329b9fc8d28635bdc974, get_coach_chat_overview 2ea72539458e9a80e17d857b22379d3e,
@@ -80,16 +92,26 @@
 -- Expected: false, true, false, true.
 -- Then, as a coach: Messages, Needs reply, the "..." on a conversation, "No reply needed". It leaves Needs reply; after a reload it stays out.
 -- Afterwards (read-only): select count(*) from chat_threads where coach_no_reply_at is not null; -- expected: 1 or more
+--   select c.relrowsecurity as rls_on, (select count(*) from pg_policies p where p.schemaname = 'public' and p.tablename = 'session_reminders') as rules,
+--          has_table_privilege('authenticated', 'public.session_reminders', 'select') as signed_in_can_read,
+--          has_table_privilege('anon', 'public.session_reminders', 'select') as anyone_can_read
+--   from pg_class c where c.oid = 'public.session_reminders'::regclass;
+-- Expected: true, 0, false, false.
+-- Once push is on and CRON_SECRET is in GitHub, after a session with bookings (read-only):
+--   select count(*) as reminded, count(distinct booking_id) as bookings from session_reminders; -- the two are always equal
+--   select job, ran_at, ok, detail from job_runs where job = 'session-reminders' order by ran_at desc limit 5;
 --
 -- REVERSE: run create_communication's definition from migration 0097 and send_due_communications' from migration 0133 again (each from its
 -- "create or replace function" line to its closing delimiter; same arguments and return types, so no drop is needed). For part 2:
 -- drop function public.get_coach_chat_overview(); then run its definition from migration 0086 and 0105's
 -- "revoke execute on function public.get_coach_chat_overview() from public, anon;"; drop function public.set_chat_no_reply(uuid, boolean);
--- the column can stay (nothing else reads it), or: alter table public.chat_threads drop column coach_no_reply_at.
+-- the column can stay (nothing else reads it), or: alter table public.chat_threads drop column coach_no_reply_at. For part 3: drop table
+-- public.session_reminders (the job then fails without sending anything, so take its step out of the workflow first).
 --
 -- Must be applied before the app update that goes with it ships: the Broadcasts screen then says a whole-gym message only reaches the
--- coach's own members in the app, and "No reply needed" calls set_chat_no_reply (without it the choice fails with "Could not save that").
--- The new app reads no_reply_at only when it is there, so the Messages list itself works either way.
+-- coach's own members in the app, "No reply needed" calls set_chat_no_reply (without it the choice fails with "Could not save that"), and
+-- the reminder job needs session_reminders (without it, it sends nothing and records a failed run). The new app reads no_reply_at only
+-- when it is there, so the Messages list itself works either way.
 --
 -- Safe to run again. No temporary tables.
 
@@ -339,3 +361,15 @@ $$;
 
 revoke execute on function public.get_coach_chat_overview() from public, anon;
 grant execute on function public.get_coach_chat_overview() to authenticated;
+-- ---- 3. D20: one reminder per booking -----------------------------------------------------------------------------------------------
+
+create table if not exists public.session_reminders (
+  booking_id uuid primary key references public.bookings(id) on delete cascade,
+  sent_at timestamptz not null default now()
+);
+
+create index if not exists session_reminders_sent_at_idx on public.session_reminders (sent_at);
+
+-- Written and read with the service role only (the hourly job): no rule, so the API shows members and coaches nothing.
+alter table public.session_reminders enable row level security;
+revoke all on table public.session_reminders from anon, authenticated;

@@ -9,6 +9,7 @@ import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { affectedMembers, type AffectedBooking } from '@/lib/classCancelPush';
 import { notifyClassCancelled } from '@/lib/classCancelNotify';
+import { notifyCreditsAdded } from '@/lib/memberNotify';
 import { notifyWaitlistPromotion, waitlistBeforeCancel } from '@/lib/waitlistPromotionNotify';
 import { countSessionBookings } from '@/lib/classSessionCounts';
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
@@ -216,7 +217,7 @@ export async function grantCreditsAndBook(
   credits: number,
   sessionLabel: string
 ): Promise<ActionResult> {
-  const granted = await grantCredits(clientId, credits, `Added at the door: ${sessionLabel}`.slice(0, 200));
+  const granted = await addCredits(clientId, credits, `Added at the door: ${sessionLabel}`.slice(0, 200));
   if (!granted.ok) return granted;
   const booked = await bookClassForClient(classId, clientId, bookingDate);
   if (booked.ok) return booked;
@@ -290,6 +291,15 @@ export async function grantCredits(
   reason: string,
   expiresAt?: string | null
 ): Promise<ActionResult> {
+  const added = await addCredits(clientId, amount, reason, expiresAt);
+  // D20: the member is told (in the app, and by push) once the credits are in.
+  if (added.ok) after(() => notifyCreditsAdded(clientId, amount, expiresAt ?? null));
+  return added;
+}
+
+// grantCredits without telling the member: a walk-in's credits at the door (grantCreditsAndBook) are spent on the spot, so "credits added,
+// book a class" would only confuse them.
+async function addCredits(clientId: string, amount: number, reason: string, expiresAt?: string | null): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('grant_credits', {
     p_client: clientId,

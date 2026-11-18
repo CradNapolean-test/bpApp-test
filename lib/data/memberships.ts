@@ -7,6 +7,7 @@ import { businessWriteFailed, businessWriteGym, onlyAdminMessage } from './busin
 import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { notifyWaitlistPromotion, waitlistsBeforePlanEnd } from '@/lib/waitlistPromotionNotify';
+import { notifyCreditPackAdded } from '@/lib/memberNotify';
 import { HISTORY_PAGE, type CreditFilter } from '@/lib/creditsForm';
 import type { ClientMembershipRow, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from './types';
 
@@ -206,7 +207,10 @@ export async function deleteCreditPack(packId: string, expectedGymId?: string | 
 export async function grantCreditPack(clientId: string, packId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.rpc('grant_credit_pack', { p_client: clientId, p_pack: packId });
-  return error ? fail(error, 'Could not give that pack') : ok();
+  if (error) return fail(error, 'Could not give that pack');
+  // D20: the member is told (in the app, and by push) once the credits are in.
+  after(() => notifyCreditPackAdded(clientId, packId));
+  return ok();
 }
 
 // ---- Coach membership panel (migration 0088) ----

@@ -5,6 +5,8 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
+import { after } from 'next/server';
+import { notifyProgrammeAssigned } from '@/lib/memberNotify';
 import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
 import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type {
@@ -349,7 +351,13 @@ export async function instantiateProgramTemplate(
     p_program_name: programName,
     p_start_date: startDate,
   });
-  return error ? fail(error, 'Could not start that programme') : ok();
+  if (error) return fail(error, 'Could not start that programme');
+  // D20: the member is told (in the app, and by push) when a coach sets them up with a programme; not when they start one themselves.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user && user.id !== clientId) after(() => notifyProgrammeAssigned(clientId, programName));
+  return ok();
 }
 
 // Rollouts not yet given out, soonest first.

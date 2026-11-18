@@ -1,7 +1,8 @@
-# Vercel's free plan only runs cron jobs once a day, so this nudges the broadcast job every hour instead. That
-# is what lets "9:00 on Sunday" go out at 9:00 rather than the next morning. Needs a repository secret called
-# CRON_SECRET with the same value as the one set in Vercel; without it this does nothing.
-name: Hourly broadcasts
+# Vercel's free plan only runs cron jobs once a day, so this nudges the hourly jobs instead: the broadcast job (that is what lets
+# "9:00 on Sunday" go out at 9:00 rather than the next morning) and the reminder before a booked session (decision D20, about 2 hours
+# before it starts). Needs a repository secret called CRON_SECRET with the same value as the one set in Vercel; without it this does
+# nothing.
+name: Hourly broadcasts and reminders
 on:
   schedule:
     - cron: '5 * * * *'
@@ -21,3 +22,16 @@ jobs:
           fi
           curl --fail --silent --show-error -H "Authorization: Bearer $CRON_SECRET" \
             https://central-hub-eta.vercel.app/api/cron/send-communications
+
+      # Runs even when the broadcast step failed, so one job's trouble does not hold up the other's.
+      - name: Send session reminders
+        if: ${{ !cancelled() }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error -H "Authorization: Bearer $CRON_SECRET" \
+            https://central-hub-eta.vercel.app/api/cron/session-reminders
