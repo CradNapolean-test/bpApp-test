@@ -64,7 +64,7 @@ export function MessagesHubShell({
   // Phone only: whether a conversation is open (otherwise the list shows).
   const [threadOpen, setThreadOpen] = useState(false);
   const phoneThread = tab === 'inbox' && threadOpen;
-  const { localOverview, selected, selectClient, markRead, markUnread, messages, loading, loadError, loadId, retryLoad, selectedClient } =
+  const { localOverview, selected, selectClient, markRead, markUnread, markNoReply, messages, loading, loadError, loadId, retryLoad, selectedClient } =
     useCoachMessages(overview, currentUserId);
   // On a wide screen the open conversation fills the rest of the window (the page's own 40px padding under it), so the reply box is
   // always on screen and switching conversations does not change the page's height (it used to shrink to "Loading…" and jump).
@@ -146,6 +146,7 @@ export function MessagesHubShell({
               onSelect={pick}
               onMarkRead={markRead}
               onMarkUnread={markUnread}
+              onMarkNoReply={markNoReply}
               currentUserId={currentUserId}
               fitToWindow
             />
@@ -165,6 +166,7 @@ export function MessagesHubShell({
                 onSelect={pick}
                 onMarkRead={markRead}
                 onMarkUnread={markUnread}
+                onMarkNoReply={markNoReply}
                 currentUserId={currentUserId}
               />
             </div>

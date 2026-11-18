@@ -3,10 +3,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { pop, useGSAP } from '@/app/_components/motion/gsap';
 import { MessageSquare } from 'lucide-react';
-import { DropdownMenu } from '@/app/_components/DropdownMenu';
+import { DropdownMenu, type DropdownMenuItem } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Avatar } from '@/app/_components/Avatar';
-import { lastSender, needsReply } from '@/lib/inboxOverview';
+import { lastSender, needsReply, replyNotNeeded } from '@/lib/inboxOverview';
 import { useFitToWindow } from './useFitToWindow';
 import type { ChatOverviewRow } from '@/lib/data/types';
 
@@ -24,8 +24,8 @@ type FilterMode = 'active' | 'reply' | 'unread' | 'all';
 
 const FILTER_LABEL: Record<FilterMode, string> = { active: 'Active', reply: 'Needs reply', unread: 'Unread', all: 'All' };
 
-// Said before the preview so the coach can tell at a glance whose turn it is: their own last word, a colleague's (a gym-wide broadcast
-// lands in every thread), or nothing for the member's own message.
+// Said before the preview so the coach can tell at a glance whose turn it is: their own last word, a colleague's (a group broadcast, or a
+// whole-gym one sent before D21), or nothing for the member's own message.
 const SENDER_PREFIX = { me: 'You: ', team: 'Another coach: ' } as const;
 
 export function ConversationList({
@@ -34,6 +34,7 @@ export function ConversationList({
   onSelect,
   onMarkRead,
   onMarkUnread,
+  onMarkNoReply,
   currentUserId,
   fitToWindow = false,
 }: {
@@ -43,6 +44,8 @@ export function ConversationList({
   // When given, each conversation gets a menu to mark it read or unread.
   onMarkRead?: (clientId: string) => void;
   onMarkUnread?: (clientId: string) => void;
+  // "No reply needed" (MS10): takes a conversation out of Needs reply until the member writes again; false puts it back.
+  onMarkNoReply?: (clientId: string, noReply: boolean) => void;
   // The coach looking at the list, so their own last message reads "You: …".
   currentUserId: string;
   // The Messages page's left column: the list scrolls inside itself and ends at the bottom of the window, level with the open thread.
@@ -112,8 +115,16 @@ export function ConversationList({
       >
         {filtered.map((c) => {
           const sender = lastSender(c, currentUserId);
-          const waiting = sender === 'member';
+          const waiting = needsReply(c);
+          const settled = replyNotNeeded(c);
           const preview = c.last_message ?? (c.last_message_at ? 'Attachment' : 'No messages yet');
+          const menu: DropdownMenuItem[] = [
+            c.unread_count > 0
+              ? { label: 'Mark as read', onSelect: () => onMarkRead?.(c.client_id) }
+              : { label: 'Mark as unread', onSelect: () => onMarkUnread?.(c.client_id) },
+          ];
+          if (onMarkNoReply && waiting) menu.push({ label: 'No reply needed', onSelect: () => onMarkNoReply(c.client_id, true) });
+          if (onMarkNoReply && settled) menu.push({ label: 'Needs a reply after all', onSelect: () => onMarkNoReply(c.client_id, false) });
           return (
             <div
               key={c.client_id}
@@ -137,18 +148,12 @@ export function ConversationList({
                       {preview}
                     </p>
                     {waiting && c.unread_count === 0 && <p className="mt-0.5 text-[11px] font-semibold text-accent">Needs reply</p>}
+                    {settled && <p className="mt-0.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">No reply needed</p>}
                   </div>
                 </div>
               </button>
-              {(onMarkRead || onMarkUnread) && c.last_message_at && (
-                <DropdownMenu
-                  triggerLabel={`More actions for ${c.client_name}`}
-                  items={
-                    c.unread_count > 0
-                      ? [{ label: 'Mark as read', onSelect: () => onMarkRead?.(c.client_id) }]
-                      : [{ label: 'Mark as unread', onSelect: () => onMarkUnread?.(c.client_id) }]
-                  }
-                />
+              {(onMarkRead || onMarkUnread || onMarkNoReply) && c.last_message_at && (
+                <DropdownMenu triggerLabel={`More actions for ${c.client_name}`} items={menu} />
               )}
             </div>
           );

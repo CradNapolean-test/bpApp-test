@@ -51,6 +51,7 @@ describe('migration 0160', () => {
     for (const [name, from] of [
       ['create_communication', '0097'],
       ['send_due_communications', '0133'],
+      ['get_coach_chat_overview', '0086'],
     ] as const) {
       const before = bodyMd5(bodyIn(name, from));
       const after = bodyMd5(latest(name).body);
@@ -83,5 +84,41 @@ describe('D21: a whole-gym broadcast goes into the sender\'s own members\' chats
   it('leaves messages already sent alone', () => {
     expect(sql).not.toMatch(/delete\s+from\s+(?:public\.)?chat_messages/i);
     expect(sql).not.toMatch(/update\s+(?:public\.)?chat_messages/i);
+  });
+});
+
+describe('MS10: "No reply needed"', () => {
+  it('adds the stamp to chat_threads, and can be run twice', () => {
+    expect(sql).toMatch(/alter table public\.chat_threads add column if not exists coach_no_reply_at timestamptz/);
+    expect(sql).toMatch(/drop function if exists public\.get_coach_chat_overview\(\);/);
+  });
+
+  it('opens no new rule on the chat tables: chat stays the member\'s and their own coach\'s (0153)', () => {
+    expect(sql).not.toMatch(/create\s+policy[^;]*chat_(?:messages|threads)/i);
+    expect(sql).not.toMatch(/grant\s+(?:insert|update|delete|all)[^;]*chat_threads/i);
+  });
+
+  it('set_chat_no_reply is for the member\'s own coach only, and marks the thread read', () => {
+    const fn = latest('set_chat_no_reply');
+    expect(fn.securityDefiner).toBe(true);
+    expect(fn.searchPath).toBe('public');
+    expect(access(fn)).toEqual({ anon: false, authenticated: true });
+    const body = code('set_chat_no_reply');
+    expect(body).toMatch(/if p_client_id is null or not coalesce\(public\.is_coach_of\(p_client_id\), false\) then\s+raise exception/);
+    expect(body).toMatch(/coach_no_reply_at = now\(\)/);
+    expect(body).toMatch(/coach_last_read_at = greatest\(chat_threads\.coach_last_read_at, now\(\)\)/);
+    expect(body).toMatch(/set coach_no_reply_at = null/);
+  });
+
+  it('the inbox overview returns the stamp, still for the caller\'s own members only, with the same unread rule', () => {
+    const fn = latest('get_coach_chat_overview');
+    expect(fn.file).toMatch(/^0160_/);
+    expect(fn.securityDefiner).toBe(true);
+    expect(access(fn)).toEqual({ anon: false, authenticated: true });
+    const body = code('get_coach_chat_overview');
+    expect(body).toMatch(/ct\.coach_no_reply_at/);
+    expect(body).toMatch(/where p\.coach_id = auth\.uid\(\)/);
+    expect(body).toMatch(/cm\.sender_id <> auth\.uid\(\)/);
+    expect(sql).toMatch(/no_reply_at timestamptz\s*\)/);
   });
 });

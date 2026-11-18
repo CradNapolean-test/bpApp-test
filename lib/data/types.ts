@@ -206,6 +206,8 @@ export interface ChatOverviewRow {
   last_message_at: string | null;
   last_sender_id: string | null;
   unread_count: number;
+  // When the coach marked the conversation "No reply needed" (MS10, migration 0160); missing before that migration.
+  no_reply_at?: string | null;
 }
 
 export interface ClassRow {

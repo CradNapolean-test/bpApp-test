@@ -1,6 +1,8 @@
 -- Messages and push (live review decisions of 11 Nov 2026). Each part has its own before/after below:
 --   1. D21: a whole-gym broadcast is posted only into the sending coach's own members' chats (create_communication,
 --      send_due_communications).
+--   2. MS10: a coach can mark a conversation "No reply needed" (chat_threads.coach_no_reply_at, set_chat_no_reply,
+--      get_coach_chat_overview).
 --
 -- 1. D21 (MS7, MS8). A broadcast is saved as a chat message from the coach who sent it. A whole-gym one went into every member's thread at
 --   the gym, so every other coach saw it in their own members' threads drawn as the member's message, and counted as unread (unread means
@@ -14,6 +16,19 @@
 --   the app emails that list. send_due_communications (last defined in migration 0133) sends the scheduled ones (the send-communications
 --   job). Nothing else in either function changes.
 --
+-- 2. MS10. The coach's Messages list has a "Needs reply" filter: conversations whose newest message is the member's. A thread stayed there
+--   until the coach wrote, even when the member's last word was "thanks" (live on 6 Nov, 1 of the 5 under Needs reply).
+-- After: the coach can choose "No reply needed" on a conversation (the menu on each row). That stamps the new column
+--   chat_threads.coach_no_reply_at with the time and marks the conversation read; the app leaves it out of Needs reply until the member
+--   writes again (a message newer than the stamp). "Needs a reply after all" clears the stamp.
+--   New: chat_threads.coach_no_reply_at (timestamptz, empty by default). chat_threads keeps its only rule, "select own or coached
+--     chat_threads" (0014): the member and their own coach can read it, nobody else (0153). Nobody writes it directly: there is no write rule,
+--     only the new set_chat_no_reply(member, true/false), which refuses anyone but the member's own coach (as mark_chat_unread, 0099). The
+--     member can read the stamp on their own thread through the database API, as they can read the coach's last-read time today.
+--   get_coach_chat_overview (last defined in migration 0086) gives the coach's list; it returns one more column, no_reply_at. Adding an
+--     output column needs a drop and create, so its execute rights are set again as they were (signed-in users only, 0105). The rows, the
+--     last message and the unread count are unchanged, and still only for the caller's own members.
+--
 -- Guard: before changing anything, the migration checks each function it replaces is the expected current one (or already this file's),
 -- comparing their bodies with spaces and line breaks squeezed out. If one has been changed some other way since, nothing is changed and it
 -- stops with "... is not the one from migration ...". Then send the PRE-FLIGHT's results to the developer instead.
@@ -21,9 +36,9 @@
 -- PRE-FLIGHT (read-only):
 --   select p.proname, md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) as body_md5
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace
---     and p.proname in ('create_communication', 'send_due_communications') order by 1;
--- Expected before: create_communication 345eaadd17306e4d1e63b6edd4f2a82f (0097's body), send_due_communications
--- fb1477aeb5df7688cbfb197e3a23f3be (0133's body).
+--     and p.proname in ('create_communication', 'send_due_communications', 'get_coach_chat_overview') order by 1;
+-- Expected before: create_communication 345eaadd17306e4d1e63b6edd4f2a82f (0097's body), get_coach_chat_overview
+-- 45993cf5e035774b4d8da8f5157d9226 (0086's body), send_due_communications fb1477aeb5df7688cbfb197e3a23f3be (0133's body).
 --
 --   -- 1. Whole-gym broadcasts not sent yet (one-off or repeating): from their next send, the in-app message reaches only the sender's own
 --   -- members (own_members_at_gym); everyone at the gym (members_at_gym) still gets the email when the channel is email or both.
@@ -39,10 +54,15 @@
 --   from scheduled_communications sc join profiles c on c.id = sc.coach_id
 --   where sc.target_type in ('gym', 'all_clients') and sc.sent_at is not null group by 1 order by 1;
 --
+--   -- 2. The chat_threads columns and rules today (expected: client_id, client_last_read_at, coach_last_read_at; one rule, a select):
+--   select column_name, data_type from information_schema.columns
+--   where table_schema = 'public' and table_name = 'chat_threads' order by ordinal_position;
+--   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'chat_threads';
+--
 -- AFTER (read-only):
 --   (the PRE-FLIGHT's first query again)
--- Expected after: create_communication e428390440a2329b9fc8d28635bdc974, send_due_communications b1e2515386a5649c8db9cd57c7daefb8 (this
--- file's bodies).
+-- Expected after: create_communication e428390440a2329b9fc8d28635bdc974, get_coach_chat_overview 2ea72539458e9a80e17d857b22379d3e,
+-- send_due_communications b1e2515386a5649c8db9cd57c7daefb8 (this file's bodies).
 --   select has_function_privilege('anon', 'public.create_communication(text, text, uuid, timestamptz, text, text)', 'execute') as anyone,
 --          has_function_privilege('authenticated', 'public.create_communication(text, text, uuid, timestamptz, text, text)', 'execute') as coaches,
 --          has_function_privilege('authenticated', 'public.send_due_communications()', 'execute') as members_can_run_job;
@@ -51,12 +71,25 @@
 --   select p.coach_id = cm.sender_id as own_member, count(*) from chat_messages cm join profiles p on p.id = cm.client_id
 --   where cm.sender_id = '<that coach''s id>' and cm.created_at > now() - interval '10 minutes' group by 1;
 -- Expected: one row, own_member true (nothing in other coaches' members' threads).
+--   (the PRE-FLIGHT's chat_threads queries again)
+-- Expected: the same three columns plus coach_no_reply_at (timestamp with time zone); still the one select rule.
+--   select has_function_privilege('anon', 'public.set_chat_no_reply(uuid, boolean)', 'execute') as anyone,
+--          has_function_privilege('authenticated', 'public.set_chat_no_reply(uuid, boolean)', 'execute') as signed_in,
+--          has_function_privilege('anon', 'public.get_coach_chat_overview()', 'execute') as anyone_overview,
+--          has_function_privilege('authenticated', 'public.get_coach_chat_overview()', 'execute') as signed_in_overview;
+-- Expected: false, true, false, true.
+-- Then, as a coach: Messages, Needs reply, the "..." on a conversation, "No reply needed". It leaves Needs reply; after a reload it stays out.
+-- Afterwards (read-only): select count(*) from chat_threads where coach_no_reply_at is not null; -- expected: 1 or more
 --
 -- REVERSE: run create_communication's definition from migration 0097 and send_due_communications' from migration 0133 again (each from its
--- "create or replace function" line to its closing delimiter; same arguments and return types, so no drop is needed).
+-- "create or replace function" line to its closing delimiter; same arguments and return types, so no drop is needed). For part 2:
+-- drop function public.get_coach_chat_overview(); then run its definition from migration 0086 and 0105's
+-- "revoke execute on function public.get_coach_chat_overview() from public, anon;"; drop function public.set_chat_no_reply(uuid, boolean);
+-- the column can stay (nothing else reads it), or: alter table public.chat_threads drop column coach_no_reply_at.
 --
 -- Must be applied before the app update that goes with it ships: the Broadcasts screen then says a whole-gym message only reaches the
--- coach's own members in the app.
+-- coach's own members in the app, and "No reply needed" calls set_chat_no_reply (without it the choice fails with "Could not save that").
+-- The new app reads no_reply_at only when it is there, so the Messages list itself works either way.
 --
 -- Safe to run again. No temporary tables.
 
@@ -64,6 +97,7 @@ do $guard$
 declare
   v_create text;
   v_due text;
+  v_overview text;
 begin
   select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_create
   from pg_proc p
@@ -77,6 +111,13 @@ begin
   where p.pronamespace = 'public'::regnamespace and p.proname = 'send_due_communications';
   if v_due is null or v_due not in ('fb1477aeb5df7688cbfb197e3a23f3be', 'b1e2515386a5649c8db9cd57c7daefb8') then
     raise exception 'send_due_communications is not the one from migration 0133 (body md5 %), so nothing was changed.', coalesce(v_due, 'missing');
+  end if;
+
+  select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_overview
+  from pg_proc p
+  where p.pronamespace = 'public'::regnamespace and p.proname = 'get_coach_chat_overview';
+  if v_overview is null or v_overview not in ('45993cf5e035774b4d8da8f5157d9226', '2ea72539458e9a80e17d857b22379d3e') then
+    raise exception 'get_coach_chat_overview is not the one from migration 0086 (body md5 %), so nothing was changed.', coalesce(v_overview, 'missing');
   end if;
 end
 $guard$;
@@ -212,3 +253,89 @@ end;
 $$;
 
 revoke execute on function public.send_due_communications() from public, anon, authenticated;
+
+-- ---- 2. MS10: "No reply needed" ---------------------------------------------------------------------------------------------------
+
+alter table public.chat_threads add column if not exists coach_no_reply_at timestamptz;
+
+-- The member's own coach marks the conversation as needing no reply (and read), or takes the mark off again. The app leaves a marked
+-- conversation out of Needs reply until the member writes again.
+create or replace function public.set_chat_no_reply(p_client_id uuid, p_no_reply boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  if p_client_id is null or not coalesce(public.is_coach_of(p_client_id), false) then
+    raise exception 'Not authorized';
+  end if;
+
+  if coalesce(p_no_reply, false) then
+    insert into chat_threads (client_id, coach_last_read_at, coach_no_reply_at)
+    values (p_client_id, now(), now())
+    on conflict (client_id) do update set
+      coach_no_reply_at = now(),
+      coach_last_read_at = greatest(chat_threads.coach_last_read_at, now());
+  else
+    update chat_threads set coach_no_reply_at = null where client_id = p_client_id;
+  end if;
+end;
+$fn$;
+
+revoke all on function public.set_chat_no_reply(uuid, boolean) from public, anon;
+grant execute on function public.set_chat_no_reply(uuid, boolean) to authenticated;
+
+-- 0086's function plus the no_reply_at column. A new output column cannot be added with "create or replace", hence the drop.
+drop function if exists public.get_coach_chat_overview();
+
+create function public.get_coach_chat_overview()
+returns table (
+  client_id uuid,
+  client_name text,
+  last_message text,
+  last_message_at timestamptz,
+  last_sender_id uuid,
+  unread_count bigint,
+  no_reply_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    p.id,
+    coalesce(cp.name, p.email),
+    lm.preview,
+    lm.created_at,
+    lm.sender_id,
+    coalesce(uc.unread_count, 0),
+    ct.coach_no_reply_at
+  from profiles p
+  left join client_profiles cp on cp.client_id = p.id
+  left join lateral (
+    select
+      coalesce(
+        text,
+        case when audio_path is not null then 'Voice note' when image_path is not null then 'Photo' end
+      ) as preview,
+      created_at,
+      sender_id
+    from chat_messages
+    where chat_messages.client_id = p.id
+    order by created_at desc limit 1
+  ) lm on true
+  left join chat_threads ct on ct.client_id = p.id
+  left join lateral (
+    select count(*) as unread_count from chat_messages cm
+    where cm.client_id = p.id
+      and cm.sender_id <> auth.uid()
+      and cm.created_at > coalesce(ct.coach_last_read_at, '-infinity'::timestamptz)
+  ) uc on true
+  where p.coach_id = auth.uid()
+  order by lm.created_at desc nulls last;
+$$;
+
+revoke execute on function public.get_coach_chat_overview() from public, anon;
+grant execute on function public.get_coach_chat_overview() to authenticated;

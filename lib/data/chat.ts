@@ -162,6 +162,14 @@ export async function markChatUnread(clientId: string): Promise<void> {
   if (error) raise(error);
 }
 
+// "No reply needed" (MS10): the conversation leaves Needs reply until the member writes again, and is marked read. `false` takes the mark
+// off. Only the member's own coach can do either (set_chat_no_reply, migration 0160).
+export async function setChatNoReply(clientId: string, noReply: boolean): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_chat_no_reply', { p_client_id: clientId, p_no_reply: noReply });
+  if (error) raise(error);
+}
+
 // For the client's own unread indicator (the header Messages icon) -- mirrors the shape
 // get_coach_chat_overview uses for the coach's side, just scoped to one thread.
 export async function getClientUnreadCount(clientId: string): Promise<number> {

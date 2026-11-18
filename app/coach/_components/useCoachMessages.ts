@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { getCoachChatOverview, getMessages, markChatRead, markChatUnread } from '@/lib/data/chat';
+import { getCoachChatOverview, getMessages, markChatRead, markChatUnread, setChatNoReply } from '@/lib/data/chat';
 import { createLatestOnly } from '@/lib/latestOnly';
-import { mergeOverview, pickChannelClients, sortOverview } from '@/lib/inboxOverview';
+import { mergeOverview, pickChannelClients, sortOverview, withNoReplyMark } from '@/lib/inboxOverview';
+import { useToast } from '@/app/_components/ToastProvider';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from '@/lib/data/types';
 
 // How often the conversation list is fetched again while the page is open, and how many conversations get a live connection.
@@ -32,6 +33,7 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
   const selectedRef = useRef<string | null>(null);
   // Only the latest request wins (R4): the first click's answer arrives after the second click's and must not be shown.
   const [guard] = useState(createLatestOnly);
+  const toast = useToast();
 
   async function selectClient(clientId: string) {
     const ticket = guard.next();
@@ -68,6 +70,16 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
     setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId && c.last_message_at ? { ...c, unread_count: Math.max(1, c.unread_count) } : c)));
     markChatUnread(clientId).catch(() => {});
     if (selectedRef.current === clientId) clearSelection();
+  }
+
+  // "No reply needed" (MS10), or taking it off. Shown straight away; if the save fails the list is fetched again, so it does not look
+  // saved when it is not.
+  function markNoReply(clientId: string, noReply: boolean) {
+    setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? withNoReplyMark(c, noReply) : c)));
+    setChatNoReply(clientId, noReply).catch(() => {
+      toast.error('Could not save that. Please try again.');
+      void refreshOverview();
+    });
   }
 
   function clearSelection() {
@@ -181,6 +193,7 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
     clearSelection,
     markRead,
     markUnread,
+    markNoReply,
     messages,
     loading,
     loadError,

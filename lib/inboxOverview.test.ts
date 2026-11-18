@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lastSender, mergeOverview, needsReply, pickChannelClients, sortOverview } from './inboxOverview';
+import { lastSender, mergeOverview, needsReply, pickChannelClients, replyNotNeeded, sortOverview, withNoReplyMark } from './inboxOverview';
 
 const row = (client_id: string, last_message_at: string | null, unread_count = 0, extra: Record<string, unknown> = {}) => ({
   client_id,
@@ -113,5 +113,53 @@ describe('lastSender and needsReply', () => {
   it('has no sender and needs no reply when there is no message yet', () => {
     expect(lastSender(convo(null, null), me)).toBeNull();
     expect(needsReply(convo(null, null))).toBe(false);
+  });
+});
+
+describe('"No reply needed" (MS10)', () => {
+  const row = (no_reply_at: string | null, last_message_at = '2026-11-05T10:00:00Z', last_sender_id = 'member-1') => ({
+    client_id: 'member-1',
+    last_message_at,
+    last_sender_id,
+    no_reply_at,
+    unread_count: 1,
+  });
+
+  it('a marked conversation leaves Needs reply', () => {
+    expect(needsReply(row('2026-11-05T10:05:00Z'))).toBe(false);
+    expect(replyNotNeeded(row('2026-11-05T10:05:00Z'))).toBe(true);
+    // Marked at the very moment of the member's message (the stamp is that message's time).
+    expect(needsReply(row('2026-11-05T10:00:00Z'))).toBe(false);
+  });
+
+  it('comes back when the member writes again', () => {
+    expect(needsReply(row('2026-11-05T10:05:00Z', '2026-11-05T11:00:00Z'))).toBe(true);
+    expect(replyNotNeeded(row('2026-11-05T10:05:00Z', '2026-11-05T11:00:00Z'))).toBe(false);
+  });
+
+  it('an old mark means nothing once the coach has replied', () => {
+    expect(replyNotNeeded(row('2026-11-05T10:05:00Z', '2026-11-05T09:00:00Z', 'coach-1'))).toBe(false);
+    expect(needsReply(row('2026-11-05T10:05:00Z', '2026-11-05T09:00:00Z', 'coach-1'))).toBe(false);
+  });
+
+  it('works on rows from before migration 0160 (no stamp at all)', () => {
+    expect(needsReply({ client_id: 'member-1', last_message_at: '2026-11-05T10:00:00Z', last_sender_id: 'member-1' })).toBe(true);
+  });
+
+  it('marking shows at once: stamped, read, and out of Needs reply even when the device clock is behind', () => {
+    const behind = new Date('2026-11-05T09:58:00Z');
+    const marked = withNoReplyMark(row(null), true, behind);
+    expect(marked.no_reply_at).toBe('2026-11-05T10:00:00Z');
+    expect(marked.unread_count).toBe(0);
+    expect(needsReply(marked)).toBe(false);
+    const now = new Date('2026-11-05T10:30:00Z');
+    expect(withNoReplyMark(row(null), true, now).no_reply_at).toBe('2026-11-05T10:30:00.000Z');
+  });
+
+  it('unmarking puts it back under Needs reply and leaves unread as it was', () => {
+    const unmarked = withNoReplyMark(row('2026-11-05T10:05:00Z'), false);
+    expect(unmarked.no_reply_at).toBeNull();
+    expect(unmarked.unread_count).toBe(1);
+    expect(needsReply(unmarked)).toBe(true);
   });
 });
