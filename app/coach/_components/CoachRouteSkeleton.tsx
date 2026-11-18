@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AppShell } from '@/app/_components/AppShell';
 import { CoachBrand } from './CoachBrand';
 import { CoachNav } from './CoachNav';
+import { CoachSidebar } from './CoachSidebar';
 import { CoachBottomTabBar } from './CoachBottomTabBar';
 
 // Shared shell for every app/coach/**/loading.tsx -- renders the real (data-independent) nav
@@ -11,7 +12,7 @@ import { CoachBottomTabBar } from './CoachBottomTabBar';
 // data the page itself is still fetching, so they simply pop in once the real page mounts.
 export function CoachRouteSkeleton({ children }: { children: ReactNode }) {
   return (
-    <AppShell title={<CoachBrand />} isCoachView topBar={<CoachNav />} bottomBar={<CoachBottomTabBar />}>
+    <AppShell title={<CoachBrand />} isCoachView topBar={<CoachNav />} coachSidebar={<CoachSidebar />} bottomBar={<CoachBottomTabBar />}>
       {children}
     </AppShell>
   );

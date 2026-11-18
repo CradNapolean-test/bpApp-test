@@ -33,7 +33,7 @@ import type {
   EducationModuleWithLessons,
 } from '@/lib/data/types';
 
-const field = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10';
+const field = 'h-11 w-full rounded-xl border border-black/[.16] bg-card px-3.5 text-base dark:border-white/15';
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -203,7 +203,7 @@ function ModuleSection({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+    <div className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-3.5 dark:border-white/10">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h4 className="truncate font-extrabold text-black dark:text-zinc-50">{module.title}</h4>
@@ -257,7 +257,7 @@ function ModuleSection({
       <button
         type="button"
         onClick={() => setSheet({ kind: 'lesson', lesson: null })}
-        className="rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 dark:border-white/15 dark:text-zinc-200"
+        className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
       >
         + Add lesson
       </button>
@@ -318,8 +318,8 @@ function AssignSheet({
               key={key}
               type="button"
               onClick={() => setAudience(key)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                audience === key ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
+              className={`h-11 rounded-full px-4 text-sm font-bold ${
+                audience === key ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
               }`}
             >
               {label}
@@ -488,7 +488,7 @@ function CourseOverlay({
         <button
           type="button"
           onClick={() => setSheet('assign')}
-          className="rounded-full bg-accent px-5 py-2.5 text-sm font-extrabold text-accent-foreground"
+          className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground"
         >
           Assign to members
         </button>
@@ -511,7 +511,7 @@ function CourseOverlay({
           <button
             type="button"
             onClick={() => setSheet('module')}
-            className="rounded-full border border-black/10 px-4 py-2 text-sm font-bold text-zinc-700 dark:border-white/15 dark:text-zinc-200"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
           >
             + Add module
           </button>
@@ -588,7 +588,7 @@ export function EducationPane({
         <button
           type="button"
           onClick={() => setAddingCourse(true)}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground hover:opacity-90"
         >
           + New course
         </button>
@@ -613,37 +613,48 @@ export function EducationPane({
           hint="Add a course, build out its modules and lessons, then assign it to members, all from here."
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+          <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3.5 pt-[18px] sm:px-6">
+            <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Your courses</h2>
+            <span className="text-[13px] font-semibold text-zinc-500">
+              {initialCourses.length} course{initialCourses.length === 1 ? '' : 's'}
+            </span>
+          </div>
           {initialCourses.map((c) => {
             const lessonCount = c.education_modules.reduce((sum, m) => sum + m.education_lessons.length, 0);
             const people = rollup.filter((r) => r.course_id === c.id);
             const finished = people.filter((p) => lessonCount > 0 && p.done >= lessonCount).length;
+            const finishedPct = people.length > 0 ? Math.round((finished / people.length) * 100) : 0;
             return (
-              <div
-                key={c.id}
-                className="rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-bold text-black dark:text-zinc-50">{c.title}</p>
-                  <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
-                    <button type="button" onClick={() => setOpenCourseId(c.id)} className="rounded-full px-2.5 py-1 text-accent hover:bg-accent/10">
-                      Edit
-                    </button>
-                    <DropdownMenu
-                      triggerLabel={`More actions for ${c.title}`}
-                      items={[{ label: 'Delete course', destructive: true, onSelect: () => handleDelete(c.id, c.title) }]}
-                    />
-                  </div>
-                </div>
-                {c.description && <p className="mt-0.5 line-clamp-2 text-sm text-zinc-500">{c.description}</p>}
-                <p className="mt-1 text-sm font-semibold text-accent">
-                  {c.education_modules.length} module{c.education_modules.length === 1 ? '' : 's'} · {lessonCount} lesson{lessonCount === 1 ? '' : 's'}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {people.length === 0
-                    ? 'Not assigned to anyone yet'
-                    : `${people.length} assigned · ${finished} finished`}
-                </p>
+              <div key={c.id} className="flex min-h-[72px] flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10">
+                <button type="button" onClick={() => setOpenCourseId(c.id)} className="flex min-w-0 flex-1 basis-64 items-center gap-3 text-left">
+                  <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                    <GraduationCap className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px] font-bold text-black dark:text-zinc-50">{c.title}</span>
+                    <span className="block truncate text-[13px] text-zinc-500 dark:text-zinc-400">
+                      {lessonCount} lesson{lessonCount === 1 ? '' : 's'} · {people.length === 0 ? 'not assigned yet' : `${people.length} member${people.length === 1 ? '' : 's'}`}
+                    </span>
+                  </span>
+                </button>
+                {people.length > 0 && (
+                  <span className="flex w-40 shrink-0 items-center gap-2.5">
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${finished} of ${people.length} finished`}>
+                      <span className="block h-full rounded-full bg-accent" style={{ width: `${finishedPct}%` }} />
+                    </span>
+                    <span className="w-20 text-right text-[13px] font-bold text-black dark:text-zinc-50">{finishedPct}% done</span>
+                  </span>
+                )}
+                <span className="ml-auto flex shrink-0 items-center gap-1">
+                  <button type="button" onClick={() => setOpenCourseId(c.id)} className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent">
+                    Edit
+                  </button>
+                  <DropdownMenu
+                    triggerLabel={`More actions for ${c.title}`}
+                    items={[{ label: 'Delete course', destructive: true, onSelect: () => handleDelete(c.id, c.title) }]}
+                  />
+                </span>
               </div>
             );
           })}

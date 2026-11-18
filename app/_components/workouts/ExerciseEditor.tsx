@@ -359,8 +359,8 @@ function ExerciseSheet<T extends EditableExercise>({
                     key={p}
                     type="button"
                     onClick={() => setPrescription(p)}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                      prescription === p ? 'bg-accent text-accent-foreground' : 'border border-black/10 dark:border-white/15'
+                    className={`h-11 rounded-full px-4 text-sm font-bold ${
+                      prescription === p ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                     }`}
                   >
                     {p === 'absolute' ? 'Fixed weight' : '% of 1RM'}
@@ -436,14 +436,14 @@ function ExerciseSheet<T extends EditableExercise>({
           type="button"
           disabled={busy || percentNeedsLink}
           onClick={save}
-          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
         <button
           type="button"
           onClick={() => runDelete(onDelete, { success: 'Removed', onDone: onClose })}
-          className="w-full rounded-full py-2 text-sm font-bold text-danger"
+          className="h-11 w-full rounded-xl text-sm font-bold text-danger"
         >
           Remove from workout
         </button>
@@ -498,8 +498,8 @@ function ExercisePickerSheet({
               key={m ?? 'all'}
               type="button"
               onClick={() => setMuscle(m)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${
-                muscle === m ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+              className={`h-11 shrink-0 rounded-full px-4 text-sm font-bold ${
+                muscle === m ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
               }`}
             >
               {m ?? 'All'}
@@ -556,7 +556,7 @@ function ExercisePickerSheet({
           )}
         </div>
 
-        <button type="button" onClick={onClose} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground">
+        <button type="button" onClick={onClose} className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground">
           {addedCount > 0 ? `Done (${addedCount} added)` : 'Done'}
         </button>
       </div>
@@ -601,7 +601,7 @@ function InstructionsSheet({
           type="button"
           disabled={busy || !notes.trim()}
           onClick={() => run(() => onAdd(name.trim() || 'Instructions', notes.trim()), { success: 'Added', onDone: onClose })}
-          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Adding…' : 'Add'}
         </button>
@@ -708,8 +708,8 @@ function FormatSheet({
                 type="button"
                 aria-pressed={format === name}
                 onClick={() => choose(name)}
-                className={`min-h-9 rounded-full px-3 py-1.5 text-sm font-semibold ${
-                  format === name ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
+                className={`h-11 rounded-full px-4 text-sm font-bold ${
+                  format === name ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                 }`}
               >
                 {name ?? 'No format'}
@@ -748,7 +748,7 @@ function FormatSheet({
           type="button"
           disabled={busy}
           onClick={save}
-          className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
@@ -838,7 +838,7 @@ function MemberExerciseRow<T extends EditableExercise>({
   const Icon = MUSCLE_GROUP_ICONS[libraryEntry?.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
   const pill = 'rounded-full bg-black/[.06] px-2.5 py-1 text-xs font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
   return (
-    <div ref={setNodeRef} style={style} className="rounded-2xl border border-black/[.06] bg-card p-4 shadow-sm dark:border-white/10">
+    <div ref={setNodeRef} style={style} className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <div className="flex items-start gap-3">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-extrabold text-accent">
           {index + 1}
@@ -1350,8 +1350,8 @@ export function ExerciseEditor<T extends EditableExercise>({
                 key={o.key}
                 type="button"
                 onClick={() => memberChoices.onChoose(slot, o.key)}
-                className={`rounded-full px-4 py-2 text-sm font-bold ${
-                  chosen === o.key ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-700 dark:border-white/15 dark:text-zinc-200'
+                className={`h-11 rounded-xl px-4 text-sm font-bold ${
+                  chosen === o.key ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                 }`}
               >
                 {o.label}
@@ -1404,8 +1404,8 @@ export function ExerciseEditor<T extends EditableExercise>({
                       key={String(split)}
                       type="button"
                       onClick={() => setStrongSplit(split)}
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                        strongSplit === split ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/15'
+                      className={`min-h-8 rounded-full px-3 text-xs font-bold ${
+                        strongSplit === split ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                       }`}
                     >
                       {split ? 'Upper / Lower' : 'One list'}
@@ -1420,8 +1420,8 @@ export function ExerciseEditor<T extends EditableExercise>({
                       key={String(single)}
                       type="button"
                       onClick={() => setConditioningSingle(single)}
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                        condSingle === single ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/15'
+                      className={`min-h-8 rounded-full px-3 text-xs font-bold ${
+                        condSingle === single ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                       }`}
                     >
                       {single ? '1 × 20 min' : '2 × 10 min'}
@@ -1435,8 +1435,8 @@ export function ExerciseEditor<T extends EditableExercise>({
                           key={String(split)}
                           type="button"
                           onClick={() => setConditioningSplit(split)}
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                            condSplit === split ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-500 dark:border-white/15'
+                          className={`min-h-8 rounded-full px-3 text-xs font-bold ${
+                            condSplit === split ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                           }`}
                         >
                           {split ? 'Breath / Burn' : 'One list'}
@@ -1466,7 +1466,7 @@ export function ExerciseEditor<T extends EditableExercise>({
                           <button
                             type="button"
                             onClick={() => setSheet({ kind: 'format', key })}
-                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                            className={`min-h-8 rounded-full px-3 text-xs font-bold ${
                               format ? 'bg-accent-soft text-accent' : 'border border-dashed border-black/20 text-zinc-500 dark:border-white/20'
                             }`}
                           >
@@ -1512,14 +1512,14 @@ export function ExerciseEditor<T extends EditableExercise>({
                       <button
                         type="button"
                         onClick={() => setSheet({ kind: 'pick', key })}
-                        className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-extrabold text-accent-foreground"
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground"
                       >
                         + Exercise
                       </button>
                       <button
                         type="button"
                         onClick={() => setSheet({ kind: 'note', key })}
-                        className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50"
                       >
                         + Instructions
                       </button>

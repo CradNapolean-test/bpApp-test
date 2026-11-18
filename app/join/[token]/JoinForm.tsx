@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Button } from '@/app/_components/Button';
+import { authButton, authInput, authLabel } from '@/app/_components/AuthFrame';
 
 export function JoinForm({ token }: { token: string }) {
   const router = useRouter();
@@ -49,7 +49,7 @@ export function JoinForm({ token }: { token: string }) {
     }
   }
 
-  const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-3 text-base dark:border-white/10';
+  const inputCls = authInput;
 
   if (checkEmail) {
     return (
@@ -67,20 +67,20 @@ export function JoinForm({ token }: { token: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-1">
-        <label htmlFor="join-email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email</label>
+        <label htmlFor="join-email" className={authLabel}>Email</label>
         <input id="join-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
       </div>
       <div className="space-y-1">
-        <label htmlFor="join-password" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Choose a password</label>
+        <label htmlFor="join-password" className={authLabel}>Choose a password</label>
         <input id="join-password" type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputCls} />
         <p className="text-xs text-zinc-500">At least 8 characters.</p>
       </div>
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      <Button type="submit" variant="primary" disabled={submitting} className="w-full !rounded-full py-3 text-base">
+      <button type="submit" disabled={submitting} className={authButton}>
         {submitting ? 'Creating your account…' : 'Create my account'}
-      </Button>
+      </button>
       <p className="text-center text-xs text-zinc-500">
         By continuing you agree to our <Link href="/legal/terms" className="underline">terms</Link> and{' '}
         <Link href="/legal/privacy" className="underline">privacy policy</Link>.

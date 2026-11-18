@@ -4,34 +4,35 @@ type Variant = 'primary' | 'outline' | 'ghost' | 'danger' | 'danger-solid' | 'da
 type Size = 'sm' | 'md';
 
 // Single source of truth for button styling, keyed off the CSS variables in globals.css
-// (--accent/--accent-foreground/--danger) rather than raw Tailwind colours -- that's what
-// makes every variant automatically reskin correctly between the client view (teal accent)
-// and the coach view ([data-view="coach"], black/white accent) with zero per-component work.
+// (--accent/--accent-foreground/--danger) rather than raw Tailwind colours.
+// The November 2026 boards: 12px corners and 44px tall (36px small). A primary button is teal on the coach's screens and black on a
+// member's (bp-btn-primary, globals.css), where teal is kept for booking and signing in.
 const VARIANT_CLS: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-foreground hover:opacity-90',
-  outline: 'border border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5',
-  ghost: 'text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/5',
-  danger: 'text-danger hover:bg-danger/10',
-  'danger-solid': 'bg-danger text-white hover:opacity-90',
-  // Full-width pill treatment for a screen-level destructive action (e.g. Sign out) rather
+  primary: 'bp-btn-primary bg-accent font-extrabold text-accent-foreground hover:opacity-90',
+  outline:
+    'border-[1.5px] border-black/20 font-bold text-black hover:bg-black/[.03] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5',
+  ghost: 'font-bold text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/5',
+  danger: 'font-bold text-danger hover:bg-danger/10',
+  'danger-solid': 'bg-danger font-extrabold text-white hover:opacity-90',
+  // Full-width treatment for a screen-level destructive action (e.g. Sign out) rather
   // than an inline row action -- persistently tinted, not just on hover, so it doesn't read
   // as a plain link.
-  'danger-soft': 'border border-danger/20 bg-danger/10 text-danger hover:bg-danger/15',
+  'danger-soft': 'border border-danger/20 bg-danger/10 font-bold text-danger hover:bg-danger/15',
   icon: 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5',
 };
 
 const SIZE_CLS: Record<Exclude<Variant, 'icon'>, Record<Size, string>> = {
-  primary: { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm' },
-  outline: { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm' },
-  ghost: { sm: 'px-2 py-1 text-xs', md: 'px-3 py-1.5 text-sm' },
-  danger: { sm: 'px-2 py-1 text-xs', md: 'px-3 py-1.5 text-sm' },
-  'danger-solid': { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2 text-sm' },
-  'danger-soft': { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2.5 text-sm' },
+  primary: { sm: 'min-h-9 px-3 text-[13px]', md: 'min-h-11 px-4 text-sm' },
+  outline: { sm: 'min-h-9 px-3 text-[13px]', md: 'min-h-11 px-4 text-sm' },
+  ghost: { sm: 'min-h-9 px-2.5 text-[13px]', md: 'min-h-11 px-3 text-sm' },
+  danger: { sm: 'min-h-9 px-2.5 text-[13px]', md: 'min-h-11 px-3 text-sm' },
+  'danger-solid': { sm: 'min-h-9 px-3 text-[13px]', md: 'min-h-11 px-4 text-sm' },
+  'danger-soft': { sm: 'min-h-9 px-3 text-[13px]', md: 'min-h-12 px-4 text-sm' },
 };
 
 const ICON_SIZE_CLS: Record<Size, string> = {
-  sm: 'h-8 w-8',
-  md: 'h-9 w-9',
+  sm: 'h-9 w-9',
+  md: 'h-10 w-10',
 };
 
 export function Button({
@@ -49,10 +50,8 @@ export function Button({
   const sizeCls = variant === 'icon' ? ICON_SIZE_CLS[size] : SIZE_CLS[variant][size];
   const shapeCls =
     variant === 'icon'
-      ? 'flex items-center justify-center rounded-md'
-      : variant === 'danger-soft'
-        ? 'rounded-full text-center font-bold'
-        : 'rounded-full font-semibold';
+      ? 'flex items-center justify-center rounded-full'
+      : 'rounded-xl text-center';
   return (
     <button
       className={`${shapeCls} ${VARIANT_CLS[variant]} ${sizeCls} shrink-0 whitespace-nowrap transition-colors disabled:opacity-50 disabled:pointer-events-none ${className}`}

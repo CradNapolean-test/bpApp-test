@@ -154,6 +154,31 @@ export function CoachMemberSideNav({
   );
 }
 
+// From a tablet up: the sections as a row of tabs under the member's header (the November 2026 mock-ups). A section with several pages
+// shows them as a second, smaller row underneath (CoachMemberTabs).
+export function CoachMemberGroupTabs({ groups, active, onSelect }: { groups: CoachGroup[]; active: string | undefined; onSelect: Select }) {
+  return (
+    <nav aria-label="Member sections" className="flex gap-1 overflow-x-auto border-b border-black/[.08] [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden">
+      {groups.map((g) => {
+        const isActive = g.key === active;
+        return (
+          <button
+            key={g.key}
+            type="button"
+            onClick={() => onSelect(g.tabs[0])}
+            aria-current={isActive ? 'page' : undefined}
+            className={`-mb-px min-h-11 shrink-0 whitespace-nowrap border-b-[3px] px-3 text-[15px] transition-colors ${
+              isActive ? 'border-accent font-bold text-black dark:text-zinc-50' : 'border-transparent font-semibold text-zinc-500 hover:text-black dark:hover:text-zinc-200'
+            }`}
+          >
+            {g.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 // Phone bottom bar: the first five sections (Profile is reached from the Overview's Manage list).
 export function CoachMemberBottomNav({ groups, active, onSelect }: { groups: CoachGroup[]; active: string | undefined; onSelect: Select }) {
   return (

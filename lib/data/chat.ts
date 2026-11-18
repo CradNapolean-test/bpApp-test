@@ -53,6 +53,22 @@ export async function getMessages(clientId: string): Promise<ChatMessage[]> {
   return pageOfNewestFirst((data ?? []) as ChatMessageRow[], CHAT_PAGE).rows.map(toMessage);
 }
 
+// The newest message from the coach in a member's thread, for the preview on the member's Coach tab: one row, not a page of the thread.
+// It reads the same rows getMessages does, so the same access rules apply.
+export async function getLatestCoachMessage(clientId: string): Promise<ChatMessageRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('client_id', clientId)
+    .neq('sender_id', clientId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1);
+  if (error) raise(error);
+  return ((data ?? []) as ChatMessageRow[])[0] ?? null;
+}
+
 // The page of messages before `beforeIso` (the oldest one on screen), and whether there are still older ones.
 export async function getEarlierMessages(clientId: string, beforeIso: string): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
   const supabase = await createClient();

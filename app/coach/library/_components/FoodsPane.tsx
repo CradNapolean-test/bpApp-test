@@ -146,12 +146,12 @@ export function FoodsPane() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-bold text-black dark:text-zinc-50">Foods</h2>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Foods</h2>
+        <p className="mt-1 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">
           Set the servings a food comes in (1 egg, 1 rasher, 1 tbsp) so members can log by serving instead of grams. Products members scanned also show here; if one
           has the wrong numbers, hide it so nobody logs it by mistake.
         </p>
-        <div className="mt-2 flex gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-2">
           {(['scanned', 'all'] as const).map((sc) => (
             <button
               key={sc}
@@ -161,8 +161,11 @@ export function FoodsPane() {
                 setFoods(null);
                 setEditing(null);
               }}
-              className={`rounded-full border px-2.5 py-0.5 text-xs ${
-                scope === sc ? 'border-accent bg-accent-soft text-accent' : 'border-black/10 text-zinc-500 dark:border-white/10'
+              aria-pressed={scope === sc}
+              className={`h-11 rounded-full px-4 text-sm font-bold ${
+                scope === sc
+                  ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                  : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
               }`}
             >
               {sc === 'scanned' ? 'Scanned products' : 'All foods'}
@@ -175,8 +178,8 @@ export function FoodsPane() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={scope === 'all' ? 'Search any food (2+ letters)' : 'Search by name or barcode'}
-        aria-label="Search scanned foods"
-        className={inputCls}
+        aria-label="Search foods"
+        className="h-11 w-full rounded-xl border border-black/[.16] bg-card px-3.5 text-base sm:max-w-md sm:text-[15px] dark:border-white/15"
       />
       {failed && <p className="text-sm text-danger">Could not load the foods. Try again in a moment.</p>}
       {foods === null ? (
@@ -184,17 +187,26 @@ export function FoodsPane() {
       ) : foods.length === 0 ? (
         <EmptyState icon={ScanBarcode} title={query.trim() ? 'No food matches that' : scope === 'all' ? 'Search for a food' : 'No scanned foods yet'} hint={scope === 'all' ? 'Type at least two letters.' : 'Products appear here once a member scans their barcode.'} />
       ) : (
-        <ul className="divide-y divide-black/[.05] rounded-2xl border border-black/[.05] bg-card dark:divide-white/10 dark:border-white/10">
+        <ul className="divide-y divide-black/[.07] overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:divide-white/10 dark:border-white/10">
           {foods.map((f) => (
-            <li key={f.id} className="p-3">
+            <li key={f.id} className="px-5 py-3 sm:px-6">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className={`truncate text-sm font-semibold ${f.hidden ? 'text-zinc-400 line-through' : 'text-black dark:text-zinc-50'}`}>{f.name}</p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className={`truncate text-[15px] font-bold ${f.hidden ? 'text-zinc-400 line-through' : 'text-black dark:text-zinc-50'}`}>{f.name}</span>
+                    <span
+                      className={`inline-flex h-5 items-center rounded-full px-2 text-[11px] font-extrabold ${
+                        f.source === 'scan' ? 'bg-accent-soft text-accent' : 'bg-black/[.06] text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                      }`}
+                    >
+                      {f.source === 'scan' ? 'Barcode' : 'Built in'}
+                    </span>
+                  </p>
+                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
                     per 100 g: {per100(f.protein)} protein · {per100(f.carbs)} carbs · {per100(f.fat)} fat
                     {f.barcode ? ` · ${f.barcode}` : ''}
                   </p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
                     Servings:{' '}
                     {f.serving_options?.length
                       ? f.serving_options.map((o) => `${unitText(o)}${o.default ? ' (default)' : ''}`).join(', ')

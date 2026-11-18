@@ -5,9 +5,7 @@ import { useRouter } from 'next/navigation';
 // Loaded when the form is sent (and fetched in advance while the browser is idle): the client is about 240 KB that the sign-in page does
 // not need to paint or to type into (R43).
 const loadSupabase = () => import('@/lib/supabase/client').then((m) => m.createClient());
-import { Logo } from '@/app/_components/Logo';
-import { Button } from '@/app/_components/Button';
-import { LegalFooterLinks } from '@/app/_components/LegalFooterLinks';
+import { AuthFrame, authButton, authCard, authInput, authLabel, authLink } from '@/app/_components/AuthFrame';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -72,16 +70,8 @@ export default function LoginPage() {
 
   if (mode === 'forgot') {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 dark:bg-black">
-        <form
-          onSubmit={handleResetRequest}
-          className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900"
-        >
-          <div className="flex flex-col items-center gap-2 text-center">
-            <Logo variant="full" size={88} />
-            <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Reset password</h1>
-          </div>
-
+      <AuthFrame title="Reset password" lead="We will email you a link to set a new one.">
+        <form onSubmit={handleResetRequest} className={authCard}>
           {resetSent ? (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               If an account exists for <span className="font-medium">{email}</span>, a reset link has been sent.
@@ -90,7 +80,7 @@ export default function LoginPage() {
           ) : (
             <>
               <div className="space-y-1">
-                <label htmlFor="reset-email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label htmlFor="reset-email" className={authLabel}>
                   Email
                 </label>
                 <input
@@ -100,48 +90,38 @@ export default function LoginPage() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+                  className={authInput}
                 />
               </div>
 
               {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-              <Button type="submit" variant="primary" disabled={submitting} className="w-full">
+              <button type="submit" disabled={submitting} className={authButton}>
                 {submitting ? 'Sending…' : 'Send reset link'}
-              </Button>
+              </button>
             </>
           )}
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode('sign-in');
-              setError(null);
-              setResetSent(false);
-            }}
-            className="w-full text-center text-sm font-medium text-zinc-600 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            &larr; Back to sign in
-          </button>
         </form>
-        <LegalFooterLinks />
-      </main>
+        <button
+          type="button"
+          onClick={() => {
+            setMode('sign-in');
+            setError(null);
+            setResetSent(false);
+          }}
+          className={authLink}
+        >
+          &larr; Back to sign in
+        </button>
+      </AuthFrame>
     );
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 dark:bg-black">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border border-black/10 bg-white p-8 dark:border-white/10 dark:bg-zinc-900"
-      >
-        <div className="flex flex-col items-center gap-2 text-center">
-          <Logo variant="full" size={88} />
-          <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Ballistic Performance</h1>
-        </div>
-
+    <AuthFrame title="Welcome back" lead="Sign in to book, log and message your coach.">
+      <form onSubmit={handleSubmit} className={authCard}>
         <div className="space-y-1">
-          <label htmlFor="email" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label htmlFor="email" className={authLabel}>
             Email
           </label>
           <input
@@ -151,26 +131,14 @@ export default function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            className={authInput}
           />
         </div>
 
         <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Password
-            </label>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('forgot');
-                setError(null);
-              }}
-              className="text-xs font-medium text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-zinc-100"
-            >
-              Forgot password?
-            </button>
-          </div>
+          <label htmlFor="password" className={authLabel}>
+            Password
+          </label>
           <input
             id="password"
             type="password"
@@ -178,17 +146,26 @@ export default function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+            className={authInput}
           />
         </div>
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-        <Button type="submit" variant="primary" disabled={submitting} className="w-full">
+        <button type="submit" disabled={submitting} className={authButton}>
           {submitting ? 'Signing in…' : 'Sign in'}
-        </Button>
+        </button>
       </form>
-      <LegalFooterLinks />
-    </main>
+      <button
+        type="button"
+        onClick={() => {
+          setMode('forgot');
+          setError(null);
+        }}
+        className={authLink}
+      >
+        Forgot your password?
+      </button>
+    </AuthFrame>
   );
 }

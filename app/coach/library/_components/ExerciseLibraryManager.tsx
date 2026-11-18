@@ -238,7 +238,7 @@ function ExerciseFormSheet({
           </div>
         </details>
 
-        <button type="submit" disabled={busy} className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
+        <button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : exercise ? 'Save' : 'Add to library'}
         </button>
         {exercise && onDelete && (
@@ -338,23 +338,38 @@ export function ExerciseLibraryManager({
   }, [initialExercises, filterGroup, noVideoOnly, search]);
 
   const editing = editingId ? initialExercises.find((ex) => ex.id === editingId) : undefined;
+  // The board's filter pills: black when on, an outline when off.
   const chip = (active: boolean) =>
-    `min-h-9 rounded-full border px-3 py-1 text-xs transition-colors ${
+    `h-11 rounded-full px-4 text-sm font-bold transition-colors ${
       active
-        ? 'border-accent bg-accent-soft text-accent'
-        : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
+        ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+        : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
     }`;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {initialExercises.length > 0 && (
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setVisible(PAGE_SIZE);
+            }}
+            placeholder={`Search ${initialExercises.length} exercises`}
+            aria-label="Search exercises"
+            className="h-11 min-w-0 flex-1 basis-56 rounded-xl border border-black/[.16] bg-card px-3.5 text-base sm:text-[15px] md:max-w-sm dark:border-white/15"
+          />
+        )}
+        <span className="flex-1" />
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90"
+          className="flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground hover:opacity-90"
         >
-          + Add exercise
+          + New exercise
         </button>
         <DropdownMenu
           variant="header"
@@ -370,21 +385,7 @@ export function ExerciseLibraryManager({
       {editing && <ExerciseFormSheet key={editing.id} exercise={editing} onClose={() => setEditingId(null)} onDelete={handleDelete} />}
 
       {initialExercises.length > 0 && (
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setVisible(PAGE_SIZE);
-          }}
-          placeholder={`Search ${initialExercises.length} exercises…`}
-          className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base md:max-w-sm dark:border-white/10"
-        />
-      )}
-
-      {initialExercises.length > 0 && (
         <div role="group" aria-label="Filter exercises" className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-zinc-500">Filter:</span>
           <button
             type="button"
             aria-pressed={filterGroup === '' && !noVideoOnly}
@@ -444,10 +445,10 @@ export function ExerciseLibraryManager({
             return (
               <div
                 key={ex.id}
-                className="rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-bold text-black dark:text-zinc-50">
+                  <p className="text-[15px] font-bold text-black dark:text-zinc-50">
                     {ex.name}
                     {ex.is_active === false && <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/10">Retired</span>}
                   </p>
@@ -466,7 +467,7 @@ export function ExerciseLibraryManager({
                     />
                   </div>
                 </div>
-                <p className="mt-0.5 text-sm text-zinc-500">{[ex.muscle_group, ex.equipment].filter(Boolean).join(' · ') || 'No muscle group or equipment set'}</p>
+                <p className="mt-0.5 text-[13px] text-zinc-500">{[ex.muscle_group, ex.equipment].filter(Boolean).join(' · ') || 'No muscle group or equipment set'}</p>
                 {ex.default_sets != null && (
                   <p className="mt-1 text-sm text-zinc-500">
                     Default {ex.default_sets}×{ex.default_reps ?? '—'}
@@ -477,12 +478,16 @@ export function ExerciseLibraryManager({
                 {hasVideo(ex) ? (
                   <VideoDemo videoUrl={ex.video_url as string} title={ex.name} />
                 ) : (
-                  <button type="button" onClick={() => setEditingId(ex.id)} className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-warning">
-                    No video linked · add one
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(ex.id)}
+                    className="mt-2 inline-flex h-7 items-center rounded-full bg-amber-100 px-2.5 text-xs font-extrabold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300"
+                  >
+                    No video · add one
                   </button>
                 )}
                 {templates > 0 && (
-                  <p className="mt-1.5 text-xs text-zinc-400">
+                  <p className="mt-1.5 text-xs font-semibold text-zinc-500">
                     In {templates} programme template{templates === 1 ? '' : 's'}
                   </p>
                 )}
@@ -500,7 +505,7 @@ export function ExerciseLibraryManager({
           <button
             type="button"
             onClick={() => setVisible((v) => v + PAGE_SIZE)}
-            className="rounded-full border border-black/10 px-4 py-1.5 text-sm font-semibold text-accent dark:border-white/10"
+            className="flex h-11 items-center rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
           >
             Show {Math.min(PAGE_SIZE, filteredExercises.length - visible)} more
           </button>

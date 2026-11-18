@@ -245,3 +245,54 @@ select optgroup {
     font-size: 16px;
   }
 }
+
+/* The member's own screens (the November 2026 redesign, AppShell memberUi). Teal fills carry near-black text and teal words use the
+   darker teal, as on the mock-ups: white on #19adb1 and #19adb1 on white are both about 2.6:1, too faint to read. Section headings are
+   bold sentence-case titles instead of small grey capitals. Scoped so the coach and owner screens are unchanged. These rules sit outside
+   Tailwind's layers, so they win over its utilities. */
+[data-ui='member'] {
+  --accent-foreground: #041f1f;
+}
+[data-ui='member'] .text-accent {
+  color: var(--accent-strong);
+}
+/* A screen's main action is black on the member boards; teal is kept for booking, signing in, Log score and Send. */
+[data-ui='member'] .bp-btn-primary {
+  background-color: #1d1d1b;
+  color: #ffffff;
+  font-weight: 700;
+}
+.dark [data-ui='member'] .bp-btn-primary {
+  background-color: #f4f4f5;
+  color: #1d1d1b;
+}
+[data-ui='member'] .bp-section {
+  padding-bottom: 0.625rem;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--foreground);
+}
+
+/* The coach's screens (the November 2026 mock-ups), stamped by AppShell when it draws the coach sidebar: dark text on teal, the darker
+   teal for links and small accent text, as on the member screens. */
+[data-ui='coach'] {
+  --accent-foreground: #041f1f;
+}
+[data-ui='coach'] .text-accent {
+  color: var(--accent-strong);
+}
+
+[data-ui='coach'] .bp-card,
+[data-ui='member'] .bp-card {
+  border-radius: 20px;
+}
+[data-ui='coach'] .bp-section {
+  padding-bottom: 0.625rem;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--foreground);
+}

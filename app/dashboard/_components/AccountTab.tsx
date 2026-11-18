@@ -11,7 +11,7 @@ import { ChangePasswordForm } from '@/app/_components/ChangePasswordForm';
 import { ChangeEmailForm } from '@/app/_components/ChangeEmailForm';
 import { ThemeToggle } from '@/app/_components/ThemeToggle';
 import { SignOutButton } from '@/app/_components/SignOutButton';
-import { Badge, Card, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
+import { Card, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import type { ThemePreference } from '@/app/_components/theme';
 import { updateEmailNotificationsEnabled, updateNotificationsEnabled } from '@/lib/data/clientProfile';
 import { deleteMyAccount } from '@/lib/data/deleteAccount';
@@ -27,6 +27,9 @@ import { BigDogCard } from './BigDogTab';
 import { DownloadMyData } from './DownloadMyData';
 import type { BigDogResultRow, ClientProfileRow } from '@/lib/data/types';
 import type { Category, Screen } from './categories';
+import { MemberHeader } from './MemberHeader';
+import type { HeaderActions } from './MemberHeader';
+import AnimatedContent from '@/app/_components/motion/AnimatedContent';
 
 type RowKey = 'password' | 'email';
 
@@ -60,6 +63,7 @@ export function AccountTab({
   membershipName = null,
   bigDogResults = [],
   onNavigate,
+  header,
 }: {
   clientId: string;
   name: string;
@@ -72,6 +76,8 @@ export function AccountTab({
   membershipName?: string | null;
   bigDogResults?: BigDogResultRow[];
   onNavigate: (category: Category, screen?: Screen) => void;
+  // The message bubble and the bell in the header.
+  header?: HeaderActions;
 }) {
   const { run } = useAction();
   const confirm = useConfirm();
@@ -143,19 +149,17 @@ export function AccountTab({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col items-center gap-1 py-1 text-center">
-        <Avatar name={name} size="lg" variant="self" />
-        <p className="mt-1 text-lg font-extrabold text-black dark:text-zinc-50">{name}</p>
-        <p className="text-sm text-zinc-500">{email}</p>
-        {membershipName && (
-          <div className="mt-1">
-            <Badge>{membershipName}</Badge>
+      <MemberHeader lead={<Avatar name={name} size="lg" variant="self" />} title={name} subtitle={email} actions={header}>
+        {(membershipName || dob || profile?.phone) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-zinc-400">
+            {membershipName && <span className="flex h-6 items-center rounded-full bg-accent/20 px-2.5 font-extrabold text-[#5fd6d6]">{membershipName}</span>}
+            {(dob || profile?.phone) && <span>{[dob, profile?.phone].filter(Boolean).join(' · ')}</span>}
           </div>
         )}
-        {(dob || profile?.phone) && (
-          <p className="mt-1 text-xs text-zinc-500">{[dob, profile?.phone].filter(Boolean).join(' · ')}</p>
-        )}
-      </div>
+      </MemberHeader>
+
+      {/* Under the header, each group rises into place in turn when Profile opens. */}
+      <AnimatedContent className="space-y-5" distance={18} duration={0.5} stagger={0.05} delay={0.05}>
 
       <BigDogCard results={bigDogResults} onOpen={() => onNavigate('Account Settings', 'Big Dog')} />
 
@@ -255,6 +259,7 @@ export function AccountTab({
           </div>
         )}
       </Card>
+      </AnimatedContent>
     </div>
   );
 }

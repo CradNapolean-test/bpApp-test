@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Columns2, Download, X } from 'lucide-react';
-import { ImageIcon, Plus } from 'lucide-react';
+import { Camera, ImageIcon, Trash2 } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useToast } from '@/app/_components/ToastProvider';
 import { MEASUREMENT_CM, isValidMeasurement, measurementMessage } from '@/lib/limits';
@@ -12,12 +12,17 @@ import { addMeasurementLog, deletePhoto, uploadProgressPhoto } from '@/lib/data/
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
 import { downloadPhoto, downloadSideBySide } from '@/lib/utils/downloadPhotos';
 import { IDENTITY, ZoomablePhoto } from './ZoomablePhoto';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import type { ZoomPan } from '@/lib/zoomPan';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { useDialog } from '@/app/_components/useDialog';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { formatDelta, siteReadings } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
+
+const shortDate = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
+const headCls = 'text-base font-extrabold text-black dark:text-zinc-50';
 
 const longDate = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -53,6 +58,8 @@ export function ProgressTab({
   // a UTC boundary gets silently filed under the wrong calendar day.
   const today = todayIsoInTz(profile?.timezone ?? DEFAULT_TIMEZONE);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
+  const photosArea = useRef<HTMLElement>(null);
+  useStaggerIn(photosArea, '[data-photo]', initialPhotos.length > 0);
   // Choosing a photo reads and shrinks it first; that takes a moment on a big phone photo and used to show nothing (PT4).
   const [preparing, setPreparing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,42 +141,46 @@ export function ProgressTab({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+      <section ref={photosArea} className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Progress photos</h3>
+          <h2 className={headCls}>Progress photos</h2>
           {withImage.length >= 2 && (
-            <button
-              type="button"
-              onClick={() => setComparing(true)}
-              className="flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
-            >
-              <Columns2 className="h-3.5 w-3.5" /> Compare
+            <button type="button" onClick={() => setComparing(true)} className="flex min-h-11 items-center gap-1.5 px-1 text-[13px] font-bold text-accent">
+              <Columns2 className="h-4 w-4" /> Compare
             </button>
           )}
         </div>
 
-        {initialPhotos.length === 0 && readOnly ? (
-          <div className="mt-4">
-            <EmptyState icon={ImageIcon} title="No progress photos yet" hint={readOnly ? 'They have not uploaded any yet.' : 'Nothing uploaded yet.'} />
-          </div>
+        {withImage.length >= 2 && beforePhoto && afterPhoto && (
+          // Before and after side by side (the board): the first and latest unless others were picked in the comparison, which a tap opens.
+          <button
+            type="button"
+            onClick={() => setComparing(true)}
+            aria-label={`Compare ${longDate(beforePhoto.photo_date)} with ${longDate(afterPhoto.photo_date)}`}
+            className="grid w-full grid-cols-2 gap-2 rounded-[20px] border border-black/[.08] bg-card p-2 text-left dark:border-white/10"
+          >
+            {([['Before', beforePhoto], ['After', afterPhoto]] as const).map(([label, photo]) => (
+              <span key={label} data-photo className="block space-y-1.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.signedUrl!} alt="" className="aspect-[3/4] w-full rounded-[14px] object-cover" />
+                <span className="block px-1 pb-0.5 text-xs font-bold text-black dark:text-zinc-50">
+                  {label} · <span className="font-semibold text-zinc-500 dark:text-zinc-400">{shortDate(photo.photo_date)}</span>
+                </span>
+              </span>
+            ))}
+          </button>
+        )}
+
+        {initialPhotos.length === 0 ? (
+          readOnly ? (
+            <EmptyState icon={ImageIcon} title="No progress photos yet" hint="They have not uploaded any yet." />
+          ) : (
+            <p className={`${cardCls} text-sm text-zinc-500 dark:text-zinc-400`}>No photos yet. Take one each week in the same spot and light, and the change shows here.</p>
+          )
         ) : (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {!readOnly && (
-              <div>
-                <button
-                  type="button"
-                  disabled={uploading || preparing}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-black/15 text-sm font-semibold text-zinc-500 disabled:opacity-50 dark:border-white/15"
-                >
-                  <Plus className="h-5 w-5" />
-                  {preparing ? 'Preparing…' : uploading ? 'Uploading…' : 'Add photo'}
-                </button>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-              </div>
-            )}
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {initialPhotos.map((photo) => (
-              <div key={photo.id} className="space-y-1">
+              <div key={photo.id} data-photo>
                 {photo.signedUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -184,13 +195,16 @@ export function ProgressTab({
                 ) : (
                   <div className="aspect-square w-full rounded-xl bg-black/5 dark:bg-white/5" />
                 )}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-500">
-                    {longDate(photo.photo_date)}
-                  </span>
+                <div className="flex items-center justify-between gap-1 pl-0.5">
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{shortDate(photo.photo_date)}</span>
                   {!readOnly && (
-                    <button onClick={() => handleDeletePhoto(photo.id, photo.photo_date)} className="font-bold text-danger hover:underline">
-                      Delete
+                    <button
+                      type="button"
+                      aria-label={`Delete the photo from ${longDate(photo.photo_date)}`}
+                      onClick={() => handleDeletePhoto(photo.id, photo.photo_date)}
+                      className="-mr-2 flex h-11 w-11 items-center justify-center rounded-xl text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                 </div>
@@ -198,18 +212,34 @@ export function ProgressTab({
             ))}
           </div>
         )}
-      </div>
 
-      <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Measurements</h3>
+        {!readOnly && (
+          <>
+            <button
+              type="button"
+              disabled={uploading || preparing}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-[#1d1d1b]"
+            >
+              <Camera className="h-[18px] w-[18px]" />
+              {preparing ? 'Preparing…' : uploading ? 'Uploading…' : 'Add this week\'s photo'}
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+          </>
+        )}
+      </section>
+
+      <section className="space-y-2.5">
+      <h2 className={headCls}>Measurements</h2>
+      <div className={cardCls}>
 
         {initialMeasurements.length === 0 ? (
-          <p className="mt-4 text-sm text-zinc-500">{readOnly ? 'They have not logged any measurements yet.' : 'No measurements logged yet.'}</p>
+          <p className="text-sm text-zinc-500">{readOnly ? 'They have not logged any measurements yet.' : 'No measurements logged yet.'}</p>
         ) : (
           <>
-            <p className="mt-3 text-xs text-zinc-500">Last logged {longDate(initialMeasurements[0].log_date)}</p>
-            <div className="mt-2 divide-y divide-black/[.05] dark:divide-white/10">
-              <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] gap-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Last logged {longDate(initialMeasurements[0].log_date)} · all in cm</p>
+            <div className="mt-2 divide-y divide-black/[.07] dark:divide-white/10">
+              <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] gap-1 pb-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                 <span />
                 <span className="text-right">Start</span>
                 <span className="text-right">Last</span>
@@ -229,13 +259,13 @@ export function ProgressTab({
                 return (
                   <div key={key} className="py-2.5">
                     <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] items-center gap-1">
-                      <span className="text-sm font-medium text-black dark:text-zinc-50">{label}</span>
+                      <span className="text-[15px] font-bold text-black dark:text-zinc-50">{label}</span>
                       <span className="text-right text-sm text-zinc-500">{start ?? '—'}</span>
                       <span className="text-right text-sm text-zinc-500">{last ?? '—'}</span>
-                      <span className="text-right text-sm font-bold text-black dark:text-zinc-50">{latest ?? '—'}</span>
+                      <span className="text-right text-[15px] font-black text-black dark:text-zinc-50">{latest ?? '—'}</span>
                     </div>
                     {deltaLabel && start != null && latest != null && (
-                      <p className={`mt-0.5 text-[11px] font-medium ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-success' : 'text-danger'}`}>
+                      <p className={`mt-0.5 text-xs font-semibold ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-accent' : 'text-danger'}`}>
                         {deltaLabel}cm since your first measurement
                         {formatDelta(vsPrevious) ? ` · ${formatDelta(vsPrevious)}cm since last time` : ''}
                       </p>
@@ -244,15 +274,16 @@ export function ProgressTab({
                 );
               })}
             </div>
-            <p className="mt-1 text-[11px] text-zinc-400">All in cm.</p>
           </>
         )}
       </div>
+      </section>
 
       {!readOnly && (
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-          <h3 className="font-bold text-black dark:text-zinc-50">Log new measurements</h3>
-          <form onSubmit={handleSaveMeasurement} className="mt-3 space-y-3">
+        <section className="space-y-2.5">
+        <h2 className={headCls}>Add a measurement</h2>
+        <div className={cardCls}>
+          <form onSubmit={handleSaveMeasurement} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               {MEASUREMENT_FIELDS.map(({ key, label }) => (
                 <div key={key} className="space-y-1">
@@ -272,12 +303,13 @@ export function ProgressTab({
             <button
               type="submit"
               disabled={savingMeasurement}
-              className="w-full rounded-full bg-accent py-3 text-sm font-bold text-accent-foreground disabled:opacity-50"
+              className="h-12 w-full rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-[#1d1d1b]"
             >
               {savingMeasurement ? 'Saving…' : 'Save measurements'}
             </button>
           </form>
         </div>
+        </section>
       )}
       {comparing && beforePhoto && afterPhoto && (
         <div ref={compareRef} role="dialog" aria-modal="true" aria-label="Before and after" className="fixed inset-0 z-[70] flex flex-col overflow-y-auto bg-background p-4">
@@ -290,7 +322,7 @@ export function ProgressTab({
           <div className="mt-4 grid grid-cols-2 gap-3">
             {([['Before', beforePhoto, setBeforeId], ['After', afterPhoto, setAfterId]] as const).map(([label, photo, setId]) => (
               <div key={label} className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">{label}</p>
                 <ZoomablePhoto
                   src={photo.signedUrl!}
                   alt={`${label} photo ${photo.photo_date}`}
@@ -313,7 +345,7 @@ export function ProgressTab({
           <p className="mt-3 text-center text-xs text-zinc-400">Pinch, scroll or double-tap to zoom. Both photos move together.</p>
           <div className="mt-3 flex flex-wrap justify-center gap-2">
             {compareZoom.scale > 1 && (
-              <button type="button" onClick={() => setCompareZoom(IDENTITY)} className="rounded-full border border-black/10 px-4 py-2 text-sm font-bold dark:border-white/15">
+              <button type="button" onClick={() => setCompareZoom(IDENTITY)} className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50">
                 Reset zoom
               </button>
             )}
@@ -336,7 +368,7 @@ export function ProgressTab({
                   }
                 })
               }
-              className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground disabled:opacity-50"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-4 text-sm font-bold disabled:opacity-50"
             >
               <Download className="h-4 w-4" /> {downloading ? 'Saving…' : 'Download'}
             </button>
@@ -368,7 +400,7 @@ export function ProgressTab({
               e.stopPropagation();
               void runDownload(() => downloadPhoto(viewing.signedUrl!, `progress-${viewing.photo_date}.jpg`));
             }}
-            className="mt-2 flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+            className="mt-2 flex h-11 items-center gap-1.5 rounded-xl bg-white/15 px-4 text-sm font-bold text-white disabled:opacity-50"
           >
             <Download className="h-4 w-4" /> {downloading ? 'Saving…' : 'Download'}
           </button>

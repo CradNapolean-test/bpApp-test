@@ -6,6 +6,9 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
+import { CoachPageHeader } from '@/app/coach/_components/CoachUi';
 import { CoachBottomTabBar } from '@/app/coach/_components/CoachBottomTabBar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
@@ -21,6 +24,19 @@ import type { ClassRow, CoachReport, ScheduleOccurrence } from '@/lib/data/types
 import type { CoachClientRow } from '@/lib/data/coach';
 
 const TABS = ['Sessions', 'Timetable', 'Red flags', 'Reports'] as const;
+
+// The line over the page title: what the open section is for, and on Sessions how today is booked.
+function classesLine(tab: (typeof TABS)[number], occurrences: ScheduleOccurrence[], timezone: string | null): string {
+  if (tab === 'Timetable') return 'The weekly timetable members book from';
+  if (tab === 'Reports') return 'How full the classes are and who turns up';
+  if (tab === 'Red flags') return 'Members flagged this week, to get in touch with';
+  const today = todayIsoInTz(timezone || DEFAULT_TIMEZONE);
+  const todays = occurrences.filter((o) => o.date === today && !o.cancelled);
+  if (todays.length === 0) return 'No sessions today';
+  const booked = todays.reduce((n, o) => n + o.bookedCount, 0);
+  const capacity = todays.reduce((n, o) => n + o.capacity, 0);
+  return `${todays.length} session${todays.length === 1 ? '' : 's'} today · ${booked} of ${capacity} booked`;
+}
 type Tab = (typeof TABS)[number];
 
 // What each tab is called in the address (?tab=...), so a reload or a shared link opens the same tab.
@@ -84,13 +100,20 @@ export function ClassesHubShell({
       topBar={<CoachNav />}
       bottomBar={<CoachBottomTabBar />}
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={email} />}
+      coachSidebar={<CoachSidebar unreadCount={unreadCount} email={email} />}
       mobileHeader={<CoachMobileBrand />}
     >
-      <h1 className="mb-4 text-2xl font-bold text-black dark:text-zinc-50">
-        Classes
-        <ActiveGymTag />
-      </h1>
-      <HubTabBar label="Classes sections" tabs={TABS} active={tab} onSelect={setTab} />
+      <CoachPageHeader
+        eyebrow={classesLine(tab, occurrences, timezone)}
+        title={
+          <>
+            Classes
+            <ActiveGymTag />
+          </>
+        }
+        actions={<HubTabBar label="Classes sections" tabs={TABS} active={tab} onSelect={setTab} />}
+      />
+      <div className="mt-6" />
 
       {tab === 'Sessions' && (
         <SessionsView

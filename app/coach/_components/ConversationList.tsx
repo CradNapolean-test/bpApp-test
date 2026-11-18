@@ -75,11 +75,12 @@ export function ConversationList({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search clients…"
-          aria-label="Search clients"
-          className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3.5 py-2.5 text-base outline-none focus:border-accent sm:py-2 sm:text-sm dark:border-white/10 dark:bg-white/5"
+          type="search"
+          placeholder="Search conversations"
+          aria-label="Search conversations"
+          className="h-11 w-full rounded-xl border border-black/[.16] bg-card px-3.5 text-base outline-none focus:border-accent sm:text-[15px] dark:border-white/15"
         />
-        <div role="group" aria-label="Show conversations" className="flex flex-wrap gap-1 text-xs">
+        <div role="group" aria-label="Show conversations" className="flex flex-wrap gap-1.5">
           {(['active', 'reply', 'unread', 'all'] as FilterMode[]).map((m) => {
             const count = m === 'reply' ? counts.reply : m === 'unread' ? counts.unread : 0;
             return (
@@ -88,8 +89,10 @@ export function ConversationList({
                 type="button"
                 aria-pressed={mode === m}
                 onClick={() => setMode(m)}
-                className={`min-h-10 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors sm:min-h-9 sm:px-2.5 sm:py-1 sm:text-xs ${
-                  mode === m ? 'bg-accent text-accent-foreground' : 'text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5'
+                className={`min-h-11 rounded-full px-4 text-sm font-bold transition-colors ${
+                  mode === m
+                    ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                    : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                 }`}
               >
                 {FILTER_LABEL[m]}
@@ -103,7 +106,7 @@ export function ConversationList({
       <nav
         ref={listRef}
         aria-label="Conversations"
-        className={`space-y-1 ${listHeight != null ? 'overflow-y-auto overscroll-contain' : ''}`}
+        className={`space-y-0.5 ${listHeight != null ? 'overflow-y-auto overscroll-contain' : ''}`}
         style={listHeight != null ? { maxHeight: listHeight } : undefined}
       >
         {filtered.map((c) => {
@@ -114,16 +117,16 @@ export function ConversationList({
             <div
               key={c.client_id}
               className={`flex items-center gap-1 rounded-2xl pr-1 transition-colors ${
-                selected === c.client_id ? 'bg-black/[.04] dark:bg-white/[.06]' : 'hover:bg-black/5 dark:hover:bg-white/5'
+                selected === c.client_id ? 'bg-accent-soft' : 'hover:bg-black/[.04] dark:hover:bg-white/5'
               }`}
             >
-              <button onClick={() => onSelect(c.client_id)} className="block min-w-0 flex-1 rounded-2xl px-3 py-2.5 text-left text-sm text-zinc-700 dark:text-zinc-300">
-                <div className="flex items-center gap-2.5">
-                  <Avatar name={c.client_name} size="sm" />
+              <button onClick={() => onSelect(c.client_id)} className="block min-h-[60px] min-w-0 flex-1 rounded-2xl px-3 py-2.5 text-left text-sm text-zinc-700 dark:text-zinc-300">
+                <div className="flex items-center gap-3">
+                  <Avatar name={c.client_name} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`truncate text-black dark:text-zinc-50 ${c.unread_count > 0 ? 'font-extrabold' : 'font-bold'}`}>{c.client_name}</span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-400">
+                      <span className={`truncate text-[15px] text-black dark:text-zinc-50 ${c.unread_count > 0 ? 'font-extrabold' : 'font-bold'}`}>{c.client_name}</span>
+                      <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-zinc-500">
                         {c.last_message_at && relativeTime(c.last_message_at)}
                         {c.unread_count > 0 && (
                           <>
@@ -134,7 +137,7 @@ export function ConversationList({
                         )}
                       </span>
                     </div>
-                    <p className={`truncate text-xs ${c.unread_count > 0 ? 'font-semibold text-zinc-700 dark:text-zinc-200' : 'text-zinc-500'}`}>
+                    <p className={`truncate text-[13px] ${c.unread_count > 0 ? 'font-semibold text-zinc-800 dark:text-zinc-200' : 'text-zinc-500 dark:text-zinc-400'}`}>
                       {sender === 'me' || sender === 'team' ? <span className="text-zinc-400">{SENDER_PREFIX[sender]}</span> : null}
                       {preview}
                     </p>

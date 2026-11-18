@@ -7,15 +7,13 @@ import { AppShell } from '@/app/_components/AppShell';
 import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { CoachNav } from './_components/CoachNav';
+import { CoachSidebar } from './_components/CoachSidebar';
 import { CoachBottomTabBar } from './_components/CoachBottomTabBar';
 import { CoachBrand } from './_components/CoachBrand';
 import { CoachHeaderExtras } from './_components/CoachHeaderExtras';
-import { CoachTimeGreeting } from './_components/CoachGreeting';
-import { AddClientForm } from './_components/AddClientForm';
 import { ActivityFeed } from './_components/ActivityFeed';
 import { CoachDashboard } from './_components/CoachDashboard';
 import { CoachMobileBrand } from './_components/CoachMobileBrand';
-import { Card } from '@/app/_components/ui';
 
 export default async function CoachPage({ searchParams }: { searchParams: Promise<{ scope?: string; coach?: string }> }) {
   const { scope: scopeParam, coach: coachParam } = await searchParams;
@@ -53,28 +51,9 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
       bottomBar={<CoachBottomTabBar />}
       mobileHeader={<CoachMobileBrand />}
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
+      coachSidebar={<CoachSidebar unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
     >
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-black dark:text-zinc-50">
-          <CoachTimeGreeting name={data.firstName} />
-        </h1>
-        {/* Phone: one column -- today, attention, activity, habits. Wide screen: today and attention on
-            the left, activity and "add client" on the right. */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_24rem]">
-          <CoachDashboard data={data} />
-          <div className="space-y-4">
-            <ActivityFeed events={data.activity} clients={[]} extraNames={names} />
-            <div className="hidden lg:block">
-              <Card>
-                <h3 className="font-bold text-black dark:text-zinc-50">Add client</h3>
-                <div className="mt-2">
-                  <AddClientForm />
-                </div>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </div>
+      <CoachDashboard data={data} activity={<ActivityFeed events={data.activity} clients={[]} extraNames={names} />} />
     </AppShell>
     </ClientOnly>
   );

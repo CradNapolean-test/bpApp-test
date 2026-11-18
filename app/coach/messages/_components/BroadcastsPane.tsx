@@ -58,7 +58,7 @@ function TemplatesSheet({
             <p className="text-xs font-medium text-zinc-500">Save what you&apos;ve written as a template</p>
             <div className="flex gap-2">
               <input className={field} placeholder="Template name" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <button type="submit" disabled={busy || !title.trim()} className="shrink-0 rounded-full bg-accent px-4 text-sm font-bold text-accent-foreground disabled:opacity-50">
+              <button type="submit" disabled={busy || !title.trim()} className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
                 Save
               </button>
             </div>
@@ -82,7 +82,7 @@ function TemplatesSheet({
                     onClick={async () => {
                       if (await confirm({ title: `Delete “${t.title}”?`, destructive: true })) run(() => deleteMessageTemplate(t.id), { success: 'Deleted' });
                     }}
-                    className="rounded-md p-1 text-zinc-400 hover:text-danger"
+                    className="rounded-lg p-1.5 text-zinc-400 hover:text-danger"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -231,8 +231,8 @@ export function BroadcastsPane({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
-        <h2 className="text-sm font-bold text-black dark:text-zinc-50">
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
+        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">
           New broadcast
           <ActiveGymTag />
         </h2>
@@ -247,10 +247,10 @@ export function BroadcastsPane({
             className={`${field} resize-none`}
           />
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={insertFirstName} className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-700 dark:border-white/15 dark:text-zinc-200">
+            <button type="button" onClick={insertFirstName} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50">
               + First name
             </button>
-            <button type="button" onClick={() => setShowTemplates(true)} className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-700 dark:border-white/15 dark:text-zinc-200">
+            <button type="button" onClick={() => setShowTemplates(true)} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50">
               Templates
             </button>
           </div>
@@ -355,7 +355,7 @@ export function BroadcastsPane({
             {target === 'gym' && gymLabel ? ` at ${gymLabel}` : ''}
             {repeat ? ' each week.' : '.'}
           </p>
-          <button type="submit" disabled={!canSubmit} className="rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50">
+          <button type="submit" disabled={!canSubmit} className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-sm font-extrabold text-accent-foreground disabled:opacity-50">
             {timing === 'now' ? 'Send now' : repeat ? 'Start repeating' : 'Schedule'}
           </button>
         </div>
@@ -363,7 +363,7 @@ export function BroadcastsPane({
 
       {series.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-black dark:text-zinc-50">Repeating</h3>
+          <h3 className="text-base font-extrabold text-black dark:text-zinc-50">Repeating</h3>
           {series.map((c) => (
             <div key={c.id} className="flex items-start justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft p-3.5 text-sm">
               <div className="min-w-0 flex-1">
@@ -384,14 +384,14 @@ export function BroadcastsPane({
       )}
 
       <div className="space-y-2">
-        <h3 className="text-sm font-bold text-black dark:text-zinc-50">Scheduled &amp; sent</h3>
+        <h3 className="text-base font-extrabold text-black dark:text-zinc-50">Scheduled &amp; sent</h3>
         {history.length === 0 && <EmptyState compact title="No broadcasts yet." />}
         {history.map((c) => {
           const isSent = c.sent_at != null;
           const isCancelled = !isSent && c.cancelled_at != null;
           const showsEmail = c.channel === 'email' || c.channel === 'both';
           return (
-            <div key={c.id} className="flex items-start justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-3.5 text-sm shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+            <div key={c.id} className="flex items-start justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-3.5 text-sm dark:border-white/10">
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-3 whitespace-pre-wrap text-zinc-900 dark:text-zinc-100">{c.message}</p>
                 <p className="mt-1 text-xs text-zinc-500">
@@ -402,7 +402,7 @@ export function BroadcastsPane({
                 </p>
               </div>
               {!isSent && (
-                <button onClick={() => handleDelete(c)} aria-label="Delete broadcast" className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/5">
+                <button onClick={() => handleDelete(c)} aria-label="Delete broadcast" className="shrink-0 rounded-lg p-2 text-zinc-400 hover:bg-black/5 hover:text-danger dark:hover:bg-white/5">
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}

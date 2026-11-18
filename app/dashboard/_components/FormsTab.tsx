@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { gsap, pop, prefersReducedMotion } from '@/app/_components/motion/gsap';
+import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
 import { Check, CheckCircle2, ChevronDown, ClipboardList, FileText } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -39,11 +41,14 @@ function Choice({ label, selected, onClick }: { label: string; selected: boolean
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        pop(e.currentTarget, 0.94);
+        onClick();
+      }}
       aria-pressed={selected}
-      className={`flex w-full items-center justify-between gap-3 rounded-full border px-5 py-3 text-left text-sm font-semibold transition-colors ${
+      className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm font-semibold transition-colors ${
         selected
-          ? 'border-accent bg-accent text-accent-foreground'
+          ? 'border-[#1d1d1b] bg-[#1d1d1b] text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-[#1d1d1b]'
           : 'border-black/10 text-black hover:bg-black/[.03] dark:border-white/10 dark:text-zinc-100 dark:hover:bg-white/[.04]'
       }`}
     >
@@ -124,6 +129,11 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
       setMissing(new Set(problems.missing));
       setInvalid(problems.invalid);
       document.getElementById(`question-${flagged[0].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // A short shake on each one still to answer, so it is plain which they are.
+      if (!prefersReducedMotion()) {
+        const cards = flagged.map((q) => document.getElementById(`question-${q.id}`)).filter(Boolean);
+        gsap.fromTo(cards, { x: -10 }, { x: 0, duration: 0.6, ease: 'elastic.out(1, 0.3)', delay: 0.25, clearProps: 'transform' });
+      }
       return;
     }
     // An unanswered optional question is simply left out: the database refuses an empty answer, and
@@ -145,7 +155,7 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
   }
 
   return (
-    <FocusOverlay title={assignment.template.name} subtitle={`${answeredCount} of ${questions.length} answered`} onClose={onClose}>
+    <FocusOverlay title={assignment.template.name} subtitle={`${answeredCount} of ${questions.length} answered`} onClose={onClose} variant="member">
       <div className="space-y-3 pb-2">
         {assignment.template.description && <p className="px-1 text-sm text-zinc-500">{assignment.template.description}</p>}
 
@@ -171,7 +181,7 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
                 </span>
                 <div className="min-w-0">
                   <p className="text-base font-bold leading-snug text-black dark:text-zinc-50">{q.question_text}</p>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{q.required ? 'Required' : 'Optional'}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">{q.required ? 'Required' : 'Optional'}</p>
                 </div>
               </div>
 
@@ -220,7 +230,7 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
           type="button"
           disabled={submitting}
           onClick={handleSubmit}
-          className="h-12 w-full rounded-full bg-accent text-base font-extrabold text-accent-foreground disabled:opacity-50"
+          className="h-12 w-full rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-[15px] font-bold disabled:opacity-50"
         >
           {submitting ? 'Submitting…' : 'Submit'}
         </button>
@@ -249,19 +259,19 @@ function CompletedForm({
     (q) => !q.archived_at || (isCoachView && assignment.responses.some((r) => r.question_id === q.id))
   );
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div data-form className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2.5 p-3.5 text-left"
+        className="flex min-h-[60px] w-full items-center gap-3 px-3.5 py-2.5 text-left"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-[#041f1f]">
           <CheckCircle2 className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{assignment.template.name}</span>
-          <span className="block text-xs text-zinc-500">Completed {assignment.completed_at ? fmtDate(assignment.completed_at) : ''}</span>
+          <span className="block truncate text-[15px] font-bold text-black dark:text-zinc-50">{assignment.template.name}</span>
+          <span className="block text-[13px] text-zinc-500 dark:text-zinc-400">Sent {assignment.completed_at ? fmtDate(assignment.completed_at) : ''}</span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -292,7 +302,7 @@ function CompletedForm({
                   onDone: () => setReviewed(true),
                 })
               }
-              className="w-full rounded-full border border-black/10 py-2 text-sm font-bold text-zinc-600 hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+              className="h-11 w-full rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black hover:bg-black/[.03] disabled:opacity-60 dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
             >
               {reviewed ? '✓ Reviewed' : 'Mark reviewed'}
             </button>
@@ -322,6 +332,8 @@ export function FormsTab({
   const { run, busy: assigning } = useAction();
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [openFormId, setOpenFormId] = useState<string | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useStaggerIn(list, '[data-form]', assignments.length);
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -337,9 +349,9 @@ export function FormsTab({
   const openForm = pending.find((a) => a.id === openFormId) ?? null;
 
   return (
-    <div className="space-y-6">
+    <div ref={list} className="space-y-6">
       {isCoachView && !readOnly && (
-        <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
           <h3 className="font-bold text-black dark:text-zinc-50">Assign a form</h3>
           <form onSubmit={handleAssign} className="mt-2 flex items-center gap-2">
             <select
@@ -357,7 +369,7 @@ export function FormsTab({
             <button
               type="submit"
               disabled={assigning || !selectedTemplate}
-              className="shrink-0 rounded-full bg-accent px-5 py-2.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+              className="shrink-0 inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
             >
               {assigning ? 'Assigning…' : 'Assign'}
             </button>
@@ -367,13 +379,13 @@ export function FormsTab({
 
       {pending.length > 0 && (
         <div className="space-y-2.5">
-          <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{isCoachView ? 'Pending' : 'To fill out'}</h3>
+          <h3 className="px-1 text-base font-extrabold text-black dark:text-zinc-50">{isCoachView ? 'Pending' : 'To do'}</h3>
           {pending.map((a) => {
             const n = a.template.questions.filter((q) => !q.archived_at).length;
             return isCoachView ? (
               <div
                 key={a.id}
-                className="flex items-center gap-2.5 rounded-2xl border border-black/[.05] bg-card p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10"
+                className="flex items-center gap-2.5 rounded-[20px] border border-black/[.08] bg-card p-3.5 dark:border-white/10"
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
                   <FileText className="h-4 w-4" />
@@ -382,14 +394,14 @@ export function FormsTab({
                 <span className="ml-auto shrink-0 text-xs text-zinc-500">waiting on client</span>
               </div>
             ) : (
-              <div key={a.id} className="rounded-2xl border border-accent/30 bg-accent-soft p-4">
+              <div key={a.id} data-form className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
                     <ClipboardList className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-base font-extrabold leading-tight text-black dark:text-zinc-50">{a.template.name}</p>
-                    <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
                       {n} question{n === 1 ? '' : 's'} · about {Math.max(1, Math.round(n * 0.5))} min
                     </p>
                     {a.template.description && <p className="mt-1.5 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{a.template.description}</p>}
@@ -398,9 +410,9 @@ export function FormsTab({
                 <button
                   type="button"
                   onClick={() => setOpenFormId(a.id)}
-                  className="mt-3 h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground"
+                  className="mt-3 h-12 w-full rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white dark:bg-zinc-100 dark:text-[#1d1d1b]"
                 >
-                  Fill out
+                  Start
                 </button>
               </div>
             );
@@ -410,7 +422,7 @@ export function FormsTab({
 
       {completed.length > 0 && (
         <div className="space-y-2.5">
-          <h3 className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Completed</h3>
+          <h3 className="px-1 text-base font-extrabold text-black dark:text-zinc-50">{isCoachView ? 'Completed' : 'Done'}</h3>
           {completed.map((a) => (
             <CompletedForm key={a.id} assignment={a} isCoachView={isCoachView} reviewClientId={isCoachView && !readOnly ? clientId : null} />
           ))}

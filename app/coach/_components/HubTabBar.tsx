@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { handleTabListKeys } from '@/app/_components/tabKeys';
 
-// Underline-style sub-tab bar shared by the coach hub shells (Classes, Library, Business, Messages) --
+// The board's segmented control (the November 2026 mock-ups): white on a grey track. It was an underlined row.
+// Shared by the coach hub shells (Classes, Library, Business, Messages) --
 // in-page state, not routes, same as WorkspaceTabBar one level down at the per-client workspace.
 // Explicit teal underline rather than border-accent: these pages set no data-view, so
 // border-accent would already resolve to teal here, but staying explicit keeps this
@@ -50,7 +51,7 @@ export function HubTabBar<T extends string>({
       onKeyDown={handleTabListKeys}
       onScroll={measure}
       style={moreRight ? { maskImage: 'linear-gradient(to right, black calc(100% - 36px), transparent)' } : undefined}
-      className="mb-4 flex w-full gap-4 overflow-x-auto border-b border-black/[.06] sm:gap-5 [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden"
+      className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-black/[.06] p-1 [scrollbar-width:none] dark:bg-white/10 [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((tab) => {
         const isActive = active === tab;
@@ -63,10 +64,8 @@ export function HubTabBar<T extends string>({
             tabIndex={isActive ? 0 : -1}
             data-active={isActive}
             onClick={() => onSelect(tab)}
-            className={`shrink-0 whitespace-nowrap border-b-2 pb-2.5 pt-2.5 text-sm transition-colors ${
-              isActive
-                ? 'border-accent font-bold text-black dark:text-zinc-50'
-                : 'border-transparent font-medium text-zinc-500 hover:text-black dark:hover:text-zinc-300'
+            className={`min-h-9 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-sm font-bold transition-colors ${
+              isActive ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300 dark:hover:text-white'
             }`}
           >
             {tab}

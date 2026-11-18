@@ -149,7 +149,7 @@ function FoodResultRow({
             id={`serving-${food.id}`}
             value={unitKey ?? ''}
             onChange={(e) => chooseUnit(units.find((u) => u.key === e.target.value) ?? null)}
-            className="max-w-full rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
+            className="max-w-full rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-sm dark:border-white/10"
           >
             <option value="">grams (g)</option>
             {units.map((u) => (
@@ -186,7 +186,7 @@ function FoodResultRow({
               placeholder="rasher"
               maxLength={MAX_UNIT_LABEL}
               aria-label="Unit name"
-              className="w-24 rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm dark:border-white/10"
+              className="w-24 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-sm dark:border-white/10"
             />
             <span className="text-zinc-500">=</span>
             <input
@@ -197,7 +197,7 @@ function FoodResultRow({
               onChange={(e) => setNewGrams(e.target.value)}
               placeholder="25"
               aria-label="Grams in one"
-              className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
+              className="w-16 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
             />
             <span className="text-zinc-500">g</span>
             <Button variant="outline" size="sm" onClick={saveNewUnit}>
@@ -243,7 +243,7 @@ function FoodResultRow({
           }}
           onBlur={() => setDraft(null)}
           aria-label={unit ? unit.label : isPerGram ? 'Grams' : 'Quantity'}
-          className="w-16 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
+          className="w-16 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
         />
         <Button variant="outline" size="sm" onClick={() => {
             setDraft(null);
@@ -267,7 +267,7 @@ function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: num
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
-  const inputCls = 'w-full rounded-md border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10';
+  const inputCls = 'w-full rounded-xl border border-black/[.16] bg-transparent px-3 py-2 text-sm dark:border-white/10';
   // Each figure is optional, but whatever is typed has to be a sensible number (FS3, FS6).
   const problem = firstFoodProblem([
     checkFoodNumber(calories, 'kcal', { allowBlank: true }),
@@ -297,7 +297,7 @@ function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: num
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-black/[.05] bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <form onSubmit={handleSubmit} className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
       <p className="mb-2 text-xs text-zinc-500">
         For something not in the food database — a restaurant meal, an estimate. Calories or macros (whatever you know).
       </p>
@@ -477,7 +477,7 @@ export function FoodSearchPicker({
 
   if (recipes && mode === 'recipes') {
     return (
-      <div className="rounded-2xl border border-black/[.05] bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+      <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
         <div className="flex gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/5">
           {modes.map((m) => (
             <button
@@ -506,7 +506,7 @@ export function FoodSearchPicker({
                     value={s}
                     onChange={(e) => setServings((v) => ({ ...v, [recipe.id]: e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)) }))}
                     aria-label="Servings"
-                    className="w-14 rounded-md border border-black/10 bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
+                    className="w-14 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
                   />
                   <span className="text-xs text-zinc-500">servings</span>
                   <Button variant="primary" size="sm" disabled={!(s > 0) || s > FOOD_LIMITS.portions} onClick={() => onAddRecipe?.(recipe.id, s)}>
@@ -523,7 +523,7 @@ export function FoodSearchPicker({
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-3 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
       {modes.length > 1 && (
         <div className="mb-2 flex gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/5">
           {modes.map((m) => (
@@ -550,7 +550,7 @@ export function FoodSearchPicker({
         autoCorrect="off"
         spellCheck={false}
         placeholder="Search foods…"
-        className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-base dark:border-white/10"
+        className="w-full rounded-xl border border-black/[.16] bg-transparent px-3.5 py-2.5 text-base dark:border-white/10"
         value={query}
         onChange={(e) => handleQueryChange(e.target.value)}
       />

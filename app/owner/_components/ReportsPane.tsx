@@ -14,7 +14,7 @@ import { prettyName } from '@/lib/gymNames';
 // A check-in is a member logging anything on their daily check-in that day (the same measure as the Overview's
 // "Logged this week"). Percentages are of members who finished onboarding in the chosen gym(s).
 
-const card = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
+const card = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 const saveCsv = (filename: string, text: string) => downloadTextFile(filename, text, 'text/csv;charset=utf-8');
@@ -30,7 +30,7 @@ function Heading({ title, hint, onCsv }: { title: string; hint?: string; onCsv?:
         <button
           type="button"
           onClick={onCsv}
-          className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-600 dark:border-white/15 dark:text-zinc-300"
+          className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50"
         >
           <Download className="h-3.5 w-3.5" /> CSV
         </button>
@@ -86,7 +86,7 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
         <button
           type="button"
           onClick={() => void load(gymId)}
-          className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+          className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground"
         >
           Try again
         </button>
@@ -275,7 +275,7 @@ export function ReportsPane({ gymId }: { gymId: string | null }) {
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-3.5 dark:border-white/10">
       <p className="text-2xl font-black text-black dark:text-zinc-50">{value}</p>
       <p className="text-xs text-zinc-500">{label}</p>
       {sub && <p className="text-[11px] text-zinc-400">{sub}</p>}

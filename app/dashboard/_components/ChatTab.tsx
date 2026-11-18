@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ImageIcon, MailOpen, MessageSquare, Pause, Play, Send, UserRound, WifiOff, X } from 'lucide-react';
+import { gsap, prefersReducedMotion } from '@/app/_components/motion/gsap';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -130,7 +131,22 @@ function PhotoBubble({ path, initial, onOpen }: { path: string; initial: string 
   );
 }
 
-function VoiceBubble({ path, initial, seed, seconds, mine }: { path: string; initial: string | null; seed: string; seconds: number | null; mine: boolean }) {
+function VoiceBubble({
+  path,
+  initial,
+  seed,
+  seconds,
+  mine,
+  member = false,
+}: {
+  path: string;
+  initial: string | null;
+  seed: string;
+  seconds: number | null;
+  mine: boolean;
+  // The member's chat: their own bubbles are black, the coach's white with a black play button (the board).
+  member?: boolean;
+}) {
   const { holderRef, url, setUrl, failed, sign, signedAtRef } = useSignedUrl('voice-notes', path, initial);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -207,7 +223,15 @@ function VoiceBubble({ path, initial, seed, seconds, mine }: { path: string; ini
         aria-label={playing ? 'Pause voice note' : 'Play voice note'}
         disabled={failed}
         onClick={() => void toggle()}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${mine ? 'bg-black/20 text-white' : 'bg-accent text-accent-foreground'}`}
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${
+          member
+            ? mine
+              ? 'bg-white/15 text-white'
+              : 'bg-[#1d1d1b] text-[#5fd6d6] dark:bg-zinc-100 dark:text-[#0e6266]'
+            : mine
+              ? 'bg-black/20 text-white'
+              : 'bg-accent text-accent-foreground'
+        }`}
       >
         {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
       </button>
@@ -216,7 +240,17 @@ function VoiceBubble({ path, initial, seed, seconds, mine }: { path: string; ini
           <span
             key={i}
             className={`w-[3px] rounded-full ${
-              i / bars.length < progress ? (mine ? 'bg-white' : 'bg-accent') : mine ? 'bg-black/25' : 'bg-black/15 dark:bg-white/25'
+              i / bars.length < progress
+                ? mine
+                  ? member
+                    ? 'bg-[#5fd6d6]'
+                    : 'bg-white'
+                  : 'bg-accent'
+                : mine
+                  ? member
+                    ? 'bg-white/30'
+                    : 'bg-black/25'
+                  : 'bg-black/15 dark:bg-white/25'
             }`}
             style={{ height: h }}
           />
@@ -243,6 +277,7 @@ export function ChatTab({
   memberHref,
   onMarkUnread,
   narrow = false,
+  look = 'card',
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -269,7 +304,11 @@ export function ChatTab({
   onMarkUnread?: () => void;
   // The chat sits in a narrow panel (the coach's Messages drawer): the header's buttons are icons only at every screen width.
   narrow?: boolean;
+  // 'member': the member's Messages screen (the board). No card or name row (the screen's black header names the coach), black
+  // bubbles for the member's own messages and white for the coach's, sized to sit between that header and the tab bar.
+  look?: 'card' | 'member';
 }) {
+  const member = look === 'member';
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   // A first page that came back full may have older messages behind it (H5); "Load earlier" fetches the page before the oldest shown.
   const [hasEarlier, setHasEarlier] = useState(() => mayHaveEarlier(initialMessages.length));
@@ -452,6 +491,25 @@ export function ChatTab({
 
   // ...and only a new newest message (or one of your own waiting to send) scrolls to the bottom.
   const newestKey = messages.at(-1)?.id ?? '';
+
+  // The member's chat: a message that arrives while it is open (theirs sent, or the coach's coming in) springs up from its own side.
+  // Only a new newest message: not the thread loading, not older messages coming in above, and not "Sending…" being swapped for the
+  // saved copy (the count stays the same then).
+  const seenIds = useRef<Set<string> | null>(null);
+  useLayoutEffect(() => {
+    const before = seenIds.current;
+    seenIds.current = new Set(messages.map((m) => m.id));
+    const newest = messages.at(-1);
+    if (!member || !before || !newest || before.has(newest.id) || messages.length <= before.size) return;
+    const row = listRef.current?.lastElementChild;
+    if (!row || prefersReducedMotion()) return;
+    const mine = newest.sender_id === currentUserId;
+    gsap.fromTo(
+      row,
+      { y: 14, scale: 0.94, opacity: 0, transformOrigin: mine ? '100% 100%' : '0% 100%' },
+      { y: 0, scale: 1, opacity: 1, duration: 0.42, ease: 'back.out(1.6)', clearProps: 'transform,opacity,transformOrigin' }
+    );
+  }, [messages, member, currentUserId]);
   useEffect(() => {
     // Scroll just the message list (scrollIntoView would also scroll the whole page).
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
@@ -616,10 +674,17 @@ export function ChatTab({
 
   return (
     <div
-      className={`flex flex-col overflow-hidden rounded-2xl border border-black/[.05] bg-card shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10 ${
-        fill ? 'h-full min-h-0' : 'h-[calc(100dvh-10.5rem-env(safe-area-inset-bottom))] min-h-[420px]'
-      }`}
+      className={
+        member
+          ? // The page keeps more room under it than the floating tab bar takes; the negative margin stops the page scrolling behind
+            // the chat by that difference.
+            'flex h-[calc(100dvh-var(--member-chat-offset)-env(safe-area-inset-bottom))] min-h-[360px] flex-col [--member-chat-offset:12.5rem] -mb-10 md:mb-0 md:[--member-chat-offset:13rem]'
+          : `flex flex-col overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10 ${
+              fill ? 'h-full min-h-0' : 'h-[calc(100dvh-10.5rem-env(safe-area-inset-bottom))] min-h-[420px]'
+            }`
+      }
     >
+      {!member && (
       <div className="flex items-center gap-3 border-b border-black/[.05] px-4 py-3 dark:border-white/10">
         <Avatar name={otherPartyName} size="md" />
         <div className="min-w-0 flex-1">
@@ -660,14 +725,15 @@ export function ChatTab({
           </button>
         )}
       </div>
-      <div ref={listRef} className="flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3.5 py-4">
+      )}
+      <div ref={listRef} data-lenis-prevent className={`flex-1 space-y-2.5 overflow-y-auto overscroll-contain ${member ? 'px-0.5 pb-4 pt-1' : 'px-3.5 py-4'}`}>
         {hasEarlier && (
           <div className="flex justify-center">
             <button
               type="button"
               onClick={() => void loadEarlier()}
               disabled={loadingEarlier}
-              className="rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold text-zinc-600 hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50 hover:bg-black/[.03] disabled:opacity-50"
             >
               {loadingEarlier ? 'Loading…' : 'Load earlier messages'}
             </button>
@@ -681,25 +747,34 @@ export function ChatTab({
           const showDay = i === 0 || dayLabel(messages[i - 1].created_at) !== dayLabel(m.created_at);
           return (
             <div key={m.id}>
-              {showDay && (
-                <p className="my-3 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-400" suppressHydrationWarning>
-                  {dayLabel(m.created_at)}
-                </p>
-              )}
+              {showDay &&
+                (member ? (
+                  <p className="my-3 flex justify-center" suppressHydrationWarning>
+                    <span className="rounded-[10px] bg-[#ececea] px-2.5 py-0.5 text-xs font-bold text-[#3a3a3f] dark:bg-white/10 dark:text-zinc-300">{dayLabel(m.created_at)}</span>
+                  </p>
+                ) : (
+                  <p className="my-3 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-400" suppressHydrationWarning>
+                    {dayLabel(m.created_at)}
+                  </p>
+                ))}
               <div className={`flex items-end gap-1.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
-                {!isMine && <Avatar name={otherPartyName} size="sm" />}
-                <div className={`flex max-w-[78%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                {!isMine && !member && <Avatar name={otherPartyName} size="sm" />}
+                <div className={`flex ${member ? 'max-w-[82%]' : 'max-w-[78%]'} flex-col ${isMine ? 'items-end' : 'items-start'}`}>
                   <div
-                    className={`overflow-hidden text-sm leading-relaxed ${m.image_path ? 'p-0' : 'px-3.5 py-2.5'} ${m.pending ? 'opacity-70' : ''} ${
-                      isMine
-                        ? 'rounded-[16px_4px_16px_16px] bg-accent text-accent-foreground'
-                        : 'rounded-[4px_16px_16px_16px] border border-black/[.05] bg-black/5 text-black dark:border-white/10 dark:bg-white/10 dark:text-zinc-50'
+                    className={`overflow-hidden ${member ? 'text-[15px] leading-snug' : 'text-sm leading-relaxed'} ${m.image_path ? 'p-0' : 'px-3.5 py-2.5'} ${m.pending ? 'opacity-70' : ''} ${
+                      member
+                        ? isMine
+                          ? 'rounded-[18px] bg-[#1d1d1b] text-white dark:bg-zinc-700'
+                          : 'rounded-[18px] border border-black/[.08] bg-card text-black dark:border-white/10 dark:text-zinc-50'
+                        : isMine
+                          ? 'rounded-[16px_4px_16px_16px] bg-accent text-accent-foreground'
+                          : 'rounded-[4px_16px_16px_16px] border border-black/[.05] bg-black/5 text-black dark:border-white/10 dark:bg-white/10 dark:text-zinc-50'
                     }`}
                   >
                     {m.image_path ? (
                       <PhotoBubble path={m.image_path} initial={m.signedImageUrl ?? null} onOpen={setViewingPhoto} />
                     ) : m.audio_path ? (
-                      <VoiceBubble path={m.audio_path} initial={m.signedAudioUrl} seed={m.id} seconds={m.audio_duration_seconds} mine={isMine} />
+                      <VoiceBubble path={m.audio_path} initial={m.signedAudioUrl} seed={m.id} seconds={m.audio_duration_seconds} mine={isMine} member={member} />
                     ) : (
                       <p className="whitespace-pre-wrap break-words">{m.text}</p>
                     )}
@@ -719,7 +794,7 @@ export function ChatTab({
                   ) : (
                     /* suppressHydrationWarning: formatted in the viewer's own timezone, which the
                        server can't know -- expected to differ between SSR and client. */
-                    <p className="mt-0.5 px-1 text-[10px] text-zinc-400" suppressHydrationWarning>
+                    <p className={`mt-0.5 px-1 ${member ? 'text-xs text-zinc-500 dark:text-zinc-400' : 'text-[10px] text-zinc-400'}`} suppressHydrationWarning>
                       {timeLabel(m.created_at)}
                     </p>
                   )}
@@ -735,7 +810,14 @@ export function ChatTab({
         </p>
       )}
       {!readOnly && (
-        <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-black/[.05] p-2.5 dark:border-white/10">
+        <form
+          onSubmit={handleSend}
+          className={
+            member
+              ? 'flex items-end gap-2 rounded-[20px] border border-black/[.08] bg-card p-2 dark:border-white/10'
+              : 'flex items-end gap-2 border-t border-black/[.05] p-2.5 dark:border-white/10'
+          }
+        >
           {/* The rounded box shows the focus (its border turns the accent colour); the global focus outline drew a square inside it. */}
           <div className="flex min-w-0 flex-1 items-end gap-1 rounded-3xl border border-black/[.08] bg-black/[.02] pl-1.5 pr-1 focus-within:border-accent dark:border-white/10 dark:bg-white/[.03] dark:focus-within:border-accent">
             <button
@@ -767,7 +849,7 @@ export function ChatTab({
             type="submit"
             disabled={!text.trim()}
             aria-label="Send"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm disabled:opacity-50"
+            className={`flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm disabled:opacity-50 ${member ? 'h-11 w-11' : 'h-10 w-10'}`}
           >
             <Send className="h-4 w-4" />
           </button>

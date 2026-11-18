@@ -1,146 +1,151 @@
 'use client';
 
+import { useRef } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
-import { Card, SectionLabel } from '@/app/_components/ui';
 import { prettyName } from '@/lib/gymNames';
 import type { BusinessOverview } from '@/lib/data/coachDashboard';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
+import { CoachSection, CoachStatStrip, coachRow } from '../../_components/CoachUi';
 
 const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-function Stat({ value, label, hint, sub }: { value: string | number; label: string; hint?: string; sub?: string }) {
+// One member on a follow-up list: who, why, and what to do about it.
+function MemberRow({ href, name, line, action, actionCls = 'text-accent' }: { href: string; name: string; line?: string; action: string; actionCls?: string }) {
   return (
-    <div className="rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
-      <p className="text-2xl font-black text-black dark:text-zinc-50">{value}</p>
-      <p className="text-xs text-zinc-500">{label}</p>
-      {sub && <p className="mt-0.5 text-[11px] font-semibold text-zinc-400">{sub}</p>}
-      {hint && <p className="mt-0.5 text-[11px] font-semibold text-warning">{hint}</p>}
-    </div>
+    <Link href={href} className={`${coachRow} flex min-h-[60px] items-center gap-3 py-2 hover:bg-black/[.02] dark:hover:bg-white/[.03]`}>
+      <Avatar name={name} size="md" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-bold text-black dark:text-zinc-50">{name}</span>
+        {line && <span className="block truncate text-[13px] text-zinc-500 dark:text-zinc-400">{line}</span>}
+      </span>
+      <span className={`shrink-0 text-sm font-bold ${actionCls}`}>{action}</span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+    </Link>
   );
 }
 
-// The owner/manager's picture of the gym: members and plans, who still needs a plan, and how each
-// coach's members are doing this week.
+// The owner/manager's picture of the gym (the November 2026 mock-ups): the headline figures, members by plan, how each coach's members
+// are doing this week, and the members whose plan needs something.
 export function OverviewPane({ data }: { data: BusinessOverview }) {
   const maxPlan = Math.max(1, ...data.plans.map((p) => p.count));
+  const noPlanCount = Math.max(0, data.members - data.onPlan);
+  const attendedDelta = data.attendedThisMonth - data.attendedLastMonth;
+  // The plan and team bars fill when the overview opens.
+  const screen = useRef<HTMLDivElement>(null);
+  useGrowIn(screen, 0.2);
+
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <Stat value={data.members} label="members" />
-        <Stat value={data.onPlan} label="on a plan" />
-        <Stat value={data.newThisMonth} label="joined this month" />
-        <Stat value={data.attendedThisMonth} label="sessions attended this month" sub={`${data.attendedLastMonth} last month`} />
-      </div>
+    <div ref={screen} className="space-y-6">
+      <CoachStatStrip
+        label="The gym at a glance"
+        stats={[
+          { label: 'Members', value: data.members },
+          { label: 'On a plan', value: data.onPlan, sub: noPlanCount > 0 ? `${noPlanCount} have no plan` : 'Everyone has a plan' },
+          { label: 'Joined this month', value: data.newThisMonth, sub: data.noPlan.length > 0 ? `${data.noPlan.length} waiting for their plan` : undefined },
+          {
+            label: 'Sessions attended',
+            value: data.attendedThisMonth,
+            tone: attendedDelta > 0 ? 'teal' : undefined,
+            sub: `${data.attendedLastMonth} last month`,
+          },
+        ]}
+      />
 
-      {data.endingSoon.length > 0 && (
-        <div>
-          <SectionLabel>Plans ending in the next 14 days · {data.endingSoon.length}</SectionLabel>
-          <Card className="!py-1">
-            <div className="divide-y divide-black/5 dark:divide-white/10">
-              {data.endingSoon.map((m) => (
-                <Link key={m.clientId} href={`/coach/clients/${m.clientId}?open=profile`} className="flex items-center gap-3 py-2.5">
-                  <Avatar name={m.name} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{m.name}</span>
-                    <span className="block truncate text-xs text-zinc-500">{m.plan}</span>
-                  </span>
-                  <span className="shrink-0 text-xs font-bold text-warning">Ends {shortDay(m.endsOn)}</span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {data.recentlyEnded.length > 0 && (
-        <div>
-          <SectionLabel>Plan ended in the last 30 days · {data.recentlyEnded.length}</SectionLabel>
-          <Card className="!py-1">
-            <div className="divide-y divide-black/5 dark:divide-white/10">
-              {data.recentlyEnded.map((m) => (
-                <Link key={m.clientId} href={`/coach/clients/${m.clientId}?open=messages`} className="flex items-center gap-3 py-2.5">
-                  <Avatar name={m.name} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{m.name}</span>
-                    <span className="block truncate text-xs text-zinc-500">
-                      {m.plan} · ended {shortDay(m.endedOn)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs font-bold text-accent">Message</span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {data.noPlan.length > 0 && (
-        <div>
-          <SectionLabel>No plan set up · {data.noPlan.length}</SectionLabel>
-          <Card className="!py-1">
-            <div className="divide-y divide-black/5 dark:divide-white/10">
-              {data.noPlan.slice(0, 8).map((m) => (
-                <Link key={m.clientId} href={`/coach/clients/${m.clientId}?open=profile`} className="flex items-center gap-3 py-2.5">
-                  <Avatar name={m.name} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-black dark:text-zinc-50">{m.name}</span>
-                  <span className="text-xs font-bold text-accent">Set up plan</span>
-                  <ChevronRight className="h-4 w-4 text-zinc-400" />
-                </Link>
-              ))}
-              {data.noPlan.length > 8 && <p className="py-2.5 text-xs text-zinc-500">and {data.noPlan.length - 8} more (Clients, filter by No plan)</p>}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      <div>
-        <SectionLabel>Members by plan</SectionLabel>
-        <Card className="space-y-3">
-          {data.plans.length === 0 && <p className="text-sm text-zinc-500">Nobody is on a plan yet.</p>}
-          {data.plans.map((p) => (
-            <div key={p.name}>
-              <div className="flex items-baseline justify-between text-sm">
-                <span className="font-semibold text-black dark:text-zinc-50">{p.name}</span>
-                <span className="font-bold text-accent">{p.count}</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-6">
+          <CoachSection title="Members by plan">
+            {data.plans.length === 0 && <p className={`${coachRow} py-4 text-sm text-zinc-500`}>Nobody is on a plan yet.</p>}
+            {data.plans.map((p) => (
+              <div key={p.name} className={`${coachRow} flex flex-wrap items-center gap-x-4 gap-y-2 py-3`}>
+                <span className="min-w-0 flex-1 basis-40 text-[15px] font-bold text-black dark:text-zinc-50">{p.name}</span>
+                <span className="h-2 flex-[2] basis-48 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${p.count} of ${data.members} members`}>
+                  <span data-grow="bar" className="block h-full rounded-full bg-accent" style={{ width: `${(p.count / maxPlan) * 100}%` }} />
+                </span>
+                <span className="w-24 shrink-0 text-right text-sm font-bold text-black dark:text-zinc-50">
+                  {p.count} member{p.count === 1 ? '' : 's'}
+                </span>
               </div>
-              <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${(p.count / maxPlan) * 100}%` }} />
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
+            ))}
+          </CoachSection>
 
-      <div>
-        <SectionLabel>Team this week</SectionLabel>
-        <div className="space-y-2">
-          {data.team.length === 0 && <Card className="text-sm text-zinc-500">No coaches at this gym yet.</Card>}
-          {data.team.map((t) => (
-            <Link
-              key={t.coachId}
-              href={`/coach?scope=coach&coach=${t.coachId}`}
-              className="flex items-center gap-3 rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10"
-            >
-              <Avatar name={prettyName(t.name)} size="md" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-black dark:text-zinc-50">{prettyName(t.name)}</p>
-                <p className="text-xs text-zinc-500">
-                  {t.members} member{t.members === 1 ? '' : 's'} · {t.eligible > 0 ? `${t.checkedIn} of ${t.eligible} checked in` : 'no check-ins due yet'}
-                </p>
-                <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${t.eligible > 0 ? (t.checkedIn / t.eligible) * 100 : 0}%` }} />
+          <CoachSection title="Team this week">
+            {data.team.length === 0 && <p className={`${coachRow} py-4 text-sm text-zinc-500`}>No coaches at this gym yet.</p>}
+            {data.team.map((t) => (
+              <Link
+                key={t.coachId}
+                href={`/coach?scope=coach&coach=${t.coachId}`}
+                className={`${coachRow} flex min-h-[64px] items-center gap-3 py-3 hover:bg-black/[.02] dark:hover:bg-white/[.03]`}
+              >
+                <Avatar name={prettyName(t.name)} size="md" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-bold text-black dark:text-zinc-50">{prettyName(t.name)}</p>
+                  <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
+                    {t.members} member{t.members === 1 ? '' : 's'} · {t.eligible > 0 ? `${t.checkedIn} of ${t.eligible} checked in` : 'no check-ins due yet'}
+                  </p>
+                  <div className="mt-1.5 h-1.5 max-w-xs overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+                    <div data-grow="bar" className="h-full rounded-full bg-accent" style={{ width: `${t.eligible > 0 ? (t.checkedIn / t.eligible) * 100 : 0}%` }} />
+                  </div>
                 </div>
-              </div>
-              <div className="shrink-0 text-right text-[11px] font-bold">
-                {t.quiet > 0 && <p className="text-danger">{t.quiet} quiet</p>}
-                {t.toReview > 0 && <p className="text-warning">{t.toReview} to review</p>}
-              </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-            </Link>
-          ))}
+                <div className="shrink-0 space-y-1 text-right">
+                  {t.quiet > 0 && (
+                    <span className="block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-extrabold text-red-800 dark:bg-red-500/15 dark:text-red-300">{t.quiet} quiet</span>
+                  )}
+                  {t.toReview > 0 && (
+                    <span className="block rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-extrabold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
+                      {t.toReview} to review
+                    </span>
+                  )}
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+              </Link>
+            ))}
+          </CoachSection>
+        </div>
+
+        <div className="min-w-0 space-y-6">
+          {data.noPlan.length > 0 && (
+            <CoachSection title="Needs setting up" count={data.noPlan.length}>
+              {data.noPlan.slice(0, 8).map((m) => (
+                <MemberRow key={m.clientId} href={`/coach/clients/${m.clientId}?open=profile`} name={m.name} line="No plan yet" action="Set up plan" />
+              ))}
+              {data.noPlan.length > 8 && (
+                <Link href="/coach/clients?filter=noplan" className={`${coachRow} flex min-h-11 items-center text-sm font-bold text-accent`}>
+                  and {data.noPlan.length - 8} more on Clients
+                </Link>
+              )}
+            </CoachSection>
+          )}
+
+          {data.endingSoon.length > 0 && (
+            <CoachSection title="Plans ending soon" count={data.endingSoon.length} action={<span className="text-[13px] font-semibold text-zinc-500">Next 14 days</span>}>
+              {data.endingSoon.map((m) => (
+                <MemberRow
+                  key={m.clientId}
+                  href={`/coach/clients/${m.clientId}?open=profile`}
+                  name={m.name}
+                  line={m.plan}
+                  action={`Ends ${shortDay(m.endsOn)}`}
+                  actionCls="text-amber-700 dark:text-amber-400"
+                />
+              ))}
+            </CoachSection>
+          )}
+
+          {data.recentlyEnded.length > 0 && (
+            <CoachSection title="Plan ended" count={data.recentlyEnded.length} action={<span className="text-[13px] font-semibold text-zinc-500">Last 30 days</span>}>
+              {data.recentlyEnded.map((m) => (
+                <MemberRow
+                  key={m.clientId}
+                  href={`/coach/clients/${m.clientId}?open=messages`}
+                  name={m.name}
+                  line={`${m.plan} · ended ${shortDay(m.endedOn)}`}
+                  action="Message"
+                />
+              ))}
+            </CoachSection>
+          )}
         </div>
       </div>
     </div>

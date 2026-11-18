@@ -1,7 +1,8 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { pop } from '@/app/_components/motion/gsap';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useToast } from '@/app/_components/ToastProvider';
@@ -60,14 +61,15 @@ const BLANK: SetupFields = {
 
 // A titled card. For the coach the long form is split into sections that fold, so the page is not one endless scroll.
 function SectionCard({ title, collapsible, defaultOpen = true, children }: { title: string; collapsible: boolean; defaultOpen?: boolean; children: React.ReactNode }) {
-  const shell = 'rounded-2xl border border-black/[.05] bg-card dark:border-white/10';
+  const shell = 'rounded-[20px] border border-black/[.08] bg-card dark:border-white/10';
   const head = 'text-sm font-semibold text-zinc-700 dark:text-zinc-300';
   if (!collapsible) {
+    // The member's screen (the board): a bold heading over a card. The fields' own top margin is for the coach's folding card.
     return (
-      <div className={`${shell} p-4`}>
-        <h3 className={head}>{title}</h3>
-        {children}
-      </div>
+      <section className="space-y-2.5">
+        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">{title}</h2>
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10 [&>*:first-child]:mt-0">{children}</div>
+      </section>
     );
   }
   return (
@@ -125,6 +127,7 @@ export function SetupTab({
   const [error, setError] = useState<string | null>(null);
   const [nutritionMode, setNutritionMode] = useState(initialProfile?.nutrition_tracking_mode ?? 'full_tracking');
   const [targetsOpen, setTargetsOpen] = useState(false);
+  const saveButton = useRef<HTMLButtonElement>(null);
 
   async function handleModeChange(mode: ClientProfileRow['nutrition_tracking_mode']) {
     await runMode(() => updateNutritionTrackingMode(clientId, mode), {
@@ -185,13 +188,19 @@ export function SetupTab({
     // Not the whole form, and no timezone (SU3): the timezone is the profile's own, set when it was created.
     await run(() => upsertClientProfile(clientId, patch), {
       success: 'Details saved',
-      onDone: () => setBaseline({ ...(baseline ?? BLANK), ...patch } as SetupFields),
+      onDone: () => {
+        setBaseline({ ...(baseline ?? BLANK), ...patch } as SetupFields);
+        pop(saveButton.current, 0.9);
+      },
     });
   }
 
-  const inputCls =
-    'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10 disabled:opacity-60';
-  const labelCls = 'text-sm font-medium text-zinc-700 dark:text-zinc-300';
+  const inputCls = isCoachView
+    ? 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10 disabled:opacity-60'
+    : 'h-12 w-full rounded-xl border border-black/[.14] bg-background px-3.5 text-base dark:border-white/15 disabled:opacity-60';
+  // Text boxes grow with their rows, so they take the member's look without the fixed height.
+  const areaCls = isCoachView ? inputCls : 'w-full rounded-xl border border-black/[.14] bg-background px-3.5 py-2.5 text-base dark:border-white/15 disabled:opacity-60';
+  const labelCls = isCoachView ? 'text-sm font-medium text-zinc-700 dark:text-zinc-300' : 'text-[13px] font-bold text-zinc-700 dark:text-zinc-300';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -275,7 +284,7 @@ export function SetupTab({
               <label className={labelCls}>{isCoachView ? 'What they want to achieve' : 'What do you want to achieve?'}</label>
               <textarea
                 rows={7}
-                className={`${inputCls} resize-y leading-relaxed`}
+                className={`${areaCls} resize-y leading-relaxed`}
                 placeholder="Be as detailed as you can. What do you want to achieve and why does it matter to you? Is there a date or event you're working towards? What has worked or not worked before? Any injuries, health conditions or things we should know about?"
                 maxLength={5000}
                 value={form.goal_description ?? ''}
@@ -287,7 +296,7 @@ export function SetupTab({
               <label className={labelCls}>Training experience</label>
               <textarea
                 rows={3}
-                className={`${inputCls} resize-y leading-relaxed`}
+                className={`${areaCls} resize-y leading-relaxed`}
                 placeholder="e.g. Trained on and off for 2 years, new to lifting weights, ex-athlete..."
                 maxLength={2000}
                 value={form.experience ?? ''}
@@ -329,13 +338,13 @@ export function SetupTab({
         {isCoachView && !readOnly && screenToggles && <MemberMetricToggles clientId={clientId} disabledMetrics={screenToggles.disabledMetrics} />}
 
         {isCoachView && !readOnly && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
             <p className="text-xs text-zinc-500">Ask this member to confirm their details. They see a banner on Home they can finish now or put off; the app keeps working either way.</p>
             <button
               type="button"
               disabled={savingMode}
               onClick={() => runMode(() => requestDetailsUpdate(clientId), { success: 'Asked them to confirm their details' })}
-              className="shrink-0 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold disabled:opacity-50 dark:border-white/15"
+              className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-50"
             >
               Ask them
             </button>
@@ -343,7 +352,7 @@ export function SetupTab({
         )}
 
         {isCoachView && !readOnly && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
             <div className="min-w-0">
               <p className="text-sm font-bold text-black dark:text-zinc-50">Daily targets override</p>
               <p className="text-xs text-zinc-500">
@@ -356,7 +365,7 @@ export function SetupTab({
             <button
               type="button"
               onClick={() => setTargetsOpen(true)}
-              className="shrink-0 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold dark:border-white/15"
+              className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50"
             >
               Edit
             </button>
@@ -515,9 +524,20 @@ export function SetupTab({
 
         {!readOnly && (
           <div className={isCoachView ? 'sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20 md:bottom-4' : ''}>
-            <Button type="submit" variant="primary" disabled={saving} className="w-full !rounded-full py-3 text-base shadow-lg">
-              {saving ? 'Saving…' : 'Save changes'}
-            </Button>
+            {isCoachView ? (
+              <Button type="submit" variant="primary" disabled={saving} className="min-h-12 w-full text-[15px] shadow-lg">
+                {saving ? 'Saving…' : 'Save changes'}
+              </Button>
+            ) : (
+              <button
+                ref={saveButton}
+                type="submit"
+                disabled={saving}
+                className="h-12 w-full rounded-xl bg-[#1d1d1b] text-[15px] font-bold text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-[#1d1d1b]"
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            )}
           </div>
         )}
       </fieldset>

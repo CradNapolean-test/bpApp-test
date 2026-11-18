@@ -105,7 +105,7 @@ export function JoinLinkCard() {
           type="button"
           disabled={busy}
           onClick={() => void makeLink(false)}
-          className="mt-2 rounded-full bg-accent px-3.5 py-1.5 text-xs font-bold text-accent-foreground disabled:opacity-50"
+          className="mt-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Creating…' : 'Create sign-up link'}
         </button>
@@ -115,7 +115,7 @@ export function JoinLinkCard() {
         <>
           <p className={`mt-2 break-all rounded-lg bg-black/[.04] p-2 font-mono text-[11px] dark:bg-white/[.06] ${link.active ? '' : 'opacity-50'}`}>{url}</p>
           <div className="mt-2 flex items-center justify-between gap-3">
-            <button type="button" onClick={copy} className="flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-bold text-accent-foreground">
+            <button type="button" onClick={copy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground">
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied' : 'Copy link'}
             </button>

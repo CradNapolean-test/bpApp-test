@@ -3,7 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Building2, UserRound } from 'lucide-react';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { CoachPageHeader } from '@/app/coach/_components/CoachUi';
+
+const OWNER_NAV = [
+  { href: '/owner', label: 'Gyms', Icon: Building2 },
+  { href: '/owner/account', label: 'Account', Icon: UserRound },
+] as const;
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -32,7 +39,7 @@ export interface OwnerGymBusiness {
 
 type Section = 'members' | 'team' | 'business' | 'settings';
 
-const card = 'rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10';
+const card = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
 const h2 = 'mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300';
 
 // What the owner can see and do for one gym. Everything on the Team and Settings tabs goes through the owner_* functions (scope "owner").
@@ -96,6 +103,7 @@ export function OwnerGymShell({
           </Link>
         }
         signOutOnMobile
+        coachSidebar={<CoachSidebar email={email} nav={OWNER_NAV} roleLabel="Owner" settingsHref="/owner/account" homeHref="/owner" />}
         mobileHeader={
           <Link href="/owner" className="flex min-w-0 items-center gap-2.5" aria-label="Back to the overview">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
@@ -105,18 +113,22 @@ export function OwnerGymShell({
           </Link>
         }
       >
-        <Link href="/owner" className="mb-3 hidden items-center gap-1.5 text-sm font-semibold text-zinc-500 hover:text-black md:inline-flex dark:hover:text-zinc-200">
-          <ArrowLeft className="h-4 w-4" /> Overview
-        </Link>
-        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">{title}</h1>
-        <p className="mb-4 text-sm text-zinc-500">
-          {gym ? `${gym.members} members, ${gym.coaches.length} coach${gym.coaches.length === 1 ? '' : 'es'}.` : 'Members, team and settings.'}
-        </p>
+        <div className="mb-6">
+          <CoachPageHeader
+            above={
+              <Link href="/owner" className="hidden min-h-11 items-center gap-1.5 text-sm font-bold text-accent hover:underline md:inline-flex">
+                <ArrowLeft className="h-4 w-4" /> All gyms
+              </Link>
+            }
+            eyebrow={gym ? `${gym.members} members, ${gym.coaches.length} coach${gym.coaches.length === 1 ? '' : 'es'}` : 'Members, team and settings'}
+            title={title}
+          />
+        </div>
 
         {gym === null ? (
           <div className="rounded-lg border border-dashed border-black/10 p-6 text-center dark:border-white/15" role="alert">
             <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{LOAD_FAILED}</p>
-            <button type="button" onClick={() => router.refresh()} className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground">
+            <button type="button" onClick={() => router.refresh()} className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground">
               Try again
             </button>
           </div>
@@ -175,7 +187,7 @@ export function OwnerGymShell({
               ) : (
                 <div className="rounded-lg border border-dashed border-black/10 p-6 text-center dark:border-white/15" role="alert">
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{LOAD_FAILED}</p>
-                  <button type="button" onClick={() => router.refresh()} className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground">
+                  <button type="button" onClick={() => router.refresh()} className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground">
                     Try again
                   </button>
                 </div>
@@ -200,7 +212,7 @@ export function OwnerGymShell({
               ) : (
                 <div className="rounded-lg border border-dashed border-black/10 p-6 text-center dark:border-white/15" role="alert">
                   <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{LOAD_FAILED}</p>
-                  <button type="button" onClick={() => router.refresh()} className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground">
+                  <button type="button" onClick={() => router.refresh()} className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground">
                     Try again
                   </button>
                 </div>

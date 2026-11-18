@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Flashlight, FlashlightOff, Keyboard, X } from 'lucide-react';
 import { useZxing } from 'react-zxing';
 import type { BarcodeFormat } from 'barcode-detector/ponyfill';
-import { Button } from '@/app/_components/Button';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 
 // Only the product barcodes on food (EAN/UPC). Without this the scanner also reads the other codes
@@ -101,7 +100,7 @@ export function BarcodeScanner({
           <button
             type="button"
             onClick={() => setManualEntry(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-full border border-white/20 py-2.5 text-sm font-medium text-white hover:bg-white/10"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-white/30 text-sm font-bold text-white hover:bg-white/10"
           >
             <Keyboard className="h-4 w-4" />
             Can&apos;t scan it? Enter the barcode number
@@ -114,11 +113,16 @@ export function BarcodeScanner({
               value={manualValue}
               onChange={(e) => setManualValue(e.target.value)}
               placeholder="Barcode number"
-              className="min-w-0 flex-1 rounded-md border border-white/20 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/40"
+              className="min-w-0 flex-1 rounded-xl border border-white/30 bg-transparent px-3.5 py-2.5 text-sm text-white placeholder:text-white/40"
             />
-            <Button type="submit" variant="primary" disabled={!manualValue.trim()}>
+            {/* White on the camera's black screen: the member screens' black main button would vanish here. */}
+            <button
+              type="submit"
+              disabled={!manualValue.trim()}
+              className="h-11 shrink-0 rounded-xl bg-white px-4 text-sm font-bold text-[#1d1d1b] disabled:opacity-40"
+            >
               Look up
-            </Button>
+            </button>
           </form>
         )}
       </div>

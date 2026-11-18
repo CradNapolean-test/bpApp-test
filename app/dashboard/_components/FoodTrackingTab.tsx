@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Trash2, Utensils } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useBackHandler } from '@/app/_components/useBackHandler';
@@ -49,6 +49,8 @@ import { AddFoodSheet } from './AddFoodSheet';
 import { CopyFoodSheet, type CopyScope } from './CopyFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
 import { NutritionSummary } from './NutritionSummary';
+import { NutritionDayCard } from './NutritionDayCard';
+import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import { AddFoodButtons, useBarcodeAdd, useFoodPairs, useFoodShortcuts } from './FoodEntryTools';
 import { PairSuggestions } from './PairSuggestions';
 import { useDialog } from '@/app/_components/useDialog';
@@ -118,7 +120,7 @@ function ManualMacroForm({ onAdd }: { onAdd: (fields: { calories: number | null;
         <button
           type="submit"
           disabled={empty || problem != null}
-          className="rounded-full bg-accent px-5 py-2 text-sm font-extrabold text-accent-foreground disabled:opacity-40"
+          className="inline-flex h-11 items-center rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-5 text-sm font-bold disabled:opacity-40"
         >
           Add
         </button>
@@ -166,7 +168,7 @@ function SectionNameInput({ sectionId, initial }: { sectionId: string; initial: 
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
-      className="rounded-md border border-transparent bg-transparent px-1 py-0.5 font-medium text-black hover:border-black/10 focus:border-black/10 dark:text-zinc-50 dark:hover:border-white/10 dark:focus:border-white/10"
+      className="rounded-lg border border-transparent bg-transparent px-1.5 py-0.5 font-medium text-black hover:border-black/10 focus:border-black/10 dark:text-zinc-50 dark:hover:border-white/10 dark:focus:border-white/10"
     />
   );
 }
@@ -213,7 +215,7 @@ function EditEntrySheet({
   ]);
   const quickReady = qName.trim() !== '' && (qCalories !== '' || qProtein !== '' || qCarbs !== '' || qFat !== '') && quickProblem == null;
   const num = (text: string) => (text.trim() === '' ? null : Number(text));
-  const boxCls = 'w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10';
+  const boxCls = 'w-full rounded-xl border border-black/[.16] bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10';
   // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
   const dialogRef = useDialog<HTMLDivElement>({ onClose });
 
@@ -253,7 +255,7 @@ function EditEntrySheet({
             <select
               defaultValue=""
               onChange={(e) => e.target.value && onRefile(e.target.value)}
-              className="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm dark:border-white/10"
+              className="w-full rounded-xl border border-black/[.16] bg-transparent px-3.5 py-2.5 text-sm dark:border-white/10"
             >
               <option value="" disabled>
                 Choose a section…
@@ -326,7 +328,7 @@ function EntryRow({
         type="button"
         disabled={readOnly}
         onClick={() => setEditing(true)}
-        className="flex w-full items-center justify-between gap-2 p-3 text-left disabled:cursor-default"
+        className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-black/[.02] disabled:cursor-default dark:hover:bg-white/[.03]"
       >
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">
@@ -390,6 +392,8 @@ export function FoodTrackingTab({
   programWeek,
   nutritionMode,
   recentDays,
+  scanOnOpen = false,
+  onScanOpened,
 }: {
   clientId: string;
   dailyLogId: string | null;
@@ -406,6 +410,9 @@ export function FoodTrackingTab({
   nutritionMode: NutritionTrackingMode;
   // Coach view: the last seven days (oldest first) with calories, to see the week at a glance.
   recentDays?: { date: string; calories: number | null }[];
+  // Opens with the barcode scanner already up (the "Scan a barcode" button on the member's Coach tab); onScanOpened says it was taken.
+  scanOnOpen?: boolean;
+  onScanOpened?: () => void;
 }) {
   // The coach sets up a member's meal sections (rename, reorder, delete, add); that stays folded away until asked for.
   const [editingSections, setEditingSections] = useState(false);
@@ -661,7 +668,15 @@ export function FoodTrackingTab({
     );
   }
 
-  const scan = useBarcodeAdd((food, portions, target) => handleAdd(food, portions, target?.id ?? null));
+  const scan = useBarcodeAdd(
+    (food, portions, target) => handleAdd(food, portions, target?.id ?? null),
+    scanOnOpen && !readOnly && !isManual ? { id: null, label: 'Other' } : null
+  );
+  // The request to open on the scanner is used once: tell the page it has been taken, so coming back here later opens the diary as usual.
+  useEffect(() => {
+    if (scanOnOpen) onScanOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Copies a day or a meal between two days. When the food lands on the day on screen it is shown straight away; when it goes to another
   // day there is nothing to show but the message. Returns whether it worked, so the sheet can stay open if not.
@@ -789,13 +804,33 @@ export function FoodTrackingTab({
     day: 'numeric',
   });
 
+  // The calorie-cycling high-day switch, under the day's numbers.
+  const highDayControl =
+    cycling && !targetsHeldBack(profile, readOnly) ? (
+      <HighDayControl
+        isHigh={isHighDay}
+        left={highLeft}
+        loaded={weekHighDays != null}
+        failed={highDaysFailed}
+        onRetry={retryHighDays}
+        extraCalories={weekTarget?.dailyHigh && weekTarget.dailyLow ? weekTarget.dailyHigh.calories - weekTarget.dailyLow.calories : 0}
+        canChange={!entryReadOnly}
+        coachView={readOnly}
+        busy={savingHighDay}
+        onToggle={handleToggleHighDay}
+      />
+    ) : null;
+  // The ring and the bars fill up when the diary opens.
+  const screen = useRef<HTMLDivElement>(null);
+  useGrowIn(screen, 0.2);
+
   return (
-    <div className="space-y-4">
+    <div ref={screen} className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Button variant="icon" aria-label="Previous day" onClick={() => loadDate(previousDay)} disabled={dateLoading || atBrowseLimit}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="text-sm font-medium">{isToday ? 'Today' : isTomorrow ? 'Tomorrow' : dateLabel}</div>
+        <div className="text-[15px] font-extrabold text-black dark:text-zinc-50">{isToday ? 'Today' : isTomorrow ? 'Tomorrow' : dateLabel}</div>
         <div className="flex items-center gap-1">
           {!isToday && (
             <Button variant="ghost" size="sm" onClick={() => loadDate(todayIso)} disabled={dateLoading}>
@@ -827,7 +862,7 @@ export function FoodTrackingTab({
         const weekAverageTarget = averageDayTarget(weekTarget);
         const top = Math.max(weekAverageTarget?.calories ?? 0, ...logged.map((d) => d.calories ?? 0), 1);
         return (
-          <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+          <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
             <div className="flex items-baseline justify-between gap-2">
               <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Last 7 days</p>
               <p className="text-xs text-zinc-500">
@@ -869,30 +904,21 @@ export function FoodTrackingTab({
         buttonLabel="Leave feedback on this day"
       />
 
-      <NutritionSummary
-        totals={totals}
-        target={dayTarget}
-        title={isToday ? "Today's targets" : 'Targets'}
-        dateLabel={dateLabel}
-        held={targetsHeldBack(profile, readOnly)}
-        memberView={!readOnly}
-        footer={
-          cycling && !targetsHeldBack(profile, readOnly) ? (
-            <HighDayControl
-              isHigh={isHighDay}
-              left={highLeft}
-              loaded={weekHighDays != null}
-              failed={highDaysFailed}
-              onRetry={retryHighDays}
-              extraCalories={weekTarget?.dailyHigh && weekTarget.dailyLow ? weekTarget.dailyHigh.calories - weekTarget.dailyLow.calories : 0}
-              canChange={!entryReadOnly}
-              coachView={readOnly}
-              busy={savingHighDay}
-              onToggle={handleToggleHighDay}
-            />
-          ) : undefined
-        }
-      />
+      {readOnly ? (
+        <NutritionSummary
+          totals={totals}
+          target={dayTarget}
+          title={isToday ? "Today's targets" : 'Targets'}
+          dateLabel={dateLabel}
+          held={targetsHeldBack(profile, readOnly)}
+          memberView={!readOnly}
+          footer={highDayControl ?? undefined}
+        />
+      ) : (
+        <NutritionDayCard totals={totals} target={dayTarget} held={targetsHeldBack(profile, readOnly)}>
+          {highDayControl && <div className="border-t border-black/[.07] pt-3 dark:border-white/10">{highDayControl}</div>}
+        </NutritionDayCard>
+      )}
       {!readOnly && (
         <div className="-mt-2 flex items-center justify-between gap-3 px-1">
           <p className="text-xs text-zinc-500">
@@ -907,21 +933,22 @@ export function FoodTrackingTab({
         <CustomTargetsSheet clientId={clientId} profile={profile} isCoach={false} current={averageDayTarget(weekTarget)} onClose={() => setTargetsOpen(false)} />
       )}
 
-      {!entryReadOnly && !isManual && (
-        <div className="space-y-2">
-          {scan.panel}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {!entryReadOnly && !isManual && scan.panel}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-1">
+        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">Meals</h2>
+        {!entryReadOnly && !isManual && (
+          <div className="flex flex-wrap items-center gap-x-3">
             {entries.length === 0 && (
-              <button type="button" onClick={handleCopyFromYesterday} className="text-sm font-semibold text-accent hover:underline">
-                Copy yesterday&apos;s food
+              <button type="button" onClick={handleCopyFromYesterday} className="min-h-9 text-[13px] font-bold text-accent hover:underline">
+                Copy yesterday
               </button>
             )}
-            <button type="button" onClick={() => setCopyScope({ kind: 'day' })} className="text-sm font-semibold text-accent hover:underline">
-              {entries.length === 0 ? 'Choose another day…' : 'Copy this day…'}
+            <button type="button" onClick={() => setCopyScope({ kind: 'day' })} className="min-h-9 text-[13px] font-bold text-accent hover:underline">
+              {entries.length === 0 ? 'Another day…' : 'Copy this day…'}
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       {!entryReadOnly && isManual && (
         <p className="text-xs text-zinc-500">Enter the protein, carbs and fat for each meal. Calories are worked out for you.</p>
       )}
@@ -932,30 +959,48 @@ export function FoodTrackingTab({
         const sectionManualEntries = manualEntries.filter((e) => e.meal_section_id === section.id);
         const sectionManualCalories = sectionManualEntries.reduce((sum, e) => sum + (dayCalories(e.protein ?? 0, e.carbs ?? 0, e.fat ?? 0) || (e.calories ?? 0)), 0);
         return (
-          <div key={section.id} className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-1">
+          <div key={section.id} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2 py-2 pl-4 pr-2">
+              <div className="flex min-w-0 flex-1 items-baseline gap-2">
                 {/* Renaming/reordering/deleting a section is structural, coach-only setup --
                     the client just logs food into whatever sections already exist, matching
                     the prototype's client view (name + total + "+ Add food", nothing else). */}
                 {readOnly && editingSections ? (
                   <SectionNameInput sectionId={section.id} initial={section.label} />
                 ) : (
-                  <h4 className="font-medium text-black dark:text-zinc-50">{section.label}</h4>
+                  <h3 className="truncate text-[15px] font-extrabold text-black dark:text-zinc-50">{section.label}</h3>
                 )}
-                <span className="shrink-0 text-sm text-zinc-500">
+                <span className="shrink-0 text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">
                   {Math.round(isManual ? sectionManualCalories : sectionTotals.calories)} kcal
                 </span>
               </div>
               {!entryReadOnly && !isManual && (
-                <button
-                  type="button"
-                  aria-label={`Copy ${section.label}`}
-                  onClick={() => setCopyScope({ kind: 'meal', section })}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-black/5 hover:text-accent dark:hover:bg-white/10"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Copy ${section.label}`}
+                    onClick={() => setCopyScope({ kind: 'meal', section })}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Scan a barcode into ${section.label}`}
+                    onClick={() => scan.start({ id: section.id, label: section.label })}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
+                  >
+                    <ScanBarcode className="h-[18px] w-[18px]" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Add food to ${section.label}`}
+                    onClick={() => setAddFoodTarget({ id: section.id, label: section.label })}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent"
+                  >
+                    <Plus className="h-[18px] w-[18px]" strokeWidth={2.6} />
+                  </button>
+                </div>
               )}
               {readOnly && editingSections && (
                 <div className="flex shrink-0 items-center gap-1">
@@ -985,40 +1030,27 @@ export function FoodTrackingTab({
             </div>
             {isManual ? (
               <>
-                <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+                <ul className="divide-y divide-black/[.07] border-t border-black/[.07] px-4 dark:divide-white/10 dark:border-white/10">
                   {sectionManualEntries.map((entry) => (
                     <ManualMacroRow key={entry.id} entry={entry} readOnly={entryReadOnly} onRemove={handleRemoveManual} />
                   ))}
-                  {sectionManualEntries.length === 0 && (
-                    <li>
-                      <EmptyState compact title="Nothing logged here yet" />
-                    </li>
-                  )}
+                  {sectionManualEntries.length === 0 && <li className="py-3 text-[13px] text-zinc-500 dark:text-zinc-400">Nothing logged yet.</li>}
                 </ul>
-                {!entryReadOnly && <ManualMacroForm onAdd={(fields) => handleAddManual(section.id, fields)} />}
+                {!entryReadOnly && (
+                  <div className="px-4 pb-4">
+                    <ManualMacroForm onAdd={(fields) => handleAddManual(section.id, fields)} />
+                  </div>
+                )}
               </>
             ) : (
               <>
-                <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+                <ul className="divide-y divide-black/[.07] border-t border-black/[.07] dark:divide-white/10 dark:border-white/10">
                   {sectionEntries.map((entry) => (
                     <EntryRow key={entry.id} entry={entry} readOnly={entryReadOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} onUpdateQuickAdd={handleUpdateQuickAdd} />
                   ))}
-                  {sectionEntries.length === 0 && (
-                    <li>
-                      <EmptyState compact title="Nothing logged here yet" />
-                    </li>
-                  )}
+                  {sectionEntries.length === 0 && <li className="px-4 py-3 text-[13px] text-zinc-500 dark:text-zinc-400">Nothing logged yet.</li>}
                 </ul>
-                {!entryReadOnly && pairStrip(section.id)}
-                {!entryReadOnly && (
-                  <div className="mt-3">
-                    <AddFoodButtons
-                      onAdd={() => setAddFoodTarget({ id: section.id, label: section.label })}
-                      onScan={() => scan.start({ id: section.id, label: section.label })}
-                      scanLabel={`Scan a barcode into ${section.label}`}
-                    />
-                  </div>
-                )}
+                {!entryReadOnly && <div className="px-4 pb-3 empty:hidden">{pairStrip(section.id)}</div>}
               </>
             )}
           </div>
@@ -1046,10 +1078,12 @@ export function FoodTrackingTab({
 
       {isManual
         ? otherManualEntries.length > 0 && (
-            <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-              <h4 className="font-medium text-black dark:text-zinc-50">Other</h4>
-              <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
-              <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+            <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+              <div className="px-4 pb-2 pt-3">
+                <h3 className="text-[15px] font-extrabold text-black dark:text-zinc-50">Other</h3>
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-400">Not yet filed under a meal.</p>
+              </div>
+              <ul className="divide-y divide-black/[.07] border-t border-black/[.07] dark:divide-white/10 dark:border-white/10">
                 {otherManualEntries.map((entry) => (
                   <ManualMacroRow key={entry.id} entry={entry} readOnly={entryReadOnly} onRemove={handleRemoveManual} />
                 ))}
@@ -1057,15 +1091,17 @@ export function FoodTrackingTab({
             </div>
           )
         : otherEntries.length > 0 && (
-            <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
-              <h4 className="font-medium text-black dark:text-zinc-50">Other</h4>
-              <p className="text-xs text-zinc-500">Not yet filed under a section.</p>
-              <ul className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+            <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+              <div className="px-4 pb-2 pt-3">
+                <h3 className="text-[15px] font-extrabold text-black dark:text-zinc-50">Other</h3>
+                <p className="text-[13px] text-zinc-500 dark:text-zinc-400">Not yet filed under a meal.</p>
+              </div>
+              <ul className="divide-y divide-black/[.07] border-t border-black/[.07] dark:divide-white/10 dark:border-white/10">
                 {otherEntries.map((entry) => (
                   <EntryRow key={entry.id} entry={entry} readOnly={entryReadOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} onUpdateQuickAdd={handleUpdateQuickAdd} />
                 ))}
               </ul>
-              {!entryReadOnly && pairStrip(null)}
+              {!entryReadOnly && <div className="px-4 pb-3 empty:hidden">{pairStrip(null)}</div>}
             </div>
           )}
 

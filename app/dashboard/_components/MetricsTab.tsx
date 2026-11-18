@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useReveal } from '@/app/_components/motion/useReveal';
 import { LineChart } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { Segmented } from '@/app/_components/ui';
@@ -38,7 +39,7 @@ const MEASURE_GROUPS: { label: string; keys: MetricKey[] }[] = [
   { label: 'Consistency', keys: ['sessions', 'foodDays'] },
 ];
 
-const cardCls = 'rounded-2xl border border-black/[.05] bg-card p-4 shadow-[0_1px_2px_rgba(0,0,0,.02)] dark:border-white/10';
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
 
 const WIDTH = 320;
 const HEIGHT = 200;
@@ -65,6 +66,9 @@ function MetricChart({
   weekly: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  // Draws in from the left; the chart is keyed on the measure, range and mode, so each new pick draws again.
+  const plot = useRef<SVGSVGElement>(null);
+  useReveal(plot);
   const first = dayNo(points[0].date);
   const last = dayNo(points[points.length - 1].date);
   const span = Math.max(1, last - first);
@@ -103,6 +107,7 @@ function MetricChart({
         {!weekly && smooth && points.length > 1 && <span> · 7-day average {formatMetricValue(smooth.value, info)}</span>}
       </p>
       <svg
+        ref={plot}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         role="img"
         aria-label={description}
@@ -154,9 +159,9 @@ function MetricChart({
 
 function Tile({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
   return (
-    <div className="rounded-xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{label}</p>
-      <p className={`text-base font-extrabold ${tone === 'good' ? 'text-success' : tone === 'bad' ? 'text-danger' : 'text-black dark:text-zinc-50'}`}>{value}</p>
+    <div className="rounded-[20px] border border-black/[.08] bg-card px-4 py-3 dark:border-white/10">
+      <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className={`text-[17px] font-black ${tone === 'good' ? 'text-success' : tone === 'bad' ? 'text-danger' : 'text-black dark:text-zinc-50'}`}>{value}</p>
     </div>
   );
 }
@@ -272,20 +277,18 @@ export function MetricsTab({
         />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Tile label="Latest" value={summary.latest != null ? formatMetricValue(summary.latest, info) : '—'} />
-            <Tile
-              label="Change"
-              value={change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${formatMetricValue(Math.abs(change), info)}`}
-              tone={changeTone}
-            />
-            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
-            <Tile
-              label="Lowest – highest"
-              value={summary.min != null && summary.max != null ? `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}` : '—'}
-            />
-          </div>
           <div className={cardCls}>
+            <div className="mb-2">
+              <p className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">{info.label}</p>
+              <p className="text-[28px] font-black leading-tight text-black dark:text-zinc-50">
+                {summary.latest != null ? formatMetricValue(summary.latest, info) : '—'}
+              </p>
+              {change != null && (
+                <p className={`text-[13px] font-bold ${changeTone === 'good' ? 'text-accent' : changeTone === 'bad' ? 'text-danger' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                  {change === 0 ? 'No change' : `${change > 0 ? 'Up' : 'Down'} ${formatMetricValue(Math.abs(change), info)}`} since {shortDate(points[0].date)}
+                </p>
+              )}
+            </div>
             <MetricChart key={`${metric}:${shownMode}:${range}`} info={info} points={points} line={line} target={target} weekly={shownMode === 'weekly'} />
             <p className="mt-2 text-xs text-zinc-500">
               {totalsOnly
@@ -294,6 +297,13 @@ export function MetricsTab({
                   ? 'Each dot is a day you logged; the line is the 7-day average. Touch or hover the chart to read any day.'
                   : 'Each dot is the average of the days you logged that week. Touch or hover the chart to read any week.'}
             </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
+            <Tile
+              label="Lowest – highest"
+              value={summary.min != null && summary.max != null ? `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}` : '—'}
+            />
           </div>
         </>
       )}

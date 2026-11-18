@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { CoachStatStrip } from '../../_components/CoachUi';
 import Link from 'next/link';
 import { getCoachReports } from '@/lib/data/reports';
 import { fillPercent } from '@/lib/slotPopularity';
@@ -22,7 +23,11 @@ const SECTION_PARAM: Record<string, Section> = { overview: 'Overview', 'no-shows
 export const reportSectionFromParam = (value: string | null): Section | undefined => (value ? SECTION_PARAM[value] : undefined);
 const RANGES = [7, 30, 90] as const;
 
-const cardCls = 'rounded-2xl border border-black/[.05] bg-card dark:border-white/10';
+const cardCls = 'rounded-[20px] border border-black/[.08] bg-card dark:border-white/10';
+// The board's segmented control: white on a grey track.
+const segTrack = 'flex max-w-full gap-1 overflow-x-auto rounded-xl bg-black/[.06] p-1 [scrollbar-width:none] dark:bg-white/10 [&::-webkit-scrollbar]:hidden';
+const segBtn = (on: boolean) =>
+  `min-h-9 shrink-0 whitespace-nowrap rounded-lg px-3.5 text-sm font-bold transition-colors ${on ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`;
 
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -131,7 +136,7 @@ export function ReportsPane({
         role="tablist"
         aria-label="Reports"
         onKeyDown={handleTabListKeys}
-        className="flex w-full gap-1 overflow-x-auto rounded-full border border-black/10 p-1 [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden"
+        className={`${segTrack} w-max`}
       >
         {SECTIONS.map((sec) => (
           <button
@@ -141,7 +146,7 @@ export function ReportsPane({
             aria-selected={section === sec}
             tabIndex={section === sec ? 0 : -1}
             onClick={() => setSection(sec)}
-            className={`min-h-10 shrink-0 rounded-full px-4 py-2 text-sm font-bold ${section === sec ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
+            className={segBtn(section === sec)}
           >
             {sec}
           </button>
@@ -149,73 +154,75 @@ export function ReportsPane({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="group" aria-label="Period" className="flex gap-1.5">
+        <div role="group" aria-label="Period" className={segTrack}>
           {RANGES.map((r) => (
             <button
               key={r}
               type="button"
               aria-pressed={days === r}
               onClick={() => setDays(r)}
-              className={`min-h-10 rounded-full px-3.5 py-1.5 text-xs font-bold ${
-                days === r ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
-              }`}
+              className={segBtn(days === r)}
             >
-              {r} days
+              Last {r} days
             </button>
           ))}
         </div>
-        <p className="text-xs text-zinc-500">{loading ? 'Updating…' : rangeLabel}</p>
+        <p className="text-sm text-zinc-500">{loading ? 'Updating…' : rangeLabel}</p>
       </div>
 
       {section === 'Overview' && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-            <div className={`${cardCls} p-3.5`}>
-              <p className="text-sm text-zinc-500">Attendance rate</p>
-              <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">
-                {report.attendanceRate == null ? '—' : `${report.attendanceRate}%`}
-                <Delta now={report.attendanceRate} before={previous?.attendanceRate ?? null} unit=" pts" />
-              </p>
-              <p className="mt-0.5 text-xs text-zinc-500">of sessions you&apos;ve marked</p>
-            </div>
-            <div className={`${cardCls} p-3.5`}>
-              <p className="text-sm text-zinc-500">Booked</p>
-              <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">
-                {report.totalBooked}
-                <Delta now={report.totalBooked} before={previous?.totalBooked ?? null} />
-              </p>
-            </div>
-            <div className={`${cardCls} p-3.5`}>
-              <p className="text-sm text-zinc-500">Attended</p>
-              <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">
-                {report.totalAttended}
-                <Delta now={report.totalAttended} before={previous?.totalAttended ?? null} />
-              </p>
-            </div>
-            <div className={`${cardCls} p-3.5`}>
-              <p className="text-sm text-zinc-500">No-show rate</p>
-              <p className="mt-1 text-2xl font-extrabold text-black dark:text-zinc-50">
-                {report.noShowRate == null ? '—' : `${report.noShowRate}%`}
-                <Delta now={report.noShowRate} before={previous?.noShowRate ?? null} unit=" pts" goodWhen="down" />
-              </p>
-              <p className="mt-0.5 text-xs text-zinc-500">of sessions you&apos;ve marked</p>
-            </div>
-          </div>
+          <CoachStatStrip
+            label="This period at a glance"
+            stats={[
+              {
+                label: 'Attendance rate',
+                value: report.attendanceRate == null ? '—' : `${report.attendanceRate}%`,
+                sub: (
+                  <>
+                    of sessions you&apos;ve marked
+                    <Delta now={report.attendanceRate} before={previous?.attendanceRate ?? null} unit=" pts" />
+                  </>
+                ),
+              },
+              {
+                label: 'Booked',
+                value: report.totalBooked,
+                sub: previous ? <Delta now={report.totalBooked} before={previous.totalBooked} /> : undefined,
+              },
+              {
+                label: 'Attended',
+                value: report.totalAttended,
+                tone: 'teal',
+                sub: previous ? <Delta now={report.totalAttended} before={previous.totalAttended} /> : undefined,
+              },
+              {
+                label: 'No-show rate',
+                value: report.noShowRate == null ? '—' : `${report.noShowRate}%`,
+                sub: (
+                  <>
+                    of sessions you&apos;ve marked
+                    <Delta now={report.noShowRate} before={previous?.noShowRate ?? null} unit=" pts" goodWhen="down" />
+                  </>
+                ),
+              },
+            ]}
+          />
           {previous && <p className="text-xs text-zinc-500">Changes are against the {days} days before.</p>}
 
           {report.unmarked > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-500/30 bg-amber-50 px-5 py-4 dark:bg-amber-500/10">
               <p className="text-sm text-zinc-700 dark:text-zinc-300">{unmarkedText}</p>
               {onOpenAttendance && (
-                <button type="button" onClick={onOpenAttendance} className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground">
+                <button type="button" onClick={onOpenAttendance} className="flex h-11 shrink-0 items-center rounded-xl bg-[#1d1d1b] px-4 text-sm font-bold text-white dark:bg-zinc-100 dark:text-[#1d1d1b]">
                   Mark attendance
                 </button>
               )}
             </div>
           )}
 
-          <div className={`${cardCls} p-4`}>
-            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Right now</h2>
+          <div className={`${cardCls} px-5 py-4 sm:px-6`}>
+            <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Right now</h2>
             <p className="mt-1 text-sm text-zinc-500">
               {report.activeBookings} upcoming {report.activeBookings === 1 ? 'booking' : 'bookings'}
               {report.avgClassesPerClient != null ? ` · ${report.avgClassesPerClient} classes per client on average` : ''}
@@ -225,13 +232,13 @@ export function ReportsPane({
       )}
 
       {section === 'No-shows' && (
-        <div className={`${cardCls} p-4`}>
+        <div className={`${cardCls} px-5 py-4 sm:px-6`}>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">
               No-shows{report.noShowRate != null ? ` · ${report.noShowRate}% of marked sessions` : ''}
             </h2>
             {report.noShows.length > 0 && (
-              <button type="button" onClick={exportNoShows} className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent dark:border-white/15">
+              <button type="button" onClick={exportNoShows} className="flex h-11 items-center rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50">
                 Export CSV
               </button>
             )}
@@ -268,25 +275,23 @@ export function ReportsPane({
       )}
 
       {section === 'Busiest' && (
-        <div className={`${cardCls} p-4`}>
+        <div className={`${cardCls} px-5 py-4 sm:px-6`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div role="group" aria-label="Order" className="flex gap-1.5">
+            <div role="group" aria-label="Order" className={segTrack}>
               {(['busiest', 'quietest'] as const).map((o) => (
                 <button
                   key={o}
                   type="button"
                   aria-pressed={slotOrder === o}
                   onClick={() => setSlotOrder(o)}
-                  className={`min-h-10 rounded-full px-3.5 py-1.5 text-xs font-bold capitalize ${
-                    slotOrder === o ? 'bg-accent text-accent-foreground' : 'border border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
-                  }`}
+                  className={`${segBtn(slotOrder === o)} capitalize`}
                 >
                   {o}
                 </button>
               ))}
             </div>
             {report.classPopularity.length > 0 && (
-              <button type="button" onClick={exportPopularity} className="rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-accent dark:border-white/15">
+              <button type="button" onClick={exportPopularity} className="flex h-11 items-center rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50">
                 Export CSV
               </button>
             )}
@@ -299,13 +304,13 @@ export function ReportsPane({
               const rate = c.marked > 0 ? Math.round((c.attended / c.marked) * 100) : null;
               return (
                 <li key={c.className}>
-                  <p className="font-semibold text-black dark:text-zinc-50">{c.className}</p>
+                  <p className="text-[15px] font-bold text-black dark:text-zinc-50">{c.className}</p>
                   <p className="text-xs text-zinc-500">
                     <span className="font-bold text-black dark:text-zinc-50">{fill}% full</span>
                     {` · ${c.bookingCount} of ${c.places} places over ${c.sessions} session${c.sessions === 1 ? '' : 's'}`}
                     {rate != null && ` · ${rate}% came`}
                   </p>
-                  <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
                     <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, fill)}%` }} />
                   </div>
                 </li>
@@ -314,7 +319,7 @@ export function ReportsPane({
             {report.classPopularity.length === 0 && <li className="text-zinc-500">No sessions in the last {days} days yet.</li>}
           </ul>
           {report.classPopularity.length > 10 && (
-            <button type="button" onClick={() => setShowAllSlots((v) => !v)} className="mt-3 rounded-full border border-black/10 px-4 py-1.5 text-sm font-semibold text-accent dark:border-white/15">
+            <button type="button" onClick={() => setShowAllSlots((v) => !v)} className="mt-3 min-h-11 text-sm font-bold text-accent">
               {showAllSlots ? 'Show fewer' : `Show all ${report.classPopularity.length}`}
             </button>
           )}

@@ -78,7 +78,7 @@ export function AddClientForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-full bg-accent py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 disabled:opacity-50"
+        className="h-11 w-full rounded-xl bg-accent text-sm font-extrabold text-accent-foreground hover:opacity-90 disabled:opacity-50"
       >
         {submitting ? 'Adding…' : 'Add client'}
       </button>

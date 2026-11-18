@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, PlusSquare, Share } from 'lucide-react';
-import { Logo } from '@/app/_components/Logo';
+import { AuthBand, setupButton } from '@/app/_components/AuthFrame';
 import { useInstall } from '@/app/_components/useInstall';
 import { Button } from '@/app/_components/Button';
 import { SignOutButton } from '@/app/_components/SignOutButton';
+import AnimatedContent from '@/app/_components/motion/AnimatedContent';
+import ClickSpark from '@/app/_components/motion/ClickSpark';
+import type { ClickSparkHandle } from '@/app/_components/motion/ClickSpark';
+import { pop } from '@/app/_components/motion/gsap';
 import { completeOnboarding, completeShortOnboarding } from '@/lib/data/onboarding';
 import { ACTIVITY_OPTIONS, ageFromDob, ageProblem, buildOnboardingPlan, needsBodyStep, PLAN_BEING_SET_UP, TRACKING_OPTIONS } from '@/lib/onboarding';
 import { CONSENT_LABEL, CONSENT_POINTS, CONSENT_REQUIRED_MESSAGE, CONSENT_TITLE } from '@/lib/consentText';
@@ -53,13 +57,13 @@ function WeightField({ label, kg, onChange }: { label: string; kg: number | null
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <label className={labelCls}>{label}</label>
-        <div className="flex rounded-full bg-black/5 p-0.5 text-xs font-bold dark:bg-white/10">
+        <div className="flex rounded-xl bg-black/[.06] p-1 dark:bg-white/10 text-xs font-bold">
           {(['kg', 'st'] as const).map((u) => (
             <button
               key={u}
               type="button"
               onClick={() => setUnit(u)}
-              className={`rounded-full px-2.5 py-1 ${unit === u ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
+              className={`min-h-8 rounded-lg px-3 ${unit === u ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`}
             >
               {u === 'kg' ? 'kg' : 'st & lb'}
             </button>
@@ -125,13 +129,13 @@ function HeightField({ cm, onChange }: { cm: number | null; onChange: (cm: numbe
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <label className={labelCls}>Height</label>
-        <div className="flex rounded-full bg-black/5 p-0.5 text-xs font-bold dark:bg-white/10">
+        <div className="flex rounded-xl bg-black/[.06] p-1 dark:bg-white/10 text-xs font-bold">
           {(['cm', 'ft'] as const).map((u) => (
             <button
               key={u}
               type="button"
               onClick={() => setUnit(u)}
-              className={`rounded-full px-2.5 py-1 ${unit === u ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
+              className={`min-h-8 rounded-lg px-3 ${unit === u ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`}
             >
               {u === 'cm' ? 'cm' : 'ft & in'}
             </button>
@@ -187,11 +191,31 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       className={`rounded-full border px-4 py-2.5 text-sm font-bold transition-colors ${
-        active ? 'border-accent bg-accent text-accent-foreground' : 'border-black/10 text-zinc-600 dark:border-white/15 dark:text-zinc-300'
+        active ? 'border-[#1d1d1b] bg-[#1d1d1b] text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border-black/[.14] bg-card text-black dark:border-white/15 dark:text-zinc-50'
       }`}
     >
       {children}
     </button>
+  );
+}
+
+function DoneCheck() {
+  const sparks = useRef<ClickSparkHandle>(null);
+  const tick = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      pop(tick.current, 0.4);
+      sparks.current?.spark();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return (
+    // Sized to the tick (not the full width the spark wrapper takes by default), so the tick stays centred and the burst comes from it.
+    <ClickSpark ref={sparks} clickToSpark={false} className="!h-auto !w-auto" sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={14} sparkRadius={56} sparkSize={12} shape="star" duration={750}>
+      <span ref={tick} className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-accent-foreground">
+        <Check className="h-8 w-8" />
+      </span>
+    </ClickSpark>
   );
 }
 
@@ -213,6 +237,7 @@ export function OnboardingFlow({
   const steps: readonly StepKey[] = short ? (needsBody ? SHORT_STEPS_WITH_BODY : SHORT_STEPS) : FULL_STEPS;
   const doneStep = steps.length;
   const [step, setStep] = useState(-1); // -1 = welcome, 0..n-1 = questions, n = done
+  const [goingBack, setGoingBack] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -341,6 +366,7 @@ export function OnboardingFlow({
       return;
     }
     setError(null);
+    setGoingBack(false);
     setStep(step + 1);
   }
 
@@ -402,28 +428,31 @@ export function OnboardingFlow({
     setStep(doneStep);
   }
 
+  // The slim black band with the wordmark (the board), then the step on the light background.
   const shell = (children: React.ReactNode) => (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
-      {children}
-      {/* A way out: someone who opened the wrong account (or a shared phone) was stuck on these screens with no sign-out (R22). */}
-      <div className="mt-8 flex items-center justify-center gap-2 text-xs text-zinc-400">
-        <span className="truncate">Signed in as {email}</span>
-        <SignOutButton variant="outline" />
+    <div className="flex min-h-dvh flex-col bg-background">
+      <AuthBand width="max-w-md" />
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-6">
+        {children}
+        {/* A way out: someone who opened the wrong account (or a shared phone) was stuck on these screens with no sign-out (R22). */}
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-zinc-400">
+          <span className="truncate">Signed in as {email}</span>
+          <SignOutButton variant="outline" />
+        </div>
       </div>
     </div>
   );
 
   if (step === -1) {
     return shell(
-      <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
-        <Logo variant="full" size={96} />
-        <h1 className="text-2xl font-extrabold text-black dark:text-zinc-50">{short ? 'Quick details check' : "Let's get you set up"}</h1>
-        <p className="text-sm text-zinc-500">
+      <div className="flex flex-1 flex-col gap-4">
+        <h1 className="px-1 text-[28px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">{short ? 'Quick details check' : "Let's get you set up"}</h1>
+        <p className="px-1 text-[15px] leading-snug text-zinc-600 dark:text-zinc-400">
           {short
             ? `${coachFirstName ?? 'Your coach'} would like you to confirm a few details so everything is up to date. It takes about a minute, and your answers are filled in where we already have them.`
             : `A few quick questions so ${coachFirstName ?? 'your coach'} can build your plan. It takes about 3 minutes, and you can change anything later.`}
         </p>
-        <ul className="w-full space-y-2 rounded-2xl border border-black/[.06] bg-card p-4 text-left text-sm dark:border-white/10">
+        <ul className="w-full space-y-2.5 rounded-[20px] border border-black/[.08] bg-card p-4 text-left text-[15px] dark:border-white/10">
           {(short
             ? ['Your contact details', 'Your goal', 'How you want to track food']
             : ['About you and your goal', 'Your body and activity', 'How you want to track food', 'Your daily calories & macros']
@@ -433,9 +462,9 @@ export function OnboardingFlow({
             </li>
           ))}
         </ul>
-        <Button variant="primary" className="w-full !rounded-full py-3 text-base" onClick={() => setStep(0)}>
+        <button type="button" className={setupButton} onClick={() => setStep(0)}>
           {short ? 'Start' : "Let's go"}
-        </Button>
+        </button>
       </div>
     );
   }
@@ -444,9 +473,7 @@ export function OnboardingFlow({
     const firstName = name ? name.split(' ')[0] : '';
     return shell(
       <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-accent-foreground">
-          <Check className="h-8 w-8" />
-        </span>
+        <DoneCheck />
         <h1 className="text-2xl font-extrabold text-black dark:text-zinc-50">You&apos;re all set{firstName ? `, ${firstName}` : ''}!</h1>
         <p className="text-sm text-zinc-500">
           {short
@@ -455,7 +482,7 @@ export function OnboardingFlow({
         </p>
 
         {!install.standalone && (
-          <div className="w-full space-y-3 rounded-2xl border border-accent/30 bg-card p-4 text-left">
+          <div className="w-full space-y-3 rounded-[20px] border border-accent/30 bg-card p-4 text-left">
             <p className="text-sm font-extrabold text-black dark:text-zinc-50">Last step: add the app to your home screen</p>
             <p className="text-xs text-zinc-500">
               It opens like any other app, and the first time you open it from your home screen we&apos;ll ask to turn on
@@ -464,7 +491,7 @@ export function OnboardingFlow({
             {install.installEvent ? (
               <Button
                 variant="primary"
-                className="w-full !rounded-full py-2.5"
+                className="w-full"
                 onClick={async () => {
                   await install.installEvent?.prompt();
                 }}
@@ -489,7 +516,7 @@ export function OnboardingFlow({
 
         <Button
           variant={install.standalone ? 'primary' : 'outline'}
-          className="w-full !rounded-full py-3 text-base"
+          className="min-h-12 w-full text-[15px]"
           onClick={() => {
             router.refresh();
           }}
@@ -504,29 +531,29 @@ export function OnboardingFlow({
     <>
       <div className="flex items-center gap-3">
         {step > 0 ? (
-          <button type="button" aria-label="Back" onClick={() => { setError(null); setStep(step - 1); }} className="rounded-full bg-black/5 p-2 dark:bg-white/10">
+          <button type="button" aria-label="Back" onClick={() => { setError(null); setGoingBack(true); setStep(step - 1); }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-black/[.14] dark:border-white/15">
             <ChevronLeft className="h-5 w-5" />
           </button>
         ) : (
-          <span className="w-9" />
+          <span className="w-11 shrink-0" />
         )}
         <div className="flex-1">
-          <p className="text-xs font-semibold text-zinc-500">
+          <p className="text-[13px] font-bold text-[#0e6266] dark:text-[#5fd6d6]">
             Step {step + 1} of {steps.length} · {STEP_TITLE[steps[step]]}
           </p>
           <div className="mt-1.5 flex gap-1">
             {steps.map((s, i) => (
-              <span key={s} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-black/10 dark:bg-white/10'}`} />
+              <span key={s} className={`h-1.5 flex-1 rounded-full transition-colors duration-500 ${i <= step ? 'bg-accent' : 'bg-black/10 dark:bg-white/15'}`} />
             ))}
           </div>
         </div>
       </div>
 
-      <div className="mt-6 flex-1 space-y-5">
+      <AnimatedContent key={step} direction="horizontal" distance={28} reverse={goingBack} duration={0.45} className="mt-6 flex-1 space-y-5">
         {steps[step] === 'consent' && (
           <>
-            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">{CONSENT_TITLE}</h2>
-            <ul className="space-y-2 rounded-2xl border border-black/[.06] bg-card p-4 text-sm text-zinc-700 dark:border-white/10 dark:text-zinc-300">
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">{CONSENT_TITLE}</h2>
+            <ul className="space-y-2 rounded-[20px] border border-black/[.08] bg-card p-4 text-sm text-zinc-700 dark:border-white/10 dark:text-zinc-300">
               {CONSENT_POINTS.map((point) => (
                 <li key={point} className="flex gap-2">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" /> <span>{point}</span>
@@ -553,7 +580,7 @@ export function OnboardingFlow({
 
         {steps[step] === 'about' && (
           <>
-            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">First, about you</h2>
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">First, about you</h2>
             <div className="space-y-1.5">
               <label className={labelCls}>Full name</label>
               <input className={inputCls} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -574,7 +601,7 @@ export function OnboardingFlow({
               <label className={labelCls}>Mobile number</label>
               <input type="tel" className={inputCls} autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
-            <div className="space-y-3 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+            <div className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
               <p className="text-sm font-bold text-black dark:text-zinc-50">Emergency contact</p>
               <input className={inputCls} placeholder="Their name" value={emName} onChange={(e) => setEmName(e.target.value)} />
               <input type="tel" className={inputCls} placeholder="Their number" value={emPhone} onChange={(e) => setEmPhone(e.target.value)} />
@@ -584,7 +611,7 @@ export function OnboardingFlow({
 
         {steps[step] === 'goal' && (
           <>
-            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your goal</h2>
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">Your goal</h2>
             <div className="space-y-1.5">
               <label className={labelCls}>What do you want to achieve?</label>
               <textarea
@@ -608,7 +635,7 @@ export function OnboardingFlow({
 
         {steps[step] === 'body' && (
           <>
-            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your body &amp; activity</h2>
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">Your body &amp; activity</h2>
             <HeightField cm={heightCm} onChange={setHeightCm} />
             <WeightField label="Current weight" kg={weightKg} onChange={setWeightKg} />
             <WeightField label="Goal weight" kg={goalKg} onChange={setGoalKg} />
@@ -650,7 +677,7 @@ export function OnboardingFlow({
 
         {steps[step] === 'food' && (
           <>
-            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">How do you want to track your food?</h2>
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">How do you want to track your food?</h2>
             <p className="-mt-2 text-sm text-zinc-500">You can change this later with your coach.</p>
             <div className="space-y-2.5">
               {TRACKING_OPTIONS.map((o) => (
@@ -678,7 +705,7 @@ export function OnboardingFlow({
 
         {steps[step] === 'plan' && (
           <>
-            <h2 className="text-xl font-extrabold text-black dark:text-zinc-50">Your daily plan</h2>
+            <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">Your daily plan</h2>
             {plan ? (
               <>
                 {/* The starting numbers come straight from a formula and nobody has looked at them, so they are not shown (M8, D6): the plan is
@@ -696,18 +723,18 @@ export function OnboardingFlow({
             )}
           </>
         )}
-      </div>
+      </AnimatedContent>
 
       {error && <p className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
       <div className="mt-6">
         {step < steps.length - 1 ? (
-          <Button variant="primary" className="w-full !rounded-full py-3 text-base" onClick={next}>
+          <button type="button" className={setupButton} onClick={next}>
             Continue
-          </Button>
+          </button>
         ) : (
-          <Button variant="primary" className="w-full !rounded-full py-3 text-base" disabled={saving || (!short && !plan)} onClick={finish}>
+          <button type="button" className={setupButton} disabled={saving || (!short && !plan)} onClick={finish}>
             {saving ? 'Saving…' : short ? 'Save & finish' : 'Looks good — finish'}
-          </Button>
+          </button>
         )}
       </div>
     </>

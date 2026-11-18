@@ -114,7 +114,7 @@ export function BlockResultForm({
         type="button"
         disabled={busy}
         onClick={save}
-        className="mt-2.5 h-11 w-full rounded-full bg-accent text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+        className="mt-2.5 h-11 w-full rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] text-sm font-bold disabled:opacity-50"
       >
         {busy ? 'Saving…' : result ? 'Update result' : 'Save result'}
       </button>

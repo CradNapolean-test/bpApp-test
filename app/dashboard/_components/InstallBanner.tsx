@@ -53,7 +53,7 @@ export function InstallBanner() {
             <button
               type="button"
               onClick={() => installEvent.prompt()}
-              className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-extrabold text-accent-foreground"
+              className="mt-2 inline-flex h-10 items-center rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-4 text-[13px] font-bold"
             >
               Install
             </button>
@@ -66,7 +66,7 @@ export function InstallBanner() {
             <button
               type="button"
               onClick={() => setSteps(true)}
-              className="mt-2 rounded-full bg-accent px-4 py-1.5 text-xs font-extrabold text-accent-foreground"
+              className="mt-2 inline-flex h-10 items-center rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-4 text-[13px] font-bold"
             >
               Show me how
             </button>

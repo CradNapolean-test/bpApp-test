@@ -23,7 +23,7 @@ export function MemberScreenToggles({
   const offByPlan = toEffectiveDisabledScreenSet([], planIncludedScreens);
 
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <p className="text-sm font-extrabold text-black dark:text-zinc-50">Screens for this member</p>
       <p className="mt-0.5 text-xs text-zinc-500">
         Untick to hide a screen from them{planName ? `. Their plan (${planName}) already hides some` : ''}. You always see everything.
@@ -54,7 +54,7 @@ export function MemberMetricToggles({ clientId, disabledMetrics }: { clientId: s
   const { run, busy } = useAction();
   const off = toDisabledMetricSet(disabledMetrics);
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <p className="text-sm font-extrabold text-black dark:text-zinc-50">Daily check-in measures</p>
       <p className="mt-0.5 text-xs text-zinc-500">Untick a measure to stop asking this member for it. Your weekly summary only lists what is on.</p>
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">

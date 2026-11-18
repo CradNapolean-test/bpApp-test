@@ -15,13 +15,11 @@ import {
   NotebookPen,
   UserCog,
   Wallet,
-  MessageSquare,
   Moon,
   Scale,
   ScanLine,
   Utensils,
 } from 'lucide-react';
-import { Avatar } from '@/app/_components/Avatar';
 import { Card, IconChip, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { getReviews } from '@/lib/data/coachReviews';
@@ -39,6 +37,7 @@ import { olderUnreviewed, olderUnreviewedLine } from '@/lib/memberReview';
 import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
+import { CoachStatStrip } from '@/app/coach/_components/CoachUi';
 import type { ClientHealthStatus } from '@/lib/data/coach';
 import type {
   BigDogResultRow,
@@ -89,14 +88,14 @@ function Tile({
 }) {
   const body = (
     <>
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+      <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
         <IconChip icon={icon} size="sm" /> {label}
       </p>
-      <p className={`mt-1.5 text-xl font-extrabold ${tone ? TONE_CLS[tone] : 'text-black dark:text-zinc-50'}`}>{value}</p>
+      <p className={`mt-1.5 text-[22px] font-extrabold leading-tight ${tone ? TONE_CLS[tone] : 'text-black dark:text-zinc-50'}`}>{value}</p>
       {hint && <p className="text-[11px] text-zinc-500">{hint}</p>}
     </>
   );
-  const cls = 'rounded-2xl border border-black/[.05] bg-card p-3.5 text-left dark:border-white/10';
+  const cls = 'rounded-[20px] border border-black/[.08] bg-card p-4 text-left dark:border-white/10';
   return onClick ? (
     <button type="button" onClick={onClick} className={`${cls} hover:bg-black/[.02] dark:hover:bg-white/[.03]`}>
       {body}
@@ -337,16 +336,38 @@ export function CoachMemberOverview({
   const injuries = journalEntries.filter((n) => n.kind === 'injury');
   const notes = journalEntries.filter((n) => n.kind !== 'injury').slice(0, 2);
 
+  const weightChange = nowWeight != null && start != null ? nowWeight - start : null;
   return (
-    <div className="mx-auto max-w-6xl space-y-4 lg:grid lg:grid-cols-5 lg:items-start lg:gap-4 lg:space-y-0">
-      <div className="space-y-4 lg:col-span-3">
-      {/* ---- who ---- */}
+    <div className="mx-auto max-w-6xl space-y-5">
+    <CoachStatStrip
+      label={`${profile?.name ?? 'Member'} at a glance`}
+      stats={[
+        {
+          label: 'Weight',
+          value: nowWeight != null ? `${nowWeight.toFixed(1)} kg` : '—',
+          sub:
+            weightChange != null && Math.abs(weightChange) >= 0.05
+              ? `${weightChange < 0 ? 'Down' : 'Up'} ${Math.abs(weightChange).toFixed(1)} kg since the start`
+              : nowWeight == null
+                ? 'No weigh-ins yet'
+                : 'Same as the start',
+        },
+        { label: 'Days logged', value: `${weekDays.length} of 7`, sub: 'This week' },
+        {
+          label: 'Sessions this week',
+          value: perWeek ? `${attendedThisWeek} of ${perWeek}` : String(attendedThisWeek),
+          sub: nextClass ? `Next: ${longDate(nextClass.booking_date)} ${formatClassTime(nextClass.class?.start_time)}` : 'Nothing booked',
+        },
+        { label: 'Credits', value: String(creditsBalance), sub: planLabel, tone: creditsBalance <= 1 && membership ? 'amber' : undefined },
+      ]}
+    />
+    <div className="space-y-5 lg:grid lg:grid-cols-5 lg:items-start lg:gap-5 lg:space-y-0">
+      <div className="space-y-5 lg:col-span-3">
+      {/* ---- who: the name is in the header above, so this is what to know about them ---- */}
       <Card>
         <div className="flex items-start gap-3">
-          <Avatar name={profile?.name ?? 'Member'} size="lg" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-extrabold text-black dark:text-zinc-50">{profile?.name ?? 'Member'}</p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-sm text-zinc-500">
               {lastActiveLabel(healthStatus)}
               {memberSince ? ` · member since ${shortDate(memberSince)}` : ''}
             </p>
@@ -355,7 +376,7 @@ export function CoachMemberOverview({
                 {planLabel}
               </span>
               <span
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                className={`min-h-8 rounded-full px-3 text-xs font-bold ${
                   creditsBalance <= 1 && membership ? 'bg-warning/15 text-warning' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
                 }`}
               >
@@ -389,11 +410,12 @@ export function CoachMemberOverview({
             </ul>
           </div>
         )}
-        <div className="mt-3 flex gap-2 sm:max-w-sm">
-          <button type="button" onClick={() => onNavigate('Messages')} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-accent py-2.5 text-sm font-extrabold text-accent-foreground">
-            <MessageSquare className="h-4 w-4" /> Message
-          </button>
-          <button type="button" onClick={() => onNavigate('Accountability', 'Forms')} className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-black/10 py-2.5 text-sm font-bold dark:border-white/15">
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => onNavigate('Accountability', 'Forms')}
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
+          >
             <FileText className="h-4 w-4" /> Forms
           </button>
         </div>
@@ -422,7 +444,7 @@ export function CoachMemberOverview({
                       type="button"
                       disabled={reviewing}
                       onClick={() => runReviewed(t.reviewed as () => Promise<unknown>, { success: 'Marked as reviewed' })}
-                      className="shrink-0 rounded-full border border-black/10 px-3 py-1.5 text-xs font-bold text-zinc-700 disabled:opacity-50 dark:border-white/15 dark:text-zinc-200"
+                      className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent disabled:opacity-50"
                     >
                       {reviewing ? 'Saving…' : 'Reviewed'}
                     </button>
@@ -579,7 +601,7 @@ export function CoachMemberOverview({
               const d = m.v != null && m.p != null ? m.v - m.p : null;
               return (
                 <button key={m.l} type="button" onClick={() => onNavigate('Progress', 'Body Scans')} className="p-3.5 text-left">
-                  <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                  <span className="flex items-center gap-1 text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
                     <ScanLine className="h-3 w-3" /> {m.l}
                   </span>
                   <span className="mt-0.5 block text-lg font-extrabold text-black dark:text-zinc-50">{m.v != null ? `${m.v}${m.u}` : '—'}</span>
@@ -635,6 +657,7 @@ export function CoachMemberOverview({
         </p>
       )}
       </div>
+    </div>
     </div>
   );
 }

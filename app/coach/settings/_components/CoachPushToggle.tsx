@@ -71,7 +71,7 @@ export function CoachPushToggle({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Message notifications</h3>
+      <h3 className="text-lg font-extrabold text-black dark:text-zinc-50">Message notifications</h3>
       <p className="text-xs text-zinc-500">
         Get a notification on this device when a member messages you. It says who it is from, never what they wrote. There are none between 9 pm and
         7 am gym time (the number in the app still counts them), and a run of messages from one member gives one notification.

@@ -51,7 +51,7 @@ export function UpdateBanner({ currentVersion }: { currentVersion: string }) {
       <button
         type="button"
         onClick={() => window.location.reload()}
-        className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm font-extrabold text-accent-foreground"
+        className="shrink-0 inline-flex h-10 items-center rounded-xl bg-accent px-4 text-[13px] font-extrabold text-accent-foreground"
       >
         Update
       </button>

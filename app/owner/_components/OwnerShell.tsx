@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Building2, ChevronRight } from 'lucide-react';
+import { Building2, ChevronRight, UserRound } from 'lucide-react';
+import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { CoachPageHeader } from '@/app/coach/_components/CoachUi';
 import { AppShell } from '@/app/_components/AppShell';
 import { Avatar } from '@/app/_components/Avatar';
 import { ClientOnly } from '@/app/_components/ClientOnly';
@@ -32,7 +34,7 @@ function Stat({ label, value, tone, sub, href }: { label: string; value: number 
       {sub && <p className="mt-0.5 text-[11px] text-zinc-400">{sub}</p>}
     </>
   );
-  const cls = 'rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10';
+  const cls = 'rounded-[20px] border border-black/[.08] bg-card p-3.5 dark:border-white/10';
   return href ? (
     <Link href={href} className={`block ${cls} hover:border-accent/40`}>
       {body}
@@ -66,7 +68,7 @@ function Numbers({ s, gymId }: { s: NumbersInput; gymId?: string }) {
         <Stat label="Plan ended, last 30 days" value={s.leftLast30} href={link('left_last_30')} />
         <Stat label="Plans ending, next 14 days" value={s.endingSoon} href={link('ending_soon')} />
       </div>
-      <div className="mt-2 rounded-2xl border border-black/[.06] bg-card p-3.5 dark:border-white/10">
+      <div className="mt-2 rounded-[20px] border border-black/[.08] bg-card p-3.5 dark:border-white/10">
         <p className="text-xs text-zinc-500">Classes attended this month so far</p>
         <p className="text-2xl font-black text-black dark:text-zinc-50">{s.attendedThisMonth}</p>
         <p className="text-xs text-zinc-500">
@@ -167,15 +169,20 @@ function RedFlagLine({ rf, gymId }: { rf: OwnerGymStats['redFlags']; gymId?: str
   );
 }
 
+const OWNER_NAV = [
+  { href: '/owner', label: 'Gyms', Icon: Building2 },
+  { href: '/owner/account', label: 'Account', Icon: UserRound },
+] as const;
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{children}</p>;
+  return <p className="mb-2 mt-5 text-[15px] font-extrabold text-black dark:text-zinc-50">{children}</p>;
 }
 
 function Retry({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="rounded-lg border border-dashed border-black/10 p-6 text-center dark:border-white/15" role="alert">
       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{message}</p>
-      <button type="button" onClick={onRetry} className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground">
+      <button type="button" onClick={onRetry} className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground">
         Try again
       </button>
     </div>
@@ -186,13 +193,13 @@ function GymCard({ gym, title, stats, onRetry }: { gym: OwnerGym; title: string;
   // min-w-0: a grid item is otherwise at least as wide as its widest content, so the coaches table (which scrolls inside its own box)
   // pushed the card past the screen and the whole page scrolled sideways on a phone (RO22).
   return (
-    <section className="min-w-0 rounded-2xl border border-black/[.06] bg-card p-4 dark:border-white/10">
+    <section className="min-w-0 rounded-[20px] border border-black/[.08] bg-card p-5 dark:border-white/10">
       <div className="mb-3 flex items-center justify-between gap-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <Building2 className="h-5 w-5 shrink-0 text-accent" />
           <h2 className="truncate text-lg font-extrabold text-black dark:text-zinc-50">{title}</h2>
         </div>
-        <Link href={rosterHref(gym.id)} className="flex shrink-0 items-center gap-0.5 text-xs font-bold text-accent">
+        <Link href={rosterHref(gym.id)} className="flex min-h-11 shrink-0 items-center gap-0.5 text-sm font-bold text-accent">
           Members and team <ChevronRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       </div>
@@ -274,6 +281,7 @@ export function OwnerShell({
           </Link>
         }
         signOutOnMobile
+        coachSidebar={<CoachSidebar email={email} nav={OWNER_NAV} roleLabel="Owner" settingsHref="/owner/account" homeHref="/owner" />}
         mobileHeader={
           <div className="flex items-center gap-2.5">
             <Logo size={32} />
@@ -284,20 +292,22 @@ export function OwnerShell({
           </div>
         }
       >
-        <h1 className="mb-1 text-2xl font-bold text-black dark:text-zinc-50">{view === 'overview' ? 'Overview' : 'Reports'}</h1>
-        <p className="mb-4 text-sm text-zinc-500">
-          {view === 'overview' ? 'Every gym in the business, side by side.' : 'Check-ins and coach messaging over time.'}
-        </p>
-        {gyms !== null && gyms.length > 0 && (
-          <div className="mb-4">
-            <Segmented
-              label="Section"
-              value={view}
-              onChange={setView}
-              options={[{ value: 'overview', label: 'Overview' }, { value: 'reports', label: 'Reports' }]}
-            />
-          </div>
-        )}
+        <div className="mb-6">
+          <CoachPageHeader
+            eyebrow={view === 'overview' ? 'Every gym in the business, side by side' : 'Check-ins and coach messaging over time'}
+            title={view === 'overview' ? 'Your gyms' : 'Reports'}
+            actions={
+              gyms !== null && gyms.length > 0 ? (
+                <Segmented
+                  label="Section"
+                  value={view}
+                  onChange={setView}
+                  options={[{ value: 'overview', label: 'Overview' }, { value: 'reports', label: 'Reports' }]}
+                />
+              ) : undefined
+            }
+          />
+        </div>
 
         {gyms === null ? (
           <Retry message={LOAD_FAILED} onRetry={retry} />
@@ -319,7 +329,7 @@ export function OwnerShell({
             {view === 'overview' && stats === null && <Retry message={LOAD_FAILED} onRetry={retry} />}
 
             {view === 'overview' && shown.length > 1 && shownStats.length > 0 && (
-              <section className="rounded-2xl border border-accent/30 bg-accent-soft/30 p-4">
+              <section className="rounded-[20px] border border-black/[.08] bg-card p-5 dark:border-white/10">
                 <h2 className="mb-3 text-lg font-extrabold text-black dark:text-zinc-50">All gyms</h2>
                 <Numbers s={totals} />
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">

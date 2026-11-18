@@ -91,7 +91,7 @@ export function VoiceRecorder({
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/5 px-2 py-1">
+    <div className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger/5 px-3 py-1.5">
       <span className="h-2 w-2 animate-pulse rounded-full bg-danger" />
       <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400" role="timer" aria-label="Recording time">
         {formatVoiceTimer(elapsed)}

@@ -347,19 +347,26 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d));
 
+  // "25 classes · 300 spots a week": the sessions that repeat weekly and the places they offer.
+  const weekly = classes.filter((c) => !c.specific_date);
+  const weeklySpots = weekly.reduce((n, c) => n + c.capacity, 0);
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="px-1 text-sm font-extrabold text-black dark:text-zinc-50">
-          Timetable
-        </p>
+      <section className="space-y-4 rounded-[20px] border border-black/[.08] bg-card px-4 pb-4 pt-[18px] sm:px-5 dark:border-white/10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Every week</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {weekly.length} class{weekly.length === 1 ? '' : 'es'} · {weeklySpots} spots a week
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => newSlot(1)}
-            className="flex items-center gap-1 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+            className="flex h-11 items-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground"
           >
-            <Plus className="h-4 w-4" /> Add session
+            <Plus className="h-4 w-4" strokeWidth={2.6} /> New class
           </button>
           <DropdownMenu
             variant="header"
@@ -375,22 +382,22 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
             type="button"
             aria-label="Previous week"
             onClick={() => setWeekStart((w) => isoAdd(w, -7))}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[.14] text-zinc-700 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <p className="min-w-[8.5rem] text-center text-sm font-bold text-black dark:text-zinc-50">{weekLabel}</p>
+          <p className="min-w-[9rem] text-center text-[15px] font-bold text-black dark:text-zinc-50">{weekLabel}</p>
           <button
             type="button"
             aria-label="Next week"
             onClick={() => setWeekStart((w) => isoAdd(w, 7))}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[.14] text-zinc-700 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
         {weekStart !== mondayOf(todayIso) && (
-          <button type="button" onClick={() => setWeekStart(mondayOf(todayIso))} className="text-sm font-semibold text-accent">
+          <button type="button" onClick={() => setWeekStart(mondayOf(todayIso))} className="min-h-11 text-sm font-bold text-accent">
             This week
           </button>
         )}
@@ -399,12 +406,12 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
       {classes.length === 0 ? (
         <EmptyState icon={CalendarDays} title="No sessions yet" hint="Add your first session, or tap any slot on the calendar once you have one." compact />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-black/[.06] bg-card dark:border-white/10">
+        <div className="overflow-x-auto rounded-2xl border border-black/[.08] dark:border-white/10">
           <div className="min-w-[21rem]" style={{ display: 'grid', gridTemplateColumns: `2.5rem repeat(${days.length}, minmax(3rem, 1fr))` }}>
             <div className="border-b border-black/[.06] dark:border-white/10" />
             {days.map((d) => (
               <div key={d} className="border-b border-l border-black/[.06] py-2 text-center dark:border-white/10">
-                <p className="text-[11px] font-bold uppercase text-zinc-500">{WEEKDAY_SHORT[d]}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-zinc-500">{WEEKDAY_SHORT[d]}</p>
                 <p
                   className={`mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                     dateFor(d) === todayIso ? 'bg-accent text-accent-foreground' : 'text-black dark:text-zinc-100'
@@ -518,6 +525,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
         </div>
       )}
 
+      </section>
       <p className="px-1 text-xs text-zinc-500">
         Solid blocks repeat every week; dashed blocks are one-off sessions. Numbers show booked / capacity, and a faded &ldquo;Off&rdquo; block is cancelled for that date. Tap an empty slot, then tap the + to add. Times are the gym&apos;s local time. To cancel a single date (for example a bank holiday), use Sessions.
       </p>
@@ -564,14 +572,14 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
               </div>
             ) : (
               <>
-                <div className="flex gap-1 rounded-full border border-black/10 p-0.5 dark:border-white/10">
+                <div className="flex gap-1 rounded-xl bg-black/[.06] p-1 dark:bg-white/10">
                   {([['weekly', 'Repeats weekly'], ['once', 'One-off']] as const).map(([key, label]) => (
                     <button
                       key={key}
                       type="button"
                       aria-pressed={draft.kind === key}
                       onClick={() => set('kind', key)}
-                      className={`flex-1 rounded-full py-2 text-sm font-bold ${draft.kind === key ? 'bg-accent text-accent-foreground' : 'text-zinc-500'}`}
+                      className={`min-h-9 flex-1 rounded-lg text-sm font-bold ${draft.kind === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`}
                     >
                       {label}
                     </button>
@@ -595,8 +603,8 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                           type="button"
                           aria-pressed={on}
                           onClick={() => set('repeatDays', on ? draft.repeatDays.filter((x) => x !== d) : [...draft.repeatDays, d])}
-                          className={`rounded-full px-3.5 py-2 text-sm font-bold ${
-                            on ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                          className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
+                            on ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                           }`}
                         >
                           {WEEKDAY_SHORT[d]}
@@ -650,7 +658,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
             <button
               type="submit"
               disabled={busy || !draft.name.trim() || (!draft.id && draft.kind === 'weekly' && draft.repeatDays.length === 0)}
-              className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+              className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save session'}
             </button>
@@ -679,8 +687,8 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                     return next;
                   });
                 }}
-                className={`rounded-full px-4 py-2 text-sm font-bold ${
-                  d === day ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
+                  d === day ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                 }`}
               >
                 {WEEKDAY_SHORT[d]}
@@ -705,8 +713,8 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                       return next;
                     })
                   }
-                  className={`rounded-full px-4 py-2 text-sm font-bold ${
-                    copyTo.has(d) ? 'bg-accent text-accent-foreground' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
+                  className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
+                    copyTo.has(d) ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                   }`}
                 >
                   {WEEKDAY_SHORT[d]}
@@ -718,7 +726,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
             type="button"
             disabled={busy || copyTo.size === 0}
             onClick={copyDay}
-            className="w-full rounded-full bg-accent py-3 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
+            className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
           >
             {busy ? 'Copying…' : 'Copy sessions'}
           </button>

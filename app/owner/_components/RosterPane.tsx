@@ -98,7 +98,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
           <button
             type="button"
             onClick={reload}
-            className="mt-3 rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-foreground"
+            className="mt-3 inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground"
           >
             Try again
           </button>
@@ -118,7 +118,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
             <>
               {/* On a phone the five columns do not fit, and Plan, Last active and Status sat off to the side (BO19): each member is a
                   row of its own there, with the same facts under the name. */}
-              <ul className="divide-y divide-black/[.05] rounded-2xl border border-black/[.06] bg-card text-sm sm:hidden dark:divide-white/10 dark:border-white/10">
+              <ul className="divide-y divide-black/[.05] rounded-[20px] border border-black/[.08] bg-card text-sm sm:hidden dark:divide-white/10 dark:border-white/10">
                 {roster.members.map((m) => (
                   <li key={m.clientId} className="flex items-start gap-2.5 px-3 py-2.5">
                     <Avatar name={m.name} size="sm" />
@@ -138,7 +138,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
                   </li>
                 ))}
               </ul>
-              <div className="hidden overflow-x-auto rounded-2xl border border-black/[.06] bg-card sm:block dark:border-white/10">
+              <div className="hidden overflow-x-auto rounded-[20px] border border-black/[.08] bg-card sm:block dark:border-white/10">
                 <table className="w-full min-w-[34rem] text-left text-sm">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
@@ -186,7 +186,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
                   type="button"
                   disabled={!hasPreviousPage(roster.offset) || loading}
                   onClick={() => setOffset(previousOffset(roster.limit, roster.offset))}
-                  className="rounded-full border border-black/10 px-3 py-1.5 font-bold disabled:opacity-40 dark:border-white/15"
+                  className="inline-flex h-9 items-center rounded-xl border-[1.5px] border-black/20 px-3 font-bold disabled:opacity-40 dark:border-white/25"
                 >
                   Previous
                 </button>
@@ -194,7 +194,7 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
                   type="button"
                   disabled={!hasNextPage(roster.total, roster.limit, roster.offset) || loading}
                   onClick={() => setOffset(roster.offset + roster.limit)}
-                  className="rounded-full border border-black/10 px-3 py-1.5 font-bold disabled:opacity-40 dark:border-white/15"
+                  className="inline-flex h-9 items-center rounded-xl border-[1.5px] border-black/20 px-3 font-bold disabled:opacity-40 dark:border-white/25"
                 >
                   Next
                 </button>

@@ -49,14 +49,14 @@ export function MemberResetLink({ clientId }: { clientId: string }) {
   }
 
   return (
-    <div className="rounded-2xl border border-black/[.05] bg-card p-4 dark:border-white/10">
+    <div className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-zinc-500">Can&apos;t sign in? Send a link for choosing a new password.</p>
         <button
           type="button"
           disabled={busy}
           onClick={() => void send()}
-          className="shrink-0 rounded-full border border-black/10 px-3.5 py-1.5 text-xs font-bold disabled:opacity-50 dark:border-white/15"
+          className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-50"
         >
           {busy ? 'Making link…' : 'Send password reset link'}
         </button>
@@ -70,7 +70,7 @@ export function MemberResetLink({ clientId }: { clientId: string }) {
           </p>
           <p className="break-all rounded-lg bg-black/[.04] p-2 font-mono text-[11px] dark:bg-white/[.06]">{result.link}</p>
           <div className="flex items-center gap-3">
-            <button type="button" onClick={copy} className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-bold text-accent-foreground">
+            <button type="button" onClick={copy} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3.5 text-[13px] font-extrabold text-accent-foreground">
               Copy link
             </button>
             <button type="button" onClick={() => setResult(null)} className="text-xs font-semibold text-zinc-500 underline">

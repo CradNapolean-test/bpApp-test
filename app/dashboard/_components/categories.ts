@@ -49,7 +49,8 @@ export const COACH_HUB_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Accou
 // Only these show a row of sibling "pills" for a member. Everything else is a single page (or a
 // drill-in from a list) with its own title and a back arrow -- pills are for switching between
 // views of the same thing (e.g. Workout / Activity), not a substitute for a menu.
-export const CLIENT_PILL_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Accountability', 'Progress'];
+// Check-in (Accountability) has no tabs: the daily check-in and Forms each open as their own screen (owner, Nov 2026).
+export const CLIENT_PILL_CATEGORIES: Category[] = ['Nutrition', 'Training', 'Progress'];
 
 export const CLIENT_CATEGORY_TITLE: Partial<Record<Category, string>> = {
   Coach: 'My coaching',
@@ -75,6 +76,16 @@ export const COACH_SCREEN_LABEL: Partial<Record<Screen, string>> = {
   Credits: 'Credits & plan',
   Info: 'Notes',
   'Weekly Log': 'Daily check-in',
+  Forms: 'Forms',
+};
+
+// The member's tab labels inside the black header (the November 2026 mock-ups' wording). Screens not listed use their own name.
+export const CLIENT_PILL_LABEL: Partial<Record<Screen, string>> = {
+  'Food Tracking': 'Food diary',
+  'Meal Planner': 'Meal planner',
+  'Weekly Log': 'Daily check-in',
+  'Progress & Photos': 'Photos',
+  'Body Scans': 'Body scans',
 };
 
 // Title for a single-page screen (shown in the header instead of its category).

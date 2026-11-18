@@ -59,7 +59,7 @@ export function GymMismatchBanner() {
           type="button"
           disabled={busy}
           onClick={() => run(() => switchActiveGym(mismatch.target.gymId), { success: `Switched to ${name(mismatch.target.gymName)}` })}
-          className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm font-bold text-accent-foreground disabled:opacity-50"
+          className="inline-flex h-11 shrink-0 items-center rounded-xl bg-accent px-4 text-sm font-extrabold text-accent-foreground disabled:opacity-50"
         >
           {busy ? 'Switching…' : `Switch to ${name(mismatch.target.gymName)}`}
         </button>
