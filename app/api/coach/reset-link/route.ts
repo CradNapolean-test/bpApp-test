@@ -5,9 +5,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { sendBroadcastEmail } from '@/lib/email';
 import { mayMakeResetLink } from '@/lib/gymAccess';
 import { makePasswordSetLink, requestOrigin } from '@/lib/accountsServer';
+import { LINK_NOT_RECORDED, recordSignInLink } from '@/lib/signInLinks';
 
 // A coach makes a one-time "choose a new password" link for one of their members (CL6) and, when email is set up, emails it to the member.
 // The coach gets the link too, to copy, because email is not always set up and a member who has lost access may not see it.
+// Every link is recorded (D22, sign_in_links, migration 0171) before it is shown or emailed; one that cannot be recorded is not given out.
 //
 // body: { clientId: string }
 export async function POST(request: Request) {
@@ -39,10 +41,22 @@ export async function POST(request: Request) {
   if (!allowed) return NextResponse.json({ error: 'Only their coach or a gym admin can do this' }, { status: 403 });
   if (!member.email) return NextResponse.json({ error: 'This member has no email address on file' }, { status: 409 });
 
-  const link = await makePasswordSetLink(createAdminClient(), member.email as string, requestOrigin(request));
+  const admin = createAdminClient();
+  const link = await makePasswordSetLink(admin, member.email as string, requestOrigin(request));
   if ('error' in link) {
     Sentry.captureMessage('reset-link: could not make a link', { level: 'warning', tags: { area: 'accounts' } });
     return NextResponse.json({ error: link.error }, { status: 500 });
+  }
+
+  const recorded = await recordSignInLink(admin, {
+    gymId: (member.gym_id as string | null) ?? null,
+    madeBy: user.id,
+    madeFor: member.id as string,
+    kind: 'member',
+  });
+  if (!recorded) {
+    Sentry.captureMessage('reset-link: could not record a link', { level: 'error', tags: { area: 'accounts' } });
+    return NextResponse.json({ error: LINK_NOT_RECORDED }, { status: 500 });
   }
 
   const href = link.link.replace(/&/g, '&amp;');

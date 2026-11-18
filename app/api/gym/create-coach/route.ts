@@ -7,6 +7,7 @@ import { ACCOUNT_NOT_ADDED, createAccountWithRollback, isValidEmail, normaliseEm
 import { authSteps, makePasswordSetLink, requestOrigin } from '@/lib/accountsServer';
 import { LOGIN_ON, mayEnableLogin, mayManageGym } from '@/lib/gymAccess';
 import { prettyName } from '@/lib/gymNames';
+import { recordSignInLink } from '@/lib/signInLinks';
 
 // Adds a coach to a gym: by a gym admin for their own gym, or by the organisation's owner for any of its gyms (body.gymId). An email that
 // already belongs to a coach account is added to the gym (a dual-gym coach doesn't need a second login) and the answer says so, with their
@@ -130,6 +131,20 @@ export async function POST(request: Request) {
   const link = await makePasswordSetLink(admin, email, requestOrigin(request));
   if ('error' in link) {
     return NextResponse.json({ email, coachId: created.id, existingAccount: false, name: prettyName(email), link: null, warning: link.error });
+  }
+  // Every sign-in link is recorded before it is shown (D22, sign_in_links, migration 0171). The coach is added either way; a link that
+  // cannot be recorded is not shown, and they can use "Forgot password" on the sign-in page instead.
+  const recorded = await recordSignInLink(admin, { gymId, madeBy: user.id, madeFor: created.id, kind: 'new_coach' });
+  if (!recorded) {
+    Sentry.captureMessage('create-coach: could not record a sign-in link', { level: 'error', tags: { area: 'accounts' } });
+    return NextResponse.json({
+      email,
+      coachId: created.id,
+      existingAccount: false,
+      name: prettyName(email),
+      link: null,
+      warning: 'The coach was added, but their sign-in link could not be recorded, so it is not shown. They can use "Forgot password" on the sign-in page.',
+    });
   }
   return NextResponse.json({ email, coachId: created.id, existingAccount: false, name: prettyName(email), link: link.link });
 }

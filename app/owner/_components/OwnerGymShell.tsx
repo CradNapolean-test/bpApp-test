@@ -27,6 +27,8 @@ import { LOAD_FAILED } from '@/lib/ownerReport';
 import type { RosterFilter } from '@/lib/ownerRoster';
 import type { OwnerGym, OwnerGymSettings } from '@/lib/data/owner';
 import type { CreditPackRow, MembershipPackageRow, RewardRow } from '@/lib/data/types';
+import { describeSignInLink, type SignInLinkRow } from '@/lib/signInLinks';
+import { formatDateTime } from '@/lib/utils/dates';
 
 // The gym's plans, credit packs and rewards, which the owner (and the gym's admins) can change: RO21, decision D3, migration 0161.
 export interface OwnerGymBusiness {
@@ -50,6 +52,7 @@ export function OwnerGymShell({
   settings,
   business,
   lastSignIns,
+  signInLinks,
   orgName,
   email,
   ownerId,
@@ -64,6 +67,8 @@ export function OwnerGymShell({
   business: OwnerGymBusiness | null;
   // When each coach last signed in (null = never), by coach id (BO18); null, or a coach missing, when it could not be read.
   lastSignIns: Record<string, string | null> | null;
+  // The one-time sign-in links made at this gym, newest first (D22, migration 0171); null when they could not be read.
+  signInLinks: SignInLinkRow[] | null;
   orgName: string | null;
   email: string;
   ownerId: string;
@@ -158,6 +163,14 @@ export function OwnerGymShell({
                   <h2 className={h2}>Add a coach</h2>
                   <AddCoachForm scope={scope} />
                 </section>
+                <section>
+                  <h2 className={h2}>Sign-in links made</h2>
+                  <p className="mb-3 text-sm text-zinc-500">
+                    Every one-time password link made here: by a member&apos;s coach or an admin from the member&apos;s page, or for a new coach. The person
+                    who makes one can see it, so it is listed. Only you and this gym&apos;s admins see this list.
+                  </p>
+                  <SignInLinkList links={signInLinks} />
+                </section>
               </div>
             )}
 
@@ -221,5 +234,25 @@ export function OwnerGymShell({
         )}
       </AppShell>
     </ClientOnly>
+  );
+}
+
+// The gym's recent sign-in links (D22): who made one, for whom, when. Newest first.
+function SignInLinkList({ links }: { links: SignInLinkRow[] | null }) {
+  if (links === null) {
+    return <p className="text-sm text-zinc-500">The list could not be loaded. Try again later.</p>;
+  }
+  if (links.length === 0) {
+    return <p className="text-sm text-zinc-500">None made yet.</p>;
+  }
+  return (
+    <ul className="divide-y divide-black/[.07] rounded-[20px] border border-black/[.08] bg-card dark:divide-white/10 dark:border-white/10">
+      {links.map((l) => (
+        <li key={l.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-4 py-3">
+          <span className="min-w-0 break-words text-sm font-semibold text-black dark:text-zinc-50">{describeSignInLink(l)}</span>
+          <span className="shrink-0 text-xs text-zinc-500">{formatDateTime(l.createdAt)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

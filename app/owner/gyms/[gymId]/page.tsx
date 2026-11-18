@@ -5,6 +5,7 @@ import { parseRosterFilter } from '@/lib/ownerRoster';
 import { getCreditPacksForGym, getOwnerPlanMemberCounts, getPackagesForGym } from '@/lib/data/memberships';
 import { getRewardsForGym } from '@/lib/data/rewards';
 import { getLastSignIns } from '@/lib/coachSignIns';
+import { getGymSignInLinks } from '@/lib/signInLinks';
 import { OwnerGymShell } from '../../_components/OwnerGymShell';
 
 // One gym in the owner's organisation: its members (read only), its coaches, its plans, credit packs and rewards (RO21, decision D3: the
@@ -29,7 +30,7 @@ export default async function OwnerGymPage({
   const { data: profile } = await supabase.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
   if (!profile || profile.role !== 'owner') redirect('/');
 
-  const [gyms, settings, orgName, business] = await Promise.all([
+  const [gyms, settings, orgName, business, signInLinks] = await Promise.all([
     getOwnerGyms(),
     getOwnerGymSettings(gymId),
     getOwnerOrganisationName(),
@@ -37,6 +38,8 @@ export default async function OwnerGymPage({
     Promise.all([getPackagesForGym(gymId), getCreditPacksForGym(gymId), getRewardsForGym(gymId), getOwnerPlanMemberCounts(gymId)])
       .then(([packages, creditPacks, rewards, planCounts]) => ({ packages, creditPacks, rewards, planCounts }))
       .catch(() => null),
+    // The sign-in links made at this gym for the Team tab (D22): read as the owner, so the database checks the gym is theirs.
+    getGymSignInLinks(supabase, gymId).catch(() => null),
   ]);
 
   // A gym that is not in this organisation's list is not found, whatever the address says.
@@ -55,6 +58,7 @@ export default async function OwnerGymPage({
       settings={settings}
       business={business}
       lastSignIns={lastSignIns}
+      signInLinks={gym ? signInLinks : null}
       orgName={orgName}
       email={profile.email ?? user.email ?? 'Owner'}
       ownerId={user.id}

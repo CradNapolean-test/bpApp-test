@@ -458,3 +458,42 @@ describe('Events: any coach adds them and changes their own; admins and the owne
     expect(access(latest('notify_event_signups'))).toEqual({ anon: false, authenticated: true });
   });
 });
+
+describe('D22: every sign-in link made is recorded, readable by gym admins and the owner only', () => {
+  const sql = migration.replace(/--.*$/gm, '');
+  const root = path.resolve(__dirname, '../..');
+  const read = (p: string) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\r\n/g, '\n');
+
+  it('the table has Row Level Security, one read policy for admins and the owner, and no write access for anyone signed in', () => {
+    expect(sql).toMatch(/create table if not exists public\.sign_in_links \(/);
+    expect(sql).toMatch(/alter table public\.sign_in_links enable row level security;/);
+    expect(Object.fromEntries(replayPolicies().get('sign_in_links') ?? new Map())).toEqual({ 'gym admins and owner read sign_in_links': 'select' });
+    expect(sql).toMatch(/create policy "gym admins and owner read sign_in_links"\s+on public\.sign_in_links for select to authenticated\s+using \(public\.can_manage_gym_business\(gym_id\)\);/);
+    expect(sql).toMatch(/revoke all on table public\.sign_in_links from anon;/);
+    expect(sql).toMatch(/revoke insert, update, delete, truncate on table public\.sign_in_links from authenticated;/);
+  });
+
+  it('the Team tab\'s list checks the caller may see that gym\'s links', () => {
+    expect(code('gym_sign_in_links')).toMatch(/if auth\.uid\(\) is null or not coalesce\(public\.can_manage_gym_business\(p_gym\), false\) then\s+raise exception 'Not authorized';/);
+    expect(code('gym_sign_in_links')).toMatch(/where l\.gym_id = p_gym/);
+    expect(access(latest('gym_sign_in_links'))).toEqual({ anon: false, authenticated: true });
+  });
+
+  it('a member\'s link is recorded before it is emailed or shown, and is not given out if it cannot be recorded', () => {
+    const route = read('app/api/coach/reset-link/route.ts');
+    const recordAt = route.indexOf('await recordSignInLink(admin');
+    expect(recordAt).toBeGreaterThan(route.indexOf('await makePasswordSetLink('));
+    expect(recordAt).toBeLessThan(route.indexOf('sendBroadcastEmail('));
+    expect(recordAt).toBeLessThan(route.indexOf('link: link.link'));
+    expect(route).toMatch(/if \(!recorded\) \{[\s\S]*?return NextResponse\.json\(\{ error: LINK_NOT_RECORDED \}, \{ status: 500 \}\);/);
+    expect(route).toMatch(/madeBy: user\.id,\s+madeFor: member\.id as string,\s+kind: 'member'/);
+  });
+
+  it('a new coach\'s link is recorded before it is shown', () => {
+    const route = read('app/api/gym/create-coach/route.ts');
+    const recordAt = route.indexOf("await recordSignInLink(admin, { gymId, madeBy: user.id, madeFor: created.id, kind: 'new_coach' })");
+    expect(recordAt).toBeGreaterThan(-1);
+    expect(recordAt).toBeLessThan(route.lastIndexOf('link: link.link'));
+    expect(route.slice(recordAt)).toMatch(/if \(!recorded\) \{[\s\S]*?link: null,/);
+  });
+});

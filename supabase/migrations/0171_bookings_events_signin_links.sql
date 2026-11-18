@@ -2,9 +2,11 @@
 --   1. D13a (BK11, RO9b): when a plan ends, its member's upcoming bookings are cancelled and refunded.
 --   2. D13b (BK10, RO9a): a booking's credit counts in the week the session runs, not the week it was booked in.
 --   3. Events: any coach adds them and changes their own; only gym admins and the owner change or delete others' or message their sign-ups.
+--   4. D22 (SE8): every one-time sign-in (password) link made is recorded: who, for whom, when. Gym admins and the owner can read it.
 --
 -- Apply the WHOLE file in one go, after 0167. It must be applied BEFORE the web app that goes with it is deployed: the Book screens ask
--- member_session_credits (part 2) what each day's sessions can be paid with.
+-- member_session_credits (part 2) what each day's sessions can be paid with, and the sign-in link routes refuse to give out a link they
+-- cannot record in sign_in_links (part 4).
 --
 -- 1. D13a. Ending a plan (end_membership now, or the overnight job when a planned last day has passed) removed the member's weekly credits
 --    (clear_membership_credits, 0088) but kept their bookings, so sessions booked with that plan's credits still happened after it ended.
@@ -63,6 +65,14 @@
 --    owner can also read the gym's events and sign-ups. An event keeps its author and gym (trigger gym_event_keep_author). The rule is
 --    may_manage_gym_event(gym, author); the web's server actions check it first, and the Events tab hides Edit and Delete on events the
 --    coach can't change.
+--
+-- 4. D22 (SE8). A member's coach or a gym admin can make a one-time "choose a new password" link for a member, and is shown it (kept, by
+--    decision); whoever adds a new coach is shown that coach's link. Nothing recorded either. New table sign_in_links: one row per link
+--    (gym, made_by, made_for, kind 'member' or 'new_coach', created_at), written only by the web server with the service role, after its
+--    checks and BEFORE the link is shown or emailed (if the row can't be written, no link is given out). Row Level Security: the gym's
+--    admins and the owner read it; nobody signed in can add, change or remove a row. gym_sign_in_links(gym, limit) lists the recent
+--    ones with names for the owner's gym page, Team tab.
+--
 -- Guard: before changing anything, the migration checks that each function it replaces is the one from the migration named below (or
 -- already this file's), comparing the bodies with spaces and line breaks squeezed out. If one has been changed some other way since, nothing
 -- is changed and it stops with "... is not the one from migration ...". Then send the PRE-FLIGHT's results to the developer instead.
@@ -113,6 +123,13 @@
 --   (the events policies query again) -> event_signups as before; gym_events "event author or gym admins change gym_events" UPDATE,
 --   "event author or gym admins remove gym_events" DELETE, "gym coaches add gym_events" INSERT, "gym reads gym_events" SELECT.
 --   select tgname from pg_trigger where tgrelid = 'public.gym_events'::regclass and not tgisinternal;  -> gym_event_keep_author
+--   select relrowsecurity from pg_class where oid = 'public.sign_in_links'::regclass;  -> true
+--   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'sign_in_links';
+--     -> "gym admins and owner read sign_in_links" SELECT (only)
+--   select privilege_type from information_schema.role_table_grants where table_schema = 'public' and table_name = 'sign_in_links'
+--     and grantee in ('anon', 'authenticated') order by 1;  -> SELECT only (for authenticated)
+--   select has_function_privilege('authenticated', 'public.gym_sign_in_links(uuid, integer)', 'execute'),
+--          has_function_privilege('anon', 'public.gym_sign_in_links(uuid, integer)', 'execute');  -> true, false
 --
 --   select p.proname, has_function_privilege('authenticated', p.oid, 'execute') as signed_in, has_function_privilege('anon', p.oid, 'execute') as anyone
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace
@@ -139,6 +156,9 @@
 --   5. Events, with two test coaches at one gym (neither an admin): coach A adds a test event; coach B sees it without Edit or Delete and
 --      "Added by another coach"; A edits it (a member signed up is told) and deletes it. Then switch Admin on for B (owner -> gym ->
 --      Team): B sees Edit and Delete on A's events.
+--   6. D22: on a test member's page, "send a password link" still shows the link; the owner's gym page, Team tab, lists it under "Sign-in
+--      links made" with the coach's and the member's names. Signed in as a coach who is not an admin,
+--      select count(*) from public.sign_in_links;  -> 0 (no rows readable).
 --
 -- REVERSE: run, from the migration named in the guard, the definitions of clear_membership_credits (0088), top_up_membership_credits and
 -- replenish_due_memberships (0144), book_class, book_class_for_client and refund_booking_credits (0132), and promote_from_waitlist
@@ -147,6 +167,8 @@
 -- Events: run notify_event_signups from 0135 and the gym_events / event_signups policies from 0065, drop the policies "gym coaches add
 -- gym_events", "event author or gym admins change gym_events" and "event author or gym admins remove gym_events", and drop trigger
 -- gym_event_keep_author on public.gym_events.
+-- Sign-in links: drop function public.gym_sign_in_links(uuid, integer); the table sign_in_links can stay (a deploy of the web app before
+-- this file refuses to give out links, since it cannot record them: deploy the code after this file, or roll the code back with it).
 --
 -- Safe to run again. No temporary tables.
 
@@ -1029,3 +1051,64 @@ $$;
 
 revoke execute on function public.notify_event_signups(uuid, text) from public, anon;
 grant execute on function public.notify_event_signups(uuid, text) to authenticated;
+
+-- =====================================================================================================================================
+-- 4. D22 (SE8): every sign-in link made is recorded
+-- =====================================================================================================================================
+
+-- One row per one-time "choose a password" link: a member's, made by their coach or a gym admin (the member page), or a new coach's,
+-- made by whoever added them (Team, "Add a coach"). Who made it, for whom, at which gym, when. Written only by the web server (the
+-- service role) after its own checks, and before the link is shown or emailed; nobody signed in can add, change or remove a row. Read by
+-- the gym's admins and the owner (can_manage_gym_business, 0161); the owner sees the recent ones on the gym's Team tab.
+create table if not exists public.sign_in_links (
+  id uuid primary key default gen_random_uuid(),
+  gym_id uuid references public.gyms(id) on delete set null,
+  made_by uuid references public.profiles(id) on delete set null,
+  made_for uuid references public.profiles(id) on delete set null,
+  kind text not null default 'member' check (kind in ('member', 'new_coach')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists sign_in_links_gym_created_idx on public.sign_in_links (gym_id, created_at desc);
+
+alter table public.sign_in_links enable row level security;
+
+revoke all on table public.sign_in_links from anon;
+revoke insert, update, delete, truncate on table public.sign_in_links from authenticated;
+grant select on table public.sign_in_links to authenticated;
+
+drop policy if exists "gym admins and owner read sign_in_links" on public.sign_in_links;
+create policy "gym admins and owner read sign_in_links"
+  on public.sign_in_links for select to authenticated
+  using (public.can_manage_gym_business(gym_id));
+
+-- The recent links of one gym with names, for the owner's Team tab (and a gym admin): newest first, at most 100.
+create or replace function public.gym_sign_in_links(p_gym uuid, p_limit integer default 20)
+returns table (id uuid, kind text, created_at timestamptz, made_by uuid, made_by_name text, made_for uuid, made_for_name text)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $fn$
+#variable_conflict use_column
+begin
+  if auth.uid() is null or not coalesce(public.can_manage_gym_business(p_gym), false) then
+    raise exception 'Not authorized';
+  end if;
+
+  return query
+    select l.id, l.kind, l.created_at,
+           l.made_by, coalesce(nullif(btrim(pb.display_name), ''), pb.email),
+           l.made_for, coalesce(nullif(btrim(cp.name), ''), nullif(btrim(pf.display_name), ''), pf.email)
+    from sign_in_links l
+    left join profiles pb on pb.id = l.made_by
+    left join profiles pf on pf.id = l.made_for
+    left join client_profiles cp on cp.client_id = l.made_for
+    where l.gym_id = p_gym
+    order by l.created_at desc
+    limit least(greatest(coalesce(p_limit, 20), 1), 100);
+end;
+$fn$;
+
+revoke execute on function public.gym_sign_in_links(uuid, integer) from public, anon;
+grant execute on function public.gym_sign_in_links(uuid, integer) to authenticated;
