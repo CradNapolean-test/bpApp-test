@@ -659,8 +659,21 @@ export function DashboardShell({
   );
 
   // Every member screen draws its own black header on a phone (MemberHeader), so the page's own header row is left out there. The four
-  // tabs draw theirs inside the screen, with the message bubble and the bell; every other screen gets the one below, with a back button.
+  // tabs draw theirs inside the screen; every other screen gets the one below, with a back button. Both keep the message bubble and the
+  // bell top right, so the coach and the notifications are a tap away from any screen (PR #2 review: a sub-screen used to drop them).
   const ownHeader = !isCoachView;
+  const memberHeader = {
+    unreadMessages: liveUnread,
+    onOpenMessages: () => handleNavigate('Messages'),
+    unreadNotifications: notifications.some((n) => !n.read_at),
+    onOpenNotifications: () => handleNavigate('Notifications'),
+  };
+  // On the Messages screen the bubble would only open the screen it is on, and on Notifications the bell would: each is left out there.
+  const subScreenActions = {
+    ...memberHeader,
+    onOpenMessages: category === 'Messages' ? undefined : memberHeader.onOpenMessages,
+    onOpenNotifications: category === 'Notifications' ? undefined : memberHeader.onOpenNotifications,
+  };
   const subScreenHeader =
     !isCoachView && showCoaching && isSubScreen ? (
       <div className="mb-4">
@@ -685,6 +698,7 @@ export function DashboardShell({
                 : undefined
           }
           title={mobileHeaderTitle}
+          actions={subScreenActions}
         >
           {showPills && (
             <div
@@ -710,12 +724,6 @@ export function DashboardShell({
         </MemberHeader>
       </div>
     ) : null;
-  const memberHeader = {
-    unreadMessages: liveUnread,
-    onOpenMessages: () => handleNavigate('Messages'),
-    unreadNotifications: notifications.some((n) => !n.read_at),
-    onOpenNotifications: () => handleNavigate('Notifications'),
-  };
 
   const coachSummary = isCoachView && (
     <>
