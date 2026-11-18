@@ -206,7 +206,8 @@ export function CreditsTab({
     if (!membership) return;
     const okConfirm = await confirm({
       title: 'End this plan now?',
-      body: 'Their weekly credits are removed today. Any bonus credits stay. Their bookings are not cancelled.',
+      // D13a, migration 0171: ending a plan cancels the member's upcoming bookings and refunds them.
+      body: 'Their weekly credits are removed today and their upcoming bookings are cancelled. Bonus credits used on those bookings are given back, and any bonus credits stay.',
       confirmLabel: 'End plan',
       destructive: true,
     });
@@ -584,7 +585,8 @@ export function CreditsTab({
           <div className="space-y-3">
             <p className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400">
               <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
-              The plan stays active until this date, then ends and the weekly credits are cleared.
+              The plan stays active until this date, then ends: the weekly credits are cleared and any bookings after it are cancelled and refunded.
+              They can&apos;t book past this date meanwhile.
             </p>
             <input type="date" min={toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), 1))} className={inputCls} value={planEnd} onChange={(e) => setPlanEnd(e.target.value)} />
             <button type="button" disabled={busy || !planEnd} onClick={submitEnd} className={`${btnCls} w-full py-3`}>
