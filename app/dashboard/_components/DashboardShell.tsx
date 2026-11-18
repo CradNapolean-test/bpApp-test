@@ -49,6 +49,7 @@ import { MemberHeader } from './MemberHeader';
 import { SmoothScroll } from '@/app/_components/motion/SmoothScroll';
 import AnimatedContent from '@/app/_components/motion/AnimatedContent';
 import { ChatTab } from './ChatTab';
+import { PrivateChatNotice } from './PrivateChatNotice';
 import { AccountTab } from './AccountTab';
 import { NotesTab as CoachInfoTab } from '@/app/coach/_components/workspace/NotesTab';
 import type { Category, Screen } from './categories';
@@ -1233,18 +1234,22 @@ export function DashboardShell({
         <div className={chatOpen ? 'fixed inset-0 z-50' : 'hidden'}>
           <div className="absolute inset-0 bg-black/40" onClick={() => setChatOpen(false)} />
           <aside className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black/10 bg-[var(--background)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] shadow-xl dark:border-white/10">
-            <ChatTab
-              fill
-              clientId={clientId}
-              initialMessages={messages}
-              currentUserId={currentUserId}
-              otherPartyName={otherPartyName}
-              readOnly={!isOwnClient}
-              draftKey={`coach-${clientId}`}
-              active={chatOpen}
-              onClose={() => setChatOpen(false)}
-              savedReplies={isOwnClient}
-            />
+            {isOwnClient ? (
+              <ChatTab
+                fill
+                clientId={clientId}
+                initialMessages={messages}
+                currentUserId={currentUserId}
+                otherPartyName={otherPartyName}
+                draftKey={`coach-${clientId}`}
+                active={chatOpen}
+                onClose={() => setChatOpen(false)}
+                savedReplies
+              />
+            ) : (
+              // A colleague's member: their chat is private to their own coach (D3, 0153), so say so rather than show an empty chat (MS22).
+              <PrivateChatNotice memberName={otherPartyName} coachName={ownerCoachName} onClose={() => setChatOpen(false)} />
+            )}
           </aside>
         </div>
       )}

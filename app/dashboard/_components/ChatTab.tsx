@@ -289,9 +289,8 @@ export function ChatTab({
   otherPartyName?: string;
   // The reply box's hint, when "Message {otherPartyName}…" would read wrongly ("Message Your coach…").
   composePlaceholder?: string;
-  // Hides the composer -- a coach viewing a colleague's client read-only can still see the
-  // thread, but sendMessage would fail RLS (owns_client) anyway since they aren't the
-  // assigned coach.
+  // Hides the composer. A coach on a colleague's member's page no longer gets this chat at all: the thread is private to the member's own
+  // coach (D3, 0153), so that page shows PrivateChatNotice instead (MS22).
   readOnly?: boolean;
   // Take the height of the box it sits in (the coach's docked chat) instead of sizing itself to the screen.
   fill?: boolean;
