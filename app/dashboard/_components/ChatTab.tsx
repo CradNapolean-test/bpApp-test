@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ImageIcon, MailOpen, MessageSquare, Pause, Play, Send, UserRound, WifiOff, X } from 'lucide-react';
+import { ImageIcon, MailOpen, MessageSquare, MessageSquareText, Pause, Play, Send, UserRound, WifiOff, X } from 'lucide-react';
 import { gsap, prefersReducedMotion } from '@/app/_components/motion/gsap';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/app/_components/ToastProvider';
@@ -24,6 +24,7 @@ import { uploadMimeType, voiceExtension } from '@/lib/voiceFormat';
 import { shrinkImage } from '@/lib/utils/shrinkImage';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { PhotoViewer } from '@/app/_components/Overlays';
+import { SavedRepliesSheet } from './SavedRepliesSheet';
 import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -278,6 +279,7 @@ export function ChatTab({
   onMarkUnread,
   narrow = false,
   look = 'card',
+  savedReplies = false,
 }: {
   clientId: string;
   initialMessages: ChatMessage[];
@@ -307,6 +309,8 @@ export function ChatTab({
   // 'member': the member's Messages screen (the board). No card or name row (the screen's black header names the coach), black
   // bubbles for the member's own messages and white for the coach's, sized to sit between that header and the tab bar.
   look?: 'card' | 'member';
+  // The coach's reply box gets a saved-replies button (MS20): the gym's saved messages, with the member's first name filled in.
+  savedReplies?: boolean;
 }) {
   const member = look === 'member';
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
@@ -371,6 +375,7 @@ export function ChatTab({
   // Photos and voice notes block the attach buttons while they upload; a text message does not (it shows at once, see handleSend).
   const [sending, setSending] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [pickingReply, setPickingReply] = useState(false);
   // 'down' while the live connection is not delivering; messages sent meanwhile still show, and a catch-up runs when it is back (M5).
   const [connection, setConnection] = useState<'connecting' | 'live' | 'down'>('connecting');
   const listRef = useRef<HTMLDivElement>(null);
@@ -609,6 +614,18 @@ export function ChatTab({
     void deliver(tempId, body);
   }
 
+  // A saved reply goes into the box (after anything already typed), ready to edit before it is sent.
+  function insertSavedReply(reply: string) {
+    const current = text.trimEnd();
+    changeText(current ? `${current}\n\n${reply}` : reply);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }
+
   function retry(m: LocalChatMessage) {
     if (m.text == null) return;
     setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, pending: 'sending' } : x)));
@@ -830,6 +847,17 @@ export function ChatTab({
               <ImageIcon className="h-[18px] w-[18px]" />
             </button>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+            {savedReplies && (
+              <button
+                type="button"
+                aria-label="Saved replies"
+                title="Saved replies"
+                onClick={() => setPickingReply(true)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:text-accent"
+              >
+                <MessageSquareText className="h-[18px] w-[18px]" />
+              </button>
+            )}
             <textarea
               ref={inputRef}
               rows={1}
@@ -854,6 +882,9 @@ export function ChatTab({
             <Send className="h-4 w-4" />
           </button>
         </form>
+      )}
+      {pickingReply && (
+        <SavedRepliesSheet memberName={otherPartyName} currentText={text} onUse={insertSavedReply} onClose={() => setPickingReply(false)} />
       )}
       {viewingPhoto && (
         <PhotoViewer label="Photo sent in chat" onClose={() => setViewingPhoto(null)}>

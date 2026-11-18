@@ -9,6 +9,13 @@ export function personaliseMessage(text: string, fullName: string | null | undef
   return text.replace(/\{first name\}/gi, first);
 }
 
+// A saved reply put into a 1:1 chat (MS20): "{first name}" becomes the member's first name. The coach's lists fall back to the member's
+// email when they have no name, and an email is not a first name, so that reads "there".
+export function personaliseForChat(text: string, memberName: string | null | undefined): string {
+  const name = memberName && !memberName.includes('@') ? memberName : null;
+  return personaliseMessage(text, name);
+}
+
 // Messages a coach can start from. Wording is a starting point to edit, not fixed text.
 export interface StarterMessage {
   title: string;

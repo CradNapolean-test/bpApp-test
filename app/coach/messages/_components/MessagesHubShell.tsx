@@ -212,6 +212,7 @@ export function MessagesHubShell({
                   // The same key as the chat on the member's page, so a half-written reply follows the coach between the two.
                   draftKey={`coach-${selected}`}
                   memberHref={`/coach/clients/${selected}`}
+                  savedReplies
                   onMarkUnread={() => {
                     markUnread(selected);
                     setThreadOpen(false);

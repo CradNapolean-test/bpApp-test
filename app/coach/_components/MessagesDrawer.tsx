@@ -133,6 +133,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
                 draftKey={`coach-${selected}`}
                 memberHref={`/coach/clients/${selected}`}
                 onMarkUnread={() => markUnread(selected)}
+                savedReplies
               />
             </div>
           )}

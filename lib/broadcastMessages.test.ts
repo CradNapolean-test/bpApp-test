@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { personaliseMessage } from './broadcastMessages';
+import { personaliseForChat, personaliseMessage } from './broadcastMessages';
 
 describe('personaliseMessage', () => {
   it('puts in the first name', () => {
@@ -17,5 +17,16 @@ describe('personaliseMessage', () => {
 
   it('leaves a message without the token alone', () => {
     expect(personaliseMessage('See you Monday', 'Brad Stein')).toBe('See you Monday');
+  });
+});
+
+describe('personaliseForChat (saved replies in 1:1 chat, MS20)', () => {
+  it("puts in the member's first name", () => {
+    expect(personaliseForChat('Hi {first name}, thanks!', 'Lena Dupont')).toBe('Hi Lena, thanks!');
+  });
+
+  it('says "there" when the list only has the member\'s email', () => {
+    expect(personaliseForChat('Hi {first name}', 'member@example.com')).toBe('Hi there');
+    expect(personaliseForChat('Hi {first name}', null)).toBe('Hi there');
   });
 });

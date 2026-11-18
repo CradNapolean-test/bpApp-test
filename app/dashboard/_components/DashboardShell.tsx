@@ -1243,6 +1243,7 @@ export function DashboardShell({
               draftKey={`coach-${clientId}`}
               active={chatOpen}
               onClose={() => setChatOpen(false)}
+              savedReplies={isOwnClient}
             />
           </aside>
         </div>
