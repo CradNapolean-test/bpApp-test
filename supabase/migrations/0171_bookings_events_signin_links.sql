@@ -112,7 +112,7 @@
 --   from public.gym_events e group by 1;
 -- Expected before: event_signups "member leaves event" DELETE, "member signs up for gym event" INSERT, "read own or gym event_signups"
 -- SELECT; gym_events "gym coaches manage gym_events" ALL, "gym reads gym_events" SELECT. An event with no author can then be changed by
--- admins and the owner only.
+-- admins and the owner only. Live on 18 Nov 2026 (read-only from the app): 2 events, at one gym, both with an author (one coach).
 --
 -- AFTER (read-only):
 --   (the PRE-FLIGHT's first query again)
