@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { creditsAddedMessage, planReadyMessage, programmeAssignedMessage } from './memberPush';
+import { creditsAddedMessage, planReadyMessage, programmeAssignedMessage, rolloutRecipients } from './memberPush';
 
 describe('member messages for coach actions (D20)', () => {
   it('plan ready: the same words in the bell and the push, opening Nutrition', () => {
@@ -15,6 +15,28 @@ describe('member messages for coach actions (D20)', () => {
     expect(m.push.url).toBe('/dashboard?open=training');
     expect(programmeAssignedMessage('   ').notice).toMatch(/a new programme/);
     expect(programmeAssignedMessage('x'.repeat(100)).notice).toMatch(/x{57}\.\.\. Open Training/);
+  });
+
+  it('a rollout tells everyone it gave a copy to, once each, by its own programme name, never whoever started it', () => {
+    const rollouts = [
+      { id: 'r1', program_name: 'Block 4', created_by: 'coach' },
+      { id: 'r2', program_name: null, created_by: 'coach' },
+      { id: 'r3', program_name: 'Nobody yet', created_by: 'coach' },
+    ];
+    const copies = [
+      { client_id: 'a', rollout_id: 'r1' },
+      { client_id: 'b', rollout_id: 'r1' },
+      { client_id: 'a', rollout_id: 'r1' },
+      { client_id: 'coach', rollout_id: 'r1' },
+      { client_id: 'c', rollout_id: 'r2' },
+      { client_id: 'd', rollout_id: null },
+      { client_id: 'e', rollout_id: 'other' },
+    ];
+    expect(rolloutRecipients(rollouts, copies)).toEqual([
+      { rolloutId: 'r1', programName: 'Block 4', clientIds: ['a', 'b'] },
+      { rolloutId: 'r2', programName: null, clientIds: ['c'] },
+    ]);
+    expect(rolloutRecipients([], copies)).toEqual([]);
   });
 
   it('credits added: how many, and opens Book', () => {

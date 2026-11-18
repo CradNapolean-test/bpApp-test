@@ -6,7 +6,7 @@ import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { createClient } from '@/lib/supabase/server';
 import { after } from 'next/server';
-import { notifyProgrammeAssigned } from '@/lib/memberNotify';
+import { notifyProgrammeAssigned, notifyStartedRollout } from '@/lib/memberNotify';
 import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
 import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type {
@@ -415,7 +415,21 @@ export async function scheduleProgrammeRollout(input: {
     p_starts_now: input.startsNow,
   });
   if (error) return fail(error, 'Could not start that programme') as ScheduleRolloutResult;
-  return { ok: true, count: typeof data === 'number' ? data : 0 };
+  const count = typeof data === 'number' ? data : 0;
+  // D20: when it starts now, everyone it reached is told (in the app, and by push). A later start is told by the daily job that hands it
+  // out (app/api/cron/apply-programme-rollouts).
+  if (input.startsNow && count > 0) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const startedBy = user.id;
+      after(() =>
+        notifyStartedRollout({ startedBy, templateId: input.templateId, startDate: input.startDate, audience: input.audience })
+      );
+    }
+  }
+  return { ok: true, count };
 }
 
 // How many members "Everyone at the gym" means: the clients who belong to the gym being worked in (their own gym, not their coach's).
