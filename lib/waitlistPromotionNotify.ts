@@ -35,6 +35,29 @@ export async function waitlistBeforeCancel(bookingId: string): Promise<WaitlistB
   }
 }
 
+// Read BEFORE a plan is ended now (end_membership): the waiting lists of the places its member's upcoming bookings free. The plan's end
+// cancels those bookings and moves the next person on each list in (cancel_bookings_for_ended_plan, migration 0171). Empty when the plan
+// has already ended or nobody is waiting. Bookings from yesterday's UTC date on, so a session today at a gym behind UTC is included; one
+// that has already started is not cancelled, so nobody on its list is moved in and nobody is sent a push.
+export async function waitlistsBeforePlanEnd(membershipId: string): Promise<WaitlistBefore[]> {
+  try {
+    const admin = createAdminClient();
+    const { data: plan } = await admin.from('client_memberships').select('client_id, ended_at').eq('id', membershipId).maybeSingle();
+    if (!plan || plan.ended_at) return [];
+    const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const { data: bookings } = await admin
+      .from('bookings')
+      .select('id')
+      .eq('client_id', plan.client_id as string)
+      .eq('status', 'booked')
+      .gte('booking_date', yesterday);
+    const lists = await Promise.all((bookings ?? []).map((b) => waitlistBeforeCancel(b.id as string)));
+    return lists.filter((w): w is WaitlistBefore => w !== null);
+  } catch {
+    return [];
+  }
+}
+
 // AFTER the cancel: whoever on that list is now booked was moved in by it. Returns how many were sent a push.
 export async function notifyWaitlistPromotion(before: WaitlistBefore): Promise<number> {
   try {

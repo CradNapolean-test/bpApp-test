@@ -4,7 +4,9 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { businessWriteFailed, businessWriteGym, onlyAdminMessage } from './businessAccess';
+import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { notifyWaitlistPromotion, waitlistsBeforePlanEnd } from '@/lib/waitlistPromotionNotify';
 import { HISTORY_PAGE, type CreditFilter } from '@/lib/creditsForm';
 import type { ClientMembershipRow, CreditPackRow, CreditsLedgerRow, MembershipPackageRow } from './types';
 
@@ -223,10 +225,17 @@ export async function startMembership(clientId: string, packageId: string, start
 }
 
 // End a plan now (weekly credits are cleared), or plan its last day.
+// Ending now also cancels the member's upcoming bookings (migration 0171) and the database moves the next person on each waiting list
+// in, writing their in-app notice. As in cancelBooking (BK9), who is waiting is read before, and whoever was moved in gets a push after
+// the response. "Now" as end_membership decides it: no end date, or one on or before today's date in UTC (the database's current_date).
 export async function endMembership(membershipId: string, end: string | null): Promise<ActionResult> {
   const supabase = await createClient();
+  const endsNow = !end || end <= new Date().toISOString().slice(0, 10);
+  const waiting = endsNow ? await waitlistsBeforePlanEnd(membershipId) : [];
   const { error } = await supabase.rpc('end_membership', { p_membership_id: membershipId, p_end: end });
-  return error ? fail(error, 'Could not end that plan') : ok();
+  if (error) return fail(error, 'Could not end that plan');
+  if (waiting.length > 0) after(() => Promise.all(waiting.map((w) => notifyWaitlistPromotion(w))));
+  return ok();
 }
 
 export async function clearScheduledEnd(membershipId: string): Promise<ActionResult> {
