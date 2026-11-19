@@ -69,7 +69,60 @@ describe('row-level security rules after every migration', () => {
     expect(left.get('coaches correct scanned foods')).toBe('update');
     expect(left.get('coaches delete scanned foods')).toBe('delete');
     const writes = [...left.entries()].filter(([, command]) => command !== 'select').map(([name]) => name).sort();
-    expect(writes).toEqual(['authenticated users cache scanned foods', 'coaches correct scanned foods', 'coaches delete scanned foods']);
+    // NU18 (0169) adds the one insert rule for a member's own food; there is still no update or delete rule for anyone but coaches.
+    expect(writes).toEqual(['authenticated users cache scanned foods', 'coaches correct scanned foods', 'coaches delete scanned foods', 'members save their own foods']);
+    expect(left.get('members save their own foods')).toBe('insert');
+    expect([...left.entries()].filter(([, command]) => command === 'select')).toEqual([['authenticated users read foods', 'select']]);
+  });
+});
+
+// NU18 (0169): a member's own food is a row in foods that only they and their own coach can read, and only they can save as theirs.
+describe("a member's own foods are private to them and their own coach (NU18, 0169)", () => {
+  const migrationsDir = path.resolve(__dirname, '../migrations');
+  const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  const read = (f: string) => fs.readFileSync(path.join(migrationsDir, f), 'utf8').replace(/--.*$/gm, '');
+  // The last "create policy <name> on public.foods ..." statement in the migrations, up to its semicolon.
+  const lastPolicy = (name: string) => {
+    let found = '';
+    for (const f of files) {
+      const sql = read(f);
+      const re = new RegExp(`create\\s+policy\\s+"${name}"\\s+on\\s+public\\.foods[^;]*;`, 'gi');
+      for (const m of sql.matchAll(re)) found = m[0];
+    }
+    return found.replace(/\s+/g, ' ');
+  };
+
+  it('the read rule lets every signed-in user read the shared foods, and an own food only its owner and their coach', () => {
+    expect(lastPolicy('authenticated users read foods')).toMatch(/using \(owner_id is null or public\.owns_client\(owner_id\)\)/);
+  });
+
+  it('a member can only save an own food as their own, with no barcode or brand', () => {
+    const rule = lastPolicy('members save their own foods');
+    expect(rule).toMatch(/for insert/);
+    expect(rule).toMatch(/source = 'own'/);
+    expect(rule).toMatch(/owner_id = auth\.uid\(\)/);
+    expect(rule).toMatch(/barcode is null/);
+    expect(rule).toMatch(/brand is null/);
+  });
+
+  it('only an own food has an owner, so the scanned-food rules cannot make one', () => {
+    const sql = files.map(read).join('\n');
+    expect(sql).toMatch(/add constraint foods_own_food_owner check \(\(source = 'own'\) = \(owner_id is not null\)\)/);
+  });
+
+  it("the search lists the caller's own foods and nobody else's", () => {
+    const latest = files.filter((f) => /create or replace function public\.search_foods\(/.test(read(f))).at(-1) as string;
+    const body = read(latest).slice(read(latest).indexOf('create or replace function public.search_foods('));
+    expect(body).toMatch(/and \(f\.owner_id is null or f\.owner_id = p\.me\)/);
+    expect(body).toMatch(/auth\.uid\(\) as me/);
+    // still runs as the caller, so the read rule applies inside it too
+    expect(body.slice(0, body.indexOf('$fn$;'))).not.toMatch(/security definer/);
+  });
+
+  it('removing an own food only hides the caller\'s own', () => {
+    const latest = files.filter((f) => /create or replace function public\.remove_own_food\(/.test(read(f))).at(-1) as string;
+    const body = read(latest).slice(read(latest).indexOf('create or replace function public.remove_own_food('));
+    expect(body).toMatch(/update public\.foods set hidden = true\s+where id = p_food_id and source = 'own' and owner_id = auth\.uid\(\)/);
   });
 });
 

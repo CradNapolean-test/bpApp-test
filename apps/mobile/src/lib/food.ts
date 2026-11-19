@@ -8,6 +8,7 @@ import { barcodeVariants } from '@ballistic/shared/utils/barcode';
 import { recipeLogFields, relinkRecipeCopies } from '@ballistic/shared/utils/diaryLines';
 import { SEARCH_LIMIT } from '@ballistic/shared/utils/foodResults';
 import type { OwnUnitRow, ServingOption } from '@ballistic/shared/utils/foodUnits';
+import type { OwnFoodRow } from '@ballistic/shared/utils/ownFoods';
 import type { QuickAddFields } from '@ballistic/shared/utils/quickAdd';
 
 import { diaryKey } from '@/lib/queryKeys';
@@ -302,9 +303,11 @@ export function useCopyFromDate(date: string) {
 // ---------- search, favourites, recently logged ----------
 // Ranked multi-word search (migration 0074); falls back to a plain name match if the RPC is unavailable.
 export function useFoodSearch(query: string) {
+  const userId = useUserId();
   const q = query.trim();
   return useQuery({
-    queryKey: ['food-search', q.toLowerCase()],
+    // Per member: the results include their own foods (NU18).
+    queryKey: ['food-search', userId, q.toLowerCase()],
     enabled: q.length >= 2,
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
@@ -349,6 +352,42 @@ export function useOwnFoodUnits() {
     await qc.invalidateQueries({ queryKey: key });
   };
   return { units: query.data ?? [], save, remove };
+}
+
+// A member's own foods (NU18): saved once with the figures for one serving, private to them and their own coach (RLS, migration 0169),
+// and found in search like any other food. Saving needs a signal (it is not queued): the form says so when it fails.
+export function useOwnFoods() {
+  const userId = useUserId();
+  const qc = useQueryClient();
+  const key = ['own-foods', userId];
+  const query = useQuery({
+    queryKey: key,
+    queryFn: async (): Promise<FoodRow[]> => {
+      // Removed ones are hidden, and stay that way.
+      const { data, error } = await supabase.from('foods').select('*').eq('owner_id', userId).eq('hidden', false).order('name').limit(200);
+      if (error) throw error;
+      return (data ?? []) as FoodRow[];
+    },
+  });
+  const refreshSearch = () => qc.invalidateQueries({ queryKey: ['food-search', userId] });
+  // Resolves to the saved food, or a message to show.
+  const save = async (row: OwnFoodRow): Promise<{ food: FoodRow } | { error: string }> => {
+    const { data, error } = await supabase.from('foods').insert({ ...row, source: 'own', owner_id: userId }).select('*').single();
+    if (error || !data) return { error: 'Could not save that food. Check your signal and try again.' };
+    const food = data as FoodRow;
+    qc.setQueryData<FoodRow[]>(key, (old = []) => [food, ...old.filter((f) => f.id !== food.id)]);
+    void refreshSearch();
+    return { food };
+  };
+  // Takes it off their list and out of search; anything already logged with it stays as it is. Resolves to a message when it could not.
+  const remove = async (food: FoodRow): Promise<string | null> => {
+    const { data, error } = await supabase.rpc('remove_own_food', { p_food_id: food.id });
+    if (error || data !== true) return 'Could not remove that food. Try again.';
+    qc.setQueryData<FoodRow[]>(key, (old = []) => old.filter((f) => f.id !== food.id));
+    void refreshSearch();
+    return null;
+  };
+  return { foods: query.data ?? [], save, remove };
 }
 
 export function useFavoriteFoods() {

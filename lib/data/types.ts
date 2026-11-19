@@ -108,8 +108,11 @@ export interface FoodRow {
   barcode: string | null;
   // A coach can hide a wrong scanned food (M12); hidden foods stay out of every member list and search.
   hidden?: boolean;
-  // Where the food came from: 'seed', 'cofid' (UK tables), 'off' (import) or 'scan' (a member's barcode scan).
+  // Where the food came from: 'seed', 'cofid' (UK tables), 'off' (import), 'scan' (a member's barcode scan) or 'own' (a member's own
+  // food, NU18).
   source?: string;
+  // The member a food of their own belongs to (readable by them and their own coach only, migration 0169); null for every shared food.
+  owner_id?: string | null;
   // The maker, for a product (Open Food Facts import or a scan): "Tesco". Null for generic foods.
   brand?: string | null;
   // The food's own servings, e.g. the pack's "1 biscuit" = 15 g, or ones a coach set (migration 0148). `default` marks the one shown first. Null/absent: grams only.

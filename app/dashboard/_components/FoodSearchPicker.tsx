@@ -11,6 +11,7 @@ import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits
 import type { PairSuggestion } from '@/lib/foodPairs';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
 import { SEARCH_LIMIT, groupFoodResults, moreLikeThis } from '@/lib/utils/foodResults';
+import { EMPTY_OWN_FOOD, OWN_FOOD_NAME_MAX, isOwnFood, readOwnFood, type OwnFoodRow, type OwnFoodText } from '@/lib/utils/ownFoods';
 import { MAX_UNIT_LABEL, countFromGrams, defaultUnit, gramsFromCount, parseUnitInput, startingAmount, unitText, unitsFor, type FoodUnit, type OwnUnitRow } from '@/lib/utils/foodUnits';
 
 const UNIT_PRESETS = [0.5, 1, 2, 3];
@@ -60,7 +61,10 @@ function FoodResultItem({
           {/* Two lines, like the phone: UK table names put what matters last ("Chicken, breast, grilled without skin, meat only"), so one
               cut-off line hid whether a food was raw or cooked. */}
           <span className="line-clamp-2 break-words text-sm font-medium text-black dark:text-zinc-50">{food.name}</span>
-          <span className="block text-xs text-zinc-500">{perLine(food)}</span>
+          <span className="block text-xs text-zinc-500">
+            {isOwnFood(food) && <span className="mr-1 rounded bg-accent-soft px-1 py-px text-[10px] font-bold text-accent">My food</span>}
+            {perLine(food)}
+          </span>
         </span>
         <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-zinc-400" />
       </button>
@@ -85,11 +89,14 @@ function FoodAmountStep({
   units = [],
   onSaveUnit,
   onDeleteUnit,
+  onRemoveOwn,
 }: {
   food: FoodRow;
   initialQty: number;
   onAdd: (food: FoodRow, qty: number) => void;
   onBack: () => void;
+  // For the member's own food (NU18): takes it off their list; resolves to a message when it could not.
+  onRemoveOwn?: () => Promise<string | null>;
   isFavorite?: boolean;
   onToggleFavorite?: (food: FoodRow, isFavorite: boolean) => void;
   // Units for this food (built-in and the member's own), shown next to grams. What is added is always grams.
@@ -98,6 +105,7 @@ function FoodAmountStep({
   onDeleteUnit?: (key: string) => void;
 }) {
   const [qty, setQty] = useState(initialQty);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const onQtyChange = (value: number) => setQty(Math.max(0, value));
   // Most foods are stored per-1g (see docs/PROJECT_SPEC.md food data notes), so the quantity
   // field means grams and defaults to a plausible serving. A handful of foods without a known
@@ -317,7 +325,91 @@ function FoodAmountStep({
       <Button variant="primary" className="w-full" disabled={!(qty > 0) || qtyProblem != null} onClick={() => onAdd(food, qty)}>
         Add
       </Button>
+      {onRemoveOwn && (
+        <div className="space-y-1 text-center">
+          <button
+            type="button"
+            onClick={async () => setRemoveError(await onRemoveOwn())}
+            className="min-h-9 text-xs font-semibold text-zinc-500 hover:text-danger"
+          >
+            Remove from my foods
+          </button>
+          <p className="text-[11px] text-zinc-400">Anything already logged with it stays as it is.</p>
+          {removeError && <p className="text-xs font-semibold text-danger">{removeError}</p>}
+        </div>
+      )}
     </div>
+  );
+}
+
+// "A food of your own" (NU18): name, what one serving is (and its weight, if known), and the protein, carbs and fat in it. Saved private to
+// the member and their own coach, then straight on to how much to add.
+function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; onSave: (row: OwnFoodRow) => Promise<string | null>; onCancel: () => void }) {
+  const [text, setText] = useState<OwnFoodText>({ ...EMPTY_OWN_FOOD, name: initialName });
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const set = (key: keyof OwnFoodText) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setText((t) => ({ ...t, [key]: e.target.value }));
+    setError(null);
+  };
+  const preview = readOwnFood(text);
+  const serving = text.serving.trim() || 'serving';
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const read = readOwnFood(text);
+    if (!read.ok) return setError(read.error);
+    setSaving(true);
+    const failure = await onSave(read.row);
+    setSaving(false);
+    if (failure) setError(failure);
+  }
+
+  const inputCls = 'w-full rounded-xl border border-black/[.16] bg-transparent px-3 py-2 text-base dark:border-white/10';
+  const labelCls = 'block space-y-1';
+  const captionCls = 'text-xs font-medium text-zinc-500';
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <button type="button" onClick={onCancel} className="flex min-h-9 items-center gap-1 text-sm font-semibold text-accent">
+        <ChevronLeft aria-hidden className="h-4 w-4" /> Back
+      </button>
+      <div>
+        <p className="text-[15px] font-bold text-black dark:text-zinc-50">A food of your own</p>
+        <p className="text-xs text-zinc-500">
+          For something you have often that is not in the list, like a café wrap. Save it once with the figures for one serving. Only you and
+          your coach can see it.
+        </p>
+      </div>
+      <label className={labelCls}>
+        <span className={captionCls}>Name</span>
+        <input type="text" value={text.name} onChange={set('name')} maxLength={OWN_FOOD_NAME_MAX} placeholder="Café chicken wrap" className={inputCls} />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className={labelCls}>
+          <span className={captionCls}>One serving is 1…</span>
+          <input type="text" value={text.serving} onChange={set('serving')} maxLength={MAX_UNIT_LABEL} placeholder="wrap" className={inputCls} />
+        </label>
+        <label className={labelCls}>
+          <span className={captionCls}>It weighs (g, if known)</span>
+          <input type="number" inputMode="decimal" min={0} value={text.grams} onChange={set('grams')} placeholder="optional" className={inputCls} />
+        </label>
+      </div>
+      <p className={captionCls}>In one {serving}</p>
+      <div className="grid grid-cols-3 gap-1.5">
+        <input type="number" inputMode="decimal" min={0} value={text.protein} onChange={set('protein')} placeholder="protein g" aria-label="Protein in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" min={0} value={text.carbs} onChange={set('carbs')} placeholder="carbs g" aria-label="Carbs in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" min={0} value={text.fat} onChange={set('fat')} placeholder="fat g" aria-label="Fat in grams" className={inputCls} />
+      </div>
+      {preview.ok && (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="font-semibold text-black dark:text-zinc-50">{Math.round(preview.perServing.calories)} kcal</span> per {serving}
+        </p>
+      )}
+      {error && <p className="text-xs font-semibold text-danger">{error}</p>}
+      <Button type="submit" variant="primary" className="w-full" disabled={saving}>
+        Save to my foods
+      </Button>
+    </form>
   );
 }
 
@@ -471,6 +563,11 @@ export function FoodSearchPicker({
     }, 200);
   }
 
+  // A member's own foods (NU18): listed before anything is typed, found in search, saved here and removed from the amount step.
+  const [ownFoods, setOwnFoods] = useState<FoodRow[]>([]);
+  // The "A food of your own" form, with the name to start from (what was searched for, when nothing was found).
+  const [creating, setCreating] = useState<{ name: string } | null>(null);
+
   // The member's own units (private to them), loaded once; built-in ones come with each food.
   const [ownUnits, setOwnUnits] = useState<OwnUnitRow[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
@@ -481,15 +578,46 @@ export function FoodSearchPicker({
       const { data: auth } = await supabase.auth.getUser();
       if (cancelled || !auth.user) return;
       setUserId(auth.user.id);
-      const { data } = await supabase.from('member_food_units').select('id, food_id, label, grams').eq('client_id', auth.user.id);
-      if (!cancelled && data) setOwnUnits(data.map((r) => ({ ...r, grams: Number(r.grams) })) as OwnUnitRow[]);
+      const [units, foods] = await Promise.all([
+        supabase.from('member_food_units').select('id, food_id, label, grams').eq('client_id', auth.user.id),
+        // The member's own foods (NU18), by name; removed ones are hidden.
+        supabase.from('foods').select('*').eq('owner_id', auth.user.id).eq('hidden', false).order('name').limit(200),
+      ]);
+      if (cancelled) return;
+      if (units.data) setOwnUnits(units.data.map((r) => ({ ...r, grams: Number(r.grams) })) as OwnUnitRow[]);
+      if (foods.data) setOwnFoods(foods.data as FoodRow[]);
     })().catch(() => {
-      // units are a convenience: without them the picker still works in grams
+      // units and own foods are a convenience: without them the picker still works in grams, and own foods still come up in search
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function saveOwnFood(row: OwnFoodRow): Promise<string | null> {
+    if (!userId) return 'Could not save that food. Try again.';
+    const { data, error } = await createClient()
+      .from('foods')
+      .insert({ ...row, source: 'own', owner_id: userId })
+      .select('*')
+      .single();
+    if (error || !data) return 'Could not save that food. Try again.';
+    const food = data as FoodRow;
+    setOwnFoods((prev) => [food, ...prev]);
+    setCreating(null);
+    // Straight on to how much, so it can be added now.
+    setPicked({ food, qty: startingAmount(food) });
+    return null;
+  }
+
+  async function removeOwnFood(food: FoodRow): Promise<string | null> {
+    const { data, error } = await createClient().rpc('remove_own_food', { p_food_id: food.id });
+    if (error || data !== true) return 'Could not remove that food. Try again.';
+    setOwnFoods((prev) => prev.filter((f) => f.id !== food.id));
+    setResults((prev) => prev.filter((f) => f.id !== food.id));
+    setPicked(null);
+    return null;
+  }
 
   async function saveUnit(foodId: string, label: string, gramsInOne: number): Promise<string | null> {
     if (!userId) return 'Could not save that unit. Try again.';
@@ -608,7 +736,16 @@ export function FoodSearchPicker({
           isFavorite={favoriteIds?.has(picked.food.id) ?? false}
           onToggleFavorite={onToggleFavorite}
           {...unitProps(picked.food)}
+          onRemoveOwn={isOwnFood(picked.food) && picked.food.owner_id === userId ? () => removeOwnFood(picked.food) : undefined}
         />
+      </div>
+    );
+  }
+
+  if (creating) {
+    return (
+      <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
+        <OwnFoodForm initialName={creating.name} onSave={saveOwnFood} onCancel={() => setCreating(null)} />
       </div>
     );
   }
@@ -656,15 +793,24 @@ export function FoodSearchPicker({
         value={query}
         onChange={(e) => handleQueryChange(e.target.value)}
       />
-      {isPending && <p className="mt-2 text-xs text-zinc-500">Searching…</p>}
+      {isPending ? (
+        <p className="mt-2 text-xs text-zinc-500">Searching…</p>
+      ) : (
+        query === '' && (
+          <button type="button" onClick={() => setCreating({ name: '' })} className="mt-1.5 min-h-9 text-[13px] font-semibold text-accent hover:underline">
+            + A food of your own
+          </button>
+        )
+      )}
 
-      {query === '' && !isPending && results.length === 0 && ((goesWith && goesWith.length > 0) || (favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
+      {query === '' && !isPending && results.length === 0 && ((goesWith && goesWith.length > 0) || ownFoods.length > 0 || (favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
         <div className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto">
           {goesWith && goesWith.length > 0 && shortcutList(
             'Goes with what’s in this meal',
             goesWith.map((g) => g.food),
             (food) => goesWith.find((g) => g.food.id === food.id)?.portions ?? startingAmount(food)
           )}
+          {ownFoods.length > 0 && shortcutList('My foods', ownFoods)}
           {favorites && favorites.length > 0 && shortcutList('Favorites', favorites)}
           {recentlyLogged && recentlyLogged.length > 0 && shortcutList('Recently logged', recentlyLogged)}
         </div>
@@ -685,6 +831,11 @@ export function FoodSearchPicker({
           {!isPending && results.length === 0 && (
             <li>
               <EmptyState compact title={query.trim().length >= 2 ? `No results for "${query.trim()}"` : query ? 'Keep typing…' : 'Start typing to search foods'} />
+              {query.trim().length >= 2 && (
+                <button type="button" onClick={() => setCreating({ name: query.trim() })} className="mx-auto mb-2 block min-h-9 text-[13px] font-semibold text-accent hover:underline">
+                  Save &ldquo;{query.trim()}&rdquo; as a food of your own
+                </button>
+              )}
             </li>
           )}
         </ul>

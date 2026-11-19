@@ -12,6 +12,7 @@ import { diaryLines, recipeLineDetail, type RecipeLine } from '@ballistic/shared
 import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, defaultUnit, parseUnitInput, startingAmount, unitForAmount, unitText, unitsFor, type FoodUnit } from '@ballistic/shared/utils/foodUnits';
 import { entryMacros, formatQuantity, totalMacros } from '@ballistic/shared/utils/foodTotals';
 import { perServing, scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
+import { EMPTY_OWN_FOOD, OWN_FOOD_NAME_MAX, isOwnFood, readOwnFood, type OwnFoodRow, type OwnFoodText } from '@ballistic/shared/utils/ownFoods';
 import { quickAddText, readQuickAdd, type QuickAddText } from '@ballistic/shared/utils/quickAdd';
 
 import { Pressable } from '@/components/press';
@@ -19,7 +20,7 @@ import { Icon } from '@/components/icons';
 import { ProgressRing } from '@/components/ProgressRing';
 import { AppText, Button, Card, Chip, SheetFrame, SmallButton, TextField } from '@/components/ui';
 import type { PendingScan } from '@/lib/barcodeFlow';
-import { newRecipeLogId, useAddFood, useAddQuickAdd, useAddRecipe, useFavoriteFoods, useFoodSearch, useOwnFoodUnits, useRecentFoods, useToggleFavorite, type QuickAddFields } from '@/lib/food';
+import { newRecipeLogId, useAddFood, useAddQuickAdd, useAddRecipe, useFavoriteFoods, useFoodSearch, useOwnFoods, useOwnFoodUnits, useRecentFoods, useToggleFavorite, type QuickAddFields } from '@/lib/food';
 import { useDebounced } from '@/lib/hooks';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -310,7 +311,10 @@ function FoodResultItem({ food, onPress, more, nested = false }: { food: FoodRow
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityHint="Choose how much" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8, minHeight: 48 }}>
         <View style={{ flex: 1 }}>
           <AppText numberOfLines={2} style={{ fontWeight: '600' }}>{food.name}</AppText>
-          <AppText variant="small" color="muted">{perLine(food)}</AppText>
+          <AppText variant="small" color="muted">
+            {isOwnFood(food) ? <AppText variant="small" color="accent" style={{ fontWeight: '700' }}>My food · </AppText> : null}
+            {perLine(food)}
+          </AppText>
         </View>
         <Icon name="chevronRight" size={18} color={t.muted} />
       </Pressable>
@@ -324,14 +328,17 @@ function FoodResultItem({ food, onPress, more, nested = false }: { food: FoodRow
 }
 
 // The second step after tapping a food: how much (servings, own serving, quick amounts, the number), then Add. Back returns to the list.
-function FoodAmountStep({ food, initialQty, onAdd, onBack, isFavorite, onToggleFavorite, units, onSaveUnit, onDeleteUnit }: {
+function FoodAmountStep({ food, initialQty, onAdd, onBack, isFavorite, onToggleFavorite, units, onSaveUnit, onDeleteUnit, onRemoveOwn }: {
   food: FoodRow; initialQty: number; onAdd: (qty: number) => void; onBack: () => void; isFavorite: boolean; onToggleFavorite: () => void;
   // Units for this food (built-in and the member's own) next to grams. What is added is always grams.
   units: FoodUnit[]; onSaveUnit: (foodId: string, label: string, grams: number) => Promise<string | null>; onDeleteUnit: (key: string) => void;
+  // For the member's own food (NU18): takes it off their list; resolves to a message when it could not.
+  onRemoveOwn?: () => Promise<string | null>;
 }) {
   const t = useTheme();
   const cfg = quantityConfig(food);
   const [qty, setQty] = useState(initialQty);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const onQty = (n: number) => setQty(Math.max(0, n));
   const [text, setText] = useState<string | null>(null);
   // Starts on the food's own serving when the amount is exactly one of it.
@@ -415,6 +422,66 @@ function FoodAmountStep({ food, initialQty, onAdd, onBack, isFavorite, onToggleF
       </View>
       <AppText variant="small" color={problem && qty > 0 ? 'danger' : 'muted'}>{problem && qty > 0 ? problem : `${unit ? `${Math.round(qty)} g · ` : ''}${Math.round(cal)} kcal · ${Math.round(food.protein * qty)}P / ${Math.round(food.carbs * qty)}C / ${Math.round(food.fat * qty)}F`}</AppText>
       <Button title="Add" disabled={!!problem} onPress={() => onAdd(qty)} />
+      {onRemoveOwn ? (
+        <View style={{ alignItems: 'center', gap: 4, paddingTop: spacing.sm }}>
+          <SmallButton title="Remove from my foods" tone="muted" onPress={async () => setRemoveError(await onRemoveOwn())} />
+          <AppText variant="small" color="muted">Anything already logged with it stays as it is.</AppText>
+          {removeError ? <AppText color="danger" style={{ fontWeight: '600' }}>{removeError}</AppText> : null}
+        </View>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+// "A food of your own" (NU18): name, what one serving is (and its weight, if known), and the protein, carbs and fat in it. Saved private to
+// the member and their own coach, then straight on to how much to add. Same fields and checks as the web (packages/shared/src/utils/ownFoods.ts).
+function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; onSave: (row: OwnFoodRow) => Promise<string | null>; onCancel: () => void }) {
+  const t = useTheme();
+  const [text, setText] = useState<OwnFoodText>({ ...EMPTY_OWN_FOOD, name: initialName });
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const set = (key: keyof OwnFoodText) => (value: string) => {
+    setText((prev) => ({ ...prev, [key]: value }));
+    setError(null);
+  };
+  const preview = readOwnFood(text);
+  const serving = text.serving.trim() || 'serving';
+  const submit = async () => {
+    const read = readOwnFood(text);
+    if (!read.ok) return setError(read.error);
+    setSaving(true);
+    const failure = await onSave(read.row);
+    setSaving(false);
+    if (failure) setError(failure);
+  };
+  return (
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: spacing.sm }}>
+      <Pressable onPress={onCancel} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6 }}>
+        <Icon name="chevronLeft" size={18} color={t.accent} />
+        <AppText color="accent" style={{ fontWeight: '700' }}>Back</AppText>
+      </Pressable>
+      <AppText variant="heading">A food of your own</AppText>
+      <AppText variant="small" color="muted">
+        For something you have often that is not in the list, like a café wrap. Save it once with the figures for one serving. Only you and your coach can see it.
+      </AppText>
+      <TextField label="Name" value={text.name} onChangeText={set('name')} maxLength={OWN_FOOD_NAME_MAX} placeholder="Café chicken wrap" />
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <View style={{ flex: 1 }}><TextField label="One serving is 1…" value={text.serving} onChangeText={set('serving')} maxLength={MAX_UNIT_LABEL} placeholder="wrap" /></View>
+        <View style={{ flex: 1 }}><TextField label="It weighs (g, if known)" value={text.grams} onChangeText={set('grams')} keyboardType="decimal-pad" placeholder="optional" /></View>
+      </View>
+      <AppText variant="small" color="muted">In one {serving}</AppText>
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <View style={{ flex: 1 }}><TextField label="Protein g" value={text.protein} onChangeText={set('protein')} keyboardType="decimal-pad" /></View>
+        <View style={{ flex: 1 }}><TextField label="Carbs g" value={text.carbs} onChangeText={set('carbs')} keyboardType="decimal-pad" /></View>
+        <View style={{ flex: 1 }}><TextField label="Fat g" value={text.fat} onChangeText={set('fat')} keyboardType="decimal-pad" /></View>
+      </View>
+      {preview.ok ? (
+        <AppText color="muted">
+          <AppText style={{ fontWeight: '800' }}>{Math.round(preview.perServing.calories)} kcal</AppText> per {serving}
+        </AppText>
+      ) : null}
+      {error ? <AppText color="danger" style={{ fontWeight: '600' }}>{error}</AppText> : null}
+      <Button title="Save to my foods" disabled={saving} onPress={submit} />
     </ScrollView>
   );
 }
@@ -459,6 +526,10 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   const recents = useRecentFoods();
   const toggleFavorite = useToggleFavorite();
   const own = useOwnFoodUnits();
+  // The member's own foods (NU18): listed before anything is typed, found in search, saved here and removed from the amount step.
+  const mine = useOwnFoods();
+  // The "A food of your own" form, with the name to start from (what was searched for, when nothing was found).
+  const [creating, setCreating] = useState<{ name: string } | null>(null);
   // The food tapped, and the amount its step starts at. The search text and results stay as they were for "Back".
   const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
 
@@ -478,6 +549,7 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   const list: { title?: string; groups: FoodGroup<FoodRow>[] }[] = searching
     ? [{ groups }]
     : [
+        ...(mine.foods.length ? [{ title: 'My foods', groups: plain(mine.foods) }] : []),
         ...(favorites.data?.length ? [{ title: 'Favorites', groups: plain(favorites.data) }] : []),
         ...(recents.data?.length ? [{ title: 'Recently logged', groups: plain(recents.data) }] : []),
       ];
@@ -496,9 +568,37 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
         units={unitsFor(food, own.units)}
         onSaveUnit={own.save}
         onDeleteUnit={own.remove}
+        onRemoveOwn={mine.foods.some((f) => f.id === food.id) ? async () => {
+          const failure = await mine.remove(food);
+          if (!failure) setPicked(null);
+          return failure;
+        } : undefined}
       />
     );
   }
+
+  if (creating) {
+    return (
+      <OwnFoodForm
+        initialName={creating.name}
+        onCancel={() => setCreating(null)}
+        onSave={async (row) => {
+          const saved = await mine.save(row);
+          if ('error' in saved) return saved.error;
+          setCreating(null);
+          // Straight on to how much, so it can be added now.
+          setPicked({ food: saved.food, qty: startingAmount(saved.food) });
+          return null;
+        }}
+      />
+    );
+  }
+
+  const ownFoodLink = (label: string, name: string) => (
+    <Pressable onPress={() => setCreating({ name })} accessibilityRole="button" hitSlop={6} style={{ paddingVertical: 8 }}>
+      <AppText color="accent" style={{ fontWeight: '700' }}>{label}</AppText>
+    </Pressable>
+  );
 
   const groupRows = ({ food, others }: FoodGroup<FoodRow>) => {
     const open = expanded.has(food.id);
@@ -517,6 +617,7 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   return (
     <>
       <TextField label="Search foods" value={text} onChangeText={setText} placeholder="e.g. chicken breast" autoCorrect={false} autoCapitalize="none" returnKeyType="search" />
+      {text === '' ? ownFoodLink('+ A food of your own', '') : null}
       <FlatList
         data={list}
         keyExtractor={(g, i) => g.title ?? 'results' + i}
@@ -528,9 +629,12 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
           </View>
         )}
         ListEmptyComponent={
-          <AppText color="muted">
-            {search.isFetching ? 'Searching…' : searching ? `No results for "${text.trim()}"` : text ? 'Keep typing…' : 'Start typing to search foods'}
-          </AppText>
+          <View>
+            <AppText color="muted">
+              {search.isFetching ? 'Searching…' : searching ? `No results for "${text.trim()}"` : text ? 'Keep typing…' : 'Start typing to search foods'}
+            </AppText>
+            {searching && !search.isFetching ? ownFoodLink(`Save “${text.trim()}” as a food of your own`, text.trim()) : null}
+          </View>
         }
       />
     </>
