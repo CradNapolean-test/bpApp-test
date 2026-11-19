@@ -88,9 +88,24 @@ describe('D21: a whole-gym broadcast goes into the sender\'s own members\' chats
 });
 
 describe('MS10: "No reply needed"', () => {
-  it('adds the stamp to chat_threads, and can be run twice', () => {
-    expect(sql).toMatch(/alter table public\.chat_threads add column if not exists coach_no_reply_at timestamptz/);
+  it('keeps the stamp in its own table, not on chat_threads (which the member can read), and can be run twice', () => {
+    expect(sql).toMatch(/create table if not exists public\.chat_no_reply \(\s*client_id uuid primary key references public\.profiles\(id\) on delete cascade,\s*marked_at timestamptz not null\s*\);/);
+    expect(sql).not.toMatch(/alter\s+table\s+(?:public\.)?chat_threads/i);
+    expect(sql).not.toMatch(/coach_no_reply_at/);
+    expect(sql).toMatch(/drop policy if exists "coach reads own members' chat_no_reply" on public\.chat_no_reply;/);
     expect(sql).toMatch(/drop function if exists public\.get_coach_chat_overview\(\);/);
+  });
+
+  it('the stamp is the coach\'s alone: only the member\'s own coach can read it, and nobody can write it directly', () => {
+    expect(sql).toMatch(/alter table public\.chat_no_reply enable row level security;/);
+    expect(sql).toMatch(/revoke all on table public\.chat_no_reply from anon, authenticated;/);
+    const policies = [...sql.matchAll(/create\s+policy[^;]*on\s+public\.chat_no_reply[^;]*;/gi)].map((m) => m[0]);
+    expect(policies).toHaveLength(1);
+    expect(policies[0]).toMatch(/for select to authenticated\s+using \(coalesce\(public\.is_coach_of\(client_id\), false\)\);/);
+    // Not owns_client (which lets the member in) or anything gym-wide.
+    expect(policies[0]).not.toMatch(/owns_client|is_self|gym/);
+    expect(sql).not.toMatch(/grant\s+(?:insert|update|delete|all)[^;]*chat_no_reply/i);
+    expect(sql).not.toMatch(/grant[^;]*chat_no_reply[^;]*\banon\b/i);
   });
 
   it('opens no new rule on the chat tables: chat stays the member\'s and their own coach\'s (0153)', () => {
@@ -105,9 +120,9 @@ describe('MS10: "No reply needed"', () => {
     expect(access(fn)).toEqual({ anon: false, authenticated: true });
     const body = code('set_chat_no_reply');
     expect(body).toMatch(/if p_client_id is null or not coalesce\(public\.is_coach_of\(p_client_id\), false\) then\s+raise exception/);
-    expect(body).toMatch(/coach_no_reply_at = now\(\)/);
+    expect(body).toMatch(/insert into chat_no_reply \(client_id, marked_at\)/);
     expect(body).toMatch(/coach_last_read_at = greatest\(chat_threads\.coach_last_read_at, now\(\)\)/);
-    expect(body).toMatch(/set coach_no_reply_at = null/);
+    expect(body).toMatch(/delete from chat_no_reply where client_id = p_client_id/);
   });
 
   it('the inbox overview returns the stamp, still for the caller\'s own members only, with the same unread rule', () => {
@@ -116,7 +131,8 @@ describe('MS10: "No reply needed"', () => {
     expect(fn.securityDefiner).toBe(true);
     expect(access(fn)).toEqual({ anon: false, authenticated: true });
     const body = code('get_coach_chat_overview');
-    expect(body).toMatch(/ct\.coach_no_reply_at/);
+    expect(body).toMatch(/nr\.marked_at/);
+    expect(body).toMatch(/left join chat_no_reply nr on nr\.client_id = p\.id/);
     expect(body).toMatch(/where p\.coach_id = auth\.uid\(\)/);
     expect(body).toMatch(/cm\.sender_id <> auth\.uid\(\)/);
     expect(sql).toMatch(/no_reply_at timestamptz\s*\)/);
