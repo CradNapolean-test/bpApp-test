@@ -69,6 +69,7 @@ export function creditsAddedMessage(input: {
   // A pack's name, when it was a pack.
   packName?: string | null;
   expiresAt?: string | null;
+  // The gym's timezone (an expiry is the end of a day at the gym), not the member's own.
   timeZone?: string | null;
 }): MemberMessage {
   const n = Math.max(0, Math.round(input.amount));

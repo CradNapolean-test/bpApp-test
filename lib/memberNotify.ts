@@ -119,18 +119,24 @@ export async function notifyStartedRollout(input: {
   }
 }
 
-// The member's own timezone, for the "to use by" date.
-async function memberTimeZone(clientId: string): Promise<string | null> {
+// The member's gym's timezone, for the "to use by" date: an expiry the coach picks is the end of that day at the gym (23:59 there,
+// lib/creditsForm.ts), so in the member's own timezone it could read as the day after (or before). Null when the gym is not known
+// (creditsAddedMessage then uses the default timezone).
+async function gymTimeZone(clientId: string): Promise<string | null> {
   try {
-    const { data } = await createAdminClient().from('client_profiles').select('timezone').eq('client_id', clientId).maybeSingle();
-    return (data?.timezone as string | null | undefined) ?? null;
+    const admin = createAdminClient();
+    const { data: member } = await admin.from('profiles').select('gym_id').eq('id', clientId).maybeSingle();
+    const gymId = member?.gym_id as string | null | undefined;
+    if (!gymId) return null;
+    const { data: gym } = await admin.from('gyms').select('timezone').eq('id', gymId).maybeSingle();
+    return (gym?.timezone as string | null | undefined) || null;
   } catch {
     return null;
   }
 }
 
 export async function notifyCreditsAdded(clientId: string, amount: number, expiresAt: string | null): Promise<void> {
-  const timeZone = expiresAt ? await memberTimeZone(clientId) : null;
+  const timeZone = expiresAt ? await gymTimeZone(clientId) : null;
   await notifyMember('credits added', clientId, creditsAddedMessage({ amount, expiresAt, timeZone }));
 }
 
@@ -141,7 +147,7 @@ export async function notifyCreditPackAdded(clientId: string, packId: string): P
     if (!pack || !(Number(pack.credits) > 0)) return;
     const days = pack.expires_after_days as number | null;
     const expiresAt = days != null ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : null;
-    const timeZone = expiresAt ? await memberTimeZone(clientId) : null;
+    const timeZone = expiresAt ? await gymTimeZone(clientId) : null;
     await notifyMember('credits added', clientId, creditsAddedMessage({ amount: Number(pack.credits), packName: pack.name as string, expiresAt, timeZone }));
   } catch {
     // Best effort, as above.
