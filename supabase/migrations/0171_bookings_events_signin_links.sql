@@ -45,7 +45,8 @@
 --      changed.
 --    The Saturday reset (0144): same day (the 03:00 UTC job), same "membership reset: week of <Saturday>" row and last_reset_week. The
 --      only difference: after it, each held booking of that week is charged. A session booked between midnight and the job is held until
---      the job runs, a few hours later.
+--      the job runs, a few hours later. If the job missed a week, the next reset first charges that week's holds against the balance it
+--      replaces (one row per booking, as always), so they never come out of the new week's credits.
 --    Bookings already made: the 0 in weekly_credits means "paid when booked" and they are left exactly as they are. Live on 18 Nov 2026
 --      none was paid ahead (2 upcoming bookings, both this credit week, paid this week), so nobody keeps an extra week's credits.
 --    Changing a plan mid-week: the new plan's credits for this week are its allowance less this week's sessions already charged (before:
@@ -439,9 +440,11 @@ revoke execute on function public.charge_booking(uuid, integer, text, uuid) from
 -- Starts a credit week for one plan: the weekly reset (Saturday, replenish_due_memberships) and the top-up when a plan starts or changes
 -- (top_up_membership_credits). The weekly balance becomes the plan's allowance LESS what that week's sessions were already charged (after
 -- a plan change mid-week, the week's sessions booked so far; at a Saturday reset, nothing). Bookings made before 0171 (weekly_credits 0)
--- are not counted: they were paid from the week they were booked in. Then every hold for this week (or, if a reset was missed, an earlier
--- one) is charged: sessions booked ahead, and ones cancelled after their deadline or removed without a refund. Same reason text as before
--- ("membership reset: week of <Saturday>"), and last_reset_week is set to that Saturday as before.
+-- are not counted: they were paid from the week they were booked in. Then every hold for this week is charged: sessions booked ahead, and
+-- ones cancelled after their deadline or removed without a refund. Same reason text as before ("membership reset: week of <Saturday>"),
+-- and last_reset_week is set to that Saturday as before. Holds of an EARLIER week (its reset never ran: the job missed that week) are
+-- charged first, before the balance is read, so each is recorded once against the old balance that the reset row replaces and none comes
+-- out of this week's credits.
 create or replace function public.start_credit_week(p_membership uuid, p_week date)
 returns void
 language plpgsql
@@ -465,6 +468,29 @@ begin
 
   perform pg_advisory_xact_lock(hashtext('credits:' || v_client::text));
 
+  -- Holds of an earlier week whose reset never ran (the job missed it): charged now, against the old balance the reset row below replaces,
+  -- so each booking has its one charge row and none is taken from this week's credits.
+  for v_held in
+    select b.id, b.weekly_credits, b.status, c.name, c.start_time, b.booking_date
+    from bookings b
+    join classes c on c.id = b.class_id
+    where b.client_id = v_client
+      and b.weekly_credits > 0
+      and b.booking_date < p_week
+      and not exists (select 1 from credits_ledger l where l.booking_id = b.id and l.bucket = 'membership')
+    order by b.booking_date, c.start_time, b.created_at
+  loop
+    insert into credits_ledger (client_id, delta, reason, bucket, booking_id)
+    values (
+      v_client,
+      -v_held.weekly_credits,
+      'Booked ' || v_held.name || ', ' || public.session_label(v_held.booking_date, v_held.start_time)
+        || case when v_held.status = 'cancelled' then ' (cancelled, no refund)' else '' end,
+      'membership',
+      v_held.id
+    );
+  end loop;
+
   select coalesce(sum(delta), 0) into v_balance from credits_ledger where client_id = v_client and bucket = 'membership';
   -- Net weekly credits already charged for this week's sessions (charges are negative, refunds positive).
   select coalesce(sum(l.delta), 0) into v_used
@@ -479,14 +505,14 @@ begin
   values (v_client, v_allowance + v_used - v_balance, 'membership reset: week of ' || p_week, 'membership');
   update client_memberships set last_reset_week = p_week where id = p_membership;
 
-  -- The holds: never charged (a refund drops a hold, so a cancelled booking here was cancelled after its deadline).
+  -- This week's holds: never charged (a refund drops a hold, so a cancelled booking here was cancelled after its deadline).
   for v_held in
     select b.id, b.weekly_credits, b.status, c.name, c.start_time, b.booking_date
     from bookings b
     join classes c on c.id = b.class_id
     where b.client_id = v_client
       and b.weekly_credits > 0
-      and b.booking_date <= p_week + 6
+      and b.booking_date between p_week and p_week + 6
       and not exists (select 1 from credits_ledger l where l.booking_id = b.id and l.bucket = 'membership')
     order by b.booking_date, c.start_time, b.created_at
   loop

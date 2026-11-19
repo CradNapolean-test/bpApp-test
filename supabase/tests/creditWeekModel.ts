@@ -99,6 +99,14 @@ export class ModelMember {
   startWeek(week: string): void {
     const p = this.plan!;
     const weekEnd = weekEndOf(week);
+    const chargeHolds = (holds: ModelBooking[]) => {
+      for (const b of holds.sort((a, c) => a.date.localeCompare(c.date))) {
+        this.ledger.push({ delta: -b.weeklyCredits, bucket: 'membership', bookingId: b.id, reason: b.status === 'cancelled' ? 'Booked (cancelled, no refund)' : 'Booked' });
+      }
+    };
+    const uncharged = (b: ModelBooking) => b.weeklyCredits > 0 && this.membershipRows(b.id).length === 0;
+    // Holds of an earlier week whose reset never ran: charged first, against the old balance the reset row replaces.
+    chargeHolds(this.bookings.filter((b) => uncharged(b) && b.date < week));
     const used = this.ledger
       .filter((r) => r.bucket === 'membership' && r.bookingId != null)
       .filter((r) => {
@@ -108,13 +116,8 @@ export class ModelMember {
       .reduce((s, r) => s + r.delta, 0);
     this.ledger.push({ delta: p.perWeek + used - this.balance('membership'), bucket: 'membership', bookingId: null, reason: `membership reset: week of ${week}` });
     p.lastResetWeek = week;
-    // Every hold up to the end of this week, whatever the booking's status (a refund drops a hold).
-    const held = this.bookings
-      .filter((b) => b.weeklyCredits > 0 && b.date <= weekEnd && this.membershipRows(b.id).length === 0)
-      .sort((a, c) => a.date.localeCompare(c.date));
-    for (const b of held) {
-      this.ledger.push({ delta: -b.weeklyCredits, bucket: 'membership', bookingId: b.id, reason: b.status === 'cancelled' ? 'Booked (cancelled, no refund)' : 'Booked' });
-    }
+    // Then this week's holds, whatever the booking's status (a refund drops a hold).
+    chargeHolds(this.bookings.filter((b) => uncharged(b) && b.date >= week && b.date <= weekEnd));
   }
 
   // refund_booking_credits(booking): drops a hold never charged, then gives back what the booking still has charged, per bucket; weekly

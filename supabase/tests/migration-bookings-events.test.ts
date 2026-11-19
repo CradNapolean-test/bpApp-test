@@ -177,12 +177,24 @@ describe('D13b in SQL: a booking\'s credit counts in the week the session runs',
     const body = code('start_credit_week');
     expect(body).toMatch(/v_allowance \+ v_used - v_balance, 'membership reset: week of ' \|\| p_week/);
     expect(body).toMatch(/b\.weekly_credits > 0\s+and b\.booking_date between p_week and p_week \+ 6/);
-    // The holds: any status (a late cancel keeps its hold), never charged, up to the end of this week.
-    const loop = body.slice(body.indexOf('for v_held in'));
-    expect(loop).toMatch(/where b\.client_id = v_client\s+and b\.weekly_credits > 0\s+and b\.booking_date <= p_week \+ 6\s+and not exists \(select 1 from credits_ledger l where l\.booking_id = b\.id and l\.bucket = 'membership'\)/);
-    expect(loop).not.toMatch(/b\.status = 'booked'/);
-    expect(loop).toMatch(/-v_held\.weekly_credits/);
-    expect(loop).toMatch(/when v_held\.status = 'cancelled' then ' \(cancelled, no refund\)'/);
+    const notCharged = String.raw`\s+and not exists \(select 1 from credits_ledger l where l\.booking_id = b\.id and l\.bucket = 'membership'\)`;
+    // First the holds of an earlier week whose reset never ran, after the lock and before the balance is read, so they come off the old
+    // balance the reset row replaces and not off this week's credits.
+    const balanceAt = body.indexOf('into v_balance');
+    const staleAt = body.indexOf('for v_held in');
+    expect(body.indexOf('pg_advisory_xact_lock')).toBeLessThan(staleAt);
+    expect(staleAt).toBeLessThan(balanceAt);
+    const stale = body.slice(staleAt, balanceAt);
+    expect(stale).toMatch(new RegExp(String.raw`where b\.client_id = v_client\s+and b\.weekly_credits > 0\s+and b\.booking_date < p_week` + notCharged));
+    // Then this week's holds, after the reset row: any status (a late cancel keeps its hold), never charged.
+    const loop = body.slice(body.lastIndexOf('for v_held in'));
+    expect(body.lastIndexOf('for v_held in')).toBeGreaterThan(body.indexOf("'membership reset: week of '"));
+    expect(loop).toMatch(new RegExp(String.raw`where b\.client_id = v_client\s+and b\.weekly_credits > 0\s+and b\.booking_date between p_week and p_week \+ 6` + notCharged));
+    for (const part of [stale, loop]) {
+      expect(part).not.toMatch(/b\.status = 'booked'/);
+      expect(part).toMatch(/-v_held\.weekly_credits/);
+      expect(part).toMatch(/when v_held\.status = 'cancelled' then ' \(cancelled, no refund\)'/);
+    }
   });
 
   it.each([['book_class'], ['book_class_for_client']])('%s pays through charge_booking, undoes a booking it cannot pay, and refuses a day after the plan', (name) => {
@@ -313,6 +325,16 @@ describe('D13b week boundaries (model of the 0171 SQL)', () => {
     m.startWeek(NEXT_WEEK);
     expect(m.balance('membership')).toBe(2);
     expect(m.ledger.some((r) => r.bookingId === b.id)).toBe(false);
+  });
+
+  it('a hold from a week whose reset never ran is charged once, and not out of the next reset\'s credits', () => {
+    const m = memberOnPlan(3); // reset 14 Nov
+    const b = m.book('2026-11-23'); // Mon 23 Nov, held for the week of 21 Nov
+    // The job misses the week of 21 Nov; the next reset is 28 Nov.
+    m.startWeek('2026-11-28');
+    expect(m.balance('membership')).toBe(3);
+    expect(m.ledger.filter((r) => r.bookingId === b.id).map((r) => [r.delta, r.bucket])).toEqual([[-1, 'membership']]);
+    expect(m.sources('2026-11-30').weeklyLeft).toBe(3);
   });
 
   it('a charged booking cancelled in time is refunded, never above the weekly allowance', () => {
