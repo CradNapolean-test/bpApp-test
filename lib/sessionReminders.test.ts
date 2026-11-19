@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dueReminders, reminderAtMs, sessionReminderPayload, sessionStartMs, type ReminderBooking } from './sessionReminders';
+import {
+  dueReminders,
+  reminderAtMs,
+  remindOnce,
+  sessionReminderPayload,
+  sessionStartMs,
+  type DueReminder,
+  type ReminderBooking,
+  type ReminderClaims,
+} from './sessionReminders';
 
 const LONDON = 'Europe/London';
 const at = (iso: string) => new Date(iso);
@@ -96,5 +105,125 @@ describe('sessionReminderPayload', () => {
     expect(p.url).toBe('/dashboard?open=book');
     expect(p.tag).toBe('session-reminder-b1');
     expect(sessionReminderPayload({ bookingId: 'b2', className: 'Yoga', startTime: '06:30', when: 'tomorrow' }).title).toBe('Yoga tomorrow at 6:30 am');
+  });
+});
+
+// ---- never twice (D20) ----
+// session_reminders as Postgres treats it: the booking id is the primary key. With ignoreDuplicates the insert is "on conflict do
+// nothing", which answers only the rows it inserted; without it the rows already there are updated and answered too (so a job that
+// dropped ignoreDuplicates would remind every booking again each hour, and these tests would catch it). Each insert is atomic, as the
+// key makes it, while two runs can interleave around it.
+function reminderTable() {
+  const rows = new Set<string>();
+  const events: string[] = [];
+  let failure: string | null = null;
+  const claims: ReminderClaims = {
+    upsert(input, options) {
+      return {
+        select: async () => {
+          await Promise.resolve();
+          if (failure) return { data: null, error: { message: failure } };
+          const answered: { booking_id: string }[] = [];
+          for (const r of input) {
+            const added = !rows.has(r.booking_id);
+            rows.add(r.booking_id);
+            if (added || !options.ignoreDuplicates) answered.push({ booking_id: r.booking_id });
+          }
+          events.push('claim');
+          return { data: answered, error: null };
+        },
+      };
+    },
+  };
+  return { claims, rows, events, fail: (message: string) => (failure = message) };
+}
+
+const dueFor = (bookingId: string, clientId = 'm1'): DueReminder => ({
+  ...booking({ bookingId, clientId }),
+  startsAt: '2026-11-20T18:00:00.000Z',
+  when: 'today',
+});
+
+function pushes(events?: string[]) {
+  const sent: string[] = [];
+  const push = async (r: DueReminder) => {
+    events?.push('push');
+    await Promise.resolve();
+    sent.push(r.bookingId);
+    return { sent: 1, failed: 0 };
+  };
+  return { sent, push };
+}
+
+const count = (ids: string[]) => ids.reduce<Record<string, number>>((acc, id) => ({ ...acc, [id]: (acc[id] ?? 0) + 1 }), {});
+
+describe('remindOnce: a booking is never reminded twice', () => {
+  it('the next hourly run does not remind a booking the last one did', async () => {
+    const table = reminderTable();
+    const { sent, push } = pushes();
+    const due = [dueFor('b1'), dueFor('b2', 'm2')];
+    const first = await remindOnce(due, table.claims, push);
+    const second = await remindOnce(due, table.claims, push);
+    expect(count(sent)).toEqual({ b1: 1, b2: 1 });
+    expect(first).toEqual({ ok: true, due: 2, claimed: 2, sent: 2, failed: 0 });
+    expect(second).toEqual({ ok: true, due: 2, claimed: 0, sent: 0, failed: 0 });
+  });
+
+  it('two runs at the same time remind each booking once between them', async () => {
+    const table = reminderTable();
+    const { sent, push } = pushes();
+    const due = [dueFor('b1'), dueFor('b2', 'm2'), dueFor('b3', 'm3')];
+    await Promise.all([remindOnce(due, table.claims, push), remindOnce([...due].reverse(), table.claims, push)]);
+    expect(count(sent)).toEqual({ b1: 1, b2: 1, b3: 1 });
+  });
+
+  it('a booking listed twice in one run is claimed and reminded once', async () => {
+    const table = reminderTable();
+    const { sent, push } = pushes();
+    const run = await remindOnce([dueFor('b1'), dueFor('b1')], table.claims, push);
+    expect(sent).toEqual(['b1']);
+    expect(run).toMatchObject({ ok: true, due: 1, claimed: 1 });
+  });
+
+  it('only the bookings this run claimed are reminded (one claimed earlier is left out, a new one goes)', async () => {
+    const table = reminderTable();
+    table.rows.add('b1');
+    const { sent, push } = pushes();
+    await remindOnce([dueFor('b1'), dueFor('b2', 'm2')], table.claims, push);
+    expect(sent).toEqual(['b2']);
+  });
+
+  it('claims before it pushes, and pushes nothing when the claim fails', async () => {
+    const ordered = reminderTable();
+    const { push: orderedPush } = pushes(ordered.events);
+    await remindOnce([dueFor('b1'), dueFor('b2', 'm2')], ordered.claims, orderedPush);
+    expect(ordered.events).toEqual(['claim', 'push', 'push']);
+
+    const table = reminderTable();
+    table.fail('database down');
+    const { sent, push } = pushes();
+    expect(await remindOnce([dueFor('b1')], table.claims, push)).toEqual({ ok: false, error: 'database down' });
+    expect(sent).toEqual([]);
+  });
+
+  it('a push that threw counts as failed, and the booking stays claimed (it is not retried and so not sent twice)', async () => {
+    const table = reminderTable();
+    let calls = 0;
+    const push = async () => {
+      calls += 1;
+      return null;
+    };
+    expect(await remindOnce([dueFor('b1')], table.claims, push)).toEqual({ ok: true, due: 1, claimed: 1, sent: 0, failed: 1 });
+    await remindOnce([dueFor('b1')], table.claims, push);
+    expect(calls).toBe(1);
+    expect(table.rows.has('b1')).toBe(true);
+  });
+
+  it('does nothing at all with nothing due', async () => {
+    const table = reminderTable();
+    const { sent, push } = pushes();
+    expect(await remindOnce([], table.claims, push)).toEqual({ ok: true, due: 0, claimed: 0, sent: 0, failed: 0 });
+    expect(table.events).toEqual([]);
+    expect(sent).toEqual([]);
   });
 });

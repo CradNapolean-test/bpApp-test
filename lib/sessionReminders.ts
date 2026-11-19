@@ -81,6 +81,55 @@ export function dueReminders(bookings: ReminderBooking[], now: Date): DueReminde
   return due;
 }
 
+// ---- never twice ----
+// The session_reminders table (migration 0160) as the job uses it: an insert that skips bookings already there (the booking id is the
+// primary key) and answers only the rows it inserted. The admin client's from('session_reminders') is one.
+export interface ReminderClaims {
+  upsert(
+    rows: { booking_id: string }[],
+    options: { onConflict: string; ignoreDuplicates: boolean }
+  ): { select(columns: string): PromiseLike<{ data: { booking_id: string }[] | null; error: { message: string } | null }> };
+}
+
+export type ReminderRun =
+  | { ok: true; due: number; claimed: number; sent: number; failed: number }
+  | { ok: false; error: string };
+
+// Claims each due booking, then pushes only the bookings this call claimed, once each. A booking a previous run (or one running at the
+// same time) already claimed is not in the answer, so it is not pushed again; a booking listed twice is claimed and pushed once; if the
+// claim fails nothing is pushed. `push` answers what lib/push.ts's pushQuietly does (null when the push threw).
+export async function remindOnce(
+  due: DueReminder[],
+  claims: ReminderClaims,
+  push: (reminder: DueReminder) => Promise<{ sent: number; failed: number } | null>
+): Promise<ReminderRun> {
+  const byBooking = new Map<string, DueReminder>();
+  for (const d of due) if (!byBooking.has(d.bookingId)) byBooking.set(d.bookingId, d);
+  const unique = [...byBooking.values()];
+  if (unique.length === 0) return { ok: true, due: 0, claimed: 0, sent: 0, failed: 0 };
+
+  const { data, error } = await claims
+    .upsert(
+      unique.map((d) => ({ booking_id: d.bookingId })),
+      { onConflict: 'booking_id', ignoreDuplicates: true }
+    )
+    .select('booking_id');
+  if (error) return { ok: false, error: error.message };
+
+  const mine = new Set((data ?? []).map((c) => c.booking_id));
+  const toSend = unique.filter((d) => mine.has(d.bookingId));
+  let sent = 0;
+  let failed = 0;
+  await Promise.all(
+    toSend.map(async (d) => {
+      const result = await push(d);
+      sent += result?.sent ?? 0;
+      failed += result?.failed ?? (result ? 0 : 1);
+    })
+  );
+  return { ok: true, due: unique.length, claimed: toSend.length, sent, failed };
+}
+
 // "Strength & Conditioning today at 6 pm"
 export function sessionReminderPayload(r: Pick<DueReminder, 'bookingId' | 'className' | 'startTime' | 'when'>): PushPayload {
   const name = r.className.length > 60 ? `${r.className.slice(0, 57)}...` : r.className;

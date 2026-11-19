@@ -5,7 +5,7 @@ import { checkPushConfig } from '@/lib/pushConfig';
 import { pushQuietly, sendPushToClient } from '@/lib/push';
 import { recordJobRun } from '@/lib/jobRuns';
 import { isMissingColumnError } from '@/lib/onboarding';
-import { dueReminders, sessionReminderPayload, type ReminderBooking } from '@/lib/sessionReminders';
+import { dueReminders, remindOnce, sessionReminderPayload, type ReminderBooking } from '@/lib/sessionReminders';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 
 // The reminder before a booked session (decision D20): a push about 2 hours before it starts (the evening before for an early class, see
@@ -134,31 +134,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ due: 0, sent: 0 });
   }
 
-  // Claim first: only the bookings this run claims are pushed, so no booking is reminded twice.
-  const { data: claimed, error: claimError } = await admin
-    .from('session_reminders')
-    .upsert(
-      due.map((d) => ({ booking_id: d.bookingId })),
-      { onConflict: 'booking_id', ignoreDuplicates: true }
-    )
-    .select('booking_id');
-  if (claimError) {
-    await recordJobRun('session-reminders', false, `claim failed, nothing sent: ${claimError.message}`);
-    return NextResponse.json({ error: claimError.message }, { status: 500 });
-  }
-  const mine = new Set(((claimed ?? []) as { booking_id: string }[]).map((c) => c.booking_id));
-
-  let sent = 0;
-  let failed = 0;
-  await Promise.all(
-    due
-      .filter((d) => mine.has(d.bookingId))
-      .map(async (d) => {
-        const result = await pushQuietly('session reminder', () => sendPushToClient(d.clientId, sessionReminderPayload(d)));
-        sent += result?.sent ?? 0;
-        failed += result?.failed ?? (result ? 0 : 1);
-      })
+  // Claim first: only the bookings this run claims are pushed, so no booking is reminded twice (remindOnce, tested in
+  // lib/sessionReminders.test.ts and route.test.ts).
+  const run = await remindOnce(due, admin.from('session_reminders'), (d) =>
+    pushQuietly('session reminder', () => sendPushToClient(d.clientId, sessionReminderPayload(d)))
   );
+  if (!run.ok) {
+    await recordJobRun('session-reminders', false, `claim failed, nothing sent: ${run.error}`);
+    return NextResponse.json({ error: run.error }, { status: 500 });
+  }
+  const { claimed, sent, failed } = run;
 
   // Old claims are no longer needed (a booking's session is long past); a deleted booking takes its claim with it.
   await admin
@@ -166,7 +151,7 @@ export async function GET(request: Request) {
     .delete()
     .lt('sent_at', new Date(now.getTime() - KEEP_DAYS * 24 * 60 * 60 * 1000).toISOString());
 
-  const detail = `${due.length} due, ${mine.size} newly claimed, ${sent} pushes sent, ${failed} failed`;
+  const detail = `${run.due} due, ${claimed} newly claimed, ${sent} pushes sent, ${failed} failed`;
   await recordJobRun('session-reminders', !(failed > 0 && sent === 0), detail);
-  return NextResponse.json({ due: due.length, claimed: mine.size, sent, failed });
+  return NextResponse.json({ due: run.due, claimed, sent, failed });
 }
