@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -515,7 +515,21 @@ export function FoodSearchPicker({
     });
   // The food tapped in a list, and the amount its step starts at (D23b). The list, query and results stay as they were for "Back".
   const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
-  const pick = (food: FoodRow, qty = startingAmount(food)) => setPicked({ food, qty });
+  // ...and where the list was scrolled to: it is not on screen while a food is open, so the position is kept when a food is tapped and
+  // put back when the list comes back ("Back to results" lands on the result that was tapped, not the top of 40 or more results).
+  const listScroll = useRef(0);
+  const listEl = useRef<HTMLElement | null>(null);
+  const pick = (food: FoodRow, qty = startingAmount(food)) => {
+    listScroll.current = listEl.current?.scrollTop ?? 0;
+    setPicked({ food, qty });
+  };
+  const keepListScroll = useCallback((el: HTMLElement | null) => {
+    listEl.current = el;
+    if (el && listScroll.current > 0) {
+      el.scrollTop = listScroll.current;
+      listScroll.current = 0;
+    }
+  }, []);
   const [servings, setServings] = useState<Record<string, number>>({});
   const [isPending, setIsPending] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -723,7 +737,8 @@ export function FoodSearchPicker({
     );
   }
 
-  // Tap a food, then choose the amount (D23b): the amount step replaces the list, and "Back to results" brings the list back as it was.
+  // Tap a food, then choose the amount (D23b): the amount step replaces the list, and "Back to results" brings the list back as it was
+  // (query, results, open groups and scroll position).
   if (picked) {
     return (
       <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
@@ -804,7 +819,7 @@ export function FoodSearchPicker({
       )}
 
       {query === '' && !isPending && results.length === 0 && ((goesWith && goesWith.length > 0) || ownFoods.length > 0 || (favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
-        <div className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto">
+        <div ref={keepListScroll} className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto">
           {goesWith && goesWith.length > 0 && shortcutList(
             'Goes with what’s in this meal',
             goesWith.map((g) => g.food),
@@ -815,7 +830,7 @@ export function FoodSearchPicker({
           {recentlyLogged && recentlyLogged.length > 0 && shortcutList('Recently logged', recentlyLogged)}
         </div>
       ) : (
-        <ul className="mt-2 max-h-[50vh] divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
+        <ul ref={keepListScroll} className="mt-2 max-h-[50vh] divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
           {groups.map(({ food: shown, others }) => {
             const open = expanded.has(shown.id);
             return [shown, ...(open ? others : [])].map((food, i) => (

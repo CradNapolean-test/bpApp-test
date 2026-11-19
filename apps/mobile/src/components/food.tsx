@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -533,6 +533,15 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   const [creating, setCreating] = useState<{ name: string } | null>(null);
   // The food tapped, and the amount its step starts at. The search text and results stay as they were for "Back".
   const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
+  // ...and where the list was scrolled to: it is not on screen while a food is open, so the position is kept when a food is tapped and
+  // put back once the list has laid out again ("Back" lands on the result that was tapped, not the top of 40 or more results).
+  const listRef = useRef<FlatList<{ title?: string; groups: FoodGroup<FoodRow>[] }>>(null);
+  const scrollY = useRef(0);
+  const restoreY = useRef(0);
+  const pick = (food: FoodRow) => {
+    restoreY.current = scrollY.current;
+    setPicked({ food, qty: startingAmount(food) });
+  };
 
   // Near-duplicate products shown as one result per brand and product, the rest behind "N more like this" (D23a).
   const groups = useMemo(() => groupFoodResults(search.data ?? []), [search.data]);
@@ -607,10 +616,10 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
       <View key={food.id}>
         <FoodResultItem
           food={food}
-          onPress={() => setPicked({ food, qty: startingAmount(food) })}
+          onPress={() => pick(food)}
           more={others.length > 0 ? { count: others.length, open, onToggle: () => toggleGroup(food.id) } : undefined}
         />
-        {open ? others.map((o) => <FoodResultItem key={o.id} food={o} nested onPress={() => setPicked({ food: o, qty: startingAmount(o) })} />) : null}
+        {open ? others.map((o) => <FoodResultItem key={o.id} food={o} nested onPress={() => pick(o)} />) : null}
       </View>
     );
   };
@@ -620,9 +629,17 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
       <TextField label="Search foods" value={text} onChangeText={setText} placeholder="e.g. chicken breast" autoCorrect={false} autoCapitalize="none" returnKeyType="search" />
       {text === '' ? ownFoodLink('+ A food of your own', '') : null}
       <FlatList
+        ref={listRef}
         data={list}
         keyExtractor={(g, i) => g.title ?? 'results' + i}
         keyboardShouldPersistTaps="handled"
+        onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={100}
+        onContentSizeChange={() => {
+          if (restoreY.current <= 0) return;
+          listRef.current?.scrollToOffset({ offset: restoreY.current, animated: false });
+          restoreY.current = 0;
+        }}
         renderItem={({ item: group }) => (
           <View style={{ marginBottom: spacing.sm }}>
             {group.title ? <AppText variant="small" color="muted" style={{ fontWeight: '700', marginBottom: 2 }}>{group.title}</AppText> : null}
