@@ -62,3 +62,35 @@ describe('D23c: a recipe is one diary line', () => {
     expect(check).toMatch(/char_length\(btrim\(recipe_name\)\) between 1 and 100/);
   });
 });
+
+describe("NU18: deleting a member who logged one of their own foods", () => {
+  const keyTables = ['food_diary_entries', 'recipe_ingredients', 'meal_plan_entries'];
+
+  it('their own foods go with them', () => {
+    expect(sql).toMatch(/alter table public\.foods add column if not exists owner_id uuid references public\.profiles\(id\) on delete cascade;/);
+  });
+
+  it("the food_id keys of the diary, recipe ingredients and plan wait for the member's cascades (deferred), whatever order they run in", () => {
+    const block = sql.slice(sql.indexOf('do $keys$'), sql.indexOf('$keys$;'));
+    expect(block).toMatch(/alter table %s alter constraint %I deferrable initially deferred/);
+    for (const t of keyTables) expect(block).toContain(`'public.${t}'::regclass`);
+    // only plain no-action keys, and only those not deferred yet, so running it again changes nothing
+    expect(block).toMatch(/c\.confdeltype = 'a'/);
+    expect(block).toMatch(/and not \(c\.condeferrable and c\.condeferred\)/);
+    // after the owner_id cascade it is there for
+    expect(sql.indexOf('do $keys$')).toBeGreaterThan(sql.indexOf('add column if not exists owner_id'));
+  });
+
+  it('the guard stops before anything changes if one of those keys is not a plain no-action key', () => {
+    const guard = sql.slice(sql.indexOf('do $guard$'), sql.indexOf('$guard$;'));
+    for (const t of keyTables) expect(guard).toContain(`'public.${t}'::regclass`);
+    expect(guard).toMatch(/c\.confdeltype <> 'a'/);
+    expect(guard).toMatch(/raise exception 'a food_id key is not/);
+    expect(sql.indexOf('$guard$;')).toBeLessThan(sql.indexOf('alter table public.food_diary_entries add column'));
+  });
+
+  it('the header has the before and after of those keys', () => {
+    expect(migration).toMatch(/Expected before: the food_id keys of food_diary_entries, meal_plan_entries and recipe_ingredients with a \(no action\), false, false;/);
+    expect(migration).toMatch(/Expected after: the same keys; the three no-action food_id keys now true, true \(deferred\)/);
+  });
+});

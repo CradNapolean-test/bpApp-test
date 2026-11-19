@@ -8,9 +8,10 @@
 -- column that does not exist yet fails.
 --
 -- Guard: before changing anything, the migration checks that search_foods and set_food_servings are the ones from 0155 and 0149 (or
--- already this file's), comparing their bodies with spaces and line breaks squeezed out, and that foods has no read rule other than
--- "authenticated users read foods". If not, nothing is changed and it stops with "... is not the one from migration ..." or "foods has
--- another read rule ...". Then send the PRE-FLIGHT's results to the developer instead.
+-- already this file's), comparing their bodies with spaces and line breaks squeezed out, that foods has no read rule other than
+-- "authenticated users read foods", and that the food_id keys of food_diary_entries, recipe_ingredients and meal_plan_entries are the
+-- plain ones from schema.sql and 0017 (no action). If not, nothing is changed and it stops with "... is not the one from migration ...",
+-- "foods has another read rule ..." or "a food_id key is not ...". Then send the PRE-FLIGHT's results to the developer instead.
 --
 -- 1. food_diary_entries gets three columns, all empty on every existing row (existing entries stay exactly as they are, one line each):
 --      recipe_log_id   the same id on every row of one logging of a recipe (a new id each time it is logged or copied to another day)
@@ -43,6 +44,12 @@
 --      coach's search does not list their members' own foods. Still runs as the caller.
 --    - set_food_servings (0149): a coach can set servings on a shared food, or on an own food of one of their own members, not anyone
 --      else's. The member rules are unchanged (own foods are not among them).
+--    - Deleting a member: their own foods go with them (owner_id), and the diary rows, recipe ingredients and planned items that use
+--      those foods go by the member's other cascades (daily_logs, recipes, meal_plan_entries). Postgres runs those cascades in the order
+--      of their internal trigger names, so the food_id keys' "is this food still used?" check could run before the rows using it were
+--      deleted, and the member could not be deleted. The three food_id keys now make that check at the end of the transaction
+--      (deferrable initially deferred), after every cascade. A food still in use is refused as before, only at the end of the
+--      transaction instead of the end of the statement (nothing in the app relies on the earlier moment).
 --
 -- PRE-FLIGHT (read-only):
 --   select table_name, column_name from information_schema.columns
@@ -62,12 +69,18 @@
 -- correct scanned foods" UPDATE, "coaches delete scanned foods" DELETE.
 --   select source, count(*) from public.foods group by 1 order by 1;
 -- Expected before: no 'own' row.
+--   select conrelid::regclass as tbl, conname, confdeltype, condeferrable, condeferred from pg_constraint
+--   where contype = 'f' and confrelid = 'public.foods'::regclass order by 1, 2;
+-- Expected before: the food_id keys of food_diary_entries, meal_plan_entries and recipe_ingredients with a (no action), false, false;
+-- food_favorites and member_food_units with c (cascade), false, false.
 --
 -- AFTER (read-only):
 --   (the PRE-FLIGHT's first query again)
 -- Expected after: food_diary_entries recipe_log_id, recipe_name, recipe_servings; meal_plan_entries meal_section_id.
 --   select column_name from information_schema.columns where table_schema = 'public' and table_name = 'foods' and column_name = 'owner_id';
 -- Expected after: one row.
+--   (the PRE-FLIGHT's pg_constraint query again)
+-- Expected after: the same keys; the three no-action food_id keys now true, true (deferred); the two cascade keys as before.
 --   (the PRE-FLIGHT's pg_proc query again)
 -- Expected after: search_foods adc01f202d961b1744964e8e19305a70 false, set_food_servings fb26ff97e115758f4a6e0eb1132bd20b true (this
 -- file's bodies).
@@ -96,7 +109,9 @@
 -- name and calories (not "Unknown food 0 kcal") and does not get it in their own search; a coach at another gym cannot read it by its
 -- id; A inserting a food with source 'own' and owner_id B, or with source 'seed', is refused; A updating its protein (update foods set
 -- protein = ... where id = ...) changes nothing; remove_own_food(id) as B returns false, as A returns true and the food leaves A's
--- search while A's diary still shows the logged line.
+-- search while A's diary still shows the logged line; deleting test member A (Authentication > Users > Delete user) after they have
+-- logged the own food, put it in a recipe and planned it works, and the food is gone with them.
+-- (node supabase/tests/security-audit/own-foods-check.cjs --ref=<sandbox project ref> runs these checks in a sandbox project.)
 --
 -- REVERSE: 1. alter table public.food_diary_entries drop constraint food_diary_entries_recipe_line; drop index
 --   idx_food_diary_entries_recipe_log_id; then drop the three columns (the rows stay, as separate lines).
@@ -106,7 +121,8 @@
 -- 3. Run search_foods' definition from migration 0155 and set_food_servings' from 0149 again (each from its "create or replace function"
 --   line to its closing delimiter, with its grant lines). drop function public.remove_own_food(uuid); drop the insert rule "members save
 --   their own foods" on foods. Keep the new read rule and owner_id: shared foods read exactly as before with it, and putting the old
---   "using (true)" back would show every member's own foods to everyone.
+--   "using (true)" back would show every member's own foods to everyone. Keep the deferred food_id keys too: they refuse the same
+--   things, and with owner_id kept they are what lets a member who logged an own food be deleted.
 --
 -- Safe to run again. No temporary tables.
 
@@ -115,6 +131,7 @@ declare
   v_md5 text;
   v_check record;
   v_other_reads text;
+  v_other_keys text;
 begin
   for v_check in
     select * from (values
@@ -136,6 +153,18 @@ begin
   where schemaname = 'public' and tablename = 'foods' and cmd in ('SELECT', 'ALL') and policyname <> 'authenticated users read foods';
   if v_other_reads is not null then
     raise exception 'foods has another read rule (%), so nothing was changed.', v_other_reads;
+  end if;
+
+  -- Deleting a member (3.): the food_id keys that 3. makes wait for the cascades must be plain no-action keys (on delete restrict
+  -- could not wait, and anything else is not what schema.sql and 0017 made).
+  select string_agg(c.conrelid::regclass::text || '.' || c.conname, ', ') into v_other_keys
+  from pg_constraint c
+  where c.contype = 'f'
+    and c.confrelid = 'public.foods'::regclass
+    and c.conrelid in ('public.food_diary_entries'::regclass, 'public.recipe_ingredients'::regclass, 'public.meal_plan_entries'::regclass)
+    and c.confdeltype <> 'a';
+  if v_other_keys is not null then
+    raise exception 'a food_id key is not the plain one from schema.sql or 0017 (%), so nothing was changed.', v_other_keys;
   end if;
 end
 $guard$;
@@ -216,6 +245,26 @@ alter table public.foods drop constraint if exists foods_own_food_owner;
 alter table public.foods add constraint foods_own_food_owner check ((source = 'own') = (owner_id is not null));
 
 create index if not exists foods_owner_id_idx on public.foods (owner_id) where owner_id is not null;
+
+-- Deleting a member: the food_id keys of the diary, recipe ingredients and plan check "is this food still used?" at the end of the
+-- transaction, after the cascades that delete the member's rows, whatever order Postgres runs those cascades in (see 3. above).
+do $keys$
+declare
+  v_key record;
+begin
+  for v_key in
+    select c.conrelid::regclass as tbl, c.conname
+    from pg_constraint c
+    where c.contype = 'f'
+      and c.confrelid = 'public.foods'::regclass
+      and c.conrelid in ('public.food_diary_entries'::regclass, 'public.recipe_ingredients'::regclass, 'public.meal_plan_entries'::regclass)
+      and c.confdeltype = 'a'
+      and not (c.condeferrable and c.condeferred)
+  loop
+    execute format('alter table %s alter constraint %I deferrable initially deferred', v_key.tbl, v_key.conname);
+  end loop;
+end
+$keys$;
 
 -- Reading: the shared foods as before (every signed-in user), and an own food only by its owner, their own coach and, read-only, the
 -- other coaches at their gym, who can already read the diary, recipes and plan it is in (0053). is_same_gym_as_client is false for a
