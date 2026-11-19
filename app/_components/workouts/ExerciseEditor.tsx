@@ -457,6 +457,7 @@ function ExerciseSheet<T extends EditableExercise>({
 function ExercisePickerSheet({
   library,
   libraryLoading = false,
+  onRetryLibrary,
   title,
   onPick,
   onCustom,
@@ -464,6 +465,7 @@ function ExercisePickerSheet({
 }: {
   library: ExerciseLibraryRow[];
   libraryLoading?: boolean;
+  onRetryLibrary?: () => void;
   title: string;
   onPick: (entry: ExerciseLibraryRow) => Promise<unknown>;
   onCustom: (name: string) => Promise<unknown>;
@@ -511,6 +513,14 @@ function ExercisePickerSheet({
 
         <div className="max-h-[48vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
           {libraryLoading && <p className="p-3 text-sm text-zinc-500">Loading the exercise library…</p>}
+          {onRetryLibrary && !libraryLoading && (
+            <div className="flex items-center justify-between gap-3 p-3">
+              <p className="text-sm font-semibold text-danger">Could not load the exercise library.</p>
+              <button type="button" onClick={onRetryLibrary} className="h-11 shrink-0 rounded-xl px-3 text-sm font-bold text-accent">
+                Try again
+              </button>
+            </div>
+          )}
           {q && !exact && !libraryLoading && (
             <button
               type="button"
@@ -961,6 +971,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   blockBadge,
   memberChoices,
   libraryLoading = false,
+  onRetryLibrary,
 }: {
   exercises: T[];
   library: ExerciseLibraryRow[];
@@ -993,6 +1004,9 @@ export function ExerciseEditor<T extends EditableExercise>({
   // True while the whole library is still on its way (the coach's view of a member reads it when a day is opened, DB21): the picker
   // says so, and holds back "Add as its own exercise" until a name can be checked against the whole library (D26).
   libraryLoading?: boolean;
+  // Given when reading the whole library failed: the picker says so, with a button that reads it again. Only the programme's own
+  // exercises are listed meanwhile, and "Add as its own exercise" is offered again (nothing is on its way to check against).
+  onRetryLibrary?: () => void;
 }) {
   const { run: runReorder } = useAction();
   const { run: runMutate } = useAction();
@@ -1575,6 +1589,7 @@ export function ExerciseEditor<T extends EditableExercise>({
         <ExercisePickerSheet
           library={library}
           libraryLoading={libraryLoading}
+          onRetryLibrary={onRetryLibrary}
           title={`Add to ${keyLabel(sheet.key)}`}
           onPick={(entry) => addFromLibrary(sheet.key, entry)}
           onCustom={(name) => addCustom(sheet.key, name)}

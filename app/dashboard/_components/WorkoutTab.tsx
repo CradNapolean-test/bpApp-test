@@ -920,20 +920,24 @@ export function WorkoutTab({
   // member page, which took 3-8 s). The coach's builder needs the whole library for its exercise picker, so it is read the first time
   // the coach opens a day, and kept while they stay on the page.
   const [wholeLibrary, setWholeLibrary] = useState<ExerciseLibraryRow[] | null>(null);
+  // Reading it failed: the picker says so with a "Try again" (which clears this), instead of saying it is loading for ever.
+  const [libraryFailed, setLibraryFailed] = useState(false);
   const builderOpen = isCoachView && openDayId != null;
   useEffect(() => {
-    if (!builderOpen || wholeLibrary) return;
+    if (!builderOpen || wholeLibrary || libraryFailed) return;
     let live = true;
     getExerciseLibrary()
       .then((rows) => {
         if (live) setWholeLibrary(rows);
       })
-      // The builder keeps working with the programme's own exercises; opening a day again tries once more.
-      .catch(() => {});
+      // The builder keeps working with the programme's own exercises meanwhile.
+      .catch(() => {
+        if (live) setLibraryFailed(true);
+      });
     return () => {
       live = false;
     };
-  }, [builderOpen, wholeLibrary]);
+  }, [builderOpen, wholeLibrary, libraryFailed]);
   const library = wholeLibrary ?? exerciseLibrary;
   const [editingSet, setEditingSet] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   const toast = useToast();
@@ -1493,7 +1497,8 @@ export function WorkoutTab({
           <ExerciseEditor
             exercises={openDay.workout_exercises}
             library={library}
-            libraryLoading={isCoachView && wholeLibrary == null}
+            libraryLoading={isCoachView && wholeLibrary == null && !libraryFailed}
+            onRetryLibrary={isCoachView && wholeLibrary == null && libraryFailed ? () => setLibraryFailed(false) : undefined}
             canEdit={isCoachView}
             // A coach opening a day sees the plan as a builder; what the member actually lifted goes under each exercise (CR2).
             renderBuilderExtra={
