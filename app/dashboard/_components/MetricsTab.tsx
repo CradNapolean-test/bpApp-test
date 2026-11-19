@@ -29,7 +29,14 @@ import {
   type MetricKey,
   type RangeKey,
 } from '@/lib/utils/metrics';
-import { formatStLb, formatWeightDiff, formatWeightForCoach, formatWeightShort, weightUnitOf } from '@/lib/utils/weightUnits';
+import {
+  formatStLb,
+  formatWeightDiff,
+  formatWeightDiffForCoach,
+  formatWeightForCoach,
+  formatWeightShort,
+  weightUnitOf,
+} from '@/lib/utils/weightUnits';
 import { useTodayIso } from './useTodayIso';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
@@ -164,11 +171,12 @@ function MetricChart({
   );
 }
 
-function Tile({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
+function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: 'good' | 'bad' }) {
   return (
     <div className="rounded-[20px] border border-black/[.08] bg-card px-4 py-3 dark:border-white/10">
       <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className={`text-[17px] font-black ${tone === 'good' ? 'text-success' : tone === 'bad' ? 'text-danger' : 'text-black dark:text-zinc-50'}`}>{value}</p>
+      {sub && <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{sub}</p>}
     </div>
   );
 }
@@ -242,13 +250,14 @@ export function MetricsTab({
   const change = summary.change;
   const changeTone = summary.favourable == null ? undefined : summary.favourable ? 'good' : 'bad';
 
-  // Bodyweight in the member's units (D16): stones and pounds for a member who reads it that way, with kilograms alongside the latest
-  // figure for their coach. The figures stay kilograms underneath.
+  // Bodyweight in the member's units (D16): stones and pounds for a member who reads it that way, with kilograms alongside every figure
+  // for their coach (the chart's axis stays short). The figures stay kilograms underneath.
   const weightUnit = weightUnitOf(profile?.weight_unit);
   const stLb = metric === 'bodyweight' && weightUnit === 'st_lb';
-  const show = (v: number) => (stLb ? formatStLb(v) : formatMetricValue(v, info));
-  const showMain = (v: number) => (stLb && isCoachView ? formatWeightForCoach(v, 'st_lb') : show(v));
-  const showDiff = (v: number) => (stLb ? formatWeightDiff(v, 'st_lb') : formatMetricValue(v, info));
+  const coachKg = stLb && isCoachView;
+  const show = (v: number) => (coachKg ? formatWeightForCoach(v, 'st_lb') : stLb ? formatStLb(v) : formatMetricValue(v, info));
+  const showDiff = (v: number) =>
+    stLb ? (isCoachView ? formatWeightDiffForCoach(v, 'st_lb') : formatWeightDiff(v, 'st_lb')) : formatMetricValue(v, info);
 
   return (
     <div className="space-y-4">
@@ -296,7 +305,7 @@ export function MetricsTab({
             <div className="mb-2">
               <p className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">{info.label}</p>
               <p className="text-[28px] font-black leading-tight text-black dark:text-zinc-50">
-                {summary.latest != null ? showMain(summary.latest) : '—'}
+                {summary.latest != null ? show(summary.latest) : '—'}
               </p>
               {change != null && (
                 <p className={`text-[13px] font-bold ${changeTone === 'good' ? 'text-accent' : changeTone === 'bad' ? 'text-danger' : 'text-zinc-500 dark:text-zinc-400'}`}>
@@ -323,7 +332,11 @@ export function MetricsTab({
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? show(summary.average) : '—'} />
+            <Tile
+              label={totalsOnly ? 'Average per week' : 'Average'}
+              value={summary.average != null ? (stLb ? formatStLb(summary.average) : show(summary.average)) : '—'}
+              sub={coachKg && summary.average != null ? `${summary.average.toFixed(1)} kg` : undefined}
+            />
             <Tile
               label="Lowest – highest"
               value={
@@ -333,6 +346,7 @@ export function MetricsTab({
                     : `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}`
                   : '—'
               }
+              sub={coachKg && summary.min != null && summary.max != null ? `${summary.min.toFixed(1)} – ${summary.max.toFixed(1)} kg` : undefined}
             />
           </div>
         </>

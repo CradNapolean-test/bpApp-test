@@ -98,7 +98,15 @@ export function TrendChart({
 
 // One card with a tab per measure: the weekly average as a chart, the change on the previous week, and a
 // week-by-week list underneath. Protein, sleep and water join weight, calories and steps.
-function WeeklyAverages({ weeks, weightUnit = 'kg' }: { weeks: WeekAverages[]; weightUnit?: WeightUnit }) {
+function WeeklyAverages({
+  weeks,
+  weightUnit = 'kg',
+  coachView = false,
+}: {
+  weeks: WeekAverages[];
+  weightUnit?: WeightUnit;
+  coachView?: boolean;
+}) {
   const [metric, setMetric] = useState<WeeklyMetric>('bodyweight');
   const info = WEEKLY_METRICS.find((m) => m.key === metric)!;
   const withValue = weeks.filter((w) => w.avg[metric] != null);
@@ -107,10 +115,12 @@ function WeeklyAverages({ weeks, weightUnit = 'kg' }: { weeks: WeekAverages[]; w
   const current = points.length ? points[points.length - 1] : null;
   const delta = weekChange(weeks, metric);
   const favorable = info.better && delta != null ? (info.better === 'down' ? delta < 0 : delta > 0) : null;
-  // Bodyweight in stones and pounds for a member who reads it that way (D16); the figures stay kilograms underneath.
+  // Bodyweight in stones and pounds for a member who reads it that way (D16); the figures stay kilograms underneath. Their coach sees
+  // kilograms alongside (the chart's axis stays short).
   const stLb = metric === 'bodyweight' && weightUnit === 'st_lb';
+  const coachKg = stLb && coachView;
   const fmt = (v: number) => (stLb ? formatStLb(v) : formatMetric(v, info));
-  const fmtDiff = (v: number) => (stLb ? formatWeightDiff(v, 'st_lb') : fmt(v));
+  const fmtDiff = (v: number) => (stLb ? (coachView ? formatWeightDiffForCoach(v, 'st_lb') : formatWeightDiff(v, 'st_lb')) : fmt(v));
   const fmtAxis = (v: number) => (stLb ? formatWeightShort(v, 'st_lb') : fmt(v));
   const unitLabel = stLb ? '' : info.unit;
   const recent = [...withValue].reverse().slice(0, 6);
@@ -136,6 +146,7 @@ function WeeklyAverages({ weeks, weightUnit = 'kg' }: { weeks: WeekAverages[]; w
       <p className="mt-1 text-[28px] font-black leading-tight text-black dark:text-zinc-50">
         {current != null ? fmt(current) : '—'}
         {unitLabel && current != null ? unitLabel : null}
+        {coachKg && current != null && <span className="ml-2 text-base font-bold text-zinc-500">{current.toFixed(1)} kg</span>}
       </p>
       {points.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-500">Nothing logged for {info.title.toLowerCase()} yet.</p>
@@ -164,6 +175,7 @@ function WeeklyAverages({ weeks, weightUnit = 'kg' }: { weeks: WeekAverages[]; w
                 <span className={`${stLb ? 'w-28' : 'w-20'} text-right font-semibold text-black dark:text-zinc-50`}>
                   {fmt(w.avg[metric] as number)}
                   {unitLabel}
+                  {coachKg && <span className="block text-xs font-medium text-zinc-500">{(w.avg[metric] as number).toFixed(1)} kg</span>}
                 </span>
               </div>
             ))}
@@ -329,7 +341,7 @@ export function OverviewTab({
       {!isCoachView && programWeek != null && <TargetsCard profile={profile} programWeek={programWeek} />}
       <section className="space-y-2.5">
         {!isCoachView && <h2 className={headCls}>Week by week</h2>}
-        <WeeklyAverages weeks={weeks} weightUnit={weightUnitOf(profile?.weight_unit)} />
+        <WeeklyAverages weeks={weeks} weightUnit={weightUnitOf(profile?.weight_unit)} coachView={isCoachView} />
       </section>
     </div>
   );
