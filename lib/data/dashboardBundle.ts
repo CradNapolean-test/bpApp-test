@@ -133,7 +133,8 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getDisabledScreens(clientId),
     getDisabledMetrics(clientId),
     getBigDogResults(clientId),
-    getUpcomingEvents(clientId),
+    // The member's own gym's events (not whichever gym the coach viewing them has active).
+    getUpcomingEvents(clientId, gymId),
     getRewardsForMember(clientId),
     getGymBookingRules(gymId),
     // A member's page shows the Refer a friend screen only when their gym has a link (R16).

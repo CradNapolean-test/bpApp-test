@@ -22,11 +22,14 @@ export default async function CoachBusinessPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
+  // The coach's active gym: its events only (a gym admin or the owner can read other gyms' events too), and whether they may edit here.
+  const scopingGymId = resolveScopingGymId(supabase).catch(() => null);
+
   const [packages, creditPacks, events, pastEvents, feedback, rewards, unreadCount, overview, planCountsById, packUsage, shirts, canEdit] = await Promise.all([
     getPackages(),
     getCreditPacks(),
-    getUpcomingEvents(null),
-    getPastEvents(10),
+    scopingGymId.then((gymId) => getUpcomingEvents(null, gymId)),
+    scopingGymId.then((gymId) => getPastEvents(gymId, 10)),
     getRecentFeedback(),
     getRewardOverview(),
     getCoachUnreadTotal(supabase),
@@ -35,7 +38,7 @@ export default async function CoachBusinessPage() {
     getPackUsage(),
     getBigDogShirts(),
     // Plans, credit packs and rewards are changed by an admin of this gym (or the owner) only: decision D3, migration 0161.
-    resolveScopingGymId(supabase).then((gymId) => mayManageGymBusiness(supabase, gymId)).catch(() => false),
+    scopingGymId.then((gymId) => mayManageGymBusiness(supabase, gymId)).catch(() => false),
   ]);
 
   return (

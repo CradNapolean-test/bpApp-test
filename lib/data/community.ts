@@ -13,14 +13,18 @@ import type { EventWithSignup, FeedbackRow } from './types';
 
 const MISSING_TABLE = ['42P01', 'PGRST205', 'PGRST202'];
 
-// Upcoming events for the caller's gym, with headcount and whether the caller is signed up.
+// Upcoming events of one gym (a member's own gym, or the coach's active gym), with headcount and whether the caller is signed up. The
+// gym is filtered here, not left to Row Level Security: a gym admin or the owner may read other gyms' events too (migration 0171), and
+// those must not show up on this gym's screens. No gym, no events.
 // Returns [] instead of throwing if migration 0065 hasn't been applied yet, since this loads on
 // every dashboard render.
-export async function getUpcomingEvents(clientId: string | null): Promise<EventWithSignup[]> {
+export async function getUpcomingEvents(clientId: string | null, gymId: string | null): Promise<EventWithSignup[]> {
+  if (!gymId) return [];
   const supabase = await createClient();
   const { data: events, error } = await supabase
     .from('gym_events')
     .select('*')
+    .eq('gym_id', gymId)
     .gte('starts_at', new Date(Date.now() - 6 * 3600 * 1000).toISOString())
     .order('starts_at');
   if (error) {
@@ -41,12 +45,14 @@ export async function getUpcomingEvents(clientId: string | null): Promise<EventW
   return events.map((e) => ({ ...e, signups: countBy.get(e.id) ?? 0, signedUp: mine.has(e.id) }));
 }
 
-// Events that have already happened (coach view), newest first.
-export async function getPastEvents(limit = 10): Promise<EventWithSignup[]> {
+// Events of one gym that have already happened (coach view), newest first. Filtered by gym for the same reason as getUpcomingEvents.
+export async function getPastEvents(gymId: string | null, limit = 10): Promise<EventWithSignup[]> {
+  if (!gymId) return [];
   const supabase = await createClient();
   const { data: events, error } = await supabase
     .from('gym_events')
     .select('*')
+    .eq('gym_id', gymId)
     .lt('starts_at', new Date(Date.now() - 6 * 3600 * 1000).toISOString())
     .order('starts_at', { ascending: false })
     .limit(limit);

@@ -14,16 +14,26 @@ function useUserId() {
   return id;
 }
 
+// The gym whose events the phone shows: the signed-in person's own (useMe). Filtered by gym here, not left to Row Level Security: a gym
+// admin or the owner can read other gyms' events too (migration 0171). Waits for useMe; no gym, no events.
+function useEventGym(): { gymId: string | null; ready: boolean } {
+  const me = useMe();
+  return { gymId: me.data?.gymId ?? null, ready: !me.isPending };
+}
+
 // Upcoming events for the member's gym, with the headcount (a database function, because members cannot read each other's
 // sign-ups) and whether they are going. Three small requests, started together.
 export function useEvents() {
   const userId = useUserId();
+  const { gymId, ready } = useEventGym();
   return useQuery({
-    queryKey: ['events', userId],
+    queryKey: ['events', userId, gymId],
+    enabled: ready,
     queryFn: async (): Promise<EventWithSignup[]> => {
+      if (!gymId) return [];
       const since = new Date(Date.now() - EVENT_GRACE_MS).toISOString();
       const [events, counts, mine] = await Promise.all([
-        supabase.from('gym_events').select('*').gte('starts_at', since).order('starts_at').limit(50),
+        supabase.from('gym_events').select('*').eq('gym_id', gymId).gte('starts_at', since).order('starts_at').limit(50),
         supabase.rpc('event_signup_counts'),
         supabase.from('event_signups').select('event_id').eq('client_id', userId),
       ]);
@@ -39,11 +49,20 @@ export function useEvents() {
 // Two small requests (not the whole events list), started when Home opens.
 export function useNextEvent() {
   const userId = useUserId();
+  const { gymId, ready } = useEventGym();
   return useQuery({
-    queryKey: ['next-event', userId],
+    queryKey: ['next-event', userId, gymId],
+    enabled: ready,
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<EventWithSignup | null> => {
-      const events = await supabase.from('gym_events').select('*').gte('starts_at', new Date().toISOString()).order('starts_at').limit(1);
+      if (!gymId) return null;
+      const events = await supabase
+        .from('gym_events')
+        .select('*')
+        .eq('gym_id', gymId)
+        .gte('starts_at', new Date().toISOString())
+        .order('starts_at')
+        .limit(1);
       if (events.error) throw events.error;
       const row = ((events.data ?? []) as GymEventRow[])[0];
       if (!row) return null;
@@ -75,8 +94,9 @@ export function useGymReferralUrl(): { url: string | null; ready: boolean } {
 // is what the member sees.
 export function useToggleEvent() {
   const userId = useUserId();
+  const { gymId } = useEventGym();
   const qc = useQueryClient();
-  const key = ['events', userId];
+  const key = ['events', userId, gymId];
   return useMutation({
     mutationFn: async ({ event }: { event: EventWithSignup }) => {
       if (event.signedUp) {
