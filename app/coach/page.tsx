@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/currentUser';
 import { getCoachDashboard } from '@/lib/data/coachDashboard';
 import { getCoachUnreadTotal } from '@/lib/data/coach';
 import type { DashboardScope } from '@/lib/data/coachDashboard';
@@ -18,9 +19,8 @@ import { CoachMobileBrand } from './_components/CoachMobileBrand';
 export default async function CoachPage({ searchParams }: { searchParams: Promise<{ scope?: string; coach?: string }> }) {
   const { scope: scopeParam, coach: coachParam } = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Shared with getCoachDashboard (one trip to the auth server per page, not two in a row before the members are read).
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   // maybeSingle, not single -- and redirect to '/' (which explicitly handles a missing

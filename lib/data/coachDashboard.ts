@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/currentUser';
 import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
 import { isGoneQuiet, sortFollowUps, type FollowUpKind, type FollowUpReason } from '@/lib/followUp';
@@ -214,9 +215,8 @@ const SELECT = `
 // only). A non-admin asking for more than their own gets their own.
 export async function getCoachDashboard(requested: DashboardScope = 'mine', coachId: string | null = null): Promise<CoachDashboardData> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The page has just asked who is signed in: the same answer, not a second trip to the auth server before the members are read.
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: me } = await supabase
@@ -229,13 +229,15 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   const isAdmin = !!me?.is_gym_admin;
   const scope: DashboardScope = isAdmin ? requested : 'mine';
 
-  // Coaches at this gym (for the admin's coach picker).
-  let coaches: CoachOption[] = [];
-  if (isAdmin && me?.gym_id) {
+  // Coaches at this gym (for the admin's coach picker). Read alongside the members, not before them, unless it decides whose members
+  // to read (By coach with no coach chosen: the first one's).
+  const readCoaches = async (): Promise<CoachOption[]> => {
+    if (!isAdmin || !me?.gym_id) return [];
     const { data } = await supabase.from('profiles').select('id, email, display_name').eq('role', 'coach').eq('gym_id', me.gym_id);
-    coaches = (data ?? []).map((c) => ({ id: c.id, name: c.display_name || c.email }));
-  }
-  const selectedCoachId = scope === 'coach' ? (coachId ?? coaches[0]?.id ?? null) : null;
+    return (data ?? []).map((c) => ({ id: c.id, name: c.display_name || c.email }));
+  };
+  const coachesFirst = scope === 'coach' && !coachId ? await readCoaches() : null;
+  const selectedCoachId = scope === 'coach' ? (coachId ?? coachesFirst?.[0]?.id ?? null) : null;
 
   const todayIso = todayIsoInTz(timezone);
   const thisWeek = isoWeekKey(todayIso);
@@ -300,13 +302,14 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     return read(before0166.replace('coach_reviews!client_id(kind, ref),', ''));
   };
 
-  const [{ data: rows, error }, occurrences, chatOverview, activity, flagResult] = await Promise.all([
+  const [{ data: rows, error }, occurrences, chatOverview, activity, flagResult, coaches] = await Promise.all([
     fetchMembers(),
     getScheduleOccurrences(1, 2),
     scope === 'mine' ? getCoachChatOverview().catch(() => []) : Promise.resolve([]),
     getRecentActivity(undefined, 8).catch(() => [] as ActivityEventRow[]),
     // The same gym as the timetable above (the active one), whichever gym the coach's own members are in (R36).
     getRedFlagReport(lastWeek, me?.gym_id).catch(() => ({ report: null, error: 'unavailable' })),
+    coachesFirst ?? readCoaches(),
   ]);
   if (error) throw new Error(error.message);
   const members = (rows ?? []) as unknown as MemberRow[];
