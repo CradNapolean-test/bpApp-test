@@ -69,7 +69,8 @@ describe('D7: the member sees which of their weeks and forms were reviewed, and 
     ]);
     const created = [...sql.matchAll(/create\s+policy[^;]*on\s+public\.coach_reviews[^;]*;/gi)].map((m) => m[0]);
     expect(created).toHaveLength(1);
-    expect(created[0]).toMatch(/for select\s+using \(public\.is_coach_of\(client_id\) or public\.is_same_gym_as_client\(client_id\)\);/);
+    // Stays "to authenticated" as 0128 (R9) left it: a logged-out caller gets an empty answer, not a refused helper function.
+    expect(created[0]).toMatch(/for select\s+to authenticated\s+using \(public\.is_coach_of\(client_id\) or public\.is_same_gym_as_client\(client_id\)\);/);
     expect(created[0]).not.toMatch(/owns_client|is_self/);
   });
 

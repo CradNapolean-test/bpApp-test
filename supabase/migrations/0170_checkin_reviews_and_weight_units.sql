@@ -17,7 +17,8 @@
 --     else from coach_reviews, and nobody else's rows. Security definer, so the member never needs to read coach_reviews or profiles.
 --   Changed: the table's read rule becomes is_coach_of(client_id) OR is_same_gym_as_client(client_id): the member themself is the only
 --     reader dropped (their own coach and the coaches at the gym read exactly what they read before). Nothing in the app reads the table
---     with a member's sign-in.
+--     with a member's sign-in. The rule stays "to authenticated", as migration 0128 (R9) left it, so a logged-out caller still gets an
+--     immediate empty answer.
 --
 -- 2. client_profiles had no units setting: every weight was shown and typed in kilograms (onboarding alone offered st & lb, and saved kg).
 -- After: New column client_profiles.weight_unit, 'kg' (the default, so every member today stays on kilograms) or 'st_lb'. Only how
@@ -33,10 +34,10 @@
 -- Safe to run twice.
 --
 -- PRE-FLIGHT (read-only):
---   select polname, polcmd, pg_get_expr(polqual, polrelid) as using_rule
+--   select polname, polcmd, polroles::regrole[] as roles, pg_get_expr(polqual, polrelid) as using_rule
 --   from pg_policy where polrelid = 'public.coach_reviews'::regclass order by 1;
 -- Expected before: "coach adds coach_reviews" (a, no using rule), "coach removes coach_reviews" (d, is_coach_of(client_id)),
--- "read coach_reviews" (r, (owns_client(client_id) OR is_same_gym_as_client(client_id))).
+-- "read coach_reviews" (r, (owns_client(client_id) OR is_same_gym_as_client(client_id))), each with roles {authenticated} (0128, R9).
 --
 --   select p.proname, md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) as body_md5
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'my_checkin_reviews';
@@ -49,7 +50,9 @@
 -- Expected before: no rows.
 --
 -- AFTER (read-only):
---   The first PRE-FLIGHT query: "read coach_reviews" is now (is_coach_of(client_id) OR is_same_gym_as_client(client_id)).
+--   The first PRE-FLIGHT query: "read coach_reviews" is now (is_coach_of(client_id) OR is_same_gym_as_client(client_id)), roles
+--   {authenticated}. And 0128's check still holds (expect zero rows):
+--     select tablename, policyname from pg_policies where schemaname = 'public' and roles = array['public']::name[];
 --   The second: my_checkin_reviews with body_md5 071c09ca84f9348b8629d6315360ac64.
 --   As one member, inside a transaction that is rolled back (put a member's id in; nothing is written):
 --     begin;
@@ -65,7 +68,7 @@
 --   alter table public.client_profiles drop column weight_unit;
 -- To undo 1: drop function public.my_checkin_reviews(); and put back 0087's read rule:
 --   drop policy if exists "read coach_reviews" on public.coach_reviews;
---   create policy "read coach_reviews" on public.coach_reviews for select
+--   create policy "read coach_reviews" on public.coach_reviews for select to authenticated
 --     using (public.owns_client(client_id) or public.is_same_gym_as_client(client_id));
 
 -- ---------------------------------------------------------------------------------------------------------------------------------------
@@ -136,6 +139,7 @@ grant execute on function public.my_checkin_reviews() to authenticated;
 drop policy if exists "read coach_reviews" on public.coach_reviews;
 create policy "read coach_reviews"
   on public.coach_reviews for select
+  to authenticated
   using (public.is_coach_of(client_id) or public.is_same_gym_as_client(client_id));
 
 -- ---------------------------------------------------------------------------------------------------------------------------------------
