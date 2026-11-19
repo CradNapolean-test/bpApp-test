@@ -3,6 +3,7 @@ import { cycleDayFor, isPlateaued } from '@/lib/calculations';
 import { NEEDS_MORE_DATA, trustworthyAdaptiveTdee } from '@/lib/insights';
 import { PLAN_BEING_SET_UP, targetsHeldBack } from '@/lib/onboarding';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
+import { weightUnitOf } from '@/lib/utils/weightUnits';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
 const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
@@ -58,6 +59,9 @@ export function InsightsTab({
   const adaptiveInsight = adaptive.status === 'ok' && !planHeld ? adaptive : null;
 
   const plateaued = isPlateaued(bodyweightSeries.slice(-28));
+  // The stall threshold in the member's units (D16); the coach sees kilograms alongside.
+  const stLb = weightUnitOf(profile?.weight_unit) === 'st_lb';
+  const stallAmount = stLb ? (isCoachView ? 'under 0.7 lb, 0.3 kg' : 'under 0.7 lb') : 'under 0.3kg';
 
   let cycleNote: number | null = null;
   if (profile?.gender === 'Female' && historyLogs.length > 0) {
@@ -103,8 +107,8 @@ export function InsightsTab({
               : 'Weigh in a few more times (6 or more) and we will tell you if your weight has stalled.'
             : plateaued
               ? isCoachView
-                ? 'Their weight has barely moved (under 0.3kg) recently. This can be normal.'
-                : 'Your weight has barely moved (under 0.3kg) recently. This can be normal — mention it to your coach.'
+                ? `Their weight has barely moved (${stallAmount}) recently. This can be normal.`
+                : `Your weight has barely moved (${stallAmount}) recently. This can be normal — mention it to your coach.`
               : isCoachView
                 ? 'Their weight is moving, so no stall detected.'
                 : 'Your weight is moving, so no stall detected.'}

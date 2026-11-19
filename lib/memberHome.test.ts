@@ -79,4 +79,9 @@ describe('checkinToday', () => {
     expect(checkinToday(log({ bodyweight: 82.4 }), [])).toEqual({ done: true, detail: 'Done. 82.4 kg.' });
     expect(checkinToday(log({}), [])).toEqual({ done: false, detail: "Today's weigh-in and how you feel" });
   });
+
+  it("says the weight in the member's own units (D16)", () => {
+    expect(checkinToday(log({ bodyweight: 78.24 }), [], 'st_lb')).toEqual({ done: true, detail: 'Done. 12 st 4.5 lb.' });
+    expect(checkinToday(log({ bodyweight: 78.24 }), [], 'kg')).toEqual({ done: true, detail: 'Done. 78.2 kg.' });
+  });
 });

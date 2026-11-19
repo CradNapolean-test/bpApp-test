@@ -13,6 +13,7 @@ import { getDailyLogs, upsertDailyLog } from '@/lib/data/dailyLogs';
 import { LOCKED_DAY_MESSAGE, canBrowseWeek, canEditDay, changedFields } from '@/lib/dayPatch';
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { BODYWEIGHT_KG, bodyweightMessage, isValidBodyweight } from '@/lib/limits';
+import { formatStLb, formatWeight, formatWeightForCoach, parseStLb, sameWeightReading, stLbFields, weightUnitOf } from '@/lib/utils/weightUnits';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { averageDayTarget, dayTargetFor } from '@/lib/utils/dayTarget';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
@@ -171,6 +172,11 @@ function WeekLog({
   // into calories), so every food figure is hidden for them.
   const mode = profile?.nutrition_tracking_mode ?? 'full_tracking';
   const isPhoto = mode === 'photo_diary';
+  // Kilograms, or stones and pounds (D16). Stored in kilograms either way; the coach sees the member's units with kilograms alongside.
+  const unit = weightUnitOf(profile?.weight_unit);
+  const showWeight = (kg: number) => (isCoachView ? formatWeightForCoach(kg, unit) : formatWeight(kg, unit));
+  // What is in the stones and pounds boxes for the day being typed in, until the next save reads it back.
+  const [stLbDraft, setStLbDraft] = useState<{ date: string; st: string; lb: string; error: string | null } | null>(null);
   // A single focused day at a time (7-day chip strip selects it), replacing the previous
   // stack of seven independently-collapsible day cards -- one form on screen instead of
   // seven, matching the mobile redesign brief.
@@ -200,7 +206,9 @@ function WeekLog({
     // The database refuses a bodyweight outside 20-400 kg. Checked here too, so a typo in that one box can't stop the rest of the day
     // (sleep, steps, water) from saving: it is reported when the member just edited it or leaves the form, and left out of the save.
     if (patch.bodyweight != null && !isValidBodyweight(Number(patch.bodyweight))) {
-      if (from === 'bodyweight' || from === 'flush') toast.error(bodyweightMessage);
+      if (from === 'bodyweight' || from === 'flush') {
+        toast.error(unit === 'st_lb' ? `Bodyweight must be between ${formatStLb(BODYWEIGHT_KG.min)} and ${formatStLb(BODYWEIGHT_KG.max)}.` : bodyweightMessage);
+      }
       const { bodyweight: _dropped, ...rest } = patch; // eslint-disable-line @typescript-eslint/no-unused-vars
       patch = rest;
     }
@@ -287,6 +295,17 @@ function WeekLog({
   const attendedToday = attendedSessions.find((a) => a.date === focusedDate) ?? null;
   const gymOn = d.gym_session || attendedToday != null;
   const weekNotes = weekDates.map((date) => ({ date, text: days[date].notes?.trim() ?? '' })).filter((n) => n.text !== '');
+  const stLbShown = stLbDraft?.date === focusedDate ? stLbDraft : { ...stLbFields(d.bodyweight), error: null };
+
+  // The stones and pounds boxes: saved as kilograms a moment after the last keystroke, and only when the reading really changed, so a
+  // weight is never nudged by being converted back and forth (D16).
+  function changeStLb(st: string, lb: string) {
+    const parsed = parseStLb(st, lb);
+    setStLbDraft({ date: focusedDate, st, lb, error: parsed.ok ? null : parsed.error });
+    if (!parsed.ok || sameWeightReading(d.bodyweight, parsed.kg, 'st_lb')) return;
+    updateDay(focusedDate, { bodyweight: parsed.kg });
+    scheduleSave(focusedDate, 'bodyweight');
+  }
 
   return (
     <div className="space-y-6">
@@ -298,10 +317,12 @@ function WeekLog({
           </div>
           <div className={cardCls}>
             <p className="text-2xl font-bold text-black dark:text-zinc-50">
-              {fmt(avgBodyweight, 1)}
-              {avgBodyweight != null && <span className="text-sm font-bold text-zinc-500">kg</span>}
+              {avgBodyweight != null && unit === 'st_lb' ? formatStLb(avgBodyweight) : fmt(avgBodyweight, 1)}
+              {avgBodyweight != null && unit === 'kg' && <span className="text-sm font-bold text-zinc-500">kg</span>}
             </p>
-            <p className="mt-0.5 text-xs text-zinc-500">avg bodyweight</p>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              avg bodyweight{isCoachView && unit === 'st_lb' && avgBodyweight != null ? ` · ${avgBodyweight.toFixed(1)} kg` : ''}
+            </p>
           </div>
         </div>
       ) : (
@@ -335,8 +356,7 @@ function WeekLog({
             {isCoachView && daysSoFar > 0 && loggedDays.length < daysSoFar ? '' : `${loggedDays.length} day${loggedDays.length === 1 ? '' : 's'} of food logged this week · `}
             avg carbs {fmt(avgCarbs)}
             {avgCarbs != null && 'g'} · avg fat {fmt(avgFat)}
-            {avgFat != null && 'g'} · avg bodyweight {fmt(avgBodyweight, 1)}
-            {avgBodyweight != null && 'kg'}
+            {avgFat != null && 'g'} · avg bodyweight {avgBodyweight != null ? showWeight(avgBodyweight) : '—'}
           </p>
         </>
       )}
@@ -517,7 +537,7 @@ function WeekLog({
         {isCoachView ? (
           <dl className="mt-3 divide-y divide-black/[.05] rounded-xl border border-black/[.05] text-sm dark:divide-white/10 dark:border-white/10">
             {([
-              ['Bodyweight', d.bodyweight != null ? `${d.bodyweight} kg` : null],
+              ['Bodyweight', d.bodyweight != null ? formatWeightForCoach(d.bodyweight, unit) : null],
               ...scaleFields.map(({ key, label }) => [label, d[key] != null ? `${d[key]} / 5` : null] as [string, string | null]),
               ['Gym session', gymOn ? (attendedToday != null ? `Yes, ${attendedToday.label}` : 'Yes') : 'No'],
               ...(gender === 'Female' ? [['Period started', d.period_started ? 'Yes' : 'No'] as [string, string | null]] : []),
@@ -540,6 +560,38 @@ function WeekLog({
           }}
           className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
+          {unit === 'st_lb' ? (
+            <div className="col-span-2 sm:col-span-4">
+              <div className="flex h-16 items-center justify-between gap-2 rounded-full border border-black/10 bg-card pl-6 pr-5 transition-colors focus-within:border-accent dark:border-white/10">
+                <span className="text-sm font-extrabold text-black dark:text-zinc-50">Bodyweight</span>
+                <span className="flex items-baseline gap-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={2}
+                    placeholder="—"
+                    aria-label="Bodyweight, stones"
+                    className="w-11 bg-transparent text-right text-3xl font-black text-black outline-none placeholder:text-zinc-400 dark:text-zinc-50"
+                    value={stLbShown.st}
+                    onChange={(e) => changeStLb(e.target.value.replace(/[^0-9]/g, ''), stLbShown.lb)}
+                  />
+                  <span className="text-base font-bold text-zinc-500">st</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    maxLength={4}
+                    placeholder="—"
+                    aria-label="Bodyweight, pounds"
+                    className="w-[4.25rem] bg-transparent text-right text-3xl font-black text-black outline-none placeholder:text-zinc-400 dark:text-zinc-50"
+                    value={stLbShown.lb}
+                    onChange={(e) => changeStLb(stLbShown.st, e.target.value.replace(/[^0-9.,]/g, ''))}
+                  />
+                  <span className="text-base font-bold text-zinc-500">lb</span>
+                </span>
+              </div>
+              {stLbShown.error && <p className="mt-1 px-6 text-xs font-semibold text-danger">{stLbShown.error}</p>}
+            </div>
+          ) : (
           <label className="col-span-2 flex h-16 items-center justify-between gap-3 rounded-full border border-black/10 bg-card px-6 transition-colors focus-within:border-accent disabled:opacity-60 dark:border-white/10 sm:col-span-4">
             <span className="text-sm font-extrabold text-black dark:text-zinc-50">Bodyweight</span>
             <span className="flex items-baseline gap-1.5">
@@ -561,6 +613,7 @@ function WeekLog({
               <span className="text-base font-bold text-zinc-500">kg</span>
             </span>
           </label>
+          )}
 
           {scaleFields.length > 0 && (
             <>

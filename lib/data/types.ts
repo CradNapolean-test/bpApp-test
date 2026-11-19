@@ -69,6 +69,9 @@ export interface ClientProfileRow {
   custom_fat?: number | null;
   // The coach has switched off the member's ability to change their own targets.
   custom_targets_locked?: boolean;
+  // How the member reads and types their bodyweight and goal weight (migration 0170, D16): kilograms, or stones and pounds. Weights are
+  // always stored in kilograms. Missing before 0170 is applied, which reads as kilograms.
+  weight_unit?: 'kg' | 'st_lb' | null;
 }
 
 export interface DailyLogRow {

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
@@ -6,7 +7,8 @@ import { ACTIVITY_OPTIONS, needsBodyStep, PLAN_BEING_SET_UP, TRACKING_OPTIONS } 
 import { CONSENT_LABEL, CONSENT_POINTS, CONSENT_TITLE } from '@ballistic/shared/utils/consentText';
 import { worthSaving } from '@ballistic/shared/utils/onboardingDraft';
 import { BLANK_ANSWERS, FULL_STEPS, SHORT_STEPS, SHORT_STEPS_WITH_BODY, STEP_TITLE, answersFromProfile, planFor, stepError, type OnboardingAnswers, type OnboardingStep } from '@ballistic/shared/utils/onboardingForm';
-import { cmToFtIn, ftInToCm, kgToStLb, stLbToKg } from '@ballistic/shared/utils/units';
+import { cmToFtIn, ftInToCm } from '@ballistic/shared/utils/units';
+import { WEIGHT_UNIT_OPTIONS, parseStLb, stLbFields, weightUnitOf, type WeightUnit } from '@ballistic/shared/utils/weightUnits';
 
 import { Pressable } from '@/components/press';
 import { ChoiceRow, DateField, FieldLabel, Input, Pill } from '@/components/fields';
@@ -16,22 +18,26 @@ import { AppText, Button, ScrollScreen } from '@/components/ui';
 import { useCompleteOnboarding } from '@/lib/details';
 import { loadOnboardingDraft, saveOnboardingDraft } from '@/lib/drafts';
 import { useSession } from '@/lib/session';
+import { supabase } from '@/lib/supabase';
 import { radius, spacing, useTheme } from '@/theme';
 
-// A weight the member can type in kg, or in stones and pounds (UK members often only know stones).
-function WeightField({ label, kg, onChange }: { label: string; kg: number | null; onChange: (kg: number | null) => void }) {
-  const [unit, setUnit] = useState<'kg' | 'st'>('kg');
+// A weight the member can type in kg, or in stones and pounds (UK members often only know stones). The choice is the member's units
+// setting from then on (D16): both weight boxes share it, and it is saved when they finish. Stones and pounds are stored to 0.01 kg, so
+// they read back exactly as typed.
+function WeightField({ label, kg, onChange, unit, onUnit }: { label: string; kg: number | null; onChange: (kg: number | null) => void; unit: WeightUnit; onUnit: (unit: WeightUnit) => void }) {
   const [text, setText] = useState(kg != null ? String(kg) : '');
-  const initial = kg != null ? kgToStLb(kg) : null;
-  const [st, setSt] = useState(initial ? String(initial.st) : '');
-  const [lb, setLb] = useState(initial ? String(initial.lb) : '');
+  const [st, setSt] = useState(() => stLbFields(kg).st);
+  const [lb, setLb] = useState(() => stLbFields(kg).lb);
 
-  const pushStLb = (nextSt: string, nextLb: string) => onChange(stLbToKg(nextSt, nextLb));
+  const pushStLb = (nextSt: string, nextLb: string) => {
+    const parsed = parseStLb(nextSt, nextLb);
+    onChange(parsed.ok && parsed.kg != null && parsed.kg > 0 ? parsed.kg : null);
+  };
   return (
     <View style={{ gap: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <FieldLabel>{label}</FieldLabel>
-        <UnitToggle options={[['kg', 'kg'], ['st', 'st & lb']]} value={unit} onChange={(u) => setUnit(u as 'kg' | 'st')} />
+        <UnitToggle options={WEIGHT_UNIT_OPTIONS.map((o) => [o.value, o.label] as [string, string])} value={unit} onChange={(u) => onUnit(weightUnitOf(u))} />
       </View>
       {unit === 'kg' ? (
         <Input
@@ -52,7 +58,7 @@ function WeightField({ label, kg, onChange }: { label: string; kg: number | null
           <Input accessibilityLabel={`${label}, pounds`} style={{ flex: 1 }} keyboardType="decimal-pad" placeholder="lb" value={lb} maxLength={5} onChangeText={(v) => { setLb(v); pushStLb(st, v); }} />
         </View>
       )}
-      {kg != null && unit === 'st' ? <AppText variant="small" color="muted">{kg.toFixed(1)} kg</AppText> : null}
+      {kg != null && unit === 'st_lb' ? <AppText variant="small" color="muted">{kg.toFixed(1)} kg</AppText> : null}
     </View>
   );
 }
@@ -140,6 +146,9 @@ export function OnboardingFlow({
     return { ...base, ...saved };
   });
   const [error, setError] = useState<string | null>(null);
+  // Kilograms or stones and pounds: saved as the member's units setting when they finish (D16).
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(weightUnitOf(existing?.weight_unit));
+  const qc = useQueryClient();
   const complete = useCompleteOnboarding();
   const set = (patch: Partial<OnboardingAnswers>) => setAnswers((a) => ({ ...a, ...patch }));
   const plan = useMemo(() => planFor(answers), [answers]);
@@ -162,8 +171,21 @@ export function OnboardingFlow({
     setError(null);
     complete.mutate(
       { answers, existing: short, withBody },
-      { onSuccess: () => onFinished({ firstName: answers.name.trim().split(/\s+/)[0] ?? '', short }), onError: (e) => setError(e.message) },
+      {
+        onSuccess: () => {
+          saveWeightUnit();
+          onFinished({ firstName: answers.name.trim().split(/\s+/)[0] ?? '', short });
+        },
+        onError: (e) => setError(e.message),
+      },
     );
+  }
+  // The units the member picked for their weight become their setting (D16). Never holds up onboarding: it can be changed in Account.
+  function saveWeightUnit() {
+    if (!userId || weightUnit === weightUnitOf(existing?.weight_unit)) return;
+    void Promise.resolve(supabase.from('client_profiles').update({ weight_unit: weightUnit }).eq('client_id', userId))
+      .then(() => qc.invalidateQueries({ queryKey: ['client-profile', userId] }))
+      .catch(() => {});
   }
 
   if (step === -1) {
@@ -293,8 +315,8 @@ export function OnboardingFlow({
         <View style={{ gap: spacing.md }}>
           <Heading>Your body &amp; activity</Heading>
           <HeightField cm={answers.heightCm} onChange={(heightCm) => set({ heightCm })} />
-          <WeightField label="Current weight" kg={answers.weightKg} onChange={(weightKg) => set({ weightKg })} />
-          <WeightField label="Goal weight" kg={answers.goalKg} onChange={(goalKg) => set({ goalKg })} />
+          <WeightField label="Current weight" kg={answers.weightKg} onChange={(weightKg) => set({ weightKg })} unit={weightUnit} onUnit={setWeightUnit} />
+          <WeightField label="Goal weight" kg={answers.goalKg} onChange={(goalKg) => set({ goalKg })} unit={weightUnit} onUnit={setWeightUnit} />
           <View style={{ gap: 8 }}>
             <FieldLabel>How active are you day to day?</FieldLabel>
             {ACTIVITY_OPTIONS.map((o) => <ChoiceRow key={o.value} title={o.label} hint={o.hint} selected={answers.activity === o.value} onPress={() => set({ activity: o.value })} />)}

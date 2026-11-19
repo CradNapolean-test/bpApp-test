@@ -17,6 +17,8 @@ import { CONSENT_LABEL, CONSENT_POINTS, CONSENT_REQUIRED_MESSAGE, CONSENT_TITLE 
 import { draftKey, parseDraft, serialiseDraft, worthSaving } from '@/lib/onboardingDraft';
 import type { TrackingMode } from '@/lib/onboarding';
 import type { ClientProfileRow } from '@/lib/data/types';
+import { updateWeightUnit } from '@/lib/data/clientProfile';
+import { WEIGHT_UNIT_OPTIONS, parseStLb, stLbFields, weightUnitOf, type WeightUnit } from '@/lib/utils/weightUnits';
 
 // The privacy step comes first: the questions after it collect health notes and an emergency contact (R22).
 const FULL_STEPS = ['consent', 'about', 'goal', 'body', 'food', 'plan'] as const;
@@ -37,20 +39,31 @@ const STEP_TITLE: Record<StepKey, string> = {
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-3 text-base dark:border-white/10';
 const labelCls = 'text-sm font-semibold text-zinc-700 dark:text-zinc-300';
 
-const KG_PER_ST = 6.35029;
-const toKg = (st: string, lb: string) => (Number(st) || 0) * KG_PER_ST + (Number(lb) || 0) * 0.453592;
 const CM_PER_IN = 2.54;
 
-// A weight the member can type in kg or stones & pounds (UK members often only know stones).
-function WeightField({ label, kg, onChange }: { label: string; kg: number | null; onChange: (kg: number | null) => void }) {
-  const [unit, setUnit] = useState<'kg' | 'st'>('kg');
+// A weight the member can type in kg or stones & pounds (UK members often only know stones). The choice is the member's units setting
+// from then on (D16): both weight boxes share it, and it is saved with their answers. Stones and pounds are stored to 0.01 kg, so they
+// read back exactly as typed.
+function WeightField({
+  label,
+  kg,
+  onChange,
+  unit,
+  onUnit,
+}: {
+  label: string;
+  kg: number | null;
+  onChange: (kg: number | null) => void;
+  unit: WeightUnit;
+  onUnit: (unit: WeightUnit) => void;
+}) {
   const [text, setText] = useState(kg != null ? String(kg) : '');
-  const [st, setSt] = useState('');
-  const [lb, setLb] = useState('');
+  const [st, setSt] = useState(() => stLbFields(kg).st);
+  const [lb, setLb] = useState(() => stLbFields(kg).lb);
 
   function pushStLb(nextSt: string, nextLb: string) {
-    const v = toKg(nextSt, nextLb);
-    onChange(v > 0 ? Math.round(v * 10) / 10 : null);
+    const parsed = parseStLb(nextSt, nextLb);
+    onChange(parsed.ok && parsed.kg != null && parsed.kg > 0 ? parsed.kg : null);
   }
 
   return (
@@ -58,14 +71,15 @@ function WeightField({ label, kg, onChange }: { label: string; kg: number | null
       <div className="flex items-center justify-between">
         <label className={labelCls}>{label}</label>
         <div className="flex rounded-xl bg-black/[.06] p-1 dark:bg-white/10 text-xs font-bold">
-          {(['kg', 'st'] as const).map((u) => (
+          {WEIGHT_UNIT_OPTIONS.map((u) => (
             <button
-              key={u}
+              key={u.value}
               type="button"
-              onClick={() => setUnit(u)}
-              className={`min-h-8 rounded-lg px-3 ${unit === u ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`}
+              aria-pressed={unit === u.value}
+              onClick={() => onUnit(u.value)}
+              className={`min-h-8 rounded-lg px-3 ${unit === u.value ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'}`}
             >
-              {u === 'kg' ? 'kg' : 'st & lb'}
+              {u.label}
             </button>
           ))}
         </div>
@@ -90,6 +104,7 @@ function WeightField({ label, kg, onChange }: { label: string; kg: number | null
             inputMode="numeric"
             className={inputCls}
             placeholder="stone"
+            aria-label={`${label}, stones`}
             value={st}
             onChange={(e) => {
               setSt(e.target.value);
@@ -101,6 +116,7 @@ function WeightField({ label, kg, onChange }: { label: string; kg: number | null
             inputMode="decimal"
             className={inputCls}
             placeholder="lb"
+            aria-label={`${label}, pounds`}
             value={lb}
             onChange={(e) => {
               setLb(e.target.value);
@@ -109,7 +125,7 @@ function WeightField({ label, kg, onChange }: { label: string; kg: number | null
           />
         </div>
       )}
-      {kg != null && unit === 'st' && <p className="text-xs text-zinc-500">{kg.toFixed(1)} kg</p>}
+      {kg != null && unit === 'st_lb' && <p className="text-xs text-zinc-500">{kg.toFixed(1)} kg</p>}
     </div>
   );
 }
@@ -256,6 +272,8 @@ export function OnboardingFlow({
   const [heightCm, setHeightCm] = useState<number | null>(null);
   const [weightKg, setWeightKg] = useState<number | null>(null);
   const [goalKg, setGoalKg] = useState<number | null>(null);
+  // Kilograms or stones and pounds: saved as the member's units setting when they finish (D16).
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(weightUnitOf(existing?.weight_unit));
   const [activity, setActivity] = useState<number>(1.5);
   const [knowsBf, setKnowsBf] = useState(false);
   const [bf, setBf] = useState('');
@@ -394,6 +412,7 @@ export function OnboardingFlow({
         setError(res.error ?? 'Something went wrong. Please try again.');
         return;
       }
+      await saveWeightUnit();
       clearDraft();
       setStep(doneStep);
       return;
@@ -424,8 +443,15 @@ export function OnboardingFlow({
       setError(res.error ?? 'Something went wrong. Please try again.');
       return;
     }
+    await saveWeightUnit();
     clearDraft();
     setStep(doneStep);
+  }
+
+  // The units the member picked for their weight become their setting (D16). Never holds up onboarding: it can be changed in Account.
+  async function saveWeightUnit() {
+    if (weightUnit === weightUnitOf(existing?.weight_unit)) return;
+    await updateWeightUnit(clientId, weightUnit).catch(() => null);
   }
 
   // The slim black band with the wordmark (the board), then the step on the light background.
@@ -637,8 +663,8 @@ export function OnboardingFlow({
           <>
             <h2 className="text-[26px] font-extrabold leading-tight tracking-tight text-black dark:text-zinc-50">Your body &amp; activity</h2>
             <HeightField cm={heightCm} onChange={setHeightCm} />
-            <WeightField label="Current weight" kg={weightKg} onChange={setWeightKg} />
-            <WeightField label="Goal weight" kg={goalKg} onChange={setGoalKg} />
+            <WeightField label="Current weight" kg={weightKg} onChange={setWeightKg} unit={weightUnit} onUnit={setWeightUnit} />
+            <WeightField label="Goal weight" kg={goalKg} onChange={setGoalKg} unit={weightUnit} onUnit={setWeightUnit} />
             <div className="space-y-2">
               <label className={labelCls}>How active are you day to day?</label>
               <div className="space-y-2">

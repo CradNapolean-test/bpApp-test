@@ -11,9 +11,10 @@ import { ChangePasswordForm } from '@/app/_components/ChangePasswordForm';
 import { ChangeEmailForm } from '@/app/_components/ChangeEmailForm';
 import { ThemeToggle } from '@/app/_components/ThemeToggle';
 import { SignOutButton } from '@/app/_components/SignOutButton';
-import { Card, ListGroup, ListRow, SectionLabel } from '@/app/_components/ui';
+import { Card, ListGroup, ListRow, SectionLabel, Segmented } from '@/app/_components/ui';
 import type { ThemePreference } from '@/app/_components/theme';
-import { updateEmailNotificationsEnabled, updateNotificationsEnabled } from '@/lib/data/clientProfile';
+import { updateEmailNotificationsEnabled, updateNotificationsEnabled, updateWeightUnit } from '@/lib/data/clientProfile';
+import { WEIGHT_UNIT_OPTIONS, weightUnitOf, type WeightUnit } from '@/lib/utils/weightUnits';
 import { deleteMyAccount } from '@/lib/data/deleteAccount';
 import { createClient as createBrowserClient } from '@/lib/supabase/client';
 import { browserLocalStorage, clearMemberLocalData } from '@/lib/utils/localData';
@@ -127,6 +128,18 @@ export function AccountTab({
     if (!saved) setEmailEnabled(!next);
   }
 
+  // Kilograms or stones and pounds for bodyweight and goal weight everywhere (D16). The page reloads after, so every screen switches.
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(weightUnitOf(profile?.weight_unit));
+  async function handleWeightUnit(next: WeightUnit) {
+    if (next === weightUnit) return;
+    const before = weightUnit;
+    setWeightUnit(next);
+    const saved = await run(() => updateWeightUnit(clientId, next), {
+      success: next === 'st_lb' ? 'Weights now in stones and pounds' : 'Weights now in kilograms',
+    });
+    if (!saved) setWeightUnit(before);
+  }
+
   async function handleDeleteAccount() {
     if (deleteText.trim().toUpperCase() !== 'DELETE') return;
     if (
@@ -213,6 +226,19 @@ export function AccountTab({
             label="Toggle email notifications"
           />
         </ListGroup>
+      </div>
+
+      <div>
+        <SectionLabel>Units</SectionLabel>
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-black dark:text-zinc-50">Bodyweight</p>
+              <p className="text-xs text-zinc-500">Your check-ins, goal weight and charts</p>
+            </div>
+            <Segmented<WeightUnit> label="Bodyweight units" size="md" value={weightUnit} onChange={handleWeightUnit} options={WEIGHT_UNIT_OPTIONS} />
+          </div>
+        </Card>
       </div>
 
       <div>

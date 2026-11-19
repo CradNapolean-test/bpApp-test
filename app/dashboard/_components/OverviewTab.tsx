@@ -14,6 +14,16 @@ import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import { useReveal } from '@/app/_components/motion/useReveal';
 import CountUp from '@/app/_components/motion/CountUp';
+import {
+  formatStLb,
+  formatWeight,
+  formatWeightDiff,
+  formatWeightDiffForCoach,
+  formatWeightForCoach,
+  formatWeightShort,
+  weightUnitOf,
+  type WeightUnit,
+} from '@/lib/utils/weightUnits';
 
 function shortDate(iso: string) {
   return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -88,7 +98,7 @@ export function TrendChart({
 
 // One card with a tab per measure: the weekly average as a chart, the change on the previous week, and a
 // week-by-week list underneath. Protein, sleep and water join weight, calories and steps.
-function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
+function WeeklyAverages({ weeks, weightUnit = 'kg' }: { weeks: WeekAverages[]; weightUnit?: WeightUnit }) {
   const [metric, setMetric] = useState<WeeklyMetric>('bodyweight');
   const info = WEEKLY_METRICS.find((m) => m.key === metric)!;
   const withValue = weeks.filter((w) => w.avg[metric] != null);
@@ -97,7 +107,12 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
   const current = points.length ? points[points.length - 1] : null;
   const delta = weekChange(weeks, metric);
   const favorable = info.better && delta != null ? (info.better === 'down' ? delta < 0 : delta > 0) : null;
-  const fmt = (v: number) => formatMetric(v, info);
+  // Bodyweight in stones and pounds for a member who reads it that way (D16); the figures stay kilograms underneath.
+  const stLb = metric === 'bodyweight' && weightUnit === 'st_lb';
+  const fmt = (v: number) => (stLb ? formatStLb(v) : formatMetric(v, info));
+  const fmtDiff = (v: number) => (stLb ? formatWeightDiff(v, 'st_lb') : fmt(v));
+  const fmtAxis = (v: number) => (stLb ? formatWeightShort(v, 'st_lb') : fmt(v));
+  const unitLabel = stLb ? '' : info.unit;
   const recent = [...withValue].reverse().slice(0, 6);
 
   return (
@@ -113,21 +128,21 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
         {delta != null && Math.abs(delta) > 0.001 && (
           <span className={`text-sm font-bold ${favorable == null ? 'text-zinc-500' : favorable ? 'text-success' : 'text-danger'}`}>
             {delta > 0 ? '+' : '-'}
-            {fmt(Math.abs(delta))}
-            {info.unit}
+            {fmtDiff(Math.abs(delta))}
+            {unitLabel}
           </span>
         )}
       </div>
       <p className="mt-1 text-[28px] font-black leading-tight text-black dark:text-zinc-50">
         {current != null ? fmt(current) : '—'}
-        {info.unit && current != null ? info.unit : null}
+        {unitLabel && current != null ? unitLabel : null}
       </p>
       {points.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-500">Nothing logged for {info.title.toLowerCase()} yet.</p>
       ) : (
         <>
           <div className="mt-3">
-            <TrendChart values={points} labels={labels} color="var(--chart-1)" formatter={fmt} />
+            <TrendChart values={points} labels={labels} color="var(--chart-1)" formatter={fmtAxis} />
           </div>
           <p className="mt-1 text-xs text-zinc-500">
             Weekly average{points.length >= 2 ? ` · last ${points.length} weeks` : ''}
@@ -137,7 +152,7 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
             <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-2 pb-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
               <span>Week of</span>
               <span className="w-12 text-right">Days</span>
-              <span className="w-20 text-right">Average</span>
+              <span className={`${stLb ? 'w-28' : 'w-20'} text-right`}>Average</span>
             </div>
             {recent.map((w, i) => (
               <div
@@ -146,9 +161,9 @@ function WeeklyAverages({ weeks }: { weeks: WeekAverages[] }) {
               >
                 <span className={i === 0 ? 'text-black dark:text-zinc-50' : 'text-zinc-500'}>{shortDate(w.weekStart)}</span>
                 <span className="w-12 text-right text-zinc-500">{w.days[metric]}</span>
-                <span className="w-20 text-right font-semibold text-black dark:text-zinc-50">
+                <span className={`${stLb ? 'w-28' : 'w-20'} text-right font-semibold text-black dark:text-zinc-50`}>
                   {fmt(w.avg[metric] as number)}
-                  {info.unit}
+                  {unitLabel}
                 </span>
               </div>
             ))}
@@ -185,22 +200,34 @@ function WeightGoalCard({
   // The coach is told when the member is further from the goal than at the start, instead of a quiet "0% there" (CR3).
   const away = coachView && latest != null ? weightGoalProgress(start, goal, latest) : null;
   const way = start > goal ? 'down' : 'up';
+  // In the member's units (D16); the coach sees them with kilograms alongside.
+  const unit = weightUnitOf(profile?.weight_unit);
+  const weight = (kg: number) => (coachView ? formatWeightForCoach(kg, unit) : formatWeight(kg, unit));
+  const diff = (kg: number) => (coachView ? formatWeightDiffForCoach(kg, unit) : formatWeightDiff(kg, unit));
   return (
     <div className={cardCls}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[15px] font-bold text-black dark:text-zinc-50">
-            {/* Counts from the start weight to today's, so the change is seen as well as read. */}
-            <CountUp to={now} from={start} decimals={1} delay={0.15} className="text-[28px] font-black leading-none" /> kg{' '}
-            {latest != null ? 'now' : 'at the start'}
-          </p>
+          {unit === 'st_lb' ? (
+            <p className="text-[15px] font-bold text-black dark:text-zinc-50">
+              <span className="text-[28px] font-black leading-none">{formatStLb(now)}</span> {latest != null ? 'now' : 'at the start'}
+            </p>
+          ) : (
+            <p className="text-[15px] font-bold text-black dark:text-zinc-50">
+              {/* Counts from the start weight to today's, so the change is seen as well as read. */}
+              <CountUp to={now} from={start} decimals={1} delay={0.15} className="text-[28px] font-black leading-none" /> kg{' '}
+              {latest != null ? 'now' : 'at the start'}
+            </p>
+          )}
           <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
-            {latest != null ? `Started at ${start} kg${latestDate ? ` · weighed ${shortDate(latestDate)}` : ''}` : 'No weigh-in logged yet'}
+            {coachView && unit === 'st_lb' ? `${now.toFixed(1)} kg · ` : ''}
+            {latest != null ? `Started at ${weight(start)}${latestDate ? ` · weighed ${shortDate(latestDate)}` : ''}` : 'No weigh-in logged yet'}
           </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">{coachView ? 'Goal' : 'Your goal'}</p>
-          <p className="text-[17px] font-extrabold text-black dark:text-zinc-50">{goal} kg</p>
+          <p className="text-[17px] font-extrabold text-black dark:text-zinc-50">{formatWeight(goal, unit)}</p>
+          {coachView && unit === 'st_lb' && <p className="text-xs text-zinc-500">{goal.toFixed(1)} kg</p>}
         </div>
       </div>
       <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${pct}% of the way to the goal weight`}>
@@ -208,13 +235,13 @@ function WeightGoalCard({
       </div>
       {away?.movingAway ? (
         <p className="mt-2 text-xs font-semibold text-danger">
-          Moving away from goal: {away.awayKg.toFixed(1)}kg further from the goal than at the start, {toGo.toFixed(1)}kg from the goal. Check the start weight is right.
+          Moving away from goal: {diff(away.awayKg)} further from the goal than at the start, {diff(toGo)} from the goal. Check the start weight is right.
         </p>
       ) : (
         <div className="mt-2 flex items-baseline justify-between gap-3">
           <p className="text-[13px] text-zinc-600 dark:text-zinc-400">
             {toGo > 0
-              ? `${done > 0 ? `${done.toFixed(1)} kg ${way}, ` : ''}${toGo.toFixed(1)} kg to go.`
+              ? `${done > 0 ? `${diff(done)} ${way}, ` : ''}${diff(toGo)} to go.`
               : coachView
                 ? 'Goal weight reached.'
                 : 'Goal weight reached — nice work.'}
@@ -302,7 +329,7 @@ export function OverviewTab({
       {!isCoachView && programWeek != null && <TargetsCard profile={profile} programWeek={programWeek} />}
       <section className="space-y-2.5">
         {!isCoachView && <h2 className={headCls}>Week by week</h2>}
-        <WeeklyAverages weeks={weeks} />
+        <WeeklyAverages weeks={weeks} weightUnit={weightUnitOf(profile?.weight_unit)} />
       </section>
     </div>
   );

@@ -4,12 +4,13 @@ import { View } from 'react-native';
 
 import { bigDogCount } from '@ballistic/shared/bigDog';
 import { longDate } from '@ballistic/shared/utils/progress';
+import { WEIGHT_UNIT_OPTIONS, weightUnitOf, type WeightUnit } from '@ballistic/shared/utils/weightUnits';
 
 import { ChangeEmailForm, ChangePasswordForm, DeletionCard, InfoCard, ProfileHeader, SectionHeader, SwitchRow, ThemeChoice } from '@/components/account';
 import { BigDogCard } from '@/components/bigdog';
 import { hasPushRow, PushSettingRow } from '@/components/push';
 import { useSignOutGuard } from '@/components/sync';
-import { AppText, ListGroup, ListRow, ScrollScreen, SectionLabel } from '@/components/ui';
+import { AppText, ListGroup, ListRow, ScrollScreen, SectionLabel, Segmented } from '@/components/ui';
 import { useGymName, useUpdateProfileSetting } from '@/lib/account';
 import { useBigDogResults } from '@/lib/bigDog';
 import { useUnreadNotifications } from '@/lib/notifications';
@@ -101,6 +102,15 @@ export default function Account() {
           />
         </ListGroup>
         {setting.isError ? <AppText variant="small" color="danger" style={{ marginTop: 6 }}>Could not save that setting: {setting.error.message}</AppText> : null}
+      </View>
+
+      <View>
+        <SectionLabel>Units</SectionLabel>
+        {/* Kilograms or stones and pounds for bodyweight and goal weight everywhere in the app (D16). Weights are stored in kilograms. */}
+        <View style={{ gap: spacing.sm }}>
+          <Segmented<WeightUnit> value={weightUnitOf(profile?.weight_unit)} onChange={(v) => setting.mutate({ weight_unit: v })} options={WEIGHT_UNIT_OPTIONS} />
+          <AppText variant="small" color="muted">Your bodyweight and goal weight, in check-ins, your goal and charts.</AppText>
+        </View>
       </View>
 
       <View>

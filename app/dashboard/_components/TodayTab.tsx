@@ -27,6 +27,7 @@ import { enabledTrackers, toDisabledMetricSet } from '@/lib/checkinMetrics';
 import { clubProgress } from '@/lib/clubs';
 import { challengeHome } from '@/lib/challengeHome';
 import { checkinToday, homeWeek } from '@/lib/memberHome';
+import { weightUnitOf } from '@/lib/utils/weightUnits';
 import { foodLeft, workoutStripText } from '@/lib/todayStrip';
 import { shortDay, WhatsNextCard } from './HomeChallenge';
 import { stripWorkoutFor } from './TodayStrip';
@@ -128,7 +129,8 @@ export function TodayTab({
   const trackers = enabledTrackers(toDisabledMetricSet(disabledMetrics));
   const checkin = checkinToday(
     todayLog ? { sleep: todayLog.sleep, steps: todayLog.steps, water: todayLog.water, bodyweight: todayLog.bodyweight } : null,
-    trackers
+    trackers,
+    weightUnitOf(profile?.weight_unit)
   );
   const pendingForms = formAssignments.filter((a) => !a.completed_at).length;
 

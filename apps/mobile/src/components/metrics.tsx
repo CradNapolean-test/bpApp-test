@@ -26,6 +26,7 @@ import {
   type RangeKey,
 } from '@ballistic/shared/utils/metrics';
 import { hasLoggedData } from '@ballistic/shared/utils/dailyLog';
+import { formatStLb, formatWeightDiff, formatWeightShort, weightUnitOf } from '@ballistic/shared/utils/weightUnits';
 import { programWeekFromLogs } from '@ballistic/shared/utils/streak';
 
 import { AppText, Button, Card, Chip, Segmented } from '@/components/ui';
@@ -43,7 +44,24 @@ const longDate = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateStrin
 
 // One metric as dots (every logged day) with a 7-day average through them, or as weekly averages, with a dashed target line.
 // Touch and drag along the chart to read any day. Same drawing and rules as the web's Metrics tab.
-function MetricChart({ info, points, line, target, weekly }: { info: MetricInfo; points: DayPoint[]; line: DayPoint[]; target: number | null; weekly: boolean }) {
+function MetricChart({
+  info,
+  points,
+  line,
+  target,
+  weekly,
+  format,
+  axisFormat,
+}: {
+  info: MetricInfo;
+  points: DayPoint[];
+  line: DayPoint[];
+  target: number | null;
+  weekly: boolean;
+  // How a value reads (bodyweight in stones and pounds for a member who reads it that way, D16), and the shorter form for the axis.
+  format?: (v: number) => string;
+  axisFormat?: (v: number) => string;
+}) {
   const t = useTheme();
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -55,7 +73,8 @@ function MetricChart({ info, points, line, target, weekly }: { info: MetricInfo;
   const domain = chartDomain([...points.map((p) => p.value), ...line.map((p) => p.value)], target);
   const x = (date: string) => PAD.left + ((dayNo(date) - first) / span) * Math.max(1, width - PAD.left - PAD.right);
   const y = (v: number) => PAD.top + (1 - (v - domain.min) / (domain.max - domain.min)) * (HEIGHT - PAD.top - PAD.bottom);
-  const fmt = (v: number) => formatMetricValue(v, { digits: info.digits, unit: '' });
+  const fmt = axisFormat ?? ((v: number) => formatMetricValue(v, { digits: info.digits, unit: '' }));
+  const show = format ?? ((v: number) => formatMetricValue(v, info));
   const ticks = [domain.max, (domain.max + domain.min) / 2, domain.min];
 
   function pick(locationX: number) {
@@ -73,8 +92,8 @@ function MetricChart({ info, points, line, target, weekly }: { info: MetricInfo;
       <AppText variant="small" color="muted" style={{ minHeight: 36 }}>
         <AppText variant="small" style={{ fontWeight: '700' }}>{weekly ? `Week of ${shortDate(shown.date)}` : longDate(shown.date)}</AppText>
         {' · '}
-        <AppText variant="small" style={{ fontWeight: '800' }}>{formatMetricValue(shown.value, info)}</AppText>
-        {!weekly && smooth && points.length > 1 ? ` · 7-day average ${formatMetricValue(smooth.value, info)}` : ''}
+        <AppText variant="small" style={{ fontWeight: '800' }}>{show(shown.value)}</AppText>
+        {!weekly && smooth && points.length > 1 ? ` · 7-day average ${show(smooth.value)}` : ''}
       </AppText>
       <View
         style={{ height: HEIGHT }}
@@ -191,6 +210,10 @@ export function MetricsSection({ todayIso }: { todayIso: string }) {
   }
 
   const change = summary.change;
+  // Bodyweight in the member's units (D16): stones and pounds for a member who reads it that way. The figures stay kilograms underneath.
+  const stLb = metric === 'bodyweight' && weightUnitOf(profile?.weight_unit) === 'st_lb';
+  const show = (v: number) => (stLb ? formatStLb(v) : formatMetricValue(v, info));
+  const showDiff = (v: number) => (stLb ? formatWeightDiff(v, 'st_lb') : formatMetricValue(v, info));
   return (
     <ScrollView
       contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.xl }}
@@ -220,17 +243,35 @@ export function MetricsSection({ todayIso }: { todayIso: string }) {
       ) : (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Tile label="Latest" value={summary.latest != null ? formatMetricValue(summary.latest, info) : '—'} />
+            <Tile label="Latest" value={summary.latest != null ? show(summary.latest) : '—'} />
             <Tile
               label="Change"
-              value={change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${formatMetricValue(Math.abs(change), info)}`}
+              value={change == null ? '—' : `${change > 0 ? '+' : change < 0 ? '−' : ''}${showDiff(Math.abs(change))}`}
               tone={summary.favourable == null ? undefined : summary.favourable ? 'success' : 'danger'}
             />
-            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
-            <Tile label="Lowest – highest" value={summary.min != null && summary.max != null ? `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}` : '—'} />
+            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? show(summary.average) : '—'} />
+            <Tile
+              label="Lowest – highest"
+              value={
+                summary.min != null && summary.max != null
+                  ? stLb
+                    ? `${formatWeightShort(summary.min, 'st_lb')} – ${formatWeightShort(summary.max, 'st_lb')}`
+                    : `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}`
+                  : '—'
+              }
+            />
           </View>
           <Card style={{ gap: spacing.sm }}>
-            <MetricChart key={`${metric}:${shownMode}:${range}`} info={info} points={points} line={line} target={target} weekly={shownMode === 'weekly'} />
+            <MetricChart
+              key={`${metric}:${shownMode}:${range}:${stLb ? 'st' : 'kg'}`}
+              info={info}
+              points={points}
+              line={line}
+              target={target}
+              weekly={shownMode === 'weekly'}
+              format={stLb ? show : undefined}
+              axisFormat={stLb ? (v) => formatWeightShort(v, 'st_lb') : undefined}
+            />
             <AppText variant="small" color="muted">
               {totalsOnly ? `Each dot is ${info.key === 'sessions' ? 'the sessions you ticked off' : 'the days you logged food'} in that week (Monday to Sunday). The first and current weeks may be part weeks. Drag along the chart to read any week.` : mode === 'daily' ? 'Each dot is a day you logged; the line is the 7-day average. Drag along the chart to read any day.' : 'Each dot is the average of the days you logged that week. Drag along the chart to read any week.'}
             </AppText>

@@ -9,6 +9,7 @@ import {
   type TrendKey,
 } from '@ballistic/shared/utils/overview';
 import { shortDate } from '@ballistic/shared/utils/progress';
+import { formatStLb, formatWeight, formatWeightDiff, formatWeightShort, weightUnitOf, type WeightUnit } from '@ballistic/shared/utils/weightUnits';
 
 import { TrendChart } from '@/components/charts';
 import { AppText, Button, Card } from '@/components/ui';
@@ -16,7 +17,8 @@ import { useClientProfile, useRecentLogs } from '@/lib/today';
 import { spacing, useTheme } from '@/theme';
 
 // "Now" says the day that weight was logged (MX13, as the web): a month-old weigh-in read as today's weight.
-function GoalCard({ start, goal, now, nowDate, pct, toGo }: { start: number; goal: number; now: number | null; nowDate: string | null; pct: number; toGo: number }) {
+// Weights in the member's own units, kilograms or stones and pounds (D16).
+function GoalCard({ start, goal, now, nowDate, pct, toGo, unit }: { start: number; goal: number; now: number | null; nowDate: string | null; pct: number; toGo: number; unit: WeightUnit }) {
   const t = useTheme();
   const col = (label: string, value: string, align: 'flex-start' | 'center' | 'flex-end', note?: string | null) => (
     <View style={{ alignItems: align, gap: 2 }}>
@@ -35,11 +37,11 @@ function GoalCard({ start, goal, now, nowDate, pct, toGo }: { start: number; goa
         <View style={{ width: `${pct}%`, height: 10, borderRadius: 5, backgroundColor: t.accent }} />
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        {col('Start', `${start}kg`, 'flex-start')}
-        {col('Now', now != null ? `${now.toFixed(1)}kg` : '—', 'center', now != null && nowDate ? `on ${shortDate(nowDate)}` : null)}
-        {col('Goal', `${goal}kg`, 'flex-end')}
+        {col('Start', formatWeight(start, unit), 'flex-start')}
+        {col('Now', now != null ? formatWeight(now, unit) : '—', 'center', now != null && nowDate ? `on ${shortDate(nowDate)}` : null)}
+        {col('Goal', formatWeight(goal, unit), 'flex-end')}
       </View>
-      <AppText variant="small" color="muted">{toGo > 0 ? `${toGo.toFixed(1)}kg to go.` : 'Goal weight reached. Nice work.'}</AppText>
+      <AppText variant="small" color="muted">{toGo > 0 ? `${formatWeightDiff(toGo, unit)} to go.` : 'Goal weight reached. Nice work.'}</AppText>
     </Card>
   );
 }
@@ -51,6 +53,8 @@ function TrendCard({
   color,
   unit,
   formatter,
+  valueFormatter = formatter,
+  diffFormatter = formatter,
   lowerIsBetter,
 }: {
   title: string;
@@ -59,6 +63,9 @@ function TrendCard({
   color: string;
   unit: string;
   formatter: (v: number) => string;
+  // The figure and the change, when they read differently from the chart's axis (stones and pounds, D16).
+  valueFormatter?: (v: number) => string;
+  diffFormatter?: (v: number) => string;
   lowerIsBetter?: boolean;
 }) {
   const s = trendSummary(weeks, dataKey, lowerIsBetter);
@@ -69,12 +76,12 @@ function TrendCard({
         {s.delta != null ? (
           <AppText color={s.favourable == null ? 'muted' : s.favourable ? 'success' : 'danger'} style={{ fontWeight: '800' }}>
             {s.delta > 0 ? '+' : '-'}
-            {formatter(Math.abs(s.delta))}
+            {diffFormatter(Math.abs(s.delta))}
             {unit}
           </AppText>
         ) : null}
       </View>
-      <AppText variant="title">{s.current != null ? `${formatter(s.current)}${unit}` : '—'}</AppText>
+      <AppText variant="title">{s.current != null ? `${valueFormatter(s.current)}${unit}` : '—'}</AppText>
       <TrendChart values={s.points} labels={s.labels} color={color} formatter={formatter} emptyText="Needs a second week of data for a trend" />
       <AppText variant="small" color="muted">
         Weekly average{s.points.length >= 2 ? ` · last ${s.points.length} weeks` : ''}
@@ -105,6 +112,7 @@ export function OverviewSection({ todayIso }: { todayIso: string }) {
   const logs = logsQ.data ?? [];
   const weeks = buildWeeklyTrend(logs).slice(-OVERVIEW_WEEKS);
   const goal = weightGoal(profile, latestBodyweight(logs));
+  const weightUnit = weightUnitOf(profile?.weight_unit);
   const latestWeighInDate = [...logs].reverse().find((l) => l.bodyweight != null)?.log_date ?? null;
 
   return (
@@ -118,8 +126,22 @@ export function OverviewSection({ todayIso }: { todayIso: string }) {
         </Card>
       ) : (
         <>
-          {goal ? <GoalCard {...goal} nowDate={latestWeighInDate} /> : null}
-          <TrendCard title="Bodyweight" weeks={weeks} dataKey="avgBodyweight" color={t.accent} unit="kg" formatter={(v) => v.toFixed(1)} lowerIsBetter />
+          {goal ? <GoalCard {...goal} nowDate={latestWeighInDate} unit={weightUnit} /> : null}
+          {weightUnit === 'st_lb' ? (
+            <TrendCard
+              title="Bodyweight"
+              weeks={weeks}
+              dataKey="avgBodyweight"
+              color={t.accent}
+              unit=""
+              formatter={(v) => formatWeightShort(v, 'st_lb')}
+              valueFormatter={formatStLb}
+              diffFormatter={(v) => formatWeightDiff(v, 'st_lb')}
+              lowerIsBetter
+            />
+          ) : (
+            <TrendCard title="Bodyweight" weeks={weeks} dataKey="avgBodyweight" color={t.accent} unit="kg" formatter={(v) => v.toFixed(1)} lowerIsBetter />
+          )}
           <TrendCard title="Calories" weeks={weeks} dataKey="avgCalories" color="#e8a020" unit="kcal" formatter={(v) => Math.round(v).toString()} />
           <TrendCard title="Protein" weeks={weeks} dataKey="avgProtein" color="#a07aff" unit="g" formatter={(v) => Math.round(v).toString()} lowerIsBetter={false} />
           <TrendCard title="Steps" weeks={weeks} dataKey="avgSteps" color="#2ecc71" unit="" formatter={(v) => Math.round(v).toString()} lowerIsBetter={false} />

@@ -29,6 +29,7 @@ import {
   type MetricKey,
   type RangeKey,
 } from '@/lib/utils/metrics';
+import { formatStLb, formatWeightDiff, formatWeightForCoach, formatWeightShort, weightUnitOf } from '@/lib/utils/weightUnits';
 import { useTodayIso } from './useTodayIso';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 
@@ -58,12 +59,17 @@ function MetricChart({
   line,
   target,
   weekly,
+  format,
+  axisFormat,
 }: {
   info: MetricInfo;
   points: DayPoint[];
   line: DayPoint[];
   target: number | null;
   weekly: boolean;
+  // How a value reads (bodyweight in stones and pounds for a member who reads it that way, D16), and the shorter form for the axis.
+  format?: (v: number) => string;
+  axisFormat?: (v: number) => string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   // Draws in from the left; the chart is keyed on the measure, range and mode, so each new pick draws again.
@@ -78,7 +84,8 @@ function MetricChart({
   );
   const x = (date: string) => PAD.left + ((dayNo(date) - first) / span) * (WIDTH - PAD.left - PAD.right);
   const y = (v: number) => PAD.top + (1 - (v - domain.min) / (domain.max - domain.min)) * (HEIGHT - PAD.top - PAD.bottom);
-  const fmt = (v: number) => formatMetricValue(v, { digits: info.digits, unit: '' });
+  const fmt = axisFormat ?? ((v: number) => formatMetricValue(v, { digits: info.digits, unit: '' }));
+  const show = format ?? ((v: number) => formatMetricValue(v, info));
   const ticks = [domain.max, (domain.max + domain.min) / 2, domain.min];
 
   function pick(clientX: number, rect: DOMRect) {
@@ -93,8 +100,8 @@ function MetricChart({
   const smooth = line.find((p) => p.date === shown.date);
   const summary = summarize(points, info.better);
   const description = `${info.label}, ${points.length} ${weekly ? 'weeks' : 'days'} from ${shortDate(points[0].date)} to ${shortDate(points[points.length - 1].date)}. Latest ${
-    summary.latest != null ? formatMetricValue(summary.latest, info) : 'none'
-  }, lowest ${formatMetricValue(summary.min ?? 0, info)}, highest ${formatMetricValue(summary.max ?? 0, info)}.`;
+    summary.latest != null ? show(summary.latest) : 'none'
+  }, lowest ${show(summary.min ?? 0)}, highest ${show(summary.max ?? 0)}.`;
 
   return (
     <div>
@@ -103,8 +110,8 @@ function MetricChart({
           {weekly ? `Week of ${shortDate(shown.date)}` : longDate(shown.date)}
         </span>
         {' · '}
-        <span className="font-bold text-black dark:text-zinc-50">{formatMetricValue(shown.value, info)}</span>
-        {!weekly && smooth && points.length > 1 && <span> · 7-day average {formatMetricValue(smooth.value, info)}</span>}
+        <span className="font-bold text-black dark:text-zinc-50">{show(shown.value)}</span>
+        {!weekly && smooth && points.length > 1 && <span> · 7-day average {show(smooth.value)}</span>}
       </p>
       <svg
         ref={plot}
@@ -235,6 +242,14 @@ export function MetricsTab({
   const change = summary.change;
   const changeTone = summary.favourable == null ? undefined : summary.favourable ? 'good' : 'bad';
 
+  // Bodyweight in the member's units (D16): stones and pounds for a member who reads it that way, with kilograms alongside the latest
+  // figure for their coach. The figures stay kilograms underneath.
+  const weightUnit = weightUnitOf(profile?.weight_unit);
+  const stLb = metric === 'bodyweight' && weightUnit === 'st_lb';
+  const show = (v: number) => (stLb ? formatStLb(v) : formatMetricValue(v, info));
+  const showMain = (v: number) => (stLb && isCoachView ? formatWeightForCoach(v, 'st_lb') : show(v));
+  const showDiff = (v: number) => (stLb ? formatWeightDiff(v, 'st_lb') : formatMetricValue(v, info));
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2">
@@ -281,15 +296,24 @@ export function MetricsTab({
             <div className="mb-2">
               <p className="text-[13px] font-semibold text-zinc-500 dark:text-zinc-400">{info.label}</p>
               <p className="text-[28px] font-black leading-tight text-black dark:text-zinc-50">
-                {summary.latest != null ? formatMetricValue(summary.latest, info) : '—'}
+                {summary.latest != null ? showMain(summary.latest) : '—'}
               </p>
               {change != null && (
                 <p className={`text-[13px] font-bold ${changeTone === 'good' ? 'text-accent' : changeTone === 'bad' ? 'text-danger' : 'text-zinc-500 dark:text-zinc-400'}`}>
-                  {change === 0 ? 'No change' : `${change > 0 ? 'Up' : 'Down'} ${formatMetricValue(Math.abs(change), info)}`} since {shortDate(points[0].date)}
+                  {change === 0 ? 'No change' : `${change > 0 ? 'Up' : 'Down'} ${showDiff(Math.abs(change))}`} since {shortDate(points[0].date)}
                 </p>
               )}
             </div>
-            <MetricChart key={`${metric}:${shownMode}:${range}`} info={info} points={points} line={line} target={target} weekly={shownMode === 'weekly'} />
+            <MetricChart
+              key={`${metric}:${shownMode}:${range}:${weightUnit}`}
+              info={info}
+              points={points}
+              line={line}
+              target={target}
+              weekly={shownMode === 'weekly'}
+              format={stLb ? show : undefined}
+              axisFormat={stLb ? (v) => formatWeightShort(v, 'st_lb') : undefined}
+            />
             <p className="mt-2 text-xs text-zinc-500">
               {totalsOnly
                 ? `Each dot is ${info.key === 'sessions' ? 'the sessions you ticked off' : 'the days you logged food'} in that week (Monday to Sunday). The first and current weeks may be part weeks. Touch or hover the chart to read any week.`
@@ -299,10 +323,16 @@ export function MetricsTab({
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? formatMetricValue(summary.average, info) : '—'} />
+            <Tile label={totalsOnly ? 'Average per week' : 'Average'} value={summary.average != null ? show(summary.average) : '—'} />
             <Tile
               label="Lowest – highest"
-              value={summary.min != null && summary.max != null ? `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}` : '—'}
+              value={
+                summary.min != null && summary.max != null
+                  ? stLb
+                    ? `${formatWeightShort(summary.min, 'st_lb')} – ${formatWeightShort(summary.max, 'st_lb')}`
+                    : `${formatMetricValue(summary.min, { ...info, unit: '' })} – ${formatMetricValue(summary.max, info)}`
+                  : '—'
+              }
             />
           </div>
         </>

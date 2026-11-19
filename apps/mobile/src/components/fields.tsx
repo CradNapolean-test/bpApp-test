@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
 
+import { parseStLb, sameWeightReading, stLbFields } from '@ballistic/shared/utils/weightUnits';
+
 import { Icon } from '@/components/icons';
 import { AppText } from '@/components/ui';
 import { radius, spacing, useTheme } from '@/theme';
@@ -66,6 +68,30 @@ export function Input({ style, ...props }: TextInputProps) {
       {...props}
       style={[{ backgroundColor: t.card, color: t.foreground, borderWidth: 1, borderColor: t.border, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 16 }, props.multiline ? { minHeight: 96, textAlignVertical: 'top' } : null, style]}
     />
+  );
+}
+
+// Stones and pounds boxes for a weight stored in kilograms (D16). `onChange` gets kilograms only when the reading really changes, so a
+// weight is never nudged by being converted back and forth; null when both boxes are emptied.
+export function StLbInput({ kg, onChange, label, editable = true }: { kg: number | null; onChange: (kg: number | null) => void; label: string; editable?: boolean }) {
+  const [draft, setDraft] = useState<{ st: string; lb: string; error: string | null } | null>(null);
+  const shown = draft ?? { ...stLbFields(kg), error: null };
+  function change(st: string, lb: string) {
+    const parsed = parseStLb(st, lb);
+    setDraft({ st, lb, error: parsed.ok ? null : parsed.error });
+    if (parsed.ok && !sameWeightReading(kg, parsed.kg, 'st_lb')) onChange(parsed.kg);
+  }
+  const box = { flex: 1, opacity: editable ? 1 : 0.6 } as const;
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Input accessibilityLabel={`${label}, stones`} style={box} keyboardType="number-pad" maxLength={2} editable={editable} placeholder="st" value={shown.st} onChangeText={(v) => change(v.replace(/[^0-9]/g, ''), shown.lb)} />
+        <AppText color="muted" style={{ fontWeight: '700' }}>st</AppText>
+        <Input accessibilityLabel={`${label}, pounds`} style={box} keyboardType="decimal-pad" maxLength={4} editable={editable} placeholder="lb" value={shown.lb} onChangeText={(v) => change(shown.st, v.replace(/[^0-9.,]/g, ''))} />
+        <AppText color="muted" style={{ fontWeight: '700' }}>lb</AppText>
+      </View>
+      {shown.error ? <AppText variant="small" color="danger" style={{ fontWeight: '600' }}>{shown.error}</AppText> : null}
+    </View>
   );
 }
 

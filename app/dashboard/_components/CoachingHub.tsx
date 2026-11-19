@@ -11,6 +11,7 @@ import { Badge } from '@/app/_components/ui';
 import { weeklyTarget } from '@/lib/calculations';
 import { getLatestCoachMessage } from '@/lib/data/chat';
 import { checkinToday } from '@/lib/memberHome';
+import { formatWeightCompact, weightUnitOf } from '@/lib/utils/weightUnits';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { dayTargetFor } from '@/lib/utils/dayTarget';
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP, targetsHeldBack } from '@/lib/onboarding';
@@ -192,8 +193,9 @@ export function CoachingHub({
   const steps = todayLog?.steps ?? null;
   const water = todayLog?.water ?? null;
   const weight = todayLog?.bodyweight ?? null;
+  const weightUnit = weightUnitOf(profile?.weight_unit); // kg, or stones and pounds (D16)
   const trackers = enabledTrackers(toDisabledMetricSet(disabledMetrics));
-  const checkin = checkinToday(todayLog ? { sleep, steps, water, bodyweight: weight } : null, trackers);
+  const checkin = checkinToday(todayLog ? { sleep, steps, water, bodyweight: weight } : null, trackers, weightUnit);
   const anyIn = sleep != null || steps != null || water != null;
 
   const bdCount = bigDogCount(bigDogResults);
@@ -356,7 +358,7 @@ export function CoachingHub({
               </span>
             </div>
             <div className="flex gap-2">
-              <StatBox label="kg" display={weight != null ? String(weight) : '—'} />
+              <StatBox label={weightUnit === 'st_lb' ? 'st & lb' : 'kg'} display={weight != null ? formatWeightCompact(weight, weightUnit) : '—'} />
               {metricOn('sleep') && <StatBox label="Sleep" display={sleep != null ? `${sleep}h` : '—'} light={sleep != null ? trafficLight('sleep', sleep) : null} />}
               {metricOn('steps') && <StatBox label="Steps" display={steps != null ? steps.toLocaleString() : '—'} light={steps != null ? trafficLight('steps', steps) : null} />}
               {metricOn('water') && <StatBox label="Water" display={water != null ? `${water}L` : '—'} light={water != null ? trafficLight('water', water) : null} />}

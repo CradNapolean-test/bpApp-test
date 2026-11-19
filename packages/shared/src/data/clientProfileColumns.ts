@@ -57,6 +57,8 @@ export const MEMBER_PROFILE_COLUMNS = [
   'custom_carbs',
   'custom_fat',
   'custom_targets_locked',
+  // Migration 0170 (D16): kilograms or stones and pounds. The phone needs 0170 applied before it ships with this.
+  'weight_unit',
 ] as const satisfies readonly (keyof ClientProfileRow)[];
 
 // Compile-time check: if a column is added to ClientProfileRow it must be listed above (or named here as deliberately left out),

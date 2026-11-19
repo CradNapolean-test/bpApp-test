@@ -38,6 +38,7 @@ import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
 import { CoachStatStrip } from '@/app/coach/_components/CoachUi';
+import { formatWeight, formatWeightDiffForCoach, formatWeightForCoach, formatWeightShort, weightUnitOf } from '@/lib/utils/weightUnits';
 import type { ClientHealthStatus } from '@/lib/data/coach';
 import type {
   BigDogResultRow,
@@ -337,6 +338,8 @@ export function CoachMemberOverview({
   const notes = journalEntries.filter((n) => n.kind !== 'injury').slice(0, 2);
 
   const weightChange = nowWeight != null && start != null ? nowWeight - start : null;
+  // The member's weights in their own units, with kilograms alongside (D16).
+  const unit = weightUnitOf(profile?.weight_unit);
   return (
     <div className="mx-auto max-w-6xl space-y-5">
     <CoachStatStrip
@@ -344,10 +347,10 @@ export function CoachMemberOverview({
       stats={[
         {
           label: 'Weight',
-          value: nowWeight != null ? `${nowWeight.toFixed(1)} kg` : '—',
+          value: nowWeight != null ? formatWeightForCoach(nowWeight, unit) : '—',
           sub:
             weightChange != null && Math.abs(weightChange) >= 0.05
-              ? `${weightChange < 0 ? 'Down' : 'Up'} ${Math.abs(weightChange).toFixed(1)} kg since the start`
+              ? `${weightChange < 0 ? 'Down' : 'Up'} ${formatWeightDiffForCoach(weightChange, unit)} since the start`
               : nowWeight == null
                 ? 'No weigh-ins yet'
                 : 'Same as the start',
@@ -540,7 +543,8 @@ export function CoachMemberOverview({
           <div className="flex items-baseline justify-between gap-2">
             <p className="flex items-center gap-2 text-2xl font-extrabold text-black dark:text-zinc-50">
               <Scale className="h-5 w-5 text-accent" />
-              {nowWeight != null ? `${nowWeight.toFixed(1)}kg` : '—'}
+              {nowWeight != null ? formatWeight(nowWeight, unit) : '—'}
+              {nowWeight != null && unit === 'st_lb' && <span className="text-sm font-bold text-zinc-500">{nowWeight.toFixed(1)} kg</span>}
             </p>
             {pct != null &&
               (movingAway ? (
@@ -554,19 +558,19 @@ export function CoachMemberOverview({
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/10">
                 <div className="h-full rounded-full bg-accent" style={{ width: `${pct ?? 0}%` }} />
               </div>
-              <div className="mt-1.5 flex justify-between text-xs text-zinc-500">
-                <span>Start {start}kg</span>
+              <div className="mt-1.5 flex justify-between gap-2 text-xs text-zinc-500">
+                <span>Start {formatWeightForCoach(start, unit)}</span>
                 {nowWeight != null && (
                   <span className={movingAway ? 'font-bold text-danger' : undefined}>
-                    {nowWeight - start > 0 ? '+' : ''}
-                    {(nowWeight - start).toFixed(1)}kg since start
+                    {nowWeight - start > 0 ? '+' : nowWeight - start < 0 ? '-' : ''}
+                    {formatWeightDiffForCoach(nowWeight - start, unit)} since start
                   </span>
                 )}
-                <span>Goal {goal}kg</span>
+                <span className="text-right">Goal {formatWeightForCoach(goal, unit)}</span>
               </div>
               {movingAway && progress && (
                 <p className="mt-2 rounded-xl bg-danger/10 px-3 py-2 text-xs text-black dark:text-zinc-100">
-                  <b className="text-danger">{progress.awayKg.toFixed(1)}kg further from the goal than at the start.</b> Check the start weight is right, then talk it through with them.
+                  <b className="text-danger">{formatWeightDiffForCoach(progress.awayKg, unit)} further from the goal than at the start.</b> Check the start weight is right, then talk it through with them.
                 </p>
               )}
             </>
@@ -577,7 +581,7 @@ export function CoachMemberOverview({
                 values={weeklyPoints.map(([, v]) => v.reduce((a, b) => a + b, 0) / v.length)}
                 labels={weeklyPoints.map(([k]) => shortDate(k))}
                 color="var(--chart-1)"
-                formatter={(v) => v.toFixed(1)}
+                formatter={(v) => formatWeightShort(v, unit)}
               />
             </div>
           )}

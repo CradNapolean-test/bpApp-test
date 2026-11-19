@@ -31,7 +31,8 @@ export function useGymName(gymId: string | null | undefined) {
 }
 
 // The few profile settings a member owns. Row Level Security lets them change their own row, and nothing else.
-export type ProfileSetting = Partial<Pick<ClientProfileRow, 'notifications_enabled' | 'email_notifications_enabled' | 'deletion_requested_at'>>;
+// weight_unit (migration 0170, D16): kilograms or stones and pounds for bodyweight and goal weight.
+export type ProfileSetting = Partial<Pick<ClientProfileRow, 'notifications_enabled' | 'email_notifications_enabled' | 'deletion_requested_at' | 'weight_unit'>>;
 
 export function useUpdateProfileSetting() {
   const userId = useUserId();

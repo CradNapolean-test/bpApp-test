@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { CALORIE_FLOOR, cycleDayFor, weeklyTarget } from '@ballistic/shared/calculations';
 import { reviewedByLine } from '@ballistic/shared/utils/checkinReviews';
+import { formatStLb, formatWeight, weightUnitOf } from '@ballistic/shared/utils/weightUnits';
 import { isMetricOn } from '@ballistic/shared/utils/checkinMetrics';
 import { canBrowseWeek, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { dayCaloriesOf } from '@ballistic/shared/utils/dailyLog';
@@ -12,7 +13,7 @@ import { dayTargetFor } from '@ballistic/shared/utils/dayTarget';
 import { normalizeGender } from '@ballistic/shared/utils/personalDetails';
 import { blankDailyLog, datesOfWeek, SCALE_FIELDS, shiftWeek, validateDayPatch, weekAverages, weekOffset, weekStartOf, LOG_LIMITS, type DayPatch } from '@ballistic/shared/utils/weeklyLog';
 
-import { AutoSaveInput, AvgCard, DayStrip, MoodDots, TrackerCard, WeekHeader } from '@/components/checkin';
+import { AutoSaveInput, AvgCard, DayStrip, MoodDots, StLbAutoSave, TrackerCard, WeekHeader } from '@/components/checkin';
 import { Icon } from '@/components/icons';
 import { CheckinTabs } from '@/components/pagetabs';
 import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
@@ -77,6 +78,7 @@ function CheckinContent() {
   const row = logs.find((l) => l.log_date === focused) ?? blankDailyLog('', focused);
   const mode = profile?.nutrition_tracking_mode ?? 'full_tracking';
   const isPhoto = mode === 'photo_diary';
+  const weightUnit = weightUnitOf(profile?.weight_unit); // kilograms, or stones and pounds (D16); stored in kilograms either way
   const attendedToday = (attendedQ.data ?? []).find((a) => a.date === focused) ?? null;
   const gymOn = row.gym_session || attendedToday != null;
 
@@ -95,7 +97,10 @@ function CheckinContent() {
 
   function commit(patch: DayPatch) {
     if (!editable) return setProblem(LOCKED_DAY_MESSAGE);
-    const bad = validateDayPatch(patch);
+    let bad = validateDayPatch(patch);
+    if (bad && weightUnit === 'st_lb' && patch.bodyweight != null && bad.startsWith('Bodyweight')) {
+      bad = `Bodyweight should be between ${formatStLb(LOG_LIMITS.bodyweight.min)} and ${formatStLb(LOG_LIMITS.bodyweight.max)}.`;
+    }
     setProblem(bad);
     if (bad) return;
     save.mutate({ date: focused, patch });
@@ -144,7 +149,11 @@ function CheckinContent() {
         {isPhoto ? (
           <>
             {isMetricOn(disabledMetrics, 'steps') ? <AvgCard value={fmt(avgs.steps)} label="avg steps" /> : null}
-            <AvgCard value={fmt(avgs.bodyweight, 1)} unit={avgs.bodyweight != null ? 'kg' : undefined} label="avg bodyweight" />
+            <AvgCard
+              value={avgs.bodyweight != null && weightUnit === 'st_lb' ? formatStLb(avgs.bodyweight) : fmt(avgs.bodyweight, 1)}
+              unit={avgs.bodyweight != null && weightUnit === 'kg' ? 'kg' : undefined}
+              label="avg bodyweight"
+            />
           </>
         ) : (
           <>
@@ -156,7 +165,7 @@ function CheckinContent() {
       </Card>
       {!isPhoto ? (
         <AppText variant="small" color="muted" style={{ marginTop: -spacing.sm }}>
-          {avgs.foodDays} day{avgs.foodDays === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgs.carbs)}{avgs.carbs != null ? 'g' : ''} · avg fat {fmt(avgs.fat)}{avgs.fat != null ? 'g' : ''} · avg bodyweight {fmt(avgs.bodyweight, 1)}{avgs.bodyweight != null ? 'kg' : ''}
+          {avgs.foodDays} day{avgs.foodDays === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgs.carbs)}{avgs.carbs != null ? 'g' : ''} · avg fat {fmt(avgs.fat)}{avgs.fat != null ? 'g' : ''} · avg bodyweight {avgs.bodyweight != null ? formatWeight(avgs.bodyweight, weightUnit) : '—'}
         </AppText>
       ) : null}
 
@@ -221,6 +230,15 @@ function CheckinContent() {
         <View pointerEvents={editable ? 'auto' : 'none'} style={{ gap: spacing.md, opacity: editable ? 1 : 0.55 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: t.card, borderWidth: 1, borderColor: t.border, borderRadius: 999, paddingHorizontal: 22, height: 64 }}>
           <AppText style={{ fontWeight: '800' }}>Bodyweight</AppText>
+          {weightUnit === 'st_lb' ? (
+            <StLbAutoSave
+              key={`bw-${focused}`}
+              kg={row.bodyweight}
+              onSave={(kg) => commit({ bodyweight: kg })}
+              onProblem={setProblem}
+              inputStyle={{ textAlign: 'right', color: t.foreground, fontSize: 28, fontWeight: '900', padding: 0 }}
+            />
+          ) : (
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
             <AutoSaveInput
               key={`bw-${focused}`}
@@ -237,6 +255,7 @@ function CheckinContent() {
             />
             <AppText color="muted" style={{ fontWeight: '700' }}>kg</AppText>
           </View>
+          )}
         </View>
 
         {SCALE_FIELDS.some(({ key }) => isMetricOn(disabledMetrics, key)) ? (

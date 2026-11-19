@@ -15,6 +15,8 @@ import { CustomTargetsSheet } from './CustomTargetsSheet';
 import { MemberResetLink } from '@/app/coach/_components/MemberResetLink';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
+import { weightUnitOf } from '@/lib/utils/weightUnits';
+import { StLbInput } from '@/app/_components/StLbInput';
 
 const NUTRITION_MODES: { value: ClientProfileRow['nutrition_tracking_mode']; label: string; hint: string }[] = [
   { value: 'full_tracking', label: 'Full tracking', hint: 'Per-food diary, barcode scan, recipes.' },
@@ -201,6 +203,8 @@ export function SetupTab({
   // Text boxes grow with their rows, so they take the member's look without the fixed height.
   const areaCls = isCoachView ? inputCls : 'w-full rounded-xl border border-black/[.14] bg-background px-3.5 py-2.5 text-base dark:border-white/15 disabled:opacity-60';
   const labelCls = isCoachView ? 'text-sm font-medium text-zinc-700 dark:text-zinc-300' : 'text-[13px] font-bold text-zinc-700 dark:text-zinc-300';
+  // Start and goal weight in the member's units (D16); stored in kilograms either way.
+  const stLb = weightUnitOf(initialProfile?.weight_unit) === 'st_lb';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -305,7 +309,17 @@ export function SetupTab({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className={labelCls}>Start weight (kg)</label>
+                <label className={labelCls}>Start weight ({stLb ? 'st & lb' : 'kg'})</label>
+                {stLb ? (
+                  <StLbInput
+                    label="Start weight"
+                    kg={form.start_weight || null}
+                    disabled={startWeightLocked}
+                    showKg={isCoachView}
+                    inputClassName={inputCls}
+                    onChange={(kg) => setForm((f) => ({ ...f, start_weight: kg ?? 0 }))}
+                  />
+                ) : (
                 <input
                   type="number"
                   step="0.1"
@@ -315,12 +329,22 @@ export function SetupTab({
                   disabled={startWeightLocked}
                   onChange={(e) => setForm({ ...form, start_weight: Number(e.target.value) })}
                 />
+                )}
                 {startWeightLocked && <p className="text-xs text-zinc-500">Set when you joined. Ask your coach to change it.</p>}
               </div>
               <div className="space-y-1">
                 <label className={labelCls}>
-                  Goal weight (kg) <span className="text-red-500">*</span>
+                  Goal weight ({stLb ? 'st & lb' : 'kg'}) <span className="text-red-500">*</span>
                 </label>
+                {stLb ? (
+                  <StLbInput
+                    label="Goal weight"
+                    kg={form.goal_weight || null}
+                    showKg={isCoachView}
+                    inputClassName={inputCls}
+                    onChange={(kg) => setForm((f) => ({ ...f, goal_weight: kg ?? 0 }))}
+                  />
+                ) : (
                 <input
                   type="number"
                   step="0.1"
@@ -329,6 +353,7 @@ export function SetupTab({
                   value={form.goal_weight || ''}
                   onChange={(e) => setForm({ ...form, goal_weight: Number(e.target.value) })}
                 />
+                )}
               </div>
             </div>
           </div>

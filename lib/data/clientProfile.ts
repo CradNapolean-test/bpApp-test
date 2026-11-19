@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { messageToHtml, sendBroadcastEmail } from '@/lib/email';
 import { friendlyProfileError } from '@/lib/profilePatch';
 import { TARGETS_LOCKED_MESSAGE, type CustomTargetValues } from '@/lib/utils/customTargets';
+import { weightUnitOf, type WeightUnit } from '@/lib/utils/weightUnits';
 import type { ClientProfileRow } from './types';
 
 export async function getClientProfile(clientId: string): Promise<ClientProfileRow | null> {
@@ -122,6 +123,17 @@ export async function updateEmailNotificationsEnabled(clientId: string, enabled:
     .update({ email_notifications_enabled: enabled })
     .eq('client_id', clientId);
   return error ? fail(error, 'Could not save the notification setting') : ok();
+}
+
+// How the member reads and types their weight (D16, migration 0170): kilograms or stones and pounds. The member's own preference, so a
+// plain update under "client updates own client_profiles"; weights themselves stay in kilograms.
+export async function updateWeightUnit(clientId: string, unit: WeightUnit): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('client_profiles')
+    .update({ weight_unit: weightUnitOf(unit) })
+    .eq('client_id', clientId);
+  return error ? fail(error, 'Could not save your units') : ok();
 }
 
 // Coach-only admin fields (join date, referral source, contract/agreement notes) -- goes

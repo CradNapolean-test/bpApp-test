@@ -3,8 +3,9 @@ import { ActivityIndicator, View } from 'react-native';
 
 import type { ClientProfileRow } from '@ballistic/shared/data/types';
 import { DETAIL_LIMITS, normalizeGender, validatePersonalDetails, type PersonalDetailsInput } from '@ballistic/shared/utils/personalDetails';
+import { weightUnitOf } from '@ballistic/shared/utils/weightUnits';
 
-import { DateField, FieldLabel, Input, Pill } from '@/components/fields';
+import { DateField, FieldLabel, Input, Pill, StLbInput } from '@/components/fields';
 import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
 import { startWeightLocked, useSaveDetails } from '@/lib/details';
 import { useClientProfile } from '@/lib/today';
@@ -64,6 +65,7 @@ function DetailsForm({ profile }: { profile: ClientProfileRow }) {
   const [dirty, setDirty] = useState(false);
   const [dobInvalid, setDobInvalid] = useState(false);
   const locked = startWeightLocked(profile);
+  const stLb = weightUnitOf(profile.weight_unit) === 'st_lb';
   const set = (patch: Partial<PersonalDetailsInput>) => {
     setF((prev) => ({ ...prev, ...patch }));
     setDirty(true);
@@ -74,7 +76,8 @@ function DetailsForm({ profile }: { profile: ClientProfileRow }) {
   function submit() {
     // A date that is half typed or not a real day must not be saved as "no date".
     const problem = dobInvalid ? 'Please check your date of birth.' : validatePersonalDetails(f);
-    if (problem) return setError(problem);
+    // A stones-and-pounds member typed no kilograms, so the weight message does not mention them (D16).
+    if (problem) return setError(stLb ? problem.replace(' (in kg)', '') : problem);
     save.mutate({ input: f, profile }, { onSuccess: () => setDirty(false) });
   }
 
@@ -123,6 +126,19 @@ function DetailsForm({ profile }: { profile: ClientProfileRow }) {
           <FieldLabel>Training experience</FieldLabel>
           <Input accessibilityLabel="Training experience" multiline value={f.experience} maxLength={DETAIL_LIMITS.experience} onChangeText={(v) => set({ experience: v })} placeholder="e.g. Trained on and off for 2 years, new to lifting weights, ex-athlete..." />
         </View>
+        {stLb ? (
+          // Stones and pounds for a member who reads their weight that way (D16); saved in kilograms.
+          <View style={{ gap: spacing.md }}>
+            <View style={{ gap: 6 }}>
+              <FieldLabel>Start weight (st & lb)</FieldLabel>
+              <StLbInput label="Start weight" kg={Number(f.startWeight) || null} editable={!locked} onChange={(kg) => set({ startWeight: kg == null ? '' : String(kg) })} />
+            </View>
+            <View style={{ gap: 6 }}>
+              <FieldLabel>Goal weight (st & lb)</FieldLabel>
+              <StLbInput label="Goal weight" kg={Number(f.goalWeight) || null} onChange={(kg) => set({ goalWeight: kg == null ? '' : String(kg) })} />
+            </View>
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <View style={{ flex: 1, gap: 6 }}>
             <FieldLabel>Start weight (kg)</FieldLabel>
@@ -133,6 +149,7 @@ function DetailsForm({ profile }: { profile: ClientProfileRow }) {
             <Input accessibilityLabel="Goal weight in kilograms" value={f.goalWeight} keyboardType="decimal-pad" maxLength={6} onChangeText={(v) => set({ goalWeight: v.replace(',', '.') })} />
           </View>
         </View>
+        )}
         {locked ? <AppText variant="small" color="muted">Your start weight is the baseline for your plan and progress charts, so only your coach can change it.</AppText> : null}
       </Card>
 

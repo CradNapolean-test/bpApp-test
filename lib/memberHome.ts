@@ -2,6 +2,7 @@
 // Only dates and wording here, so the rules can be tested without the screen.
 
 import { WEEKDAY_LABELS, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { formatWeight, type WeightUnit } from '@/lib/utils/weightUnits';
 
 type HomeBooking = { booking_date: string; status: string; attended: boolean };
 
@@ -61,12 +62,13 @@ export function homeWeek(bookings: HomeBooking[], todayIso: string): { days: Hom
 }
 
 // The daily check-in line on Home. With sleep, steps or water switched on it is done when every one of them is in for today; with all
-// three switched off, when today's bodyweight is in.
+// three switched off, when today's bodyweight is in. The weight reads in the member's units (D16).
 export function checkinToday(
   log: { sleep: number | null; steps: number | null; water: number | null; bodyweight: number | null } | null | undefined,
-  trackers: readonly string[]
+  trackers: readonly string[],
+  unit: WeightUnit = 'kg'
 ): { done: boolean; detail: string } {
-  const weight = log?.bodyweight != null ? `${log.bodyweight} kg` : null;
+  const weight = log?.bodyweight != null ? formatWeight(log.bodyweight, unit) : null;
   if (trackers.length === 0) {
     return weight ? { done: true, detail: `Done. ${weight}.` } : { done: false, detail: "Today's weigh-in and how you feel" };
   }

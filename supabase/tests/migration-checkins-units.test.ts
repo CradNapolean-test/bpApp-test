@@ -77,3 +77,23 @@ describe('D7: the member sees which of their weeks and forms were reviewed, and 
     expect(sql).not.toMatch(/(?:insert into|update|delete from)\s+(?:public\.)?coach_reviews/i);
   });
 });
+
+describe('D16: stones and pounds as a per-member setting', () => {
+  it('adds client_profiles.weight_unit, kilograms for everyone until they change it, and can be run twice', () => {
+    expect(sql).toMatch(
+      /alter table public\.client_profiles\s+add column if not exists weight_unit text not null default 'kg'\s+constraint client_profiles_weight_unit_check check \(weight_unit in \('kg', 'st_lb'\)\);/
+    );
+    // The guard refuses a weight_unit column that is not this one.
+    expect(guard).toMatch(/column_name = 'weight_unit'/);
+    expect(guard).toMatch(/conname = 'client_profiles_weight_unit_check'/);
+  });
+
+  it('changes no weights: they stay in kilograms', () => {
+    expect(sql).not.toMatch(/update\s+(?:public\.)?(?:client_profiles|daily_logs)/i);
+    expect(sql).not.toMatch(/alter\s+table\s+(?:public\.)?daily_logs/i);
+  });
+
+  it('does not touch the profile protection trigger (the unit is the member\'s own preference)', () => {
+    expect(sql).not.toMatch(/protect_coach_owned_profile_fields/);
+  });
+});

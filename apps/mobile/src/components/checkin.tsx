@@ -4,6 +4,7 @@ import { Platform, TextInput, View, type StyleProp, type TextInputProps, type Te
 import type { DailyLogRow } from '@ballistic/shared/data/types';
 import { dayTrafficLight, trafficLight, type TrackerMetric, type TrafficLight } from '@ballistic/shared/utils/accountability';
 import { dayHasFood, editableTrackerValue, formatTrackerValue, nudgeValue, parseTrackerInput, TRACKER_CONFIG, type WaterUnit } from '@ballistic/shared/utils/weeklyLog';
+import { parseStLb, sameWeightReading, stLbFields } from '@ballistic/shared/utils/weightUnits';
 
 import { Pressable } from '@/components/press';
 import { IconChip } from '@/components/home';
@@ -79,6 +80,84 @@ export function AutoSaveInput({
       }}
       style={style}
     />
+  );
+}
+
+// Bodyweight in stones and pounds (D16): two boxes that save together, a moment after the last keystroke, when the member leaves a box,
+// and when the screen closes. It saves kilograms, and only when the reading really changed, so a stored weight never drifts by being
+// shown and typed back. `onProblem` gets what is wrong with the typing (or null once it is fine).
+export function StLbAutoSave({
+  kg,
+  onSave,
+  onProblem,
+  delay = 800,
+  inputStyle,
+}: {
+  kg: number | null;
+  onSave: (kg: number | null) => void;
+  onProblem: (message: string | null) => void;
+  delay?: number;
+  inputStyle?: StyleProp<TextStyle>;
+}) {
+  const t = useTheme();
+  const [draft, setDraft] = useState<{ st: string; lb: string } | null>(null);
+  const draftRef = useRef<{ st: string; lb: string } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef({ kg, onSave, onProblem });
+  useEffect(() => {
+    latest.current = { kg, onSave, onProblem };
+  });
+
+  const flush = useCallback(() => {
+    if (!timer.current) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+    const d = draftRef.current;
+    if (!d) return;
+    const parsed = parseStLb(d.st, d.lb);
+    if (!parsed.ok) return latest.current.onProblem(parsed.error);
+    latest.current.onProblem(null);
+    if (!sameWeightReading(latest.current.kg, parsed.kg, 'st_lb')) latest.current.onSave(parsed.kg);
+  }, []);
+  useEffect(() => flush, [flush]); // the screen closing counts as leaving the boxes
+
+  const shown = draft ?? stLbFields(kg);
+  const change = (next: { st: string; lb: string }) => {
+    draftRef.current = next;
+    setDraft(next);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, delay);
+  };
+  const unitStyle = { color: t.muted, fontWeight: '700' } as const;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+      <TextInput
+        accessibilityLabel="Bodyweight, stones"
+        keyboardType="number-pad"
+        maxLength={2}
+        placeholder="—"
+        placeholderTextColor={t.muted}
+        selectTextOnFocus
+        value={shown.st}
+        onChangeText={(v) => change({ st: v.replace(/[^0-9]/g, ''), lb: (draftRef.current ?? shown).lb })}
+        onBlur={flush}
+        style={[inputStyle, { minWidth: 34 }]}
+      />
+      <AppText style={unitStyle}>st</AppText>
+      <TextInput
+        accessibilityLabel="Bodyweight, pounds"
+        keyboardType="decimal-pad"
+        maxLength={4}
+        placeholder="—"
+        placeholderTextColor={t.muted}
+        selectTextOnFocus
+        value={shown.lb}
+        onChangeText={(v) => change({ st: (draftRef.current ?? shown).st, lb: v.replace(/[^0-9.,]/g, '') })}
+        onBlur={flush}
+        style={[inputStyle, { minWidth: 52 }]}
+      />
+      <AppText style={unitStyle}>lb</AppText>
+    </View>
   );
 }
 
