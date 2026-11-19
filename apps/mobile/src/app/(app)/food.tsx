@@ -4,7 +4,7 @@ import { ActivityIndicator } from 'react-native';
 import type { ClientProfileRow, FoodDiaryEntryRow } from '@ballistic/shared/data/types';
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
 import { addDays, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
-import type { RecipeLine } from '@ballistic/shared/utils/diaryLines';
+import { recipeRowCount, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
 
 import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
@@ -153,13 +153,13 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           onSave={(portions) => { updatePortions.mutate({ id: editing.id, portions }); setEditing(null); }}
           onSaveQuick={(fields) => { updateQuick.mutate({ id: editing.id, fields }); setEditing(null); }}
           onRemove={() => { removeEntry.mutate({ id: editing.id }); setEditing(null); }}
-          onRefile={(sectionId) => { refile.mutate({ id: editing.id, sectionId }); setEditing(null); }}
+          onRefile={(sectionId) => { refile.mutate({ id: editing.id, sectionId, recipeLogId: editing.recipe_log_id ?? null }); setEditing(null); }}
         />
       ) : null}
       {removingRecipe ? (
         <ConfirmSheet
           title={`Remove ${removingRecipe.name}?`}
-          body={`This takes all ${removingRecipe.entries.length} of its ingredients off this day.`}
+          body={`This takes all ${recipeRowCount(entries, removingRecipe.id) || removingRecipe.entries.length} of its ingredients off this day.`}
           onCancel={() => setRemovingRecipe(null)}
           onConfirm={() => { removeRecipe.mutate({ recipeLogId: removingRecipe.id }); setRemovingRecipe(null); }}
         />

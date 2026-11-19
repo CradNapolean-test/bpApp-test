@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { diaryLines, recipeLineDetail, recipeLogFields, relinkRecipeCopies } from './diaryLines';
+import { diaryLines, fileUnderLabel, recipeLineDetail, recipeLogFields, recipeRowCount, refiledEntries, relinkRecipeCopies } from './diaryLines';
 
 // Same cases as packages/shared/src/utils/diaryLines.test.ts: the web and the phone must show a recipe the same way.
 const row = (id: string, recipe?: { log: string; name?: string; servings?: number }) => ({
@@ -33,6 +33,37 @@ describe('diaryLines (D23c)', () => {
   it('carries the servings, and names a line with no name "Recipe"', () => {
     const [line] = diaryLines([{ ...row('a', { log: 'r1', servings: 1.5 }), recipe_name: '  ' }]);
     expect(line).toMatchObject({ kind: 'recipe', name: 'Recipe', servings: 1.5 });
+  });
+});
+
+describe('filing a row from "Other" under a meal', () => {
+  const day = [
+    { ...row('banana'), meal_section_id: null },
+    { ...row('oats', { log: 'r1' }), meal_section_id: null },
+    { ...row('milk', { log: 'r1' }), meal_section_id: null },
+    { ...row('eggs', { log: 'r2' }), meal_section_id: 'lunch' },
+    { ...row('whey', { log: 'r2' }), meal_section_id: null },
+  ];
+  const where = (rows: typeof day) => rows.map((r) => `${r.id}:${r.meal_section_id ?? 'other'}`);
+
+  it('moves a plain row on its own', () => {
+    expect(where(refiledEntries(day, { id: 'banana' }, 'breakfast'))).toEqual(['banana:breakfast', 'oats:other', 'milk:other', 'eggs:lunch', 'whey:other']);
+  });
+
+  it('moves every ingredient of a recipe still in "Other" with the one filed, so the recipe stays one line', () => {
+    expect(where(refiledEntries(day, { id: 'milk', recipe_log_id: 'r1' }, 'breakfast'))).toEqual(['banana:other', 'oats:breakfast', 'milk:breakfast', 'eggs:lunch', 'whey:other']);
+    // only rows still in "Other": a row already filed elsewhere stays where it is
+    expect(where(refiledEntries(day, { id: 'whey', recipe_log_id: 'r2' }, 'dinner'))).toEqual(['banana:other', 'oats:other', 'milk:other', 'eggs:lunch', 'whey:dinner']);
+  });
+
+  it('says when the whole recipe moves', () => {
+    expect(fileUnderLabel(row('banana'))).toBe('File under');
+    expect(fileUnderLabel(row('milk', { log: 'r1' }))).toBe('File all of Protein oats under');
+  });
+
+  it('counts every row of a logged recipe on the day for "Remove", wherever it is filed', () => {
+    expect(recipeRowCount(day, 'r1')).toBe(2);
+    expect(recipeRowCount(day, 'r2')).toBe(2);
   });
 });
 

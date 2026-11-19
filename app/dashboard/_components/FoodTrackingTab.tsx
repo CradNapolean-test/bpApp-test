@@ -13,6 +13,7 @@ import {
   addFoodDiaryEntry,
   addQuickAddEntry,
   copyDiaryBetweenDates,
+  fileRecipeUnderSection,
   getFoodDiaryForDate,
   removeFoodDiaryEntry,
   removeRecipeFromDiary,
@@ -46,7 +47,7 @@ import { addDays, DEFAULT_TIMEZONE, startOfWeek, toIsoDate } from '@/lib/utils/d
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
 import { suggestPairs, type PairSuggestion } from '@/lib/foodPairs';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
-import { diaryLines, recipeLineDetail, type RecipeLine } from '@/lib/utils/diaryLines';
+import { diaryLines, fileUnderLabel, recipeLineDetail, recipeRowCount, refiledEntries, type RecipeLine } from '@/lib/utils/diaryLines';
 import { AddFoodSheet } from './AddFoodSheet';
 import { CopyFoodSheet, type CopyScope } from './CopyFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
@@ -253,7 +254,7 @@ function EditEntrySheet({
         )}
         {onRefile && (
           <div className="mt-3 space-y-1">
-            <label className="text-xs font-medium text-zinc-500">File under</label>
+            <label className="text-xs font-medium text-zinc-500">{fileUnderLabel(entry)}</label>
             <select
               defaultValue=""
               onChange={(e) => e.target.value && onRefile(e.target.value)}
@@ -785,7 +786,7 @@ export function FoodTrackingTab({
     if (!currentDailyLogId) return;
     const ok = await confirm({
       title: `Remove ${line.name}?`,
-      body: `This takes all ${line.entries.length} of its ingredients off this day.`,
+      body: `This takes all ${recipeRowCount(entries, line.id) || line.entries.length} of its ingredients off this day.`,
       destructive: true,
     });
     if (!ok) return;
@@ -808,11 +809,14 @@ export function FoodTrackingTab({
       line.kind === 'entry' ? entryRow(line.entry) : <RecipeLineRow key={line.id} line={line} readOnly={entryReadOnly} onRemoveRecipe={handleRemoveRecipe} renderEntry={entryRow} />
     );
 
+  // An ingredient of a logged recipe takes the rest of the recipe in "Other" with it, so the recipe stays one line (D23c).
   async function handleRefile(id: string, sectionId: string | null) {
+    const target: { id: string; recipe_log_id?: string | null } = entries.find((e) => e.id === id) ?? { id };
     await run(
       async () => {
-        await updateFoodDiaryEntrySection(id, sectionId);
-        setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, meal_section_id: sectionId } : e)));
+        if (target.recipe_log_id) await fileRecipeUnderSection(target.recipe_log_id, sectionId);
+        else await updateFoodDiaryEntrySection(id, sectionId);
+        setEntries((prev) => refiledEntries(prev, target, sectionId));
       },
       { success: 'Moved', ...quiet }
     );

@@ -122,6 +122,18 @@ export async function updateFoodDiaryEntrySection(entryId: string, mealSectionId
   if (error) raise(error);
 }
 
+// Files a logged recipe sitting in "Other" under a section: every row of that logging still in "Other" (lib/utils/diaryLines.ts
+// refiledEntries), so it stays one line in one meal and "Remove" takes off what it shows. RLS keeps it to the member's own diary.
+export async function fileRecipeUnderSection(recipeLogId: string, mealSectionId: string | null): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('food_diary_entries')
+    .update({ meal_section_id: mealSectionId })
+    .eq('recipe_log_id', recipeLogId)
+    .is('meal_section_id', null);
+  if (error) raise(error);
+}
+
 // Corrects a logged quantity after the fact (e.g. misjudged a portion) instead of forcing a
 // delete-and-re-add -- tapping a diary row opens this.
 export async function updateFoodDiaryEntryPortions(entryId: string, portions: number, dailyLogId: string): Promise<FoodDiaryEntryRow[]> {

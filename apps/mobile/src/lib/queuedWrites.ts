@@ -120,11 +120,14 @@ export const WRITE_DIARY_QUICK_UPDATE = defineWrite<DiaryQuickUpdateVars>('diary
   invalidate: ({ userId, date }) => diaryRefresh(userId, date),
 });
 
-// "File under": moves an entry that is sitting in "Other" into one of the member's own sections.
-export type DiaryRefileVars = { userId: string; date: string; id: string; sectionId: string };
+// "File under": moves an entry that is sitting in "Other" into one of the member's own sections. An ingredient of a logged recipe
+// (recipeLogId) takes every row of that recipe still in "Other" with it, so the recipe stays one line in one meal (D23c). A write queued
+// before recipeLogId existed moves the one row, as it did then.
+export type DiaryRefileVars = { userId: string; date: string; id: string; sectionId: string; recipeLogId?: string | null };
 export const WRITE_DIARY_REFILE = defineWrite<DiaryRefileVars>('diary-refile', {
-  run: async ({ id, sectionId }) => {
-    const { error } = await supabase.from('food_diary_entries').update({ meal_section_id: sectionId }).eq('id', id);
+  run: async ({ id, sectionId, recipeLogId }) => {
+    const rows = supabase.from('food_diary_entries').update({ meal_section_id: sectionId });
+    const { error } = recipeLogId ? await rows.eq('recipe_log_id', recipeLogId).is('meal_section_id', null) : await rows.eq('id', id);
     if (error) throw error;
   },
   invalidate: ({ userId, date }) => [{ key: diaryKey(userId, date) }],

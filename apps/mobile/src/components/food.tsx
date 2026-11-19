@@ -8,7 +8,7 @@ import type { FoodDiaryEntryRow, FoodRow, MealPlanEntryRow, MealSectionRow, Nutr
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@ballistic/shared/onboarding';
 import { parseQuantity, quantityConfig, quantityProblem } from '@ballistic/shared/utils/foodQuantity';
 import { groupFoodResults, moreLikeThis, type FoodGroup } from '@ballistic/shared/utils/foodResults';
-import { diaryLines, recipeLineDetail, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
+import { diaryLines, fileUnderLabel, recipeLineDetail, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
 import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, defaultUnit, parseUnitInput, startingAmount, unitForAmount, unitText, unitsFor, type FoodUnit } from '@ballistic/shared/utils/foodUnits';
 import { entryMacros, formatQuantity, totalMacros } from '@ballistic/shared/utils/foodTotals';
 import { perServing, scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
@@ -281,7 +281,7 @@ export function EditEntrySheet({ entry, sections = [], onSave, onSaveQuick, onRe
       {/* An entry sitting in "Other" can be filed under one of the member's own sections. */}
       {onRefile && entry.meal_section_id === null && sections.length > 0 ? (
         <View style={{ gap: spacing.sm }}>
-          <AppText variant="small" color="muted">File under</AppText>
+          <AppText variant="small" color="muted">{fileUnderLabel(entry)}</AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {sections.map((s) => <Chip key={s.id} label={s.label} onPress={() => onRefile(s.id)} />)}
           </View>

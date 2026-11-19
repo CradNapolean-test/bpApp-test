@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import type { FoodDiaryEntryRow, FoodRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
 import { lookupBarcode } from '@ballistic/shared/openFoodFacts';
 import { barcodeVariants } from '@ballistic/shared/utils/barcode';
-import { recipeLogFields, relinkRecipeCopies } from '@ballistic/shared/utils/diaryLines';
+import { recipeLogFields, refiledEntries, relinkRecipeCopies } from '@ballistic/shared/utils/diaryLines';
 import { SEARCH_LIMIT } from '@ballistic/shared/utils/foodResults';
 import type { OwnUnitRow, ServingOption } from '@ballistic/shared/utils/foodUnits';
 import type { OwnFoodRow } from '@ballistic/shared/utils/ownFoods';
@@ -226,13 +226,18 @@ export function useRemoveEntry(date: string) {
   return useQueuedWrite({ key: WRITE_DIARY_REMOVE, toVars, apply });
 }
 
-// "File under": moves an entry sitting in "Other" into one of the member's own sections.
+// "File under": moves an entry sitting in "Other" into one of the member's own sections. An ingredient of a logged recipe (pass its
+// recipe_log_id) takes the rest of the recipe in "Other" with it, so the recipe stays one line (D23c).
+type RefileInput = { id: string; sectionId: string; recipeLogId?: string | null };
 export function useRefileEntry(date: string) {
   const userId = useUserId();
   const updateDiary = useDiaryCacheUpdate(date);
-  const toVars = useCallback((input: { id: string; sectionId: string }): DiaryRefileVars => ({ userId, date, id: input.id, sectionId: input.sectionId }), [userId, date]);
+  const toVars = useCallback(
+    (input: RefileInput): DiaryRefileVars => ({ userId, date, id: input.id, sectionId: input.sectionId, recipeLogId: input.recipeLogId ?? null }),
+    [userId, date],
+  );
   const apply = useCallback(
-    (input: { id: string; sectionId: string }) => updateDiary((old) => ({ ...old, entries: old.entries.map((e) => (e.id === input.id ? { ...e, meal_section_id: input.sectionId } : e)) })),
+    (input: RefileInput) => updateDiary((old) => ({ ...old, entries: refiledEntries(old.entries, { id: input.id, recipe_log_id: input.recipeLogId }, input.sectionId) })),
     [updateDiary],
   );
   return useQueuedWrite({ key: WRITE_DIARY_REFILE, toVars, apply });

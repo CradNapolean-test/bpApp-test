@@ -43,6 +43,27 @@ export function recipeLogFields(recipeLogId: string, name: string, servings: num
   return { recipe_log_id: recipeLogId, recipe_name: (name.trim() || 'Recipe').slice(0, NAME_MAX), recipe_servings: servings };
 }
 
+// "File under" for a row sitting in "Other". An ingredient of a logged recipe takes the rest of its recipe with it (every row of that
+// logging still in "Other"), so the recipe stays one line in one meal and "Remove" takes off exactly the ingredients it shows.
+export function fileUnderLabel(entry: RecipeLinkFields): string {
+  return entry.recipe_log_id ? `File all of ${entry.recipe_name?.trim() || 'this recipe'} under` : 'File under';
+}
+
+// The day's rows after `target` is filed under `sectionId`, by the rule above.
+export function refiledEntries<T extends RecipeLinkFields & { id: string; meal_section_id: string | null }>(
+  entries: T[],
+  target: { id: string; recipe_log_id?: string | null },
+  sectionId: string | null
+): T[] {
+  const recipe = target.recipe_log_id;
+  return entries.map((e) =>
+    e.id === target.id || (recipe && e.recipe_log_id === recipe && e.meal_section_id === null) ? { ...e, meal_section_id: sectionId } : e
+  );
+}
+
+// How many rows "Remove" takes off for a logged recipe: every row of that logging on the day, wherever it is filed.
+export const recipeRowCount = (entries: RecipeLinkFields[], recipeLogId: string) => entries.filter((e) => e.recipe_log_id === recipeLogId).length;
+
 // Copying a day or a meal: each recipe on it lands as a new recipe line of its own (a new id), still one line.
 export function relinkRecipeCopies<T extends RecipeLinkFields>(rows: T[], newId: () => string): T[] {
   const ids = new Map<string, string>();
