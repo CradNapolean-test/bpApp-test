@@ -34,6 +34,7 @@ const GRAMS_MAX = 5000;
 
 const num = (text: string) => Number(text.trim().replace(',', '.'));
 const perGram = (value: number, grams: number) => Math.round((value / grams) * 1e6) / 1e6;
+const formatGrams = (grams: number) => grams.toLocaleString('en-GB', { maximumFractionDigits: 1 });
 
 export type OwnFoodResult = { ok: true; row: OwnFoodRow; perServing: { calories: number; protein: number; carbs: number; fat: number } } | { ok: false; error: string };
 
@@ -60,19 +61,20 @@ export function readOwnFood(text: OwnFoodText): OwnFoodResult {
   const grams = num(text.grams);
   if (!(grams > 0)) return { ok: false, error: 'Enter how many grams one serving weighs, or leave it empty.' };
   if (grams > GRAMS_MAX) return { ok: false, error: 'That serving is heavier than the app allows.' };
-  if (protein + carbs + fat > grams * 1.05) return { ok: false, error: 'The protein, carbs and fat add up to more than the serving weighs.' };
+  // The weight is kept to 0.1 g, and the figures are checked as they are saved (per gram), by the same limits as the database: at most
+  // 1 g of protein, carbs or fat in a gram, and 1.05 g of the three together (a little over 1 for rounded labels).
   const weight = Math.round(grams * 10) / 10;
+  if (!(weight > 0)) return { ok: false, error: 'Enter how many grams one serving weighs, or leave it empty.' };
+  const per = { protein: perGram(protein, weight), carbs: perGram(carbs, weight), fat: perGram(fat, weight) };
+  // (a hair over, for adding up decimals in floating point, is not over)
+  const over = (value: number, limit: number) => value > limit + 1e-9;
+  const heavier = (['protein', 'carbs', 'fat'] as const).find((key) => over(per[key], 1));
+  if (heavier) return { ok: false, error: `The ${heavier} is more than the serving weighs (${formatGrams(weight)} g).` };
+  if (over(per.protein + per.carbs + per.fat, 1.05)) return { ok: false, error: 'The protein, carbs and fat add up to more than the serving weighs.' };
   return {
     ok: true,
     perServing,
-    row: {
-      name,
-      portion: '1 gram',
-      protein: perGram(protein, weight),
-      carbs: perGram(carbs, weight),
-      fat: perGram(fat, weight),
-      serving_options: [{ label: serving, grams: weight, default: true }],
-    },
+    row: { name, portion: '1 gram', ...per, serving_options: [{ label: serving, grams: weight, default: true }] },
   };
 }
 

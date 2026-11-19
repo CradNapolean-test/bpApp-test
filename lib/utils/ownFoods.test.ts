@@ -50,6 +50,25 @@ describe('readOwnFood (NU18)', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.row.protein).toBe(1);
   });
+
+  it('refuses any one of protein, carbs or fat heavier than the serving, as the database does (at most 1 g in a gram)', () => {
+    // an oil: 10 g, with 10.2 g of fat on a rounded label. The three together are within 1.05 g a gram, but fat alone is over 1.
+    expect(readOwnFood({ ...wrap, protein: '0', carbs: '0', fat: '10.2', grams: '10' })).toEqual({ ok: false, error: 'The fat is more than the serving weighs (10 g).' });
+    expect(readOwnFood({ ...wrap, protein: '0', carbs: '0', fat: '10', grams: '10' })).toMatchObject({ ok: true, row: { fat: 1 } });
+    expect(readOwnFood({ ...wrap, protein: '20.5', carbs: '0', fat: '0', grams: '20' })).toMatchObject({ ok: false, error: expect.stringMatching(/^The protein /) });
+  });
+
+  it('checks against the weight as saved (to 0.1 g)', () => {
+    // 0.04 g rounds to 0 g: no figures per gram can be worked out from that
+    expect(readOwnFood({ ...wrap, protein: '0.01', carbs: '0', fat: '0', grams: '0.04' })).toMatchObject({ ok: false, error: expect.stringMatching(/grams one serving weighs/) });
+    // 10.04 g is saved as 10 g, so 10.03 g of fat is over
+    expect(readOwnFood({ ...wrap, protein: '0', carbs: '0', fat: '10.03', grams: '10.04' })).toMatchObject({ ok: false, error: expect.stringMatching(/^The fat /) });
+  });
+
+  it('lets the three together reach 1.05 g a gram, and not past it', () => {
+    expect(readOwnFood({ ...wrap, protein: '35', carbs: '35', fat: '35', grams: '100' })).toMatchObject({ ok: true });
+    expect(readOwnFood({ ...wrap, protein: '35', carbs: '35', fat: '35.1', grams: '100' })).toEqual({ ok: false, error: 'The protein, carbs and fat add up to more than the serving weighs.' });
+  });
 });
 
 describe('isOwnFood', () => {
