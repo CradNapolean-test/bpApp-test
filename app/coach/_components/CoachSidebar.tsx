@@ -54,8 +54,9 @@ export function CoachSidebar({
           </>
         )}
       </Link>
-      {/* Only shows for a coach in more than one gym. */}
-      <div className="-mt-3 px-2 empty:hidden [&_span]:!text-zinc-300">
+      {/* Only shows for a coach in more than one gym. Light text and a light pill on the black column; the list of sites is drawn
+          outside this box (GymSwitcherMenu), so these rules no longer reach it. */}
+      <div className="-mt-3 px-2 empty:hidden [&_button:hover]:!bg-white/15 [&_button]:!bg-white/10 [&_span]:!text-zinc-300">
         <GymSwitcherMenu />
       </div>
 
