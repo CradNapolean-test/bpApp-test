@@ -30,7 +30,9 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   if (!profile || profile.role !== 'coach') redirect('/');
 
   const requested: DashboardScope = scopeParam === 'gym' || scopeParam === 'coach' ? scopeParam : 'mine';
-  const data = await getCoachDashboard(requested, coachParam ?? null);
+  // The header's message badge is always the coach's own unread, whichever view is showing. Read alongside the dashboard, not after it,
+  // so a scope switch (which runs this page again) waits for one round of reads instead of two.
+  const [data, unreadCount] = await Promise.all([getCoachDashboard(requested, coachParam ?? null), getCoachUnreadTotal(supabase).catch(() => 0)]);
 
   // The activity feed is gym-wide, so it includes members of other coaches too; their names come
   // from the dashboard's own lookup where we have them, otherwise a quick query.
@@ -40,8 +42,6 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
     const { data: extra } = await supabase.from('client_profiles').select('client_id, name').in('client_id', unknownIds);
     for (const p of extra ?? []) if (p.name) names[p.client_id] = p.name;
   }
-  // The header's message badge is always the coach's own unread, whichever view is showing.
-  const unreadCount = await getCoachUnreadTotal(supabase).catch(() => 0);
 
   return (
     <ClientOnly fallback={<PageSkeleton />}>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import type { ReactNode } from 'react';
 import {
   BellOff,
@@ -37,6 +37,7 @@ import ClickSpark, { type ClickSparkHandle } from '@/app/_components/motion/Clic
 import { foldAway, pop } from '@/app/_components/motion/gsap';
 import { CoachPageHeader, CoachSection, CoachStatStrip, coachBtnOutline, coachBtnPrimary, coachBtnSoft, coachLink, coachRow } from './CoachUi';
 import { SESSION_MIN, currentAndNext, minuteOfDayIn, toMinutes as toMin, todayAtGym } from '@/lib/todaySessions';
+import { dashboardScopeHref, dashboardScopeKey } from '@/lib/dashboardScope';
 import type { CheckReason, CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
 import type { ScheduleOccurrence } from '@/lib/data/types';
 import { ActiveGymTag } from './ActiveGymTag';
@@ -205,8 +206,29 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
   );
 }
 
-export function CoachDashboard({ data, activity }: { data: CoachDashboardData; activity?: ReactNode }) {
+export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboardData; activity?: ReactNode }) {
   const router = useRouter();
+  // My members / Whole gym / By coach. Each scope is its own page load, which reads every member's last month from the database and
+  // takes seconds; the pills used to sit there for all of it, with only the highlight moving. Now the tap shows at once: the pill moves,
+  // the figures below fade and stop taking taps until the new ones arrive (useTransition's pending state), and a scope already seen on
+  // this visit puts its figures up straight away while the fresh ones load. Nothing more is read from the database than before.
+  const [switching, startSwitch] = useTransition();
+  const seenScopes = useRef(new Map<string, CoachDashboardData>());
+  useEffect(() => {
+    seenScopes.current.set(dashboardScopeKey(loaded.scope, loaded.selectedCoachId), loaded);
+  }, [loaded]);
+  // The scope tapped, for as long as the page still holds the figures it was tapped from.
+  const [picked, setPicked] = useState<{ from: CoachDashboardData; scope: DashboardScope; coachId: string | null; data: CoachDashboardData | null } | null>(
+    null
+  );
+  const pending = picked && picked.from === loaded ? picked : null;
+  const data = pending?.data ?? loaded;
+  function switchScope(scope: DashboardScope, coachId: string | null) {
+    const key = dashboardScopeKey(scope, coachId);
+    if (!pending && key === dashboardScopeKey(loaded.scope, loaded.selectedCoachId)) return;
+    setPicked({ from: loaded, scope, coachId, data: seenScopes.current.get(key) ?? null });
+    startSwitch(() => router.push(dashboardScopeHref(scope, coachId)));
+  }
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showAllToCheck, setShowAllToCheck] = useState(false);
@@ -216,10 +238,9 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
   // The to-do groups settle in when the dashboard opens.
   useStaggerIn(screen, '[data-stagger]', null, 0.2);
   const scopeTrack = useRef<HTMLDivElement>(null);
-  // The highlight moves the moment a scope is tapped, not a second later when the new figures arrive: the scope tapped is shown while
-  // the page still holds the one it was tapped from.
-  const [picked, setPicked] = useState<{ key: DashboardScope; from: DashboardScope } | null>(null);
-  const shownScope = picked && picked.from === data.scope ? picked.key : data.scope;
+  // The highlight moves the moment a scope is tapped, not seconds later when the new figures arrive.
+  const shownScope = pending ? pending.scope : loaded.scope;
+  const shownCoachId = pending ? pending.coachId : loaded.selectedCoachId;
   useSlidingThumb(scopeTrack, shownScope);
   // "Happening now / Up next" follows the gym's clock: it used to be worked out once, when the page loaded, and then sat there (CC3).
   const [clockMs, setClockMs] = useState(() => Date.now());
@@ -227,7 +248,7 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
     const tick = setInterval(() => setClockMs(Date.now()), 60_000);
     return () => clearInterval(tick);
   }, []);
-  const { scope, isAdmin, coaches, selectedCoachId, stats } = data;
+  const { scope, isAdmin, coaches, stats } = data;
   const own = (mineFlag: boolean) => scope === 'mine' || mineFlag;
 
   // ---- To do ----
@@ -459,8 +480,9 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
   const { inProgress } = currentAndNext(today, nowMin);
   const toMark = data.occurrences.filter((o) => (o.unmarkedCount ?? 0) > 0);
 
-  const scopeHref = (s: DashboardScope, coachId?: string) => `/coach?scope=${s}${coachId ? `&coach=${coachId}` : ''}`;
-  const scopeLabel = scope === 'gym' ? 'the whole gym' : scope === 'coach' ? coaches.find((c) => c.id === selectedCoachId)?.name ?? 'this coach' : 'your members';
+  // The scope tapped, while it loads too.
+  const scopeLabel =
+    shownScope === 'gym' ? 'the whole gym' : shownScope === 'coach' ? coaches.find((c) => c.id === shownCoachId)?.name ?? 'this coach' : 'your members';
 
   const deltaLast = stats.sessionsAttended - stats.sessionsAttendedSameTimeLastWeek;
   const checkinPct = stats.checkinsOf > 0 ? Math.round((stats.checkinsIn / stats.checkinsOf) * 100) : 0;
@@ -486,7 +508,13 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
   const toCheckShown = showAllToCheck ? data.toCheck : data.toCheck.slice(0, 6);
 
   return (
-    <div ref={screen} className="space-y-6 pb-20 lg:pb-0">
+    <div
+      ref={screen}
+      aria-busy={switching || undefined}
+      // While another scope loads, everything under the header fades and takes no taps: what shows is the old scope's figures, or
+      // the new scope's from earlier in this visit.
+      className={`space-y-6 pb-20 lg:pb-0 ${switching ? '[&>*:not(:first-child)]:pointer-events-none [&>*:not(:first-child)]:opacity-60 [&>*:not(:first-child)]:transition-opacity' : ''}`}
+    >
       <CoachPageHeader
         eyebrow={clockLine}
         title={`${greeting}, ${data.firstName || 'Coach'}`}
@@ -506,10 +534,7 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
                     type="button"
                     aria-pressed={shownScope === key}
                     data-active={shownScope === key}
-                    onClick={() => {
-                      if (key !== scope) setPicked({ key, from: scope });
-                      router.push(key === 'coach' ? scopeHref('coach', selectedCoachId ?? coaches[0]?.id) : scopeHref(key));
-                    }}
+                    onClick={() => switchScope(key, key === 'coach' ? (shownCoachId ?? coaches[0]?.id ?? null) : null)}
                     className={`relative h-9 whitespace-nowrap rounded-lg px-3 text-sm font-bold transition-colors ${
                       shownScope === key ? 'bg-card text-black shadow-sm dark:text-zinc-50' : 'text-zinc-600 hover:text-black dark:text-zinc-300'
                     }`}
@@ -528,12 +553,12 @@ export function CoachDashboard({ data, activity }: { data: CoachDashboardData; a
           </>
         }
       />
-      {isAdmin && scope !== 'mine' && (
+      {isAdmin && shownScope !== 'mine' && (
         <div className="space-y-2">
-          {scope === 'coach' && coaches.length > 0 && (
+          {shownScope === 'coach' && coaches.length > 0 && (
             <select
-              value={selectedCoachId ?? ''}
-              onChange={(e) => router.push(scopeHref('coach', e.target.value))}
+              value={shownCoachId ?? ''}
+              onChange={(e) => switchScope('coach', e.target.value)}
               aria-label="Coach"
               className="h-11 w-full max-w-sm rounded-xl border border-black/[.16] bg-card px-3 text-base dark:border-white/15"
             >
