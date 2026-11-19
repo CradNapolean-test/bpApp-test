@@ -515,20 +515,20 @@ export function FoodSearchPicker({
     });
   // The food tapped in a list, and the amount its step starts at (D23b). The list, query and results stay as they were for "Back".
   const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
-  // ...and where the list was scrolled to: it is not on screen while a food is open, so the position is kept when a food is tapped and
-  // put back when the list comes back ("Back to results" lands on the result that was tapped, not the top of 40 or more results).
+  const pick = (food: FoodRow, qty = startingAmount(food)) => setPicked({ food, qty });
+  // ...and where the list was scrolled to: the list is not on screen while a food (or the own-food form) is open, so the position the
+  // list reported last is kept when it goes, and put back when it comes back ("Back to results" lands on the result that was tapped, not
+  // the top of 40 or more results). Any other list starts at the top.
   const listScroll = useRef(0);
-  const listEl = useRef<HTMLElement | null>(null);
-  const pick = (food: FoodRow, qty = startingAmount(food)) => {
-    listScroll.current = listEl.current?.scrollTop ?? 0;
-    setPicked({ food, qty });
+  const backTo = useRef(0);
+  const onListScroll = (e: React.UIEvent<HTMLElement>) => {
+    listScroll.current = e.currentTarget.scrollTop;
   };
   const keepListScroll = useCallback((el: HTMLElement | null) => {
-    listEl.current = el;
-    if (el && listScroll.current > 0) {
-      el.scrollTop = listScroll.current;
-      listScroll.current = 0;
-    }
+    if (!el) return;
+    el.scrollTop = backTo.current;
+    listScroll.current = backTo.current;
+    backTo.current = 0;
   }, []);
   const [servings, setServings] = useState<Record<string, number>>({});
   const [isPending, setIsPending] = useState(false);
@@ -581,6 +581,9 @@ export function FoodSearchPicker({
   const [ownFoods, setOwnFoods] = useState<FoodRow[]>([]);
   // The "A food of your own" form, with the name to start from (what was searched for, when nothing was found).
   const [creating, setCreating] = useState<{ name: string } | null>(null);
+  useEffect(() => {
+    if (picked || creating) backTo.current = listScroll.current;
+  }, [picked, creating]);
 
   // The member's own units (private to them), loaded once; built-in ones come with each food.
   const [ownUnits, setOwnUnits] = useState<OwnUnitRow[]>([]);
@@ -819,7 +822,7 @@ export function FoodSearchPicker({
       )}
 
       {query === '' && !isPending && results.length === 0 && ((goesWith && goesWith.length > 0) || ownFoods.length > 0 || (favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
-        <div ref={keepListScroll} className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto">
+        <div ref={keepListScroll} onScroll={onListScroll} className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto">
           {goesWith && goesWith.length > 0 && shortcutList(
             'Goes with what’s in this meal',
             goesWith.map((g) => g.food),
@@ -830,7 +833,7 @@ export function FoodSearchPicker({
           {recentlyLogged && recentlyLogged.length > 0 && shortcutList('Recently logged', recentlyLogged)}
         </div>
       ) : (
-        <ul ref={keepListScroll} className="mt-2 max-h-[50vh] divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
+        <ul ref={keepListScroll} onScroll={onListScroll} className="mt-2 max-h-[50vh] divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
           {groups.map(({ food: shown, others }) => {
             const open = expanded.has(shown.id);
             return [shown, ...(open ? others : [])].map((food, i) => (

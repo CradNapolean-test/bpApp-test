@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -533,15 +533,16 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   const [creating, setCreating] = useState<{ name: string } | null>(null);
   // The food tapped, and the amount its step starts at. The search text and results stay as they were for "Back".
   const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
-  // ...and where the list was scrolled to: it is not on screen while a food is open, so the position is kept when a food is tapped and
-  // put back once the list has laid out again ("Back" lands on the result that was tapped, not the top of 40 or more results).
+  const pick = (food: FoodRow) => setPicked({ food, qty: startingAmount(food) });
+  // ...and where the list was scrolled to: the list is not on screen while a food (or the own-food form) is open, so the offset it
+  // reported last is kept when it goes, and put back once it has laid out again ("Back" lands on the result that was tapped, not the top
+  // of 40 or more results).
   const listRef = useRef<FlatList<{ title?: string; groups: FoodGroup<FoodRow>[] }>>(null);
   const scrollY = useRef(0);
   const restoreY = useRef(0);
-  const pick = (food: FoodRow) => {
-    restoreY.current = scrollY.current;
-    setPicked({ food, qty: startingAmount(food) });
-  };
+  useEffect(() => {
+    if (picked || creating) restoreY.current = scrollY.current;
+  }, [picked, creating]);
 
   // Near-duplicate products shown as one result per brand and product, the rest behind "N more like this" (D23a).
   const groups = useMemo(() => groupFoodResults(search.data ?? []), [search.data]);
@@ -638,6 +639,7 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
         onContentSizeChange={() => {
           if (restoreY.current <= 0) return;
           listRef.current?.scrollToOffset({ offset: restoreY.current, animated: false });
+          scrollY.current = restoreY.current;
           restoreY.current = 0;
         }}
         renderItem={({ item: group }) => (
