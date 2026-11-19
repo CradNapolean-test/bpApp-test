@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { dayCalories, type DayTarget } from '@ballistic/shared/calculations';
 import type { FoodDiaryEntryRow, FoodRow, MealPlanEntryRow, MealSectionRow, NutritionFeedbackRow, RecipeWithIngredients } from '@ballistic/shared/data/types';
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@ballistic/shared/onboarding';
+import { FOOD_LIMITS } from '@ballistic/shared/utils/foodLimits';
 import { parseQuantity, quantityConfig, quantityProblem } from '@ballistic/shared/utils/foodQuantity';
 import { groupFoodResults, moreLikeThis, type FoodGroup } from '@ballistic/shared/utils/foodResults';
 import { diaryLines, fileUnderLabel, recipeLineDetail, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
@@ -641,7 +642,9 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   );
 }
 
-// The saved recipes, each with a servings picker: logging or planning a recipe copies its ingredients, scaled.
+// The saved recipes, each with a servings picker: logging or planning a recipe copies its ingredients, scaled. Servings go up to 50, as on
+// the web (FOOD_LIMITS.portions; the diary allows at most 100 on a logged recipe, migration 0169), so a slip like 150 for 1.5 is caught
+// here instead of being refused after it shows in the diary.
 export function RecipePickList({ recipes, onAdd }: { recipes: RecipeWithIngredients[]; onAdd: (recipe: RecipeWithIngredients, servings: number) => void }) {
   const t = useTheme();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -653,6 +656,7 @@ export function RecipePickList({ recipes, onAdd }: { recipes: RecipeWithIngredie
         const per = perServing(r);
         const text = servings[r.id] ?? '1';
         const n = parseQuantity(text);
+        const tooMany = n > FOOD_LIMITS.portions;
         return (
           <View key={r.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.border, gap: spacing.sm }}>
             <Pressable onPress={() => setSelectedId((cur) => (cur === r.id ? null : r.id))} accessibilityRole="button">
@@ -665,7 +669,8 @@ export function RecipePickList({ recipes, onAdd }: { recipes: RecipeWithIngredie
                   {[0.5, 1, 2].map((p) => <Chip key={p} label={`${p}×`} active={n === p} onPress={() => setServings((s) => ({ ...s, [r.id]: String(p) }))} />)}
                 </View>
                 <View style={{ width: 120 }}><TextField label="Servings" value={text} keyboardType="decimal-pad" onChangeText={(v) => setServings((s) => ({ ...s, [r.id]: v }))} /></View>
-                <Button title="Add" disabled={!(n > 0) || !r.recipe_ingredients.length} onPress={() => onAdd(r, n)} />
+                {tooMany ? <AppText color="danger" style={{ fontWeight: '600' }}>{`Servings can be at most ${FOOD_LIMITS.portions}.`}</AppText> : null}
+                <Button title="Add" disabled={!(n > 0) || tooMany || !r.recipe_ingredients.length} onPress={() => onAdd(r, n)} />
               </View>
             ) : null}
           </View>
