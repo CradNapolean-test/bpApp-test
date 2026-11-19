@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { FoodRow, MealPlanEntryRow, MealPlanSection, MealSectionRow, RecipeWithIngredients } from '@ballistic/shared/data/types';
-import { diarySectionIdFor, scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
+import type { FoodRow, MealPlanEntryRow, MealSectionRow, RecipeWithIngredients } from '@ballistic/shared/data/types';
+import { scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
 import { newPlanRows } from '@ballistic/shared/utils/planLogging';
+import { plannedFor, type PlanPick } from '@ballistic/shared/utils/planSections';
 
 import { fetchDiary, useAddFoods, type DiaryData } from '@/lib/food';
 import { diaryKey } from '@/lib/queryKeys';
@@ -16,7 +17,8 @@ function useUserId() {
   return id;
 }
 
-// The member's planned meals, each with its food. One request.
+// The member's planned meals, each with its food. One request. The planner is laid out in the member's own diary sections (NU12):
+// an item belongs to one of them, and one planned before that is filed by its old fixed meal (planSections.ts).
 export function useMealPlan() {
   const userId = useUserId();
   return useQuery({
@@ -48,34 +50,45 @@ function useMealPlanMutation<V>(write: (userId: string, vars: V) => Promise<void
   });
 }
 
-const temp = (userId: string, section: MealPlanSection, food: FoodRow, portions: number): MealPlanEntryRow => ({ id: 'pending-' + Math.random().toString(36).slice(2), client_id: userId, section, food_id: food.id, portions, food });
+// `sectionId`: one of the member's diary sections, or null for "Other".
+const temp = (userId: string, sectionId: string | null, food: FoodRow, portions: number): MealPlanEntryRow => ({
+  id: 'pending-' + Math.random().toString(36).slice(2),
+  client_id: userId,
+  section: null,
+  meal_section_id: sectionId,
+  food_id: food.id,
+  portions,
+  food,
+});
 
 export function useAddPlanFood() {
-  return useMealPlanMutation<{ section: MealPlanSection; food: FoodRow; portions: number }>(
-    async (userId, { section, food, portions }) => {
+  return useMealPlanMutation<{ sectionId: string | null; food: FoodRow; portions: number }>(
+    async (userId, { sectionId, food, portions }) => {
       const problem = validatePortions(portions);
       if (problem) throw new Error(problem);
-      const { error } = await supabase.from('meal_plan_entries').insert({ client_id: userId, section, food_id: food.id, portions });
+      const { error } = await supabase.from('meal_plan_entries').insert({ client_id: userId, meal_section_id: sectionId, section: null, food_id: food.id, portions });
       if (error) throw new Error('Could not add that to your plan.');
     },
-    (rows, { section, food, portions }, userId) => [...rows, temp(userId, section, food, portions)],
+    (rows, { sectionId, food, portions }, userId) => [...rows, temp(userId, sectionId, food, portions)],
   );
 }
 
 // A recipe goes into the plan as its ingredients, scaled to the servings asked for.
 export function useAddPlanRecipe() {
-  return useMealPlanMutation<{ section: MealPlanSection; recipe: RecipeWithIngredients; servings: number }>(
-    async (userId, { section, recipe, servings }) => {
+  return useMealPlanMutation<{ sectionId: string | null; recipe: RecipeWithIngredients; servings: number }>(
+    async (userId, { sectionId, recipe, servings }) => {
       const scaled = scaleIngredients(recipe.recipe_ingredients, servings, recipe.servings);
       if (scaled.length === 0) return;
       const bad = scaled.map((s) => validatePortions(s.portions)).find(Boolean);
       if (bad) throw new Error(bad);
-      const { error } = await supabase.from('meal_plan_entries').insert(scaled.map((s) => ({ client_id: userId, section, food_id: s.food_id, portions: s.portions })));
+      const { error } = await supabase
+        .from('meal_plan_entries')
+        .insert(scaled.map((s) => ({ client_id: userId, meal_section_id: sectionId, section: null, food_id: s.food_id, portions: s.portions })));
       if (error) throw new Error('Could not add that recipe to your plan.');
     },
-    (rows, { section, recipe, servings }, userId) => {
+    (rows, { sectionId, recipe, servings }, userId) => {
       const scaled = scaleIngredients(recipe.recipe_ingredients, servings, recipe.servings);
-      const added = scaled.map((s) => temp(userId, section, recipe.recipe_ingredients.find((i) => i.food_id === s.food_id)!.food as FoodRow, s.portions));
+      const added = scaled.map((s) => temp(userId, sectionId, recipe.recipe_ingredients.find((i) => i.food_id === s.food_id)!.food as FoodRow, s.portions));
       return [...rows, ...added];
     },
   );
@@ -106,7 +119,7 @@ export function useRemovePlanEntry() {
 export const PLAN_CHECK_FAILED = "Could not check today's diary. Try again when you have signal.";
 const DIARY_CHECK_TIMEOUT_MS = 8000;
 
-// Copies one planned meal (or the whole plan) into a day's food diary, filed under the matching diary section.
+// Copies one planned meal (or the whole plan) into a day's food diary, each item into the same section it is planned in (NU12).
 // What is already in the diary (the same food, section and amount) is skipped, so tapping it twice no longer doubles every entry (MP1).
 // It looks at the diary the screens already hold, which includes foods still waiting to be saved, else reads it; if the diary cannot be
 // read at all it adds nothing and says so, because adding blindly is exactly how entries got doubled.
@@ -116,12 +129,14 @@ export function useLogPlanToDiary(date: string) {
   const addFoods = useAddFoods(date);
   return {
     ...addFoods,
-    logPlan: async (entries: MealPlanEntryRow[], which: MealPlanSection | 'all', sections: MealSectionRow[]): Promise<{ added: number; planned: number }> => {
-      const chosen = entries.filter((e) => e.food && (which === 'all' || e.section === which));
-      const planned = chosen.map((e) => {
-        const sectionId = diarySectionIdFor(e.section, sections);
-        return { food: e.food as FoodRow, portions: e.portions, sectionId, food_id: (e.food as FoodRow).id, meal_section_id: sectionId };
-      });
+    logPlan: async (entries: MealPlanEntryRow[], which: PlanPick, sections: MealSectionRow[]): Promise<{ added: number; planned: number }> => {
+      const planned = plannedFor(entries.filter((e) => e.food), which, sections).map(({ entry, sectionId }) => ({
+        food: entry.food as FoodRow,
+        portions: entry.portions,
+        sectionId,
+        food_id: (entry.food as FoodRow).id,
+        meal_section_id: sectionId,
+      }));
       if (planned.length === 0) return { added: 0, planned: 0 };
       let diary: DiaryData;
       try {

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import type { MealPlanEntryRow, MealPlanSection } from '@ballistic/shared/data/types';
+import type { MealPlanEntryRow } from '@ballistic/shared/data/types';
 import { entryMacros, totalMacros } from '@ballistic/shared/utils/foodTotals';
-import { amountLabel, MEAL_PLAN_SECTIONS } from '@ballistic/shared/utils/mealPlan';
+import { amountLabel } from '@ballistic/shared/utils/mealPlan';
 import { planLoggedMessage } from '@ballistic/shared/utils/planLogging';
+import { orderedSections, planEntrySectionId, type PlanPick } from '@ballistic/shared/utils/planSections';
 
 import { Pressable } from '@/components/press';
 import { AddFoodButtons, CompleteScanSheet, FoodPickerSheet, QuantitySheet, ScanAmountSheet, ScannerSheet, TotalsCard } from '@/components/food';
@@ -17,8 +18,11 @@ import { PLAN_CHECK_FAILED, useAddPlanFood, useAddPlanRecipe, useLogPlanToDiary,
 import { useRecipes } from '@/lib/recipes';
 import { spacing, useTheme } from '@/theme';
 
-// The Meal Planner: a typical day laid out meal by meal, with its totals against the member's target. A planned meal (or the
-// whole plan) can be copied into today's food diary in one tap.
+// A meal in the planner: one of the member's diary sections (NU12), or "Other" (id null) for planned items with none.
+type PlanMeal = { id: string | null; label: string };
+
+// The Meal Planner: a typical day laid out in the member's own meals (the diary's sections), with its totals against the member's
+// target. A planned meal (or the whole plan) can be copied into today's food diary in one tap, each item into the same meal.
 export default function MealPlan() {
   const t = useTheme();
   const { todayIso, target } = useDayContext();
@@ -31,17 +35,16 @@ export default function MealPlan() {
   const remove = useRemovePlanEntry();
   const diary = useLogPlanToDiary(todayIso);
 
-  const [adding, setAdding] = useState<{ key: MealPlanSection; label: string } | null>(null);
+  const [adding, setAdding] = useState<PlanMeal | null>(null);
   const [editing, setEditing] = useState<MealPlanEntryRow | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [logging, setLogging] = useState(false);
   const [noteIsError, setNoteIsError] = useState(false);
   const scan = useBarcodeFlow((food, grams, scanTarget) => {
-    const section = MEAL_PLAN_SECTIONS.find((s) => s.key === scanTarget?.id);
-    if (section) addFood.mutate({ section: section.key, food, portions: grams });
+    if (scanTarget) addFood.mutate({ sectionId: scanTarget.id, food, portions: grams });
   });
 
-  if (planQ.isPending) {
+  if (planQ.isPending || sectionsQ.isPending) {
     return (
       <Screen style={{ justifyContent: 'center' }}>
         <ActivityIndicator color={t.accent} />
@@ -59,10 +62,14 @@ export default function MealPlan() {
 
   const entries = planQ.data;
   const sections = sectionsQ.data ?? [];
+  // The member's meals in diary order, then "Other" for anything planned with no section (only when there is some).
+  const own: PlanMeal[] = orderedSections(sections).map((s) => ({ id: s.id, label: s.label }));
+  const unfiled = entries.some((e) => planEntrySectionId(e, sections) === null);
+  const meals: PlanMeal[] = unfiled || own.length === 0 ? [...own, { id: null, label: 'Other' }] : own;
   // (Adding to the diary is a queued write: a refusal is reported by the line under the header, not here.)
   const error = [addFood, addRecipe, updatePortions, remove].find((m) => m.isError)?.error?.message;
 
-  async function logToDiary(which: MealPlanSection | 'all', label: string) {
+  async function logToDiary(which: PlanPick, label: string) {
     if (logging) return;
     setLogging(true);
     try {
@@ -88,13 +95,13 @@ export default function MealPlan() {
 
         {entries.length > 0 ? <Button title="Add the whole plan to today's diary" onPress={() => logToDiary('all', 'Plan')} loading={logging} /> : null}
 
-        {MEAL_PLAN_SECTIONS.map(({ key, label }) => {
-          const mine = entries.filter((e) => e.section === key);
+        {meals.map(({ id, label }) => {
+          const mine = entries.filter((e) => planEntrySectionId(e, sections) === id);
           const kcal = totalMacros(mine).calories;
           return (
-            <Card key={key} style={{ gap: spacing.sm }}>
+            <Card key={id ?? 'other'} style={{ gap: spacing.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <AppText variant="heading">{label}</AppText>
+                <AppText variant="heading" style={{ flexShrink: 1 }}>{label}</AppText>
                 {mine.length > 0 ? <AppText variant="small" color="muted">{Math.round(kcal)} kcal</AppText> : null}
               </View>
               {mine.length === 0 ? <AppText variant="small" color="muted">Nothing planned yet.</AppText> : null}
@@ -107,8 +114,8 @@ export default function MealPlan() {
                   <AppText color="muted">{Math.round(entryMacros(e).calories)} kcal</AppText>
                 </Pressable>
               ))}
-              <AddFoodButtons onAdd={() => setAdding({ key, label })} onScan={() => scan.start({ id: key, label })} scanLabel={`Scan a barcode into ${label}`} />
-              {mine.length > 0 ? <Button title={`Add ${label} to today's diary`} variant="secondary" disabled={logging} onPress={() => logToDiary(key, label)} /> : null}
+              <AddFoodButtons onAdd={() => setAdding({ id, label })} onScan={() => scan.start({ id, label })} scanLabel={`Scan a barcode into ${label}`} />
+              {mine.length > 0 ? <Button title={`Add ${label} to today's diary`} variant="secondary" disabled={logging} onPress={() => logToDiary({ sectionId: id }, label)} /> : null}
             </Card>
           );
         })}
@@ -118,9 +125,9 @@ export default function MealPlan() {
         <FoodPickerSheet
           title={`Add to ${adding.label}`}
           onClose={() => setAdding(null)}
-          onAddFood={(food, portions) => addFood.mutate({ section: adding.key, food, portions })}
+          onAddFood={(food, portions) => addFood.mutate({ sectionId: adding.id, food, portions })}
           recipes={recipesQ.data ?? []}
-          onAddRecipe={(recipe, servings) => addRecipe.mutate({ section: adding.key, recipe, servings })}
+          onAddRecipe={(recipe, servings) => addRecipe.mutate({ sectionId: adding.id, recipe, servings })}
         />
       ) : null}
       {editing ? (

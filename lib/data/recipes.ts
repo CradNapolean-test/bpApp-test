@@ -4,7 +4,7 @@ import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
 import { recipeLogFields } from '@/lib/utils/diaryLines';
 import { syncFoodDiaryToLog } from './foodDiary';
-import type { FoodDiaryEntryRow, MealPlanSection, RecipeRow, RecipeWithIngredients } from './types';
+import type { FoodDiaryEntryRow, RecipeRow, RecipeWithIngredients } from './types';
 
 export async function getRecipes(clientId: string): Promise<RecipeRow[]> {
   const supabase = await createClient();
@@ -128,13 +128,19 @@ export async function logRecipeToDiary(
   return syncFoodDiaryToLog(dailyLogId);
 }
 
+// A recipe goes into the plan as its ingredients, scaled, in one of the member's diary sections (NU12; null = "Other").
 export async function addRecipeToMealPlan(
   clientId: string,
-  section: MealPlanSection,
+  mealSectionId: string | null,
   recipeId: string,
   servings: number
 ): Promise<void> {
   const supabase = await createClient();
+  if (mealSectionId !== null) {
+    const { data: own, error: ownError } = await supabase.from('meal_sections').select('id').eq('client_id', clientId).eq('id', mealSectionId).maybeSingle();
+    if (ownError) raise(ownError);
+    if (!own) throw new Error('That meal is not one of your sections.');
+  }
   const { data: recipe, error: recipeError } = await supabase
     .from('recipes')
     .select('servings')
@@ -152,7 +158,7 @@ export async function addRecipeToMealPlan(
   const scale = servings / recipe.servings;
   const rows = ingredients
     .filter((i) => i.food_id)
-    .map((i) => ({ client_id: clientId, section, food_id: i.food_id, portions: i.portions * scale }));
+    .map((i) => ({ client_id: clientId, meal_section_id: mealSectionId, section: null, food_id: i.food_id, portions: i.portions * scale }));
   const { error: insertError } = await supabase.from('meal_plan_entries').insert(rows);
   if (insertError) raise(insertError);
 }

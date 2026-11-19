@@ -1,33 +1,8 @@
-import type { FoodRow, MealPlanSection, MealSectionRow, RecipeWithIngredients } from '../data/types';
+import type { FoodRow, RecipeWithIngredients } from '../data/types';
 import { totalRecipeMacros } from './foodTotals';
 
-// Recipes and the Meal Planner: the fixed meal slots, how a recipe is scaled when it is logged or planned, and the limits
+// Recipes and the Meal Planner: how a recipe is scaled when it is logged or planned, and the limits
 // (migration 0112 enforces the same ones in the database). Same behaviour as the web.
-
-export const MEAL_PLAN_SECTIONS: { key: MealPlanSection; label: string }[] = [
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'mid_morning_snack', label: 'Mid-Morning Snack' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'afternoon_snack', label: 'Afternoon Snack' },
-  { key: 'dinner', label: 'Dinner' },
-  { key: 'evening_snack', label: 'Evening Snack' },
-];
-
-// Which of the member's own diary sections a planned meal goes into when it is copied to the food diary (matched by name; if
-// they renamed or removed it, it goes in unfiled).
-export const MEAL_PLAN_DIARY_LABEL: Record<MealPlanSection, string> = {
-  breakfast: 'Breakfast',
-  mid_morning_snack: 'Snacks',
-  lunch: 'Lunch',
-  afternoon_snack: 'Snacks',
-  dinner: 'Dinner',
-  evening_snack: 'Snacks',
-};
-
-export function diarySectionIdFor(key: MealPlanSection, sections: Pick<MealSectionRow, 'id' | 'label'>[]): string | null {
-  const want = MEAL_PLAN_DIARY_LABEL[key].toLowerCase();
-  return sections.find((s) => s.label.trim().toLowerCase() === want)?.id ?? null;
-}
 
 export const RECIPE_NAME_MAX = 100;
 export const MAX_SERVINGS = 100;

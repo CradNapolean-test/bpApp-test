@@ -1099,6 +1099,7 @@ export function DashboardShell({
             <MealPlannerTab
               clientId={clientId}
               initialEntries={mealPlanEntries}
+              sections={mealSections}
               recipes={recipes}
               readOnly={isCoachView}
               profile={profile}

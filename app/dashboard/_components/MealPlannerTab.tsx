@@ -18,16 +18,11 @@ import { useBarcodeAdd, useFoodShortcuts } from './FoodEntryTools';
 import { NutritionSummary } from './NutritionSummary';
 import { QuantitySheet } from './QuantitySheet';
 import { useGrowIn } from '@/app/_components/motion/useGrowIn';
-import type { ClientProfileRow, MealPlanEntryRow, MealPlanSection, FoodRow, RecipeRow } from '@/lib/data/types';
+import { orderedSections, planEntrySectionId, type PlanPick } from '@/lib/utils/planSections';
+import type { ClientProfileRow, MealPlanEntryRow, MealSectionRow, FoodRow, RecipeRow } from '@/lib/data/types';
 
-const SECTIONS: { key: MealPlanSection; label: string }[] = [
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'mid_morning_snack', label: 'Mid-Morning Snack' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'afternoon_snack', label: 'Afternoon Snack' },
-  { key: 'dinner', label: 'Dinner' },
-  { key: 'evening_snack', label: 'Evening Snack' },
-];
+// A meal in the planner: one of the member's diary sections (NU12), or "Other" (id null) for planned items with none.
+type PlanMeal = { id: string | null; label: string };
 
 const amountLabel = (entry: MealPlanEntryRow) =>
   entry.food?.portion === '1 gram' ? `${Math.round(entry.portions * 10) / 10}g` : `${Math.round(entry.portions * 100) / 100}× ${entry.food?.portion ?? ''}`;
@@ -84,6 +79,7 @@ function EntryRow({
 export function MealPlannerTab({
   clientId,
   initialEntries,
+  sections,
   recipes,
   readOnly,
   profile,
@@ -92,6 +88,9 @@ export function MealPlannerTab({
 }: {
   clientId: string;
   initialEntries: MealPlanEntryRow[];
+  // The member's own diary sections (their coach's meals): the planner is laid out in them, so copying a plan into the diary lands each
+  // item in the same meal (NU12).
+  sections: MealSectionRow[];
   recipes: RecipeRow[];
   readOnly: boolean;
   profile: ClientProfileRow | null;
@@ -106,7 +105,7 @@ export function MealPlannerTab({
   const { run: runUpdate } = useAction();
   const { run: runLog, busy: logging } = useAction();
   const { favorites, recentlyLogged, favoriteIds, toggleFavorite } = useFoodShortcuts(clientId, !readOnly);
-  const [addFoodSection, setAddFoodSection] = useState<{ key: MealPlanSection; label: string } | null>(null);
+  const [addFoodSection, setAddFoodSection] = useState<PlanMeal | null>(null);
 
   const weekTarget = useMemo(() => {
     const engineProfile = toMemberEngineProfile(profile, readOnly);
@@ -117,19 +116,18 @@ export function MealPlannerTab({
   const highDay = isCyclingTarget(weekTarget) ? weekTarget?.dailyHigh ?? null : null;
 
   // Returns whether it worked, so the Add food sheet stays open (keeping what was typed) when it did not (FS5).
-  async function handleAdd(section: MealPlanSection, food: FoodRow, portions: number) {
-    return run(() => addMealPlanEntry(clientId, section, food.id, portions), { success: `${food.name} added` });
+  async function handleAdd(sectionId: string | null, food: FoodRow, portions: number) {
+    return run(() => addMealPlanEntry(clientId, sectionId, food.id, portions), { success: `${food.name} added` });
   }
 
   const scan = useBarcodeAdd(async (food, portions, target) => {
-    const section = SECTIONS.find((x) => x.label === target?.label);
-    if (section) await addMealPlanEntry(clientId, section.key, food.id, portions);
+    await addMealPlanEntry(clientId, target?.id ?? null, food.id, portions);
     router.refresh();
   });
 
-  async function handleAddRecipe(section: MealPlanSection, recipeId: string, servings: number) {
+  async function handleAddRecipe(sectionId: string | null, recipeId: string, servings: number) {
     const recipe = recipes.find((r) => r.id === recipeId);
-    return runRecipe(() => addRecipeToMealPlan(clientId, section, recipeId, servings), {
+    return runRecipe(() => addRecipeToMealPlan(clientId, sectionId, recipeId, servings), {
       success: recipe ? `${recipe.name} added` : 'Recipe added',
     });
   }
@@ -142,14 +140,14 @@ export function MealPlannerTab({
     await runUpdate(() => updateMealPlanEntryPortions(id, portions), { success: 'Updated' });
   }
 
-  async function handleLog(sectionKey: MealPlanSection | 'all', label: string) {
+  async function handleLog(which: PlanPick, label: string) {
     if (!todayLogId) return;
     // What is already in today's diary is skipped, so a second tap says "already there" instead of adding everything again (MP1).
     await runLog(
       async () => {
-        const result = await logPlanToDiary(clientId, todayLogId, sectionKey);
+        const result = await logPlanToDiary(clientId, todayLogId, which);
         if (result.ok) {
-          toast.success(planLoggedMessage(result.added, result.planned, sectionKey === 'all' ? 'Plan' : label));
+          toast.success(planLoggedMessage(result.added, result.planned, which === 'all' ? 'Plan' : label));
           if (result.added > 0) router.refresh();
         }
         return result;
@@ -157,6 +155,13 @@ export function MealPlannerTab({
       { refresh: false }
     );
   }
+
+  // The member's meals in diary order, then "Other" for anything planned with no section (only when there is some).
+  const meals: PlanMeal[] = useMemo(() => {
+    const own = orderedSections(sections).map((s) => ({ id: s.id as string | null, label: s.label }));
+    const unfiled = initialEntries.some((e) => planEntrySectionId(e, sections) === null);
+    return unfiled || own.length === 0 ? [...own, { id: null, label: 'Other' }] : own;
+  }, [sections, initialEntries]);
 
   const dayTotals = totalMacros(initialEntries);
   const canLog = !readOnly && !!todayLogId;
@@ -224,11 +229,11 @@ export function MealPlannerTab({
 
       {!readOnly && <div className="space-y-2">{scan.panel}</div>}
 
-      {SECTIONS.map(({ key, label }) => {
-        const entries = initialEntries.filter((e) => e.section === key);
+      {meals.map(({ id, label }) => {
+        const entries = initialEntries.filter((e) => planEntrySectionId(e, sections) === id);
         const sectionKcal = totalMacros(entries).calories;
         return (
-          <div key={key} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+          <div key={id ?? 'other'} className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
             <div className="flex items-center justify-between gap-2 py-2 pl-4 pr-2">
               <div className="flex min-h-11 min-w-0 flex-1 items-baseline gap-2 self-center pt-2.5">
                 <h3 className="truncate text-[15px] font-extrabold text-black dark:text-zinc-50">{label}</h3>
@@ -239,7 +244,7 @@ export function MealPlannerTab({
                   <button
                     type="button"
                     aria-label={`Scan a barcode into ${label}`}
-                    onClick={() => scan.start({ id: key, label })}
+                    onClick={() => scan.start({ id, label })}
                     className="flex h-11 w-11 items-center justify-center rounded-xl text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
                   >
                     <ScanBarcode className="h-[18px] w-[18px]" />
@@ -247,7 +252,7 @@ export function MealPlannerTab({
                   <button
                     type="button"
                     aria-label={`Add food to ${label}`}
-                    onClick={() => setAddFoodSection({ key, label })}
+                    onClick={() => setAddFoodSection({ id, label })}
                     className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent"
                   >
                     <Plus className="h-[18px] w-[18px]" strokeWidth={2.6} />
@@ -263,7 +268,7 @@ export function MealPlannerTab({
             </ul>
             {canLog && entries.length > 0 && (
               <div className="border-t border-black/[.07] px-2 py-1 dark:border-white/10">
-                <button type="button" disabled={logging} onClick={() => handleLog(key, label)} className="min-h-11 px-2 text-[13px] font-bold text-accent disabled:opacity-60">
+                <button type="button" disabled={logging} onClick={() => handleLog({ sectionId: id }, label)} className="min-h-11 px-2 text-[13px] font-bold text-accent disabled:opacity-60">
                   Add {label} to today&apos;s diary
                 </button>
               </div>
@@ -286,9 +291,9 @@ export function MealPlannerTab({
       {addFoodSection && (
         <AddFoodSheet
           sectionLabel={addFoodSection.label}
-          onAdd={(food, portions) => handleAdd(addFoodSection.key, food, portions)}
+          onAdd={(food, portions) => handleAdd(addFoodSection.id, food, portions)}
           recipes={recipes}
-          onAddRecipe={(recipeId, servings) => handleAddRecipe(addFoodSection.key, recipeId, servings)}
+          onAddRecipe={(recipeId, servings) => handleAddRecipe(addFoodSection.id, recipeId, servings)}
           favorites={favorites}
           recentlyLogged={recentlyLogged}
           favoriteIds={favoriteIds}

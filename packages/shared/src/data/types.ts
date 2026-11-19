@@ -156,8 +156,8 @@ export interface FoodDiaryEntryRow {
   recipe_servings?: number | null;
 }
 
-// Customizable per-client tracking sections (MyFitnessPal-style) -- distinct from
-// MealPlanSection below, which is a fixed enum used only by the Meal Planner.
+// Customizable per-client tracking sections (MyFitnessPal-style). The Meal Planner uses them too (NU12); MealPlanSection below is the
+// planner's old fixed meals, kept on items planned before migration 0169.
 export interface MealSectionRow {
   id: string;
   client_id: string;
@@ -169,7 +169,10 @@ export interface MealSectionRow {
 export interface MealPlanEntryRow {
   id: string;
   client_id: string;
-  section: MealPlanSection;
+  // One of the six fixed meals the planner had before NU12; null for items planned since (migration 0169).
+  section: MealPlanSection | null;
+  // The member's diary section the item is planned in (NU12, migration 0169); see lib/utils/planSections.ts.
+  meal_section_id?: string | null;
   food_id: string | null;
   portions: number;
   food: FoodRow | null;

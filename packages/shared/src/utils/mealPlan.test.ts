@@ -1,26 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RecipeWithIngredients } from '../data/types';
-import { MEAL_PLAN_SECTIONS, amountLabel, diarySectionIdFor, parseServings, perServing, scaleIngredients, validatePortions, validateRecipeName } from './mealPlan';
-
-describe('meal slots', () => {
-  it('has six slots in the day\'s order', () => {
-    expect(MEAL_PLAN_SECTIONS.map((s) => s.key)).toEqual(['breakfast', 'mid_morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack']);
-  });
-});
-
-describe('diarySectionIdFor', () => {
-  const sections = [{ id: 's1', label: 'Breakfast' }, { id: 's2', label: ' snacks ' }, { id: 's3', label: 'Dinner' }];
-  it('matches by name, ignoring case and spaces', () => {
-    expect(diarySectionIdFor('breakfast', sections)).toBe('s1');
-    expect(diarySectionIdFor('mid_morning_snack', sections)).toBe('s2');
-    expect(diarySectionIdFor('evening_snack', sections)).toBe('s2');
-    expect(diarySectionIdFor('dinner', sections)).toBe('s3');
-  });
-  it('leaves it unfiled when the member has no such section', () => {
-    expect(diarySectionIdFor('lunch', sections)).toBeNull();
-  });
-});
+import { amountLabel, parseServings, perServing, scaleIngredients, validatePortions, validateRecipeName } from './mealPlan';
 
 describe('validation', () => {
   it('checks recipe names', () => {
