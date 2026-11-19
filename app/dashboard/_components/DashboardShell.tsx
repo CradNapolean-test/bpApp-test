@@ -24,6 +24,7 @@ import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
+import { useReadSinceDrawn } from '@/app/coach/_components/CoachUnreadContext';
 import { CoachMemberBottomNav, CoachMemberGroupTabs, CoachMemberTabs, activeCoachGroup, coachGroups } from './CoachMemberNav';
 import type { CoachTab } from './CoachMemberNav';
 import { ClientBottomTabBar } from './ClientBottomTabBar';
@@ -274,6 +275,13 @@ export function DashboardShell({
     setSeenServerUnread(unreadMessageCount);
     setLiveUnread(unreadMessageCount);
   }
+  // The coach's view: this member's chat read here since the page loaded (the slide-over, or the Messages drawer). The "Message · 2 new"
+  // pill, the phone's chat dot and the header's Messages count drop at once; they kept the page's figures until a reload. `messages`
+  // is new on every server render, so a reload's own figures take over again.
+  const readSinceLoad = useReadSinceDrawn(messages);
+  const chatReadHere = isCoachView && readSinceLoad(clientId);
+  const perClientUnread = chatReadHere ? 0 : perClientUnreadCount;
+  const coachUnread = chatReadHere ? Math.max(0, coachUnreadCount - perClientUnreadCount) : coachUnreadCount;
   const viewingMessagesRef = useRef(false);
   useEffect(() => {
     if (isCoachView) return;
@@ -763,7 +771,7 @@ export function DashboardShell({
             }`}
           >
             <MessageSquare className="h-4 w-4" /> Message
-            {!chatOpen && perClientUnreadCount > 0 && <span className="font-extrabold">· {perClientUnreadCount} new</span>}
+            {!chatOpen && perClientUnread > 0 && <span className="font-extrabold">· {perClientUnread} new</span>}
           </button>
           {isOwnClient && (
             <button
@@ -844,7 +852,7 @@ export function DashboardShell({
             className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
           >
             <MessageSquare className="h-5 w-5" />
-            {(isCoachView ? perClientUnreadCount : unreadMessageCount) > 0 && (
+            {(isCoachView ? perClientUnread : unreadMessageCount) > 0 && (
               <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
             )}
           </button>
@@ -883,7 +891,7 @@ export function DashboardShell({
           )}
           {isCoachView && (
             <span className="hidden md:inline-flex">
-              <CoachMessagesButton unreadCount={coachUnreadCount} />
+              <CoachMessagesButton unreadCount={coachUnread} />
             </span>
           )}
           {!isCoachView && area === 'Coaching' && category === 'Home' && (

@@ -25,6 +25,7 @@ import { shrinkImage } from '@/lib/utils/shrinkImage';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { PhotoViewer } from '@/app/_components/Overlays';
 import { SavedRepliesSheet } from './SavedRepliesSheet';
+import { useCoachUnread } from '@/app/coach/_components/CoachUnreadContext';
 import type { ChatMessage, ChatMessageRow } from '@/lib/data/types';
 
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -392,12 +393,16 @@ export function ChatTab({
   const toast = useToast();
   useBackHandler(viewingPhoto != null, () => setViewingPhoto(null));
 
+  // On the coach's pages: tells the page's badges and lists the thread is read, as the marker is written (CoachUnreadContext). Nothing
+  // in the member's own app, whose badge is cleared by viewing Messages (DashboardShell).
+  const noteRead = useCoachUnread()?.markRead;
   // Marks the thread read; a failure is tried once more shortly after, since a silent failure left the unread badge stuck on.
   const markRead = useCallback(() => {
     markChatRead(clientId).catch(() => {
       window.setTimeout(() => markChatRead(clientId).catch(() => {}), 3000);
     });
-  }, [clientId]);
+    noteRead?.(clientId);
+  }, [clientId, noteRead]);
 
   // Fetch whatever was written after the newest message on screen: after the live connection came back, or after the page was
   // hidden and shown again (a phone that was locked stops the socket), so nothing sent in the gap is missing (M5).

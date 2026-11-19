@@ -2,14 +2,17 @@
 
 import { MessageSquare } from 'lucide-react';
 import { useMessagesDrawer } from './MessagesDrawerContext';
+import { useLiveUnreadTotal } from './CoachUnreadContext';
 
 // Messages isn't one of the coach's 4 primary tabs, so it lives as a header icon instead --
 // mirrors DashboardShell's client-facing header icon, except this one shows at every screen
 // width (not md:hidden). Opens the shared MessagesDrawer overlay (mounted once in
 // app/coach/layout.tsx) instead of navigating to /coach/messages, matching PT Distinction's
 // overlay-from-anywhere pattern -- the full page still exists at /coach/messages if wanted.
-export function CoachMessagesButton({ unreadCount = 0 }: { unreadCount?: number }) {
+export function CoachMessagesButton({ unreadCount: serverCount = 0 }: { unreadCount?: number }) {
   const { open } = useMessagesDrawer();
+  // The count the page was loaded with, until the drawer's list counts it again (a conversation read there lowers it at once).
+  const unreadCount = useLiveUnreadTotal(serverCount);
   return (
     <button
       onClick={open}

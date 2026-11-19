@@ -41,6 +41,7 @@ import { dashboardScopeHref, dashboardScopeKey } from '@/lib/dashboardScope';
 import type { CheckReason, CoachDashboardData, DashboardScope } from '@/lib/data/coachDashboard';
 import type { ScheduleOccurrence } from '@/lib/data/types';
 import { ActiveGymTag } from './ActiveGymTag';
+import { useReadSinceDrawn } from './CoachUnreadContext';
 import { AddClientForm } from './AddClientForm';
 import { JoinLinkCard } from './JoinLinkCard';
 
@@ -249,20 +250,23 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
     return () => clearInterval(tick);
   }, []);
   const { scope, isAdmin, coaches, stats } = data;
+  const readSinceLoad = useReadSinceDrawn(loaded);
   const own = (mineFlag: boolean) => scope === 'mine' || mineFlag;
 
   // ---- To do ----
   const groups: TodoGroup[] = [];
 
-  if (data.unreadThreads.length > 0) {
-    const names = data.unreadThreads.map((t) => t.name);
+  // A conversation read since these figures loaded (in the Messages drawer) leaves "Reply to messages" at once, not at the next reload.
+  const unreadThreads = data.unreadThreads.filter((t) => !readSinceLoad(t.clientId));
+  if (unreadThreads.length > 0) {
+    const names = unreadThreads.map((t) => t.name);
     groups.push({
       key: 'messages',
       icon: MessageSquare,
       tone: 'teal',
       title: 'Reply to messages',
       summary: names.length <= 2 ? names.join(' and ') : `${names[0]}, ${names[1]} and ${names.length - 2} more waiting`,
-      items: data.unreadThreads.map((t) => ({
+      items: unreadThreads.map((t) => ({
         key: t.clientId,
         clientId: t.clientId,
         title: t.name,

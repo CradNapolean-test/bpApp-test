@@ -6,6 +6,7 @@ import { getCoachChatOverview, getMessages, markChatRead, markChatUnread, setCha
 import { createLatestOnly } from '@/lib/latestOnly';
 import { mergeOverview, pickChannelClients, sortOverview, withNoReplyMark } from '@/lib/inboxOverview';
 import { useToast } from '@/app/_components/ToastProvider';
+import { useCoachUnread } from './CoachUnreadContext';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from '@/lib/data/types';
 
 // How often the conversation list is fetched again while the page is open, and how many conversations get a live connection.
@@ -22,8 +23,12 @@ let channelRun = 0;
 // events in this project (verified with disposable two-coach test accounts, admin-bypassing
 // inserts), and subscribing before auth.getSession() resolves can lose the race against the
 // realtime socket's auth handshake.
-export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUserId: string) {
+// `ready`: the list holds the real conversations (the drawer fetches them after it opens), so its unread total can be reported.
+export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUserId: string, ready = true) {
   const [localOverview, setLocalOverview] = useState(initialOverview);
+  // Reads and the list's total go to the badges and lists elsewhere on the page (the header and sidebar Messages, the dashboard's
+  // "Reply to messages"), which otherwise kept the counts the page was loaded with until a reload.
+  const unread = useCoachUnread();
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,6 +61,7 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
     setMessages(msgs);
     setLoadId(ticket);
     setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? { ...c, unread_count: 0 } : c)));
+    unread?.markRead(clientId);
     setLoading(false);
   }
 
@@ -64,11 +70,13 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
   function markRead(clientId: string) {
     setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? { ...c, unread_count: 0 } : c)));
     markChatRead(clientId).catch(() => {});
+    unread?.markRead(clientId);
   }
 
   function markUnread(clientId: string) {
     setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId && c.last_message_at ? { ...c, unread_count: Math.max(1, c.unread_count) } : c)));
     markChatUnread(clientId).catch(() => {});
+    unread?.markUnread(clientId);
     if (selectedRef.current === clientId) clearSelection();
   }
 
@@ -77,6 +85,8 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
   // saved when it is not.
   function markNoReply(clientId: string, noReply: boolean, seenAt: string | null) {
     setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? withNoReplyMark(c, noReply, seenAt) : c)));
+    // "No reply needed" also marks the conversation read (set_chat_no_reply).
+    if (noReply) unread?.markRead(clientId);
     setChatNoReply(clientId, noReply, seenAt).catch(() => {
       toast.error('Could not save that. Please try again.');
       void refreshOverview();
@@ -96,14 +106,14 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
     if (selectedRef.current) void selectClient(selectedRef.current);
   }
 
-  useEffect(() => {
-    // Reacting to an external prop signal (MessagesDrawer fetches its overview asynchronously
-    // and passes it in once available), not synchronizing with an external system -- the
-    // established exception to this rule elsewhere in the app (see WorkoutTab.tsx's focusDay
-    // effect).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  // A new list from the caller (MessagesDrawer fetches its overview after it opens and passes it in) replaces what is on screen. Done
+  // while rendering, not in an effect, so no render ever pairs the new list's arrival with the old (empty) one: the unread total
+  // reported below would otherwise read 0 for a moment and blank the header badge.
+  const [syncedOverview, setSyncedOverview] = useState(initialOverview);
+  if (syncedOverview !== initialOverview) {
+    setSyncedOverview(initialOverview);
     setLocalOverview(initialOverview);
-  }, [initialOverview]);
+  }
 
   // Fetch the list again when the tab regains focus and every minute while the page is open, merged into what is on screen, so a
   // member's first ever message (no live connection yet) and anything missed while a connection dropped still show up (R29).
@@ -186,6 +196,13 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
 
   const unreadTotal = localOverview.reduce((sum, c) => sum + c.unread_count, 0);
   const selectedClient = localOverview.find((c) => c.client_id === selected);
+
+  // The list's own count is the freshest there is while it is open (it follows reads, new messages and the minute refetch): the header
+  // and sidebar badges show it.
+  const reportTotal = unread?.reportTotal;
+  useEffect(() => {
+    if (ready) reportTotal?.(unreadTotal);
+  }, [ready, unreadTotal, reportTotal]);
 
   return {
     localOverview,

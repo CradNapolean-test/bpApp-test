@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { COACH_NAV, isCoachNavActive } from './coachNavItems';
 import { useCoachLogoUrl, useCoachName } from './CoachBrandingContext';
 import { GymSwitcherMenu } from './GymSwitcherMenu';
+import { useLiveUnreadTotal } from './CoachUnreadContext';
 import { SignOutButton } from '@/app/_components/SignOutButton';
 
 // The coach's desktop navigation (the November 2026 mock-ups): a black column down the left with the wordmark, the six sections, and the
@@ -14,7 +15,7 @@ import { SignOutButton } from '@/app/_components/SignOutButton';
 type NavItem = { href: string; label: string; Icon: typeof COACH_NAV[number]['Icon'] };
 
 export function CoachSidebar({
-  unreadCount = 0,
+  unreadCount: serverUnread,
   email,
   nav,
   roleLabel = 'Coach',
@@ -30,6 +31,9 @@ export function CoachSidebar({
   homeHref?: string;
 }) {
   const pathname = usePathname();
+  // As the header's Messages button: lowered at once by a conversation read in the drawer. Pages that leave the count out show none.
+  const liveUnread = useLiveUnreadTotal(serverUnread ?? 0);
+  const unreadCount = serverUnread === undefined ? 0 : liveUnread;
   const items: readonly NavItem[] = nav ?? COACH_NAV;
   // The coach's own rule for their sections; for others, the longest section address the page is under.
   const activeHref = nav

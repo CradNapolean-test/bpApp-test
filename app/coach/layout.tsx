@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { MessagesDrawerProvider } from './_components/MessagesDrawerContext';
 import { CoachBrandingProvider } from './_components/CoachBrandingContext';
 import { CoachGymsProvider } from './_components/CoachGymsContext';
+import { CoachUnreadProvider } from './_components/CoachUnreadContext';
 import { GymMismatchBanner } from './_components/GymMismatchBanner';
 import { getClientGymMismatch, getMyGyms } from '@/lib/data/gym';
 import type { GymMismatch } from '@/lib/gymMismatch';
@@ -40,10 +41,13 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   return (
     <CoachBrandingProvider logoUrl={logoUrl} coachName={coachName}>
       <CoachGymsProvider gyms={gyms} mismatch={mismatch}>
-        <MessagesDrawerProvider currentUserId={user?.id ?? ''}>
-          <GymMismatchBanner />
-          {children}
-        </MessagesDrawerProvider>
+        {/* Outside the drawer's provider, so a conversation read in the drawer updates the badges and lists of the page behind it. */}
+        <CoachUnreadProvider>
+          <MessagesDrawerProvider currentUserId={user?.id ?? ''}>
+            <GymMismatchBanner />
+            {children}
+          </MessagesDrawerProvider>
+        </CoachUnreadProvider>
       </CoachGymsProvider>
     </CoachBrandingProvider>
   );

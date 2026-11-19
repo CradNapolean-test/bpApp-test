@@ -25,7 +25,7 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
   // A real dialog (SH3): focus moves in and returns, Tab stays inside, Escape closes, the page behind is inert.
   const dialogRef = useDialog<HTMLElement>({ onClose });
   const { localOverview, selected, selectClient, clearSelection, markRead, markUnread, markNoReply, messages, loading, loadError, loadId, retryLoad, selectedClient } =
-    useCoachMessages(overview ?? EMPTY_OVERVIEW, currentUserId);
+    useCoachMessages(overview ?? EMPTY_OVERVIEW, currentUserId, overview !== null);
 
   useEffect(() => {
     let cancelled = false;
