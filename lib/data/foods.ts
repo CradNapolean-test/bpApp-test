@@ -8,18 +8,20 @@ import { addDays, toIsoDate } from '@/lib/utils/dates';
 import type { ServingOption } from '@/lib/utils/foodUnits';
 import type { ActivityRow, FoodRow } from './types';
 
-export async function searchFoods(query: string): Promise<FoodRow[]> {
+// `limit`: the Add food picker asks for more than it shows, because it folds near-duplicate products into one result (D23a).
+export async function searchFoods(query: string, limit = 25): Promise<FoodRow[]> {
   const supabase = await createClient();
   const q = query.trim();
+  const max = Math.min(100, Math.max(1, Math.round(limit)));
   if (q) {
     // Ranked multi-word search over the whole UK database (migration 0074): exact and starts-with
     // matches first, then UK generics, scanned/imported products, and the old seed last.
-    const ranked = await supabase.rpc('search_foods', { p_query: q, p_limit: 25 });
+    const ranked = await supabase.rpc('search_foods', { p_query: q, p_limit: max });
     if (!ranked.error) return (ranked.data ?? []) as FoodRow[];
     // Not applied yet (or any other failure): fall back to the plain name search below.
   }
   // Hidden foods stay out of the fallback too (M12), as they do in search_foods.
-  let request = supabase.from('foods').select('*').eq('hidden', false).order('name').limit(25);
+  let request = supabase.from('foods').select('*').eq('hidden', false).order('name').limit(max);
   if (q) request = request.ilike('name', `%${q}%`);
   const { data, error } = await request;
   if (error) raise(error);

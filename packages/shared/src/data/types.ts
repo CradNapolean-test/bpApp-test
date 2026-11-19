@@ -110,6 +110,8 @@ export interface FoodRow {
   hidden?: boolean;
   // Where the food came from: 'seed', 'cofid' (UK tables), 'off' (import) or 'scan' (a member's barcode scan).
   source?: string;
+  // The maker, for a product (Open Food Facts import or a scan): "Tesco". Null for generic foods.
+  brand?: string | null;
   // The food's own servings, e.g. the pack's "1 biscuit" = 15 g, or ones a coach set (migration 0148). `default` marks the one shown first. Null/absent: grams only.
   serving_options?: { label: string; grams: number; default?: boolean }[] | null;
 }

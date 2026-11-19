@@ -56,10 +56,11 @@ const cases = [
   else console.log('  ok: 88 everyday foods marked');
 
   // Speed (0155): short words match the most foods ("ch" about 17,000). After 0154 these took 2-8 s or timed out, and a
-  // member typing "chicken" waited at every letter. Times include the trip to the database.
-  for (const query of ['ch', 'chi', 'chic', 'chicken', 'cheese', 'chocolate', 'beef']) {
+  // member typing "chicken" waited at every letter. Times include the trip to the database. The Add food picker asks for 60 (it folds
+  // near-duplicate products into one result per brand, D23a), so that is what is timed.
+  for (const query of ['ch', 'chi', 'chic', 'chicken', 'cheese', 'chocolate', 'beef', 'greek yogurt']) {
     const started = Date.now();
-    const { error } = await db.rpc('search_foods', { p_query: query, p_limit: 25 });
+    const { error } = await db.rpc('search_foods', { p_query: query, p_limit: 60 });
     const ms = Date.now() - started;
     if (error) failures.push(`"${query}" errors: ${error.message} (${ms} ms)`);
     else if (ms > SLOW_MS) failures.push(`"${query}" took ${ms} ms (limit ${SLOW_MS} ms)`);

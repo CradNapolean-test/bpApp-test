@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Modal, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,6 +7,7 @@ import { dayCalories, type DayTarget } from '@ballistic/shared/calculations';
 import type { FoodDiaryEntryRow, FoodRow, MealPlanEntryRow, MealSectionRow, NutritionFeedbackRow, RecipeWithIngredients } from '@ballistic/shared/data/types';
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@ballistic/shared/onboarding';
 import { parseQuantity, quantityConfig, quantityProblem } from '@ballistic/shared/utils/foodQuantity';
+import { groupFoodResults, moreLikeThis, type FoodGroup } from '@ballistic/shared/utils/foodResults';
 import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, defaultUnit, parseUnitInput, startingAmount, unitForAmount, unitText, unitsFor, type FoodUnit } from '@ballistic/shared/utils/foodUnits';
 import { entryMacros, formatQuantity, totalMacros } from '@ballistic/shared/utils/foodTotals';
 import { perServing, scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
@@ -391,14 +392,40 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qtys, setQtys] = useState<Record<string, number>>({});
 
+  // Near-duplicate products shown as one result per brand and product, the rest behind "N more like this" (D23a).
+  const groups = useMemo(() => groupFoodResults(search.data ?? []), [search.data]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
   const favoriteIds = new Set((favorites.data ?? []).map((f) => f.id));
   const searching = text.trim().length >= 2;
-  const list: { title?: string; foods: FoodRow[] }[] = searching
-    ? [{ foods: search.data ?? [] }]
+  const plain = (foods: FoodRow[]) => foods.map((food) => ({ food, others: [] as FoodRow[] }));
+  const list: { title?: string; groups: FoodGroup<FoodRow>[] }[] = searching
+    ? [{ groups }]
     : [
-        ...(favorites.data?.length ? [{ title: 'Favorites', foods: favorites.data }] : []),
-        ...(recents.data?.length ? [{ title: 'Recently logged', foods: recents.data }] : []),
+        ...(favorites.data?.length ? [{ title: 'Favorites', groups: plain(favorites.data) }] : []),
+        ...(recents.data?.length ? [{ title: 'Recently logged', groups: plain(recents.data) }] : []),
       ];
+
+  const groupRows = ({ food, others }: FoodGroup<FoodRow>) => {
+    const open = expanded.has(food.id);
+    return (
+      <View key={food.id}>
+        {row(food)}
+        {open ? others.map(row) : null}
+        {others.length > 0 ? (
+          <Pressable onPress={() => toggleGroup(food.id)} accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={6} style={{ paddingBottom: 8 }}>
+            <AppText variant="small" color="accent" style={{ fontWeight: '700' }}>{open ? 'Hide the others' : moreLikeThis(others.length)}</AppText>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  };
 
   const row = (food: FoodRow) => {
     const qty = qtys[food.id] ?? startingAmount(food);
@@ -430,7 +457,7 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
         renderItem={({ item: group }) => (
           <View style={{ gap: 2, marginBottom: spacing.sm }}>
             {group.title ? <AppText variant="small" color="muted" style={{ fontWeight: '700' }}>{group.title}</AppText> : null}
-            {group.foods.map(row)}
+            {group.groups.map(groupRows)}
           </View>
         )}
         ListEmptyComponent={

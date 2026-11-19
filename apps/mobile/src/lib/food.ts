@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import type { FoodDiaryEntryRow, FoodRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
 import { lookupBarcode } from '@ballistic/shared/openFoodFacts';
 import { barcodeVariants } from '@ballistic/shared/utils/barcode';
+import { SEARCH_LIMIT } from '@ballistic/shared/utils/foodResults';
 import type { OwnUnitRow, ServingOption } from '@ballistic/shared/utils/foodUnits';
 import type { QuickAddFields } from '@ballistic/shared/utils/quickAdd';
 
@@ -277,10 +278,11 @@ export function useFoodSearch(query: string) {
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<FoodRow[]> => {
-      const ranked = await supabase.rpc('search_foods', { p_query: q, p_limit: 25 });
+      // More than are shown: near-duplicate products are folded into one result per brand (D23a, foodResults.ts).
+      const ranked = await supabase.rpc('search_foods', { p_query: q, p_limit: SEARCH_LIMIT });
       if (!ranked.error) return (ranked.data ?? []) as FoodRow[];
       // Hidden foods stay out of the fallback too (M12), as they do in search_foods.
-      const { data, error } = await supabase.from('foods').select('*').eq('hidden', false).ilike('name', `%${q}%`).order('name').limit(25);
+      const { data, error } = await supabase.from('foods').select('*').eq('hidden', false).ilike('name', `%${q}%`).order('name').limit(SEARCH_LIMIT);
       if (error) throw error;
       return (data ?? []) as FoodRow[];
     },

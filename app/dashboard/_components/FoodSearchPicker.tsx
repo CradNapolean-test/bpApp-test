@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Star } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -10,6 +10,7 @@ import { dayCalories } from '@/lib/calculations';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import type { PairSuggestion } from '@/lib/foodPairs';
 import type { FoodRow, RecipeRow } from '@/lib/data/types';
+import { SEARCH_LIMIT, groupFoodResults, moreLikeThis } from '@/lib/utils/foodResults';
 import { MAX_UNIT_LABEL, countFromGrams, defaultUnit, gramsFromCount, parseUnitInput, startingAmount, unitText, unitsFor, type FoodUnit, type OwnUnitRow } from '@/lib/utils/foodUnits';
 
 const UNIT_PRESETS = [0.5, 1, 2, 3];
@@ -39,7 +40,10 @@ function FoodResultRow({
   units = [],
   onSaveUnit,
   onDeleteUnit,
+  more,
 }: {
+  // The other rows for the same product (D23a): how many, whether they are showing, and the toggle.
+  more?: { count: number; open: boolean; onToggle: () => void };
   food: FoodRow;
   qty: number;
   onQtyChange: (value: number) => void;
@@ -257,6 +261,11 @@ function FoodResultRow({
         </span>
       </div>
       {qtyProblem && <p className="text-xs font-semibold text-danger">{qtyProblem}</p>}
+      {more && (
+        <button type="button" aria-expanded={more.open} onClick={more.onToggle} className="text-xs font-semibold text-accent hover:underline">
+          {more.open ? 'Hide the others' : moreLikeThis(more.count)}
+        </button>
+      )}
     </li>
   );
 }
@@ -351,6 +360,16 @@ export function FoodSearchPicker({
   const [mode, setMode] = useState<'foods' | 'recipes' | 'quick_add'>('foods');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodRow[]>([]);
+  // Near-duplicate products shown as one result per brand and product, the rest behind "N more like this" (D23a).
+  const groups = useMemo(() => groupFoodResults(results), [results]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [grams, setGrams] = useState<Record<string, number>>({});
   const [servings, setServings] = useState<Record<string, number>>({});
   const [isPending, setIsPending] = useState(false);
@@ -379,7 +398,7 @@ export function FoodSearchPicker({
       abort.current = controller;
       let foods: FoodRow[] | null = null;
       try {
-        const { data, error } = await createClient().rpc('search_foods', { p_query: q, p_limit: 25 }).abortSignal(controller.signal);
+        const { data, error } = await createClient().rpc('search_foods', { p_query: q, p_limit: SEARCH_LIMIT }).abortSignal(controller.signal);
         if (!error) foods = (data ?? []) as FoodRow[];
       } catch {
         // aborted or offline: handled below
@@ -387,13 +406,14 @@ export function FoodSearchPicker({
       if (id !== latest.current) return; // a newer search has taken over
       if (foods === null) {
         try {
-          foods = await searchFoods(q);
+          foods = await searchFoods(q, SEARCH_LIMIT);
         } catch {
           foods = [];
         }
         if (id !== latest.current) return;
       }
       setResults(foods);
+      setExpanded(new Set());
       setIsPending(false);
     }, 200);
   }
@@ -618,18 +638,22 @@ export function FoodSearchPicker({
         </div>
       ) : (
         <ul className="mt-2 max-h-80 divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
-          {results.map((food) => (
-            <FoodResultRow
-              key={food.id}
-              food={food}
-              qty={grams[food.id] ?? startingAmount(food)}
-              onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
-              onAdd={onAdd}
-              isFavorite={favoriteIds?.has(food.id) ?? false}
-              onToggleFavorite={onToggleFavorite}
-              {...unitProps(food)}
-            />
-          ))}
+          {groups.map(({ food: shown, others }) => {
+            const open = expanded.has(shown.id);
+            return [shown, ...(open ? others : [])].map((food, i) => (
+              <FoodResultRow
+                key={food.id}
+                food={food}
+                qty={grams[food.id] ?? startingAmount(food)}
+                onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
+                onAdd={onAdd}
+                isFavorite={favoriteIds?.has(food.id) ?? false}
+                onToggleFavorite={onToggleFavorite}
+                {...unitProps(food)}
+                more={i === 0 && others.length > 0 ? { count: others.length, open, onToggle: () => toggleGroup(shown.id) } : undefined}
+              />
+            ));
+          })}
           {!isPending && results.length === 0 && (
             <li>
               <EmptyState compact title={query.trim().length >= 2 ? `No results for "${query.trim()}"` : query ? 'Keep typing…' : 'Start typing to search foods'} />
