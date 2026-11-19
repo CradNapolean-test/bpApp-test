@@ -19,14 +19,15 @@
 --
 -- 2. MS10. The coach's Messages list has a "Needs reply" filter: conversations whose newest message is the member's. A thread stayed there
 --   until the coach wrote, even when the member's last word was "thanks" (live on 6 Nov, 1 of the 5 under Needs reply).
--- After: the coach can choose "No reply needed" on a conversation (the menu on each row). That stamps the time in the new table
---   chat_no_reply and marks the conversation read; the app leaves it out of Needs reply until the member writes again (a message newer
---   than the stamp). "Needs a reply after all" removes the stamp.
+-- After: the coach can choose "No reply needed" on a conversation (the menu on each row). That stamps, in the new table chat_no_reply,
+--   the time of the newest message the coach saw in their list (never later than now), and marks the conversation read up to that
+--   message; the app leaves it out of Needs reply until the member writes again (a message newer than the stamp). So a message the member
+--   sent after the list was last refreshed still needs a reply, and stays unread. "Needs a reply after all" removes the stamp.
 --   New: chat_no_reply (client_id, marked_at), one row per marked conversation, gone with the member (on delete cascade). It is the coach's
 --     own note, so it is not on chat_threads, which the member can read (0014): Row Level Security is on and its one rule, "coach reads own
 --     members' chat_no_reply", lets only the member's own coach (is_coach_of) read a row; the member and other coaches see nothing. Nobody
---     writes it directly: there is no write rule or grant, only the new set_chat_no_reply(member, true/false), which refuses anyone but the
---     member's own coach (as mark_chat_unread, 0099). chat_threads and its rule are unchanged.
+--     writes it directly: there is no write rule or grant, only the new set_chat_no_reply(member, true/false, newest message seen), which
+--     refuses anyone but the member's own coach (as mark_chat_unread, 0099). chat_threads and its rule are unchanged.
 --   get_coach_chat_overview (last defined in migration 0086) gives the coach's list; it returns one more column, no_reply_at. Adding an
 --     output column needs a drop and create, so its execute rights are set again as they were (signed-in users only, 0105). The rows, the
 --     last message and the unread count are unchanged, and still only for the caller's own members.
@@ -94,8 +95,8 @@
 --          has_table_privilege('anon', 'public.chat_no_reply', 'select') as anyone_can_read
 --   from pg_class c where c.oid = 'public.chat_no_reply'::regclass;
 -- Expected: true, coach reads own members' chat_no_reply SELECT, false, false.
---   select has_function_privilege('anon', 'public.set_chat_no_reply(uuid, boolean)', 'execute') as anyone,
---          has_function_privilege('authenticated', 'public.set_chat_no_reply(uuid, boolean)', 'execute') as signed_in,
+--   select has_function_privilege('anon', 'public.set_chat_no_reply(uuid, boolean, timestamptz)', 'execute') as anyone,
+--          has_function_privilege('authenticated', 'public.set_chat_no_reply(uuid, boolean, timestamptz)', 'execute') as signed_in,
 --          has_function_privilege('anon', 'public.get_coach_chat_overview()', 'execute') as anyone_overview,
 --          has_function_privilege('authenticated', 'public.get_coach_chat_overview()', 'execute') as signed_in_overview;
 -- Expected: false, true, false, true.
@@ -113,7 +114,7 @@
 -- REVERSE: run create_communication's definition from migration 0097 and send_due_communications' from migration 0133 again (each from its
 -- "create or replace function" line to its closing delimiter; same arguments and return types, so no drop is needed). For part 2:
 -- drop function public.get_coach_chat_overview(); then run its definition from migration 0086 and 0105's
--- "revoke execute on function public.get_coach_chat_overview() from public, anon;"; drop function public.set_chat_no_reply(uuid, boolean);
+-- "revoke execute on function public.get_coach_chat_overview() from public, anon;"; drop function public.set_chat_no_reply(uuid, boolean, timestamptz);
 -- the table can stay (nothing else reads it), or: drop table public.chat_no_reply. For part 3: drop table
 -- public.session_reminders (the job then fails without sending anything, so take its step out of the workflow first).
 --
@@ -303,35 +304,48 @@ create policy "coach reads own members' chat_no_reply" on public.chat_no_reply
   using (coalesce(public.is_coach_of(client_id), false));
 
 -- The member's own coach marks the conversation as needing no reply (and read), or takes the mark off again. The app leaves a marked
--- conversation out of Needs reply until the member writes again.
-create or replace function public.set_chat_no_reply(p_client_id uuid, p_no_reply boolean)
+-- conversation out of Needs reply until the member writes again. p_seen_at is the newest message the coach saw in their list: the mark,
+-- and the read mark, go up to that message and no further (never later than now), so a message that arrived after the list was last
+-- refreshed still needs a reply and stays unread. Taking the mark off needs no time.
+-- (An earlier draft of this file had no p_seen_at; it was never applied, but dropping that form keeps the call unambiguous.)
+drop function if exists public.set_chat_no_reply(uuid, boolean);
+
+create or replace function public.set_chat_no_reply(p_client_id uuid, p_no_reply boolean, p_seen_at timestamptz default null)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $fn$
+declare
+  v_seen timestamptz;
 begin
   if p_client_id is null or not coalesce(public.is_coach_of(p_client_id), false) then
     raise exception 'Not authorized';
   end if;
 
-  if coalesce(p_no_reply, false) then
-    insert into chat_no_reply (client_id, marked_at)
-    values (p_client_id, now())
-    on conflict (client_id) do update set marked_at = now();
-
-    insert into chat_threads (client_id, coach_last_read_at)
-    values (p_client_id, now())
-    on conflict (client_id) do update set
-      coach_last_read_at = greatest(chat_threads.coach_last_read_at, now());
-  else
+  if not coalesce(p_no_reply, false) then
     delete from chat_no_reply where client_id = p_client_id;
+    return;
   end if;
+
+  if p_seen_at is null then
+    raise exception 'Say which message was seen';
+  end if;
+  v_seen := least(p_seen_at, now());
+
+  insert into chat_no_reply (client_id, marked_at)
+  values (p_client_id, v_seen)
+  on conflict (client_id) do update set marked_at = greatest(chat_no_reply.marked_at, excluded.marked_at);
+
+  insert into chat_threads (client_id, coach_last_read_at)
+  values (p_client_id, v_seen)
+  on conflict (client_id) do update set
+    coach_last_read_at = greatest(chat_threads.coach_last_read_at, excluded.coach_last_read_at);
 end;
 $fn$;
 
-revoke all on function public.set_chat_no_reply(uuid, boolean) from public, anon;
-grant execute on function public.set_chat_no_reply(uuid, boolean) to authenticated;
+revoke all on function public.set_chat_no_reply(uuid, boolean, timestamptz) from public, anon;
+grant execute on function public.set_chat_no_reply(uuid, boolean, timestamptz) to authenticated;
 
 -- 0086's function plus the no_reply_at column. A new output column cannot be added with "create or replace", hence the drop.
 drop function if exists public.get_coach_chat_overview();

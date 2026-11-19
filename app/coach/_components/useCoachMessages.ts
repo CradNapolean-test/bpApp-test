@@ -72,11 +72,12 @@ export function useCoachMessages(initialOverview: ChatOverviewRow[], currentUser
     if (selectedRef.current === clientId) clearSelection();
   }
 
-  // "No reply needed" (MS10), or taking it off. Shown straight away; if the save fails the list is fetched again, so it does not look
+  // "No reply needed" (MS10), or taking it off. `seenAt` is the newest message time on the row the coach chose it from, so a message
+  // that arrived after that still needs a reply. Shown straight away; if the save fails the list is fetched again, so it does not look
   // saved when it is not.
-  function markNoReply(clientId: string, noReply: boolean) {
-    setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? withNoReplyMark(c, noReply) : c)));
-    setChatNoReply(clientId, noReply).catch(() => {
+  function markNoReply(clientId: string, noReply: boolean, seenAt: string | null) {
+    setLocalOverview((prev) => prev.map((c) => (c.client_id === clientId ? withNoReplyMark(c, noReply, seenAt) : c)));
+    setChatNoReply(clientId, noReply, seenAt).catch(() => {
       toast.error('Could not save that. Please try again.');
       void refreshOverview();
     });

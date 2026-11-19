@@ -121,8 +121,18 @@ describe('MS10: "No reply needed"', () => {
     const body = code('set_chat_no_reply');
     expect(body).toMatch(/if p_client_id is null or not coalesce\(public\.is_coach_of\(p_client_id\), false\) then\s+raise exception/);
     expect(body).toMatch(/insert into chat_no_reply \(client_id, marked_at\)/);
-    expect(body).toMatch(/coach_last_read_at = greatest\(chat_threads\.coach_last_read_at, now\(\)\)/);
     expect(body).toMatch(/delete from chat_no_reply where client_id = p_client_id/);
+  });
+
+  it('set_chat_no_reply stamps (and marks read) up to the newest message the coach saw, not the time of the click', () => {
+    expect(sql).toMatch(/create or replace function public\.set_chat_no_reply\(p_client_id uuid, p_no_reply boolean, p_seen_at timestamptz default null\)/);
+    expect(sql).toMatch(/drop function if exists public\.set_chat_no_reply\(uuid, boolean\);/);
+    const body = code('set_chat_no_reply');
+    expect(body).not.toMatch(/now\(\)\s*\)\s*on conflict|=\s*now\(\)/);
+    expect(body).toMatch(/if p_seen_at is null then\s+raise exception/);
+    expect(body).toMatch(/v_seen := least\(p_seen_at, now\(\)\);/);
+    expect(body).toMatch(/values \(p_client_id, v_seen\)\s+on conflict \(client_id\) do update set marked_at = greatest\(chat_no_reply\.marked_at, excluded\.marked_at\)/);
+    expect(body).toMatch(/values \(p_client_id, v_seen\)\s+on conflict \(client_id\) do update set\s+coach_last_read_at = greatest\(chat_threads\.coach_last_read_at, excluded\.coach_last_read_at\)/);
   });
 
   it('the inbox overview returns the stamp, still for the caller\'s own members only, with the same unread rule', () => {

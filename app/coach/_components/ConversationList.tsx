@@ -44,8 +44,9 @@ export function ConversationList({
   // When given, each conversation gets a menu to mark it read or unread.
   onMarkRead?: (clientId: string) => void;
   onMarkUnread?: (clientId: string) => void;
-  // "No reply needed" (MS10): takes a conversation out of Needs reply until the member writes again; false puts it back.
-  onMarkNoReply?: (clientId: string, noReply: boolean) => void;
+  // "No reply needed" (MS10): takes a conversation out of Needs reply until the member writes again; false puts it back. `seenAt` is the
+  // newest message time the row showed when the coach chose it.
+  onMarkNoReply?: (clientId: string, noReply: boolean, seenAt: string | null) => void;
   // The coach looking at the list, so their own last message reads "You: …".
   currentUserId: string;
   // The Messages page's left column: the list scrolls inside itself and ends at the bottom of the window, level with the open thread.
@@ -123,8 +124,8 @@ export function ConversationList({
               ? { label: 'Mark as read', onSelect: () => onMarkRead?.(c.client_id) }
               : { label: 'Mark as unread', onSelect: () => onMarkUnread?.(c.client_id) },
           ];
-          if (onMarkNoReply && waiting) menu.push({ label: 'No reply needed', onSelect: () => onMarkNoReply(c.client_id, true) });
-          if (onMarkNoReply && settled) menu.push({ label: 'Needs a reply after all', onSelect: () => onMarkNoReply(c.client_id, false) });
+          if (onMarkNoReply && waiting) menu.push({ label: 'No reply needed', onSelect: () => onMarkNoReply(c.client_id, true, c.last_message_at) });
+          if (onMarkNoReply && settled) menu.push({ label: 'Needs a reply after all', onSelect: () => onMarkNoReply(c.client_id, false, null) });
           return (
             <div
               key={c.client_id}

@@ -162,11 +162,12 @@ export async function markChatUnread(clientId: string): Promise<void> {
   if (error) raise(error);
 }
 
-// "No reply needed" (MS10): the conversation leaves Needs reply until the member writes again, and is marked read. `false` takes the mark
-// off. Only the member's own coach can do either (set_chat_no_reply, migration 0160).
-export async function setChatNoReply(clientId: string, noReply: boolean): Promise<void> {
+// "No reply needed" (MS10): the conversation leaves Needs reply until the member writes again, and is marked read. `seenAt` is the
+// newest message the coach saw in their list: the mark goes up to that message only, so one that arrived since still needs a reply.
+// `false` takes the mark off. Only the member's own coach can do either (set_chat_no_reply, migration 0160).
+export async function setChatNoReply(clientId: string, noReply: boolean, seenAt: string | null): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase.rpc('set_chat_no_reply', { p_client_id: clientId, p_no_reply: noReply });
+  const { error } = await supabase.rpc('set_chat_no_reply', { p_client_id: clientId, p_no_reply: noReply, p_seen_at: noReply ? seenAt : null });
   if (error) raise(error);
 }
 

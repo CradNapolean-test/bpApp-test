@@ -70,13 +70,15 @@ export function needsReply(row: ReplyRow): boolean {
   return row.last_message_at != null && row.last_sender_id === row.client_id && !replyNotNeeded(row);
 }
 
-// The conversation as it shows straight after the coach marks it (or unmarks it): the stamp is the member's newest message's time rather
-// than the device clock (a phone whose clock is behind would otherwise leave it under Needs reply), and marking it also marks it read, as
-// the database does (set_chat_no_reply).
-export function withNoReplyMark<T extends OverviewRowLike & ReplyRow>(row: T, noReply: boolean, now: Date = new Date()): T {
+// The conversation as it shows straight after the coach marks it (or unmarks it), as the database stores it (set_chat_no_reply): the
+// stamp is the newest message the coach saw (`seenAt`, the row's own newest message when they chose it), not the device clock, and
+// marking it also marks it read up to that message. A message newer than that (one that arrived meanwhile) still needs a reply and
+// stays unread.
+export function withNoReplyMark<T extends OverviewRowLike & ReplyRow>(row: T, noReply: boolean, seenAt: string | null = row.last_message_at): T {
   if (!noReply) return { ...row, no_reply_at: null };
-  const stamp = row.last_message_at && time(row.last_message_at) > now.getTime() ? row.last_message_at : now.toISOString();
-  return { ...row, no_reply_at: stamp, unread_count: 0 };
+  if (!seenAt) return row;
+  const newer = row.last_message_at != null && time(row.last_message_at) > time(seenAt);
+  return { ...row, no_reply_at: seenAt, unread_count: newer ? row.unread_count : 0 };
 }
 
 // Which conversations get a live connection: the most recent ones that have a message, plus the open one. Supabase limits how many

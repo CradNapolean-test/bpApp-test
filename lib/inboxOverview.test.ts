@@ -146,14 +146,22 @@ describe('"No reply needed" (MS10)', () => {
     expect(needsReply({ client_id: 'member-1', last_message_at: '2026-11-05T10:00:00Z', last_sender_id: 'member-1' })).toBe(true);
   });
 
-  it('marking shows at once: stamped, read, and out of Needs reply even when the device clock is behind', () => {
-    const behind = new Date('2026-11-05T09:58:00Z');
-    const marked = withNoReplyMark(row(null), true, behind);
+  it('marking shows at once: stamped with the newest message the coach saw (not the device clock), read, and out of Needs reply', () => {
+    const marked = withNoReplyMark(row(null), true, '2026-11-05T10:00:00Z');
     expect(marked.no_reply_at).toBe('2026-11-05T10:00:00Z');
     expect(marked.unread_count).toBe(0);
     expect(needsReply(marked)).toBe(false);
-    const now = new Date('2026-11-05T10:30:00Z');
-    expect(withNoReplyMark(row(null), true, now).no_reply_at).toBe('2026-11-05T10:30:00.000Z');
+    // Without a time given, the row's own newest message is what the coach saw.
+    expect(withNoReplyMark(row(null), true).no_reply_at).toBe('2026-11-05T10:00:00Z');
+  });
+
+  it('a message that arrived after the one the coach saw still needs a reply, and stays unread', () => {
+    // The coach chose "No reply needed" on the 10:00 message; by the time the list updated, the member had written again at 10:01.
+    const marked = withNoReplyMark(row(null, '2026-11-05T10:01:00Z'), true, '2026-11-05T10:00:00Z');
+    expect(marked.no_reply_at).toBe('2026-11-05T10:00:00Z');
+    expect(marked.unread_count).toBe(1);
+    expect(needsReply(marked)).toBe(true);
+    expect(replyNotNeeded(marked)).toBe(false);
   });
 
   it('unmarking puts it back under Needs reply and leaves unread as it was', () => {
