@@ -2,6 +2,7 @@
 
 import { raise } from './errors';
 import { createClient } from '@/lib/supabase/server';
+import { recipeLogFields } from '@/lib/utils/diaryLines';
 import { syncFoodDiaryToLog } from './foodDiary';
 import type { FoodDiaryEntryRow, MealPlanSection, RecipeRow, RecipeWithIngredients } from './types';
 
@@ -82,9 +83,12 @@ export async function removeRecipeIngredient(id: string): Promise<void> {
 }
 
 // Fans out a recipe's ingredients into individual food_diary_entries, scaled by servings --
-// zero changes needed to foodTotals.ts or FoodTrackingTab, they just see plain food entries.
+// zero changes needed to foodTotals.ts, the totals see plain food entries.
 // `servings` here means "how many of the recipe's OWN serving size" (MyFitnessPal-style), so
 // the ingredient portions scale by servings / recipe.servings, not by servings alone.
+// The rows of one logging share a recipe_log_id and carry the recipe's name and the servings (D23c, migration 0169), so the diary shows
+// them as one line that opens to its ingredients (lib/utils/diaryLines.ts). The name is kept on the rows, so renaming or deleting the
+// recipe later does not change what the diary says was eaten.
 export async function logRecipeToDiary(
   dailyLogId: string,
   recipeId: string,
@@ -94,7 +98,7 @@ export async function logRecipeToDiary(
   const supabase = await createClient();
   const { data: recipe, error: recipeError } = await supabase
     .from('recipes')
-    .select('servings')
+    .select('name, servings')
     .eq('id', recipeId)
     .single();
   if (recipeError) raise(recipeError);
@@ -107,6 +111,7 @@ export async function logRecipeToDiary(
   if (!ingredients || ingredients.length === 0) return syncFoodDiaryToLog(dailyLogId);
 
   const scale = servings / recipe.servings;
+  const link = recipeLogFields(crypto.randomUUID(), recipe.name, servings);
   const rows = ingredients
     .filter((i) => i.food_id)
     .map((i) => ({
@@ -114,6 +119,7 @@ export async function logRecipeToDiary(
       food_id: i.food_id,
       portions: i.portions * scale,
       meal_section_id: mealSectionId,
+      ...link,
     }));
   const { error: insertError } = await supabase.from('food_diary_entries').insert(rows);
   if (insertError) raise(insertError);

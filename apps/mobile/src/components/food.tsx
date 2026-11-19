@@ -8,6 +8,7 @@ import type { FoodDiaryEntryRow, FoodRow, MealPlanEntryRow, MealSectionRow, Nutr
 import { NO_TARGETS_YET, PLAN_BEING_SET_UP } from '@ballistic/shared/onboarding';
 import { parseQuantity, quantityConfig, quantityProblem } from '@ballistic/shared/utils/foodQuantity';
 import { groupFoodResults, moreLikeThis, type FoodGroup } from '@ballistic/shared/utils/foodResults';
+import { diaryLines, recipeLineDetail, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
 import { MAX_UNIT_LABEL, countFromGrams, gramsFromCount, defaultUnit, parseUnitInput, startingAmount, unitForAmount, unitText, unitsFor, type FoodUnit } from '@ballistic/shared/utils/foodUnits';
 import { entryMacros, formatQuantity, totalMacros } from '@ballistic/shared/utils/foodTotals';
 import { perServing, scaleIngredients, validatePortions } from '@ballistic/shared/utils/mealPlan';
@@ -18,7 +19,7 @@ import { Icon } from '@/components/icons';
 import { ProgressRing } from '@/components/ProgressRing';
 import { AppText, Button, Card, Chip, SheetFrame, SmallButton, TextField } from '@/components/ui';
 import type { PendingScan } from '@/lib/barcodeFlow';
-import { useAddFood, useAddFoods, useAddQuickAdd, useFavoriteFoods, useFoodSearch, useOwnFoodUnits, useRecentFoods, useToggleFavorite, type QuickAddFields } from '@/lib/food';
+import { newRecipeLogId, useAddFood, useAddQuickAdd, useAddRecipe, useFavoriteFoods, useFoodSearch, useOwnFoodUnits, useRecentFoods, useToggleFavorite, type QuickAddFields } from '@/lib/food';
 import { useDebounced } from '@/lib/hooks';
 import { radius, spacing, useTheme } from '@/theme';
 
@@ -145,16 +146,61 @@ export function AddFoodButtons({ onAdd, onScan, scanLabel }: { onAdd: () => void
   );
 }
 
+function EntryLine({ entry, onEdit, nested = false }: { entry: FoodDiaryEntryRow; onEdit: (e: FoodDiaryEntryRow) => void; nested?: boolean }) {
+  const t = useTheme();
+  return (
+    <Pressable onPress={() => onEdit(entry)} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 10, paddingLeft: nested ? spacing.md : 0, borderTopWidth: 1, borderTopColor: t.border }}>
+      <View style={{ flexShrink: 1 }}>
+        <AppText style={{ fontWeight: '600' }} numberOfLines={1}>{entryName(entry)}</AppText>
+        <AppText variant="small" color="muted">{entry.food ? formatQuantity(entry) : 'Quick add'}</AppText>
+      </View>
+      <AppText style={{ fontWeight: '600' }}>{kcal(entry)} <AppText variant="small" color="muted">kcal</AppText></AppText>
+    </Pressable>
+  );
+}
+
+// A logged recipe is one line (D23c): its name, servings and calories, which opens to show its ingredients (each still editable) and a
+// way to remove the whole recipe.
+function RecipeLineView({ line, onEdit, onRemove }: { line: RecipeLine<FoodDiaryEntryRow>; onEdit: (e: FoodDiaryEntryRow) => void; onRemove?: (line: RecipeLine<FoodDiaryEntryRow>) => void }) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  const total = totalMacros(line.entries);
+  return (
+    <View>
+      <Pressable onPress={() => setOpen((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.border }}>
+        <View style={{ flexShrink: 1 }}>
+          <AppText style={{ fontWeight: '600' }} numberOfLines={1}>{line.name}</AppText>
+          <AppText variant="small" color="muted">{recipeLineDetail(line.servings, line.entries.length)}</AppText>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <AppText style={{ fontWeight: '600' }}>{Math.round(total.calories)} <AppText variant="small" color="muted">kcal</AppText></AppText>
+          <Icon name={open ? 'chevronUp' : 'chevronDown'} size={16} color={t.muted} />
+        </View>
+      </Pressable>
+      {open ? (
+        <View>
+          {line.entries.map((e) => <EntryLine key={e.id} entry={e} onEdit={onEdit} nested />)}
+          {onRemove ? (
+            <Pressable onPress={() => onRemove(line)} accessibilityRole="button" style={{ paddingVertical: 10, paddingLeft: spacing.md, borderTopWidth: 1, borderTopColor: t.border }}>
+              <AppText color="danger" style={{ fontWeight: '700' }}>Remove {line.name}</AppText>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export function DiarySection({
-  label, entries, onAdd, onScan, onEdit,
+  label, entries, onAdd, onScan, onEdit, onRemoveRecipe,
 }: {
   label: string;
   entries: FoodDiaryEntryRow[];
   onAdd: () => void;
   onScan: () => void;
   onEdit: (e: FoodDiaryEntryRow) => void;
+  onRemoveRecipe?: (line: RecipeLine<FoodDiaryEntryRow>) => void;
 }) {
-  const t = useTheme();
   const sectionKcal = Math.round(entries.reduce((s, e) => s + entryMacros(e).calories, 0));
   return (
     <Card style={{ gap: spacing.sm }}>
@@ -164,15 +210,9 @@ export function DiarySection({
         <AppText variant="small" color="muted">{sectionKcal} kcal</AppText>
       </View>
       {entries.length === 0 ? <AppText variant="small" color="muted">Nothing logged yet.</AppText> : null}
-      {entries.map((e) => (
-        <Pressable key={e.id} onPress={() => onEdit(e)} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.border }}>
-          <View style={{ flexShrink: 1 }}>
-            <AppText style={{ fontWeight: '600' }} numberOfLines={1}>{entryName(e)}</AppText>
-            <AppText variant="small" color="muted">{e.food ? formatQuantity(e) : 'Quick add'}</AppText>
-          </View>
-          <AppText style={{ fontWeight: '600' }}>{kcal(e)} <AppText variant="small" color="muted">kcal</AppText></AppText>
-        </Pressable>
-      ))}
+      {diaryLines(entries).map((line) =>
+        line.kind === 'entry' ? <EntryLine key={line.entry.id} entry={line.entry} onEdit={onEdit} /> : <RecipeLineView key={line.id} line={line} onEdit={onEdit} onRemove={onRemoveRecipe} />,
+      )}
       <AddFoodButtons onAdd={onAdd} onScan={onScan} scanLabel={`Scan a barcode into ${label}`} />
     </Card>
   );
@@ -548,7 +588,7 @@ function SheetTabs<T extends string>({ value, onChange, options }: { value: T; o
 export function AddFoodSheet({ section, date, onClose, recipes = [] }: { section: { id: string | null; label: string }; date: string; onClose: () => void; recipes?: RecipeWithIngredients[] }) {
   const [tab, setTab] = useState<'search' | 'recipes' | 'quick'>('search');
   const addFood = useAddFood(date);
-  const addFoods = useAddFoods(date);
+  const addRecipe = useAddRecipe(date);
   const addQuick = useAddQuickAdd(date);
   const tabs = [
     { value: 'search' as const, label: 'Search' },
@@ -569,7 +609,8 @@ export function AddFoodSheet({ section, date, onClose, recipes = [] }: { section
             const items = scaleIngredients(recipe.recipe_ingredients, servings, recipe.servings)
               .map((i) => ({ food: recipe.recipe_ingredients.find((r) => r.food_id === i.food_id)?.food, portions: i.portions, sectionId: section.id }))
               .filter((i): i is { food: FoodRow; portions: number; sectionId: string | null } => !!i.food);
-            addFoods.mutate({ items });
+            // One line in the diary that opens to its ingredients (D23c).
+            if (items.length) addRecipe.mutate({ items, recipeLogId: newRecipeLogId(), name: recipe.name, servings });
             onClose();
           }}
         />

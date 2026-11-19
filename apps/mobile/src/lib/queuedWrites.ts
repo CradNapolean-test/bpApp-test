@@ -56,6 +56,10 @@ export type DiaryRowInput = {
   quick_add_protein: number | null;
   quick_add_carbs: number | null;
   quick_add_fat: number | null;
+  // The rows of one logging of a recipe share an id and carry its name and servings (D23c, migration 0169). Absent on other rows.
+  recipe_log_id?: string | null;
+  recipe_name?: string | null;
+  recipe_servings?: number | null;
 };
 
 const diaryRefresh = (userId: string, date: string) => [
@@ -124,6 +128,18 @@ export const WRITE_DIARY_REFILE = defineWrite<DiaryRefileVars>('diary-refile', {
     if (error) throw error;
   },
   invalidate: ({ userId, date }) => [{ key: diaryKey(userId, date) }],
+});
+
+// Removes a logged recipe: every row of that one logging (D23c). The same recipe logged another time is another line and stays.
+export type DiaryRemoveRecipeVars = { userId: string; date: string; recipeLogId: string };
+export const WRITE_DIARY_REMOVE_RECIPE = defineWrite<DiaryRemoveRecipeVars>('diary-remove-recipe', {
+  run: async ({ userId, date, recipeLogId }) => {
+    const dailyLogId = await logIdFor(userId, date);
+    const { error } = await supabase.from('food_diary_entries').delete().eq('daily_log_id', dailyLogId).eq('recipe_log_id', recipeLogId);
+    if (error) throw error;
+    await syncDiaryToLog(dailyLogId);
+  },
+  invalidate: ({ userId, date }) => diaryRefresh(userId, date),
 });
 
 // ---------- manual macro entry ----------

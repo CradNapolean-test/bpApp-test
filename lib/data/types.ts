@@ -150,6 +150,10 @@ export interface FoodDiaryEntryRow {
   quick_add_protein: number | null;
   quick_add_carbs: number | null;
   quick_add_fat: number | null;
+  // Set on the rows of one logging of a recipe (D23c, migration 0169): the screens show them as one line that opens to its ingredients.
+  recipe_log_id?: string | null;
+  recipe_name?: string | null;
+  recipe_servings?: number | null;
 }
 
 // Customizable per-client tracking sections (MyFitnessPal-style) -- distinct from

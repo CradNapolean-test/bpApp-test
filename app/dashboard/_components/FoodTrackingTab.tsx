@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react';
+import { ChefHat, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useBackHandler } from '@/app/_components/useBackHandler';
@@ -15,6 +15,7 @@ import {
   copyDiaryBetweenDates,
   getFoodDiaryForDate,
   removeFoodDiaryEntry,
+  removeRecipeFromDiary,
   updateFoodDiaryEntryPortions,
   updateFoodDiaryEntrySection,
   updateQuickAddEntry,
@@ -45,6 +46,7 @@ import { addDays, DEFAULT_TIMEZONE, startOfWeek, toIsoDate } from '@/lib/utils/d
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
 import { suggestPairs, type PairSuggestion } from '@/lib/foodPairs';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
+import { diaryLines, recipeLineDetail, type RecipeLine } from '@/lib/utils/diaryLines';
 import { AddFoodSheet } from './AddFoodSheet';
 import { CopyFoodSheet, type CopyScope } from './CopyFoodSheet';
 import { FeedbackThread } from './FeedbackThread';
@@ -373,6 +375,66 @@ function EntryRow({
               : undefined
           }
         />
+      )}
+    </li>
+  );
+}
+
+// A logged recipe is one line (D23c): its name, servings, calories and macros, which opens to show its ingredients. Each ingredient can
+// still be changed on its own; "Remove" takes the whole recipe out. The coach can open it too.
+function RecipeLineRow({
+  line,
+  readOnly,
+  onRemoveRecipe,
+  renderEntry,
+}: {
+  line: RecipeLine<FoodDiaryEntryRow>;
+  readOnly: boolean;
+  onRemoveRecipe: (line: RecipeLine<FoodDiaryEntryRow>) => void;
+  renderEntry: (entry: FoodDiaryEntryRow) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const macros = totalMacros(line.entries);
+  return (
+    <li>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]"
+      >
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-black dark:text-zinc-50">
+            <ChefHat aria-hidden className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            <span className="truncate">{line.name}</span>
+          </span>
+          <span className="block text-xs text-zinc-500">{recipeLineDetail(line.servings, line.entries.length)}</span>
+          <span className="block text-xs text-zinc-500">
+            <span style={{ color: '#a07aff' }}>P {Math.round(macros.protein)}g</span> ·{' '}
+            <span style={{ color: '#e8a020' }}>C {Math.round(macros.carbs)}g</span> ·{' '}
+            <span style={{ color: '#2ecc71' }}>F {Math.round(macros.fat)}g</span>
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-black dark:text-zinc-50">
+          <span>
+            {Math.round(macros.calories)} <span className="text-xs font-normal text-zinc-500">kcal</span>
+          </span>
+          <ChevronDown aria-hidden className={`h-4 w-4 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-black/[.07] bg-black/[.015] pl-3 dark:border-white/10 dark:bg-white/[.02]">
+          <ul className="divide-y divide-black/[.07] dark:divide-white/10" aria-label={`${line.name} ingredients`}>
+            {line.entries.map((entry) => renderEntry(entry))}
+          </ul>
+          {!readOnly && (
+            <div className="border-t border-black/[.07] px-4 py-1.5 dark:border-white/10">
+              <button type="button" onClick={() => onRemoveRecipe(line)} className="min-h-10 text-[13px] font-bold text-danger">
+                Remove {line.name}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </li>
   );
@@ -719,6 +781,33 @@ export function FoodTrackingTab({
     );
   }
 
+  async function handleRemoveRecipe(line: RecipeLine<FoodDiaryEntryRow>) {
+    if (!currentDailyLogId) return;
+    const ok = await confirm({
+      title: `Remove ${line.name}?`,
+      body: `This takes all ${line.entries.length} of its ingredients off this day.`,
+      destructive: true,
+    });
+    if (!ok) return;
+    const date = viewingDate;
+    await run(
+      async () => {
+        const rows = await removeRecipeFromDiary(line.id, currentDailyLogId);
+        if (viewingRef.current === date) setEntries(rows);
+      },
+      { success: 'Removed', ...quiet }
+    );
+  }
+
+  // A meal's rows as the diary shows them: a logged recipe is one line that opens to its ingredients (D23c).
+  const entryRow = (entry: FoodDiaryEntryRow) => (
+    <EntryRow key={entry.id} entry={entry} readOnly={entryReadOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} onUpdateQuickAdd={handleUpdateQuickAdd} />
+  );
+  const lineRows = (rows: FoodDiaryEntryRow[]) =>
+    diaryLines(rows).map((line) =>
+      line.kind === 'entry' ? entryRow(line.entry) : <RecipeLineRow key={line.id} line={line} readOnly={entryReadOnly} onRemoveRecipe={handleRemoveRecipe} renderEntry={entryRow} />
+    );
+
   async function handleRefile(id: string, sectionId: string | null) {
     await run(
       async () => {
@@ -1045,9 +1134,7 @@ export function FoodTrackingTab({
             ) : (
               <>
                 <ul className="divide-y divide-black/[.07] border-t border-black/[.07] dark:divide-white/10 dark:border-white/10">
-                  {sectionEntries.map((entry) => (
-                    <EntryRow key={entry.id} entry={entry} readOnly={entryReadOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} onUpdateQuickAdd={handleUpdateQuickAdd} />
-                  ))}
+                  {lineRows(sectionEntries)}
                   {sectionEntries.length === 0 && <li className="px-4 py-3 text-[13px] text-zinc-500 dark:text-zinc-400">Nothing logged yet.</li>}
                 </ul>
                 {!entryReadOnly && <div className="px-4 pb-3 empty:hidden">{pairStrip(section.id)}</div>}
@@ -1097,9 +1184,7 @@ export function FoodTrackingTab({
                 <p className="text-[13px] text-zinc-500 dark:text-zinc-400">Not yet filed under a meal.</p>
               </div>
               <ul className="divide-y divide-black/[.07] border-t border-black/[.07] dark:divide-white/10 dark:border-white/10">
-                {otherEntries.map((entry) => (
-                  <EntryRow key={entry.id} entry={entry} readOnly={entryReadOnly} sections={sections} onRemove={handleRemove} onRefile={handleRefile} onUpdatePortions={handleUpdatePortions} onUpdateQuickAdd={handleUpdateQuickAdd} />
-                ))}
+                {lineRows(otherEntries)}
               </ul>
               {!entryReadOnly && <div className="px-4 pb-3 empty:hidden">{pairStrip(null)}</div>}
             </div>

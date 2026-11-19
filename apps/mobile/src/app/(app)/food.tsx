@@ -4,6 +4,7 @@ import { ActivityIndicator } from 'react-native';
 import type { ClientProfileRow, FoodDiaryEntryRow } from '@ballistic/shared/data/types';
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
 import { addDays, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
+import type { RecipeLine } from '@ballistic/shared/utils/diaryLines';
 
 import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
@@ -11,11 +12,11 @@ import { AddFoodSheet, CoachFeedbackCard, CompleteScanSheet, DateNav, DiarySecti
 import { ManualDiaryScreen } from '@/components/manualMacros';
 import { NutritionTabs } from '@/components/pagetabs';
 import { PhotoDiaryScreen } from '@/components/photoDiary';
-import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
+import { AppText, Button, Card, ConfirmSheet, Screen, ScrollScreen } from '@/components/ui';
 import { useBarcodeFlow } from '@/lib/barcodeFlow';
 import { useFoodTarget } from '@/lib/foodTarget';
 import { useRecipes } from '@/lib/recipes';
-import { useAddFood, useCopyFromDate, useDiary, useMealSections, useNutritionFeedback, useRefileEntry, useRemoveEntry, useUpdatePortions, useUpdateQuickAdd } from '@/lib/food';
+import { useAddFood, useCopyFromDate, useDiary, useMealSections, useNutritionFeedback, useRefileEntry, useRemoveEntry, useRemoveRecipe, useUpdatePortions, useUpdateQuickAdd } from '@/lib/food';
 import { useScreenAccess } from '@/lib/screens';
 import { timezoneOf, useClientProfile, useNow } from '@/lib/today';
 import { spacing, useTheme } from '@/theme';
@@ -63,6 +64,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
   const target = useFoodTarget(profile, today, date);
   const addFood = useAddFood(date);
   const removeEntry = useRemoveEntry(date);
+  const removeRecipe = useRemoveRecipe(date);
   const updatePortions = useUpdatePortions(date);
   const updateQuick = useUpdateQuickAdd(date);
   const refile = useRefileEntry(date);
@@ -72,6 +74,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
 
   const [addTarget, setAddTarget] = useState<{ id: string | null; label: string } | null>(null);
   const [editing, setEditing] = useState<FoodDiaryEntryRow | null>(null);
+  const [removingRecipe, setRemovingRecipe] = useState<RecipeLine<FoodDiaryEntryRow> | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   if (sectionsQ.isPending) {
@@ -135,9 +138,10 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
             onAdd={() => setAddTarget({ id: s.id, label: s.label })}
             onScan={() => scan.start({ id: s.id, label: s.label })}
             onEdit={setEditing}
+            onRemoveRecipe={setRemovingRecipe}
           />
         ))}
-        {other.length ? <DiarySection label="Other" entries={other} onAdd={() => setAddTarget({ id: null, label: 'Other' })} onScan={() => scan.start({ id: null, label: 'Other' })} onEdit={setEditing} /> : null}
+        {other.length ? <DiarySection label="Other" entries={other} onAdd={() => setAddTarget({ id: null, label: 'Other' })} onScan={() => scan.start({ id: null, label: 'Other' })} onEdit={setEditing} onRemoveRecipe={setRemovingRecipe} /> : null}
       </ScrollScreen>
 
       {addTarget ? <AddFoodSheet section={addTarget} date={date} recipes={areas.recipes ? recipesQ.data ?? [] : []} onClose={() => setAddTarget(null)} /> : null}
@@ -150,6 +154,14 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           onSaveQuick={(fields) => { updateQuick.mutate({ id: editing.id, fields }); setEditing(null); }}
           onRemove={() => { removeEntry.mutate({ id: editing.id }); setEditing(null); }}
           onRefile={(sectionId) => { refile.mutate({ id: editing.id, sectionId }); setEditing(null); }}
+        />
+      ) : null}
+      {removingRecipe ? (
+        <ConfirmSheet
+          title={`Remove ${removingRecipe.name}?`}
+          body={`This takes all ${removingRecipe.entries.length} of its ingredients off this day.`}
+          onCancel={() => setRemovingRecipe(null)}
+          onConfirm={() => { removeRecipe.mutate({ recipeLogId: removingRecipe.id }); setRemovingRecipe(null); }}
         />
       ) : null}
       {scan.scanTarget ? <ScannerSheet onClose={scan.cancelScan} onDetected={scan.handleDetected} /> : null}

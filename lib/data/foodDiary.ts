@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getDailyLog, getOrCreateDailyLog } from './dailyLogs';
 import { canBrowseDate, canEditFoodDay } from '@/lib/dayPatch';
 import { rowsToCopy } from '@/lib/diaryCopy';
+import { relinkRecipeCopies } from '@/lib/utils/diaryLines';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { dayFieldsFromDiary } from '@/lib/utils/foodTotals';
 import type { FoodDiaryEntryRow } from './types';
@@ -101,6 +102,15 @@ export async function removeFoodDiaryEntry(id: string, dailyLogId: string): Prom
   return syncFoodDiaryToLog(dailyLogId);
 }
 
+// Removes a logged recipe: every row of that one logging (D23c). Rows of the same recipe logged another time are a different line and
+// stay. RLS keeps it to the member's own diary.
+export async function removeRecipeFromDiary(recipeLogId: string, dailyLogId: string): Promise<FoodDiaryEntryRow[]> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('food_diary_entries').delete().eq('daily_log_id', dailyLogId).eq('recipe_log_id', recipeLogId);
+  if (error) raise(error);
+  return syncFoodDiaryToLog(dailyLogId);
+}
+
 // Re-files an entry into a different (or no) section -- covers legacy pre-migration rows
 // (meal_section_id starts null) and simple corrections.
 export async function updateFoodDiaryEntrySection(entryId: string, mealSectionId: string | null): Promise<void> {
@@ -178,7 +188,8 @@ export async function copyDiaryBetweenDates(
     .eq('daily_log_id', toLog.id);
   if (existingError) raise(existingError);
 
-  const fresh = rowsToCopy(source, existing ?? [], toSectionId);
+  // A recipe on the day lands as a recipe line of its own (a new id), still one line (D23c).
+  const fresh = relinkRecipeCopies(rowsToCopy(source, existing ?? [], toSectionId), () => crypto.randomUUID());
   if (fresh.length > 0) {
     const { error: insertError } = await supabase.from('food_diary_entries').insert(
       fresh.map((entry) => ({
@@ -191,6 +202,9 @@ export async function copyDiaryBetweenDates(
         quick_add_protein: entry.quick_add_protein,
         quick_add_carbs: entry.quick_add_carbs,
         quick_add_fat: entry.quick_add_fat,
+        recipe_log_id: entry.recipe_log_id ?? null,
+        recipe_name: entry.recipe_name ?? null,
+        recipe_servings: entry.recipe_servings ?? null,
       }))
     );
     if (insertError) raise(insertError);

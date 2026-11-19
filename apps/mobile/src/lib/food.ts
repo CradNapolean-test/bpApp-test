@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import type { FoodDiaryEntryRow, FoodRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
 import { lookupBarcode } from '@ballistic/shared/openFoodFacts';
 import { barcodeVariants } from '@ballistic/shared/utils/barcode';
+import { recipeLogFields, relinkRecipeCopies } from '@ballistic/shared/utils/diaryLines';
 import { SEARCH_LIMIT } from '@ballistic/shared/utils/foodResults';
 import type { OwnUnitRow, ServingOption } from '@ballistic/shared/utils/foodUnits';
 import type { QuickAddFields } from '@ballistic/shared/utils/quickAdd';
@@ -18,10 +19,12 @@ import {
   WRITE_DIARY_QUICK_UPDATE,
   WRITE_DIARY_REFILE,
   WRITE_DIARY_REMOVE,
+  WRITE_DIARY_REMOVE_RECIPE,
   type DiaryAddVars,
   type DiaryPortionsVars,
   type DiaryQuickUpdateVars,
   type DiaryRefileVars,
+  type DiaryRemoveRecipeVars,
   type DiaryRemoveVars,
   type DiaryRowInput,
 } from '@/lib/queuedWrites';
@@ -152,6 +155,16 @@ type AddItem = { food: FoodRow | null; fields: Partial<DiaryRowInput> };
 const foodItem = (i: FoodItem): AddItem => ({ food: i.food, fields: { food_id: i.food.id, portions: i.portions, meal_section_id: i.sectionId } });
 const oneFood = (i: FoodItem): AddItem[] => [foodItem(i)];
 const manyFoods = ({ items }: { items: FoodItem[] }): AddItem[] => items.map(foodItem);
+// A recipe's ingredients, already scaled: every row carries the same recipe_log_id (made here, once per logging), name and servings, so the
+// diary shows them as one line (D23c). The id is part of the input so the cache and the queued write agree on it.
+type RecipeInput = { items: FoodItem[]; recipeLogId: string; name: string; servings: number };
+const recipeFoods = ({ items, recipeLogId, name, servings }: RecipeInput): AddItem[] => {
+  const link = recipeLogFields(recipeLogId, name, servings);
+  return items.map((i) => {
+    const item = foodItem(i);
+    return { ...item, fields: { ...item.fields, ...link } };
+  });
+};
 const quickItem = ({ fields, sectionId }: { fields: QuickAddFields; sectionId: string | null }): AddItem[] => [
   {
     food: null,
@@ -187,6 +200,22 @@ export const useAddFoods = (date: string) => useDiaryAdd<{ items: FoodItem[] }>(
 
 // Quick Add: a row with no food, for something with no database match (a restaurant meal, an estimate).
 export const useAddQuickAdd = (date: string) => useDiaryAdd<{ fields: QuickAddFields; sectionId: string | null }>(date, quickItem);
+
+// A saved recipe: its ingredients as rows, shown in the diary as one line that opens to them (D23c). Make the recipeLogId with newRecipeLogId().
+export const useAddRecipe = (date: string) => useDiaryAdd<RecipeInput>(date, recipeFoods);
+export const newRecipeLogId = () => randomUUID();
+
+// Takes a logged recipe off the day: every row of that one logging.
+export function useRemoveRecipe(date: string) {
+  const userId = useUserId();
+  const updateDiary = useDiaryCacheUpdate(date);
+  const toVars = useCallback((input: { recipeLogId: string }): DiaryRemoveRecipeVars => ({ userId, date, recipeLogId: input.recipeLogId }), [userId, date]);
+  const apply = useCallback(
+    (input: { recipeLogId: string }) => updateDiary((old) => ({ ...old, entries: old.entries.filter((e) => e.recipe_log_id !== input.recipeLogId) })),
+    [updateDiary],
+  );
+  return useQueuedWrite({ key: WRITE_DIARY_REMOVE_RECIPE, toVars, apply });
+}
 
 export function useRemoveEntry(date: string) {
   const userId = useUserId();
@@ -251,10 +280,12 @@ export function useCopyFromDate(date: string) {
       const source = ((data as unknown as { food_diary_entries: FoodDiaryEntryRow[] } | null)?.food_diary_entries) ?? [];
       if (!source.length) return 0;
       const toLogId = qc.getQueryData<DiaryData>(diaryKey(userId, date))?.dailyLogId ?? (await getOrCreateLogId(userId, date));
-      const copies = source.map((e) => ({
+      // A recipe on the day lands as a recipe line of its own (a new id), still one line (D23c).
+      const copies = relinkRecipeCopies(source, randomUUID).map((e) => ({
         daily_log_id: toLogId, food_id: e.food_id, portions: e.portions, meal_section_id: e.meal_section_id,
         quick_add_name: e.quick_add_name, quick_add_calories: e.quick_add_calories, quick_add_protein: e.quick_add_protein,
         quick_add_carbs: e.quick_add_carbs, quick_add_fat: e.quick_add_fat,
+        recipe_log_id: e.recipe_log_id ?? null, recipe_name: e.recipe_name ?? null, recipe_servings: e.recipe_servings ?? null,
       }));
       const { error: insertError } = await supabase.from('food_diary_entries').insert(copies);
       if (insertError) throw insertError;
