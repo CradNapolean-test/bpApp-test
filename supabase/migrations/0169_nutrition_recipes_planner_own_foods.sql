@@ -1,7 +1,7 @@
 -- Nutrition decisions of 11 Nov 2026 (decision batch 7). Each change has its own before/after below:
 --   1. D23c (NU17): a recipe logs as one diary line that opens to its ingredients.
 --   2. NU12: the Meal Planner uses the member's own diary sections, not six fixed meals.
---   3. NU18: members save their own foods (name, serving and macros), private to them and their own coach, found in search.
+--   3. NU18: members save their own foods (name, serving and macros), private to them and their gym's coaches, found in search.
 -- (D23a "one result per brand" and D23b "tap a food, then choose the amount" are screen changes only: nothing here.)
 --
 -- Apply this BEFORE the web app (and phone app) of this batch is deployed: the new screens write the new columns, and a write naming a
@@ -31,7 +31,10 @@
 --    member. Changes:
 --    - foods.owner_id (new; deleting the member deletes their own foods) and source 'own' allowed; a check ties the two together.
 --    - Read rule "authenticated users read foods": was every signed-in user reads every food; now the same for every shared food (no
---      owner), and an own food only by its owner and their own coach (owns_client). Nobody else can read it, even by its id.
+--      owner), and an own food only by its owner, their own coach (owns_client) and the other coaches at their gym (is_same_gym_as_client,
+--      read-only: the reach 0053 gives those coaches to the member's diary, recipes and plan, so a food logged there shows with its name
+--      and figures, and the day adds up, for them too; the privacy policy lists saved foods among what they can read). No other member,
+--      no coach at another gym and not the gym owner (0131) can read it, even by its id.
 --    - New insert rule "members save their own foods": only as their own, no barcode, brand or everyday place, a name of 1-100
 --      characters, and figures in range (per gram, or per serving when saved without a weight). The scanned-food insert rule is unchanged.
 --    - Nobody can change an own food's figures afterwards (no update rule for them), so what was logged stays as it was. The member
@@ -69,8 +72,8 @@
 -- Expected after: search_foods adc01f202d961b1744964e8e19305a70 false, set_food_servings fb26ff97e115758f4a6e0eb1132bd20b true (this
 -- file's bodies).
 --   (the PRE-FLIGHT's pg_policies query again)
--- Expected after: the same four, "authenticated users read foods" now with qual ((owner_id IS NULL) OR owns_client(owner_id)), and
--- "members save their own foods" INSERT.
+-- Expected after: the same four, "authenticated users read foods" now with qual ((owner_id IS NULL) OR owns_client(owner_id) OR
+-- is_same_gym_as_client(owner_id)), and "members save their own foods" INSERT.
 --   select has_function_privilege('authenticated', 'public.remove_own_food(uuid)', 'execute') as members,
 --          has_function_privilege('anon', 'public.remove_own_food(uuid)', 'execute') as anyone;
 -- Expected: true, false.
@@ -89,9 +92,11 @@
 -- to my diary" puts each item in the same meal of today's diary.
 -- Write checks for 3. (test accounts): member A saves "Cafe wrap" (Add food > My foods), finds it by searching "wrap" and logs it; member
 -- B (another coach) searching "wrap" does not get it and cannot read it by its id (select from foods where id = ...: no row); A's coach
--- sees it in A's diary and does not get it in their own search; A inserting a food with source 'own' and owner_id B, or with source
--- 'seed', is refused; A updating its protein (update foods set protein = ... where id = ...) changes nothing; remove_own_food(id) as B
--- returns false, as A returns true and the food leaves A's search while A's diary still shows the logged line.
+-- sees it in A's diary and does not get it in their own search; another coach at A's gym opening A's page sees the logged line with its
+-- name and calories (not "Unknown food 0 kcal") and does not get it in their own search; a coach at another gym cannot read it by its
+-- id; A inserting a food with source 'own' and owner_id B, or with source 'seed', is refused; A updating its protein (update foods set
+-- protein = ... where id = ...) changes nothing; remove_own_food(id) as B returns false, as A returns true and the food leaves A's
+-- search while A's diary still shows the logged line.
 --
 -- REVERSE: 1. alter table public.food_diary_entries drop constraint food_diary_entries_recipe_line; drop index
 --   idx_food_diary_entries_recipe_log_id; then drop the three columns (the rows stay, as separate lines).
@@ -125,7 +130,7 @@ begin
     end if;
   end loop;
 
-  -- An own food must be readable by its owner and their coach only: no other read rule on foods may let anyone else see it.
+  -- An own food must be readable by its owner and their gym's coaches only: no other read rule on foods may let anyone else see it.
   select string_agg(policyname, ', ') into v_other_reads
   from pg_policies
   where schemaname = 'public' and tablename = 'foods' and cmd in ('SELECT', 'ALL') and policyname <> 'authenticated users read foods';
@@ -212,12 +217,14 @@ alter table public.foods add constraint foods_own_food_owner check ((source = 'o
 
 create index if not exists foods_owner_id_idx on public.foods (owner_id) where owner_id is not null;
 
--- Reading: the shared foods as before (every signed-in user), and an own food only by its owner and their own coach.
+-- Reading: the shared foods as before (every signed-in user), and an own food only by its owner, their own coach and, read-only, the
+-- other coaches at their gym, who can already read the diary, recipes and plan it is in (0053). is_same_gym_as_client is false for a
+-- member (they have no gym of their own as a coach) and for the gym owner (0131).
 drop policy if exists "authenticated users read foods" on public.foods;
 create policy "authenticated users read foods"
   on public.foods for select
   to authenticated
-  using (owner_id is null or public.owns_client(owner_id));
+  using (owner_id is null or public.owns_client(owner_id) or public.is_same_gym_as_client(owner_id));
 
 -- Saving one: only as their own, with no barcode, brand or everyday place, and figures in range (per gram as every other food, or per
 -- serving for a food saved without a weight). Nobody can edit an own food's figures afterwards, so what was logged stays what it was.

@@ -111,7 +111,7 @@ export interface FoodRow {
   // Where the food came from: 'seed', 'cofid' (UK tables), 'off' (import), 'scan' (a member's barcode scan) or 'own' (a member's own
   // food, NU18).
   source?: string;
-  // The member a food of their own belongs to (readable by them and their own coach only, migration 0169); null for every shared food.
+  // The member a food of their own belongs to (readable by them and their gym's coaches only, migration 0169); null for every shared food.
   owner_id?: string | null;
   // The maker, for a product (Open Food Facts import or a scan): "Tesco". Null for generic foods.
   brand?: string | null;

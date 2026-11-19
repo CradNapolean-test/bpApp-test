@@ -354,7 +354,7 @@ export function useOwnFoodUnits() {
   return { units: query.data ?? [], save, remove };
 }
 
-// A member's own foods (NU18): saved once with the figures for one serving, private to them and their own coach (RLS, migration 0169),
+// A member's own foods (NU18): saved once with the figures for one serving, private to them and their gym's coaches (RLS, migration 0169),
 // and found in search like any other food. Saving needs a signal (it is not queued): the form says so when it fails.
 export function useOwnFoods() {
   const userId = useUserId();

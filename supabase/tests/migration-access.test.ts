@@ -76,8 +76,9 @@ describe('row-level security rules after every migration', () => {
   });
 });
 
-// NU18 (0169): a member's own food is a row in foods that only they and their own coach can read, and only they can save as theirs.
-describe("a member's own foods are private to them and their own coach (NU18, 0169)", () => {
+// NU18 (0169): a member's own food is a row in foods that only they and their gym's coaches can read (their own coach, and read-only the
+// other coaches at their gym, as for the diary it is logged in: 0053), and only they can save as theirs.
+describe("a member's own foods are private to them and their gym's coaches (NU18, 0169)", () => {
   const migrationsDir = path.resolve(__dirname, '../migrations');
   const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
   const read = (f: string) => fs.readFileSync(path.join(migrationsDir, f), 'utf8').replace(/--.*$/gm, '');
@@ -92,8 +93,20 @@ describe("a member's own foods are private to them and their own coach (NU18, 01
     return found.replace(/\s+/g, ' ');
   };
 
-  it('the read rule lets every signed-in user read the shared foods, and an own food only its owner and their coach', () => {
-    expect(lastPolicy('authenticated users read foods')).toMatch(/using \(owner_id is null or public\.owns_client\(owner_id\)\)/);
+  it("the read rule lets every signed-in user read the shared foods, and an own food only its owner and their gym's coaches", () => {
+    expect(lastPolicy('authenticated users read foods')).toMatch(
+      /using \(owner_id is null or public\.owns_client\(owner_id\) or public\.is_same_gym_as_client\(owner_id\)\);$/
+    );
+  });
+
+  it("a coach at the member's gym reads the own food the same way as the diary rows that point at it (0053), and the gym owner does not", () => {
+    const sql = files.map(read).join('\n');
+    expect(sql).toMatch(/create policy "same-gym coach reads food_diary_entries"[^;]*is_same_gym_as_client\(daily_logs\.client_id\)/);
+    // the owner of the gym is not "a coach at the same gym" (0131): only a coach's own gym counts
+    const latest = files.filter((f) => /create or replace function public\.is_same_gym_as_client\(/.test(read(f))).at(-1) as string;
+    expect(latest).toBe('0131_owner_and_admin_functions.sql');
+    const body = read(latest).slice(read(latest).indexOf('create or replace function public.is_same_gym_as_client('));
+    expect(body.slice(0, body.indexOf('$$;'))).toMatch(/select public\.my_gym_id\(\) is not null and public\.my_gym_id\(\) = public\.client_gym_id\(target_client_id\);/);
   });
 
   it('a member can only save an own food as their own, with no barcode or brand', () => {

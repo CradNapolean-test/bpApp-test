@@ -343,7 +343,7 @@ function FoodAmountStep({
 }
 
 // "A food of your own" (NU18): name, what one serving is (and its weight, if known), and the protein, carbs and fat in it. Saved private to
-// the member and their own coach, then straight on to how much to add.
+// the member and their gym's coaches, then straight on to how much to add.
 function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; onSave: (row: OwnFoodRow) => Promise<string | null>; onCancel: () => void }) {
   const [text, setText] = useState<OwnFoodText>({ ...EMPTY_OWN_FOOD, name: initialName });
   const [error, setError] = useState<string | null>(null);
@@ -377,7 +377,7 @@ function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; o
         <p className="text-[15px] font-bold text-black dark:text-zinc-50">A food of your own</p>
         <p className="text-xs text-zinc-500">
           For something you have often that is not in the list, like a café wrap. Save it once with the figures for one serving. Only you and
-          your coach can see it.
+          the coaches at your gym can see it.
         </p>
       </div>
       <label className={labelCls}>

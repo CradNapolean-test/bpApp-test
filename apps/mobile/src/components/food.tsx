@@ -434,7 +434,7 @@ function FoodAmountStep({ food, initialQty, onAdd, onBack, isFavorite, onToggleF
 }
 
 // "A food of your own" (NU18): name, what one serving is (and its weight, if known), and the protein, carbs and fat in it. Saved private to
-// the member and their own coach, then straight on to how much to add. Same fields and checks as the web (packages/shared/src/utils/ownFoods.ts).
+// the member and their gym's coaches, then straight on to how much to add. Same fields and checks as the web (packages/shared/src/utils/ownFoods.ts).
 function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; onSave: (row: OwnFoodRow) => Promise<string | null>; onCancel: () => void }) {
   const t = useTheme();
   const [text, setText] = useState<OwnFoodText>({ ...EMPTY_OWN_FOOD, name: initialName });
@@ -462,7 +462,7 @@ function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; o
       </Pressable>
       <AppText variant="heading">A food of your own</AppText>
       <AppText variant="small" color="muted">
-        For something you have often that is not in the list, like a café wrap. Save it once with the figures for one serving. Only you and your coach can see it.
+        For something you have often that is not in the list, like a café wrap. Save it once with the figures for one serving. Only you and the coaches at your gym can see it.
       </AppText>
       <TextField label="Name" value={text.name} onChangeText={set('name')} maxLength={OWN_FOOD_NAME_MAX} placeholder="Café chicken wrap" />
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>

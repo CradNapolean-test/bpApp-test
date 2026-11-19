@@ -1,7 +1,7 @@
 import { dayCalories } from '../calculations';
 
 // A member's own food (NU18): the same café wrap was a fresh Quick Add every day. Now a member saves it once (name, serving, and the
-// protein, carbs and fat of one serving) and finds it in search, private to them and their own coach (migration 0169). It is stored like
+// protein, carbs and fat of one serving) and finds it in search, private to them and their gym's coaches (migration 0169). It is stored like
 // every other food: per gram when the serving's weight is known (with that serving as the food's own, shown first), else per serving
 // ("1 wrap"). The database checks the same limits. Twin of lib/utils/ownFoods.ts (the web): keep the two the same.
 
