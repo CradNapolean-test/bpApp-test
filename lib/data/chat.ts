@@ -187,6 +187,15 @@ export async function markChatUnread(clientId: string): Promise<void> {
   if (error) raise(error);
 }
 
+// The coach's unread total as the header and sidebar Messages show it (coach_unread_total, migration 0141), read again after the coach
+// reads a conversation (CoachUnreadContext). Fails rather than answering 0, so a badge keeps the figure it has.
+export async function getMyUnreadTotal(): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('coach_unread_total');
+  if (error) raise(error);
+  return Number(data ?? 0);
+}
+
 // "No reply needed" (MS10): the conversation leaves Needs reply until the member writes again, and is marked read. `seenAt` is the
 // newest message the coach saw in their list: the mark goes up to that message only, so one that arrived since still needs a reply.
 // `false` takes the mark off. Only the member's own coach can do either (set_chat_no_reply, migration 0160).

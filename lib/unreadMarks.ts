@@ -31,6 +31,16 @@ export function withUnreadTotal(marks: UnreadMarks, value: number): UnreadMarks 
   return { ...marks, seq, total: { value, at: seq } };
 }
 
+// The change number at which server-drawn figures (an object from the page's server render) first came on screen, kept in `seen`. A page
+// brought back by the browser's or phone's Back is drawn from Next's history cache with the very same objects, so it keeps the number it
+// first had and a conversation read in between still counts as read; a fresh server render brings new objects and starts from now.
+export function firstSeenAt(seen: WeakMap<object, number>, drawn: object, seq: number): number {
+  const at = seen.get(drawn);
+  if (at !== undefined) return at;
+  seen.set(drawn, seq);
+  return seq;
+}
+
 // Whether the conversation was read here after figures drawn at change `since`.
 export function readSince(marks: UnreadMarks, clientId: string, since: number): boolean {
   return (marks.readAt[clientId] ?? 0) > since;

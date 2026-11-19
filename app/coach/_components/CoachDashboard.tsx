@@ -250,7 +250,8 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
     return () => clearInterval(tick);
   }, []);
   const { scope, isAdmin, coaches, stats } = data;
-  const readSinceLoad = useReadSinceDrawn(loaded);
+  // The figures on screen: a scope seen earlier in this visit, shown while its fresh figures load, keeps the time it was drawn.
+  const readSinceLoad = useReadSinceDrawn(data);
   const own = (mineFlag: boolean) => scope === 'mine' || mineFlag;
 
   // ---- To do ----

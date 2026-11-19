@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { NO_UNREAD_MARKS, liveUnreadTotal, readSince, withThreadRead, withThreadUnread, withUnreadTotal } from './unreadMarks';
+import { NO_UNREAD_MARKS, firstSeenAt, liveUnreadTotal, readSince, withThreadRead, withThreadUnread, withUnreadTotal } from './unreadMarks';
+
+describe('figures brought back by Back', () => {
+  it('keep the change number they were first drawn at, so a conversation read on the next page still counts as read', () => {
+    const seen = new WeakMap<object, number>();
+    const dashboard = { unreadThreads: [{ clientId: 'jo' }] };
+    expect(firstSeenAt(seen, dashboard, 0)).toBe(0); // the dashboard is drawn
+    const read = withThreadRead(NO_UNREAD_MARKS, 'jo'); // Jo's chat is read on her page (change 1)
+    // Back: the same object from the history cache, on a newly mounted dashboard.
+    const since = firstSeenAt(seen, dashboard, read.seq);
+    expect(since).toBe(0);
+    expect(readSince(read, 'jo', since)).toBe(true);
+    // A fresh server render is a new object: its figures already have the read in them.
+    const fresh = { unreadThreads: [] };
+    expect(firstSeenAt(seen, fresh, read.seq)).toBe(read.seq);
+    expect(readSince(read, 'jo', firstSeenAt(seen, fresh, 5))).toBe(false);
+  });
+});
 
 describe('unread marks', () => {
   it('a conversation read after the figures were drawn counts as read; one read before them does not', () => {

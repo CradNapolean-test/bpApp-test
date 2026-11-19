@@ -7,6 +7,7 @@ import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Avatar } from '@/app/_components/Avatar';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { GroupsManager } from './GroupsManager';
+import { useReadSinceDrawn } from './CoachUnreadContext';
 import { useSlidingThumb } from '@/app/_components/motion/useSlidingThumb';
 import { useFlipList } from '@/app/_components/motion/useFlipList';
 import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
@@ -15,6 +16,8 @@ import { LIST_STEP, remainingAfter, showMore, visibleCount } from '@/lib/paging'
 import { QUIET_DAYS, SLIPPING_DAYS, hasReason, type FollowUp, type FollowUpKind } from '@/lib/followUp';
 import type { ClientHealthBucket, ClientHealthStatus, CoachClientRow, GymClientRow } from '@/lib/data/coach';
 import type { ClientGroupWithMembers } from '@/lib/data/types';
+
+const NO_UNREAD: Record<string, number> = {};
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits';
 type Scope = 'mine' | 'gym';
@@ -56,7 +59,7 @@ export function ClientTable({
   statuses,
   groups,
   holdIds = [],
-  unreadByClient = {},
+  unreadByClient: drawnUnread = NO_UNREAD,
   initialPlan = '',
   initialScope = 'mine',
   initialQuick = 'all',
@@ -93,6 +96,9 @@ export function ClientTable({
   const [managingGroups, setManagingGroups] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>(initialQuick);
   const [legend, setLegend] = useState(false);
+  // A conversation read since the counts were drawn (in the Messages drawer, or on the member's page before coming Back) shows none.
+  const readSinceDrawn = useReadSinceDrawn(drawnUnread);
+  const unreadOf = (clientId: string) => (readSinceDrawn(clientId) ? 0 : (drawnUnread[clientId] ?? 0));
   // Motion (GSAP): the My members / Whole gym highlight slides; the rows settle in when the list first shows and when the scope changes;
   // and when a filter or the sort changes, the rows that stay glide to their new places (Flip), so the coach sees what moved.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -391,7 +397,7 @@ const scopeBtnCls = (active: boolean) =>
       <ul className="divide-y divide-black/[.07] overflow-hidden rounded-[20px] border border-black/[.08] bg-card md:hidden dark:divide-white/10 dark:border-white/10">
         {shownRows.map(({ client, health }) => {
           const status = statusFor(client.id, health);
-          const unread = unreadByClient[client.id] ?? 0;
+          const unread = unreadOf(client.id);
           const last = health?.lastActiveDate
             ? health.daysSinceActive === 0
               ? 'Active today'
@@ -490,9 +496,9 @@ const scopeBtnCls = (active: boolean) =>
                         {onHold.has(client.id) && (
                           <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-sky-600 dark:text-sky-400">HOLD</span>
                         )}
-                        {(unreadByClient[client.id] ?? 0) > 0 && (
+                        {unreadOf(client.id) > 0 && (
                           <Link href={`/coach/clients/${client.id}?open=messages`} aria-label="Unread messages" className="inline-flex items-center gap-1 text-xs font-bold text-accent">
-                            <MessageSquare className="h-3 w-3" /> {unreadByClient[client.id]}
+                            <MessageSquare className="h-3 w-3" /> {unreadOf(client.id)}
                           </Link>
                         )}
                       </div>
