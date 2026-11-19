@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
+import type { CheckinReviewRow } from '@/lib/checkinReviews';
 
 // checkin_reminders (migration 0166): the coach has dealt with a member who did not answer 3 check-in reminders; ref is the day they stopped.
 export type ReviewKind = 'week' | 'diary_day' | 'form' | 'challenge_week3' | 'challenge_final' | 'checkin_reminders';
@@ -21,6 +22,16 @@ export async function unmarkReviewed(kind: ReviewKind, clientId: string, ref: st
   const supabase = await createClient();
   const { error } = await supabase.from('coach_reviews').delete().eq('kind', kind).eq('client_id', clientId).eq('ref', ref);
   return error ? fail(error, 'Could not undo that') : ok();
+}
+
+// The signed-in member's own reviewed weeks and forms, with their coach's first name (D7). Read through my_checkin_reviews() (migration
+// 0170), which returns nothing else from coach_reviews. Empty when it cannot be read (before 0170 is applied, say): the screens then just
+// show no "Reviewed" line.
+export async function getMyCheckinReviews(): Promise<CheckinReviewRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('my_checkin_reviews');
+  if (error || !Array.isArray(data)) return [];
+  return data as CheckinReviewRow[];
 }
 
 // Weeks (Mondays) of this member's check-ins the coach has already reviewed.

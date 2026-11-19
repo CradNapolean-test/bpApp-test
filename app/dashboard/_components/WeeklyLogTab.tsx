@@ -21,7 +21,8 @@ import { AccountabilityTracker } from './AccountabilityTracker';
 import { enabledTrackers, toDisabledMetricSet, weekStats } from '@/lib/checkinMetrics';
 import type { CheckinMetric } from '@/lib/checkinMetrics';
 import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
-import { getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
+import { getMyCheckinReviews, getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
+import { reviewedByLine, reviewsByRef, type ReviewMark } from '@/lib/checkinReviews';
 import { sendMessage } from '@/lib/data/chat';
 import { checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
 import { isQueuedCheckin, nextUnreviewedCheckin, type QueuedCheckin } from '@/lib/checkinQueue';
@@ -730,6 +731,22 @@ export function WeeklyLogTab(
     getReviewedWeeks(rest.clientId).then((weeks) => setReviewed(new Set(weeks)));
   }, [rest.isCoachView, rest.clientId]);
 
+  // The member sees which of their weeks their coach has reviewed, and who by (D7). No push: it is there when they next look.
+  const [memberReviews, setMemberReviews] = useState<Map<string, ReviewMark> | null>(null);
+  useEffect(() => {
+    if (rest.isCoachView) return;
+    let live = true;
+    getMyCheckinReviews()
+      .then((rows) => {
+        if (live) setMemberReviews(reviewsByRef(rows, 'week'));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [rest.isCoachView]);
+  const memberReview = memberReviews?.get(weekStart) ?? null;
+
   async function toggleReviewed() {
     setBusy(true);
     const done = reviewed.has(weekStart);
@@ -786,6 +803,10 @@ export function WeeklyLogTab(
             Undo
           </button>
         </div>
+      )}
+
+      {!rest.isCoachView && memberReview && (
+        <p className="rounded-full bg-success/15 px-4 py-2 text-center text-sm font-bold text-success">{reviewedByLine(memberReview)}</p>
       )}
 
       {logs === 'loading' ? (

@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { CompletedFormCard, FormToFillCard, FormsEmpty } from '@/components/forms';
 import { CheckinTabs } from '@/components/pagetabs';
 import { AppText, Button, Screen, ScrollScreen, SectionLabel } from '@/components/ui';
+import { useCheckinReviews } from '@/lib/checkinReviews';
 import { useFormAssignments } from '@/lib/forms';
 import { spacing, useTheme } from '@/theme';
 
@@ -10,6 +11,7 @@ import { spacing, useTheme } from '@/theme';
 export default function Forms() {
   const t = useTheme();
   const q = useFormAssignments();
+  const reviews = useCheckinReviews('form');
 
   if (q.isPending) {
     return (
@@ -41,7 +43,7 @@ export default function Forms() {
       {completed.length > 0 ? (
         <View>
           <SectionLabel>Completed</SectionLabel>
-          <View style={{ gap: spacing.sm }}>{completed.map((a) => <CompletedFormCard key={a.id} assignment={a} />)}</View>
+          <View style={{ gap: spacing.sm }}>{completed.map((a) => <CompletedFormCard key={a.id} assignment={a} review={reviews.get(a.id) ?? null} />)}</View>
         </View>
       ) : null}
       {q.data.length === 0 ? <FormsEmpty text="Your coach hasn't sent you a form to fill out." /> : null}

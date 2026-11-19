@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { CALORIE_FLOOR, cycleDayFor, weeklyTarget } from '@ballistic/shared/calculations';
+import { reviewedByLine } from '@ballistic/shared/utils/checkinReviews';
 import { isMetricOn } from '@ballistic/shared/utils/checkinMetrics';
 import { canBrowseWeek, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { dayCaloriesOf } from '@ballistic/shared/utils/dailyLog';
@@ -18,6 +19,7 @@ import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
 import { useDayContext } from '@/lib/day';
 import { useDisabledMetrics, useScreenAccess } from '@/lib/screens';
 import { useAttendedSessions, usePeriodStarts, useSaveDay, useWeekLogs } from '@/lib/weeklyLog';
+import { useCheckinReviews } from '@/lib/checkinReviews';
 import { spacing, useTheme } from '@/theme';
 
 const dayMonth = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -68,6 +70,8 @@ function CheckinContent() {
   const female = normalizeGender(profile?.gender) === 'Female';
   const periodQ = usePeriodStarts(female);
   const save = useSaveDay();
+  // "Reviewed by Brad ✓" once the coach has looked at this week (D7).
+  const weekReview = useCheckinReviews('week').get(weekStart) ?? null;
 
   const logs = weekQ.data ?? [];
   const row = logs.find((l) => l.log_date === focused) ?? blankDailyLog('', focused);
@@ -130,6 +134,11 @@ function CheckinContent() {
         onBack={() => setPickedWeek(shiftWeek(weekStart, -1))}
         onForward={() => setPickedWeek(shiftWeek(weekStart, 1))}
       />
+      {weekReview ? (
+        <View style={{ alignSelf: 'stretch', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(16,185,129,0.15)' }}>
+          <AppText variant="small" color="success" style={{ fontWeight: '700', textAlign: 'center' }}>{reviewedByLine(weekReview)}</AppText>
+        </View>
+      ) : null}
 
       <Card style={{ flexDirection: 'row', gap: spacing.md }}>
         {isPhoto ? (

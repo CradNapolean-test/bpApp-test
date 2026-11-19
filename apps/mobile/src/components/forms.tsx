@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import type { FormAssignmentWithDetails, FormQuestionRow } from '@ballistic/shared/data/types';
 import { answerText, cleanNumberInput, estimatedMinutes, MAX_LONG_ANSWER, MAX_SHORT_ANSWER, type FormAnswer } from '@ballistic/shared/utils/forms';
+import { reviewedByLine, type ReviewMark } from '@ballistic/shared/utils/checkinReviews';
 
 import { Pressable } from '@/components/press';
 import { ChoiceRow, Input } from '@/components/fields';
@@ -36,8 +37,8 @@ export function FormToFillCard({ assignment }: { assignment: FormAssignmentWithD
   );
 }
 
-// A finished form: one line until it is tapped, then the answers given.
-export function CompletedFormCard({ assignment }: { assignment: FormAssignmentWithDetails }) {
+// A finished form: one line until it is tapped, then the answers given. Once the coach has reviewed it, "Reviewed by Brad ✓" (D7).
+export function CompletedFormCard({ assignment, review = null }: { assignment: FormAssignmentWithDetails; review?: ReviewMark | null }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   return (
@@ -49,6 +50,7 @@ export function CompletedFormCard({ assignment }: { assignment: FormAssignmentWi
         <View style={{ flex: 1 }}>
           <AppText style={{ fontWeight: '700' }} numberOfLines={1}>{assignment.template.name}</AppText>
           <AppText variant="small" color="muted">Completed {assignment.completed_at ? fmtDate(assignment.completed_at) : ''}</AppText>
+          {review ? <AppText variant="small" color="success" style={{ fontWeight: '700' }}>{reviewedByLine(review)}</AppText> : null}
         </View>
         <Icon name={open ? 'chevronUp' : 'chevronDown'} size={18} color={t.muted} />
       </Pressable>

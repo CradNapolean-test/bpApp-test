@@ -8,7 +8,8 @@ import { useAction } from '@/app/_components/useAction';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
-import { markReviewed } from '@/lib/data/coachReviews';
+import { getMyCheckinReviews, markReviewed } from '@/lib/data/coachReviews';
+import { reviewedByLine, reviewsByRef, type ReviewMark } from '@/lib/checkinReviews';
 import { answerProblems, parseNumberAnswer } from '@/lib/formAnswers';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow } from '@/lib/data/types';
 
@@ -246,10 +247,13 @@ function CompletedForm({
   assignment,
   reviewClientId = null,
   isCoachView = false,
+  memberReview = null,
 }: {
   assignment: FormAssignmentWithDetails;
   reviewClientId?: string | null;
   isCoachView?: boolean;
+  // The member's own view: their coach's "Reviewed" mark on this form, if there is one (D7).
+  memberReview?: ReviewMark | null;
 }) {
   const [open, setOpen] = useState(false);
   const [reviewed, setReviewed] = useState(false);
@@ -272,6 +276,7 @@ function CompletedForm({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] font-bold text-black dark:text-zinc-50">{assignment.template.name}</span>
           <span className="block text-[13px] text-zinc-500 dark:text-zinc-400">Sent {assignment.completed_at ? fmtDate(assignment.completed_at) : ''}</span>
+          {memberReview && <span className="block text-[13px] font-bold text-success">{reviewedByLine(memberReview)}</span>}
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -334,6 +339,20 @@ export function FormsTab({
   const [openFormId, setOpenFormId] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   useStaggerIn(list, '[data-form]', assignments.length);
+  // Which of the member's sent forms their coach has reviewed, and who by (D7).
+  const [memberReviews, setMemberReviews] = useState<Map<string, ReviewMark> | null>(null);
+  useEffect(() => {
+    if (isCoachView) return;
+    let live = true;
+    getMyCheckinReviews()
+      .then((rows) => {
+        if (live) setMemberReviews(reviewsByRef(rows, 'form'));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [isCoachView]);
 
   async function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -424,7 +443,13 @@ export function FormsTab({
         <div className="space-y-2.5">
           <h3 className="px-1 text-base font-extrabold text-black dark:text-zinc-50">{isCoachView ? 'Completed' : 'Done'}</h3>
           {completed.map((a) => (
-            <CompletedForm key={a.id} assignment={a} isCoachView={isCoachView} reviewClientId={isCoachView && !readOnly ? clientId : null} />
+            <CompletedForm
+              key={a.id}
+              assignment={a}
+              isCoachView={isCoachView}
+              reviewClientId={isCoachView && !readOnly ? clientId : null}
+              memberReview={isCoachView ? null : memberReviews?.get(a.id) ?? null}
+            />
           ))}
         </div>
       )}
