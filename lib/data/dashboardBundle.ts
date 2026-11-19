@@ -27,14 +27,14 @@ import { getBodyScans } from './bodyScans';
 import { getNutritionFeedback } from './nutritionFeedback';
 import { getNotifications } from './notifications';
 import { getFormTemplates, getClientFormAssignments } from './forms';
-import { getExerciseLibrary, getExerciseLibraryByIds } from './exerciseLibrary';
+import { getExerciseLibraryByIds } from './exerciseLibrary';
 import { getProgramTemplates } from './programTemplates';
 import { getRecipesWithIngredients } from './recipes';
 import { getDisabledMetrics, getDisabledScreens } from './clientScreenSettings';
 import { toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE, startOfWeek, weekDates as weekDatesFor, addDays } from '@/lib/utils/dates';
 import { bookingWindowStart, workoutWindowStart } from '@/lib/trainingWindow';
 import { libraryIdsOf } from '@/lib/programLibrary';
-import type { CreditPackRow, ExerciseLibraryRow, MembershipPackageRow, ProgramTemplateRow, FormTemplateRow } from './types';
+import type { CreditPackRow, MembershipPackageRow, ProgramTemplateRow, FormTemplateRow } from './types';
 
 const HISTORY_DAYS = 84;
 
@@ -43,8 +43,9 @@ const HISTORY_DAYS = 84;
 // today's blank row as a side effect of just looking at the page.
 //
 // It also decides what the page carries (R13/M1: the member's page was 347 KB, 300 KB of it data). A member's own page leaves out what only
-// a coach uses (plans, credit packs, form and programme templates, the whole exercise library: only the entries their programmes use come
-// with it). Both pages leave out what a screen can fetch when it opens: the timetable, the Education courses and assignments, the credit
+// a coach uses (plans, credit packs, form and programme templates). Neither page carries the whole exercise library, only the entries the
+// member's programmes use; the coach's builder reads the rest when a day is opened (DB21: it was about 227 KB of the coach's member page,
+// which took 3-8 s). Both pages leave out what a screen can fetch when it opens: the timetable, the Education courses and assignments, the credit
 // history and the habits, which nothing on the page showed.
 export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
   // Profile is fetched first (not inside the big Promise.all below) specifically so its
@@ -85,7 +86,6 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     notifications,
     formTemplates,
     formAssignments,
-    fullExerciseLibrary,
     programTemplates,
     recipes,
     unreadMessageCount,
@@ -125,7 +125,6 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getNotifications(clientId),
     canWrite ? Promise.resolve([] as FormTemplateRow[]) : getFormTemplates(gymId),
     getClientFormAssignments(clientId),
-    canWrite ? Promise.resolve([] as ExerciseLibraryRow[]) : getExerciseLibrary(),
     canWrite ? Promise.resolve([] as ProgramTemplateRow[]) : getProgramTemplates(gymId),
     getRecipesWithIngredients(clientId),
     getClientUnreadCount(clientId),
@@ -144,8 +143,9 @@ export async function loadDashboardBundle(clientId: string, canWrite: boolean) {
     getFirstLoggedDate(clientId),
   ]);
 
-  // A member's page carries the library entries their programmes use; the coach's view of a member carries the whole library.
-  const exerciseLibrary = canWrite ? await getExerciseLibraryByIds(libraryIdsOf(programs)) : fullExerciseLibrary;
+  // Both pages carry the library entries the member's programmes use (their videos, pictures and muscle groups); the coach's builder reads
+  // the whole library when it opens (DB21).
+  const exerciseLibrary = await getExerciseLibraryByIds(libraryIdsOf(programs));
 
   const foodDiaryEntries = todayLog ? await getFoodDiaryEntries(todayLog.id) : [];
   const foodPhotos = todayLog ? await getFoodPhotos(todayLog.id) : [];

@@ -456,12 +456,14 @@ function ExerciseSheet<T extends EditableExercise>({
 
 function ExercisePickerSheet({
   library,
+  libraryLoading = false,
   title,
   onPick,
   onCustom,
   onClose,
 }: {
   library: ExerciseLibraryRow[];
+  libraryLoading?: boolean;
   title: string;
   onPick: (entry: ExerciseLibraryRow) => Promise<unknown>;
   onCustom: (name: string) => Promise<unknown>;
@@ -508,7 +510,8 @@ function ExercisePickerSheet({
         </div>
 
         <div className="max-h-[48vh] divide-y divide-black/5 overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {q && !exact && (
+          {libraryLoading && <p className="p-3 text-sm text-zinc-500">Loading the exercise library…</p>}
+          {q && !exact && !libraryLoading && (
             <button
               type="button"
               disabled={busy}
@@ -550,7 +553,7 @@ function ExercisePickerSheet({
               </button>
             );
           })}
-          {shown.length === 0 && !(q && !exact) && <p className="p-3 text-sm text-zinc-500">No exercises match.</p>}
+          {shown.length === 0 && !libraryLoading && !(q && !exact) && <p className="p-3 text-sm text-zinc-500">No exercises match.</p>}
           {matches.length > shown.length && (
             <p className="p-3 text-xs text-zinc-500">Showing the first {shown.length} of {matches.length}. Search to narrow down.</p>
           )}
@@ -957,6 +960,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   renderBlockFooter,
   blockBadge,
   memberChoices,
+  libraryLoading = false,
 }: {
   exercises: T[];
   library: ExerciseLibraryRow[];
@@ -986,6 +990,9 @@ export function ExerciseEditor<T extends EditableExercise>({
     // Called straight away on a tap; the caller updates the screen immediately and saves in the background.
     onChoose: (slot: 1 | 2, blockKey: string) => void;
   };
+  // True while the whole library is still on its way (the coach's view of a member reads it when a day is opened, DB21): the picker
+  // says so, and holds back "Add as its own exercise" until a name can be checked against the whole library (D26).
+  libraryLoading?: boolean;
 }) {
   const { run: runReorder } = useAction();
   const { run: runMutate } = useAction();
@@ -1567,6 +1574,7 @@ export function ExerciseEditor<T extends EditableExercise>({
       {sheet?.kind === 'pick' && (
         <ExercisePickerSheet
           library={library}
+          libraryLoading={libraryLoading}
           title={`Add to ${keyLabel(sheet.key)}`}
           onPick={(entry) => addFromLibrary(sheet.key, entry)}
           onCustom={(name) => addCustom(sheet.key, name)}

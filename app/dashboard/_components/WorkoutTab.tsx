@@ -8,7 +8,7 @@ import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
 import { useOnDemand } from '@/app/_components/useOnDemand';
-import { getExerciseOptions } from '@/lib/data/exerciseLibrary';
+import { getExerciseLibrary, getExerciseOptions } from '@/lib/data/exerciseLibrary';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
@@ -916,6 +916,25 @@ export function WorkoutTab({
     setLiveLogs((prev) => applySetChange(prev, change));
   }
   const [openDayId, setOpenDayId] = useState<string | null>(null);
+  // The page carries only the library entries this member's programmes use (DB21: the whole library was about 227 KB of every coach's
+  // member page, which took 3-8 s). The coach's builder needs the whole library for its exercise picker, so it is read the first time
+  // the coach opens a day, and kept while they stay on the page.
+  const [wholeLibrary, setWholeLibrary] = useState<ExerciseLibraryRow[] | null>(null);
+  const builderOpen = isCoachView && openDayId != null;
+  useEffect(() => {
+    if (!builderOpen || wholeLibrary) return;
+    let live = true;
+    getExerciseLibrary()
+      .then((rows) => {
+        if (live) setWholeLibrary(rows);
+      })
+      // The builder keeps working with the programme's own exercises; opening a day again tries once more.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [builderOpen, wholeLibrary]);
+  const library = wholeLibrary ?? exerciseLibrary;
   const [editingSet, setEditingSet] = useState<{ log: WorkoutLogRow; index: number } | null>(null);
   const toast = useToast();
   const lenis = useLenis();
@@ -1161,7 +1180,7 @@ export function WorkoutTab({
   };
 
   const libraryVideo = (libraryId: string | null) =>
-    (libraryId ? exerciseLibrary.find((l) => l.id === libraryId)?.video_url : null) ?? null;
+    (libraryId ? library.find((l) => l.id === libraryId)?.video_url : null) ?? null;
 
   const openDay = openDayId
     ? programs.flatMap((p) => p.workout_program_days).find((d) => d.id === openDayId)
@@ -1266,7 +1285,7 @@ export function WorkoutTab({
 
             <ProgramDayList
               ownerId={program.id}
-              library={exerciseLibrary}
+              library={library}
               showPhaseLabel={!isCoachView}
               animateWeeks
               columns={isCoachView}
@@ -1473,7 +1492,8 @@ export function WorkoutTab({
 
           <ExerciseEditor
             exercises={openDay.workout_exercises}
-            library={exerciseLibrary}
+            library={library}
+            libraryLoading={isCoachView && wholeLibrary == null}
             canEdit={isCoachView}
             // A coach opening a day sees the plan as a builder; what the member actually lifted goes under each exercise (CR2).
             renderBuilderExtra={
