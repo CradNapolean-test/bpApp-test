@@ -20,11 +20,12 @@ import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
 import { enabledTrackers, toDisabledMetricSet, weekStats } from '@/lib/checkinMetrics';
 import type { CheckinMetric } from '@/lib/checkinMetrics';
-import type { ClientProfileRow, DailyLogRow } from '@/lib/data/types';
+import type { ChatMessageRow, ClientProfileRow, DailyLogRow } from '@/lib/data/types';
 import { getMyCheckinReviews, getReviewedWeeks, markReviewed, unmarkReviewed } from '@/lib/data/coachReviews';
 import { reviewedByLine, reviewsByRef, type ReviewMark } from '@/lib/checkinReviews';
-import { sendMessage } from '@/lib/data/chat';
-import { checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
+import { getMemberMessagesBetween, sendMessage } from '@/lib/data/chat';
+import { checkinChatLine, checkinChatWindow, checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
+import { formatInZone } from '@/lib/broadcastSend';
 import { isQueuedCheckin, nextUnreviewedCheckin, type QueuedCheckin } from '@/lib/checkinQueue';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 
@@ -830,6 +831,15 @@ export function WeeklyLogTab(
             }}
           />
           {rest.isCoachView && canReview && (
+            <CheckinMessages
+              key={`messages-${weekStart}`}
+              clientId={rest.clientId}
+              weekStart={weekStart}
+              timezone={rest.profile?.timezone ?? DEFAULT_TIMEZONE}
+              memberName={rest.profile?.name ?? null}
+            />
+          )}
+          {rest.isCoachView && canReview && (
             <CheckinReply
               key={`reply-${weekStart}`}
               clientId={rest.clientId}
@@ -885,6 +895,71 @@ function NextCheckin({ clientId, weekStart }: { clientId: string; weekStart: str
     );
   }
   return null;
+}
+
+// What the member said in chat since their Sunday check-in, just above the reply box, so the coach reads it before replying instead of
+// opening the chat first (CW1). Read when the week opens, with the coach's own sign-in (only the member's own coach can read the chat).
+// Nothing is shown for a week whose Sunday has not begun yet.
+function CheckinMessages({
+  clientId,
+  weekStart,
+  timezone,
+  memberName,
+}: {
+  clientId: string;
+  weekStart: string;
+  timezone: string;
+  memberName: string | null;
+}) {
+  type Loaded = { sunday: string; messages: ChatMessageRow[]; more: boolean };
+  const [state, setState] = useState<Loaded | 'loading' | 'error' | 'none'>('loading');
+  useEffect(() => {
+    // Worked out here, not while rendering: it depends on the time now.
+    const span = checkinChatWindow(weekStart, timezone);
+    let live = true;
+    (span
+      ? getMemberMessagesBetween(clientId, span.fromIso, span.toIso).then((r): Loaded => ({ sunday: span.sunday, ...r }))
+      : Promise.resolve('none' as const)
+    )
+      .then((next) => {
+        if (live) setState(next);
+      })
+      .catch(() => {
+        if (live) setState('error');
+      });
+    return () => {
+      live = false;
+    };
+  }, [clientId, weekStart, timezone]);
+
+  if (state === 'none') return null;
+  const firstName = memberName?.trim().split(/\s+/)[0] || 'them';
+  const sundayLabel =
+    typeof state === 'object'
+      ? new Date(state.sunday + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
+      : 'Sunday';
+  return (
+    <div className={cardCls}>
+      <h4 className="text-sm font-bold text-black dark:text-zinc-50">Their messages since {sundayLabel}</h4>
+      {state === 'loading' ? (
+        <p className="mt-1 text-sm text-zinc-400">Loading their messages…</p>
+      ) : state === 'error' ? (
+        <p className="mt-1 text-sm text-zinc-400">We could not load their messages. They are in the chat.</p>
+      ) : state.messages.length === 0 ? (
+        <p className="mt-1 text-sm text-zinc-400">No messages from {firstName} since their check-in.</p>
+      ) : (
+        <ul className="mt-2 space-y-2.5">
+          {state.messages.map((m) => (
+            <li key={m.id}>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">{formatInZone(m.created_at, timezone)}</p>
+              <p className="whitespace-pre-wrap break-words text-sm text-black dark:text-zinc-50">{checkinChatLine(m)}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {typeof state === 'object' && state.more && <p className="mt-2 text-xs text-zinc-500">More in the chat.</p>}
+    </div>
+  );
 }
 
 // The end of a coach's read-through of a week: write back to the member (it goes into their chat, headed with the week) and mark the

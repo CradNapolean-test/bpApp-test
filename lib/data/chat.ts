@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { after } from 'next/server';
 import { notifyAfterMessage } from '@/lib/chatNotify';
 import { CHAT_CATCH_UP_MAX, CHAT_PAGE, pageOfNewestFirst } from '@/lib/chatMessages';
+import { CHECKIN_CHAT_MAX } from '@/lib/checkinReply';
 import type { ChatMessage, ChatMessageRow, ChatOverviewRow } from './types';
 
 // Who is pinged after a message is stored is decided in lib/chatNotify.ts: a coach's message pings the member's phone, and a member's message
@@ -99,6 +100,30 @@ export async function getMessagesSince(clientId: string, afterIso: string): Prom
     .limit(CHAT_CATCH_UP_MAX);
   if (error) raise(error);
   return pageOfNewestFirst((data ?? []) as ChatMessageRow[], CHAT_CATCH_UP_MAX).rows.map(toMessage);
+}
+
+// The member's own messages in [fromIso, toIso), oldest first, at most CHECKIN_CHAT_MAX (`more` says there were others): what they said
+// since their Sunday check-in, on the coach's view of that week (CW1). Read with the coach's own sign-in, so the chat's access rules apply
+// (only the member's own coach reads it, 0153).
+export async function getMemberMessagesBetween(
+  clientId: string,
+  fromIso: string,
+  toIso: string
+): Promise<{ messages: ChatMessageRow[]; more: boolean }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('id, client_id, sender_id, text, audio_path, audio_duration_seconds, image_path, created_at')
+    .eq('client_id', clientId)
+    .eq('sender_id', clientId)
+    .gte('created_at', fromIso)
+    .lt('created_at', toIso)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(CHECKIN_CHAT_MAX + 1);
+  if (error) raise(error);
+  const rows = (data ?? []) as ChatMessageRow[];
+  return { messages: rows.slice(0, CHECKIN_CHAT_MAX), more: rows.length > CHECKIN_CHAT_MAX };
 }
 
 // Returns the saved row so the sender's screen can show the message at once instead of waiting for the live connection to deliver it
