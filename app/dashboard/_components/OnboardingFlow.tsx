@@ -60,9 +60,22 @@ function WeightField({
   const [text, setText] = useState(kg != null ? String(kg) : '');
   const [st, setSt] = useState(() => stLbFields(kg).st);
   const [lb, setLb] = useState(() => stLbFields(kg).lb);
+  // Why the stones and pounds typed are not a weight ("Pounds should be a number from 0 to 13.9."), shown under the boxes.
+  const [error, setError] = useState<string | null>(null);
+  // The unit is switched here or on the other weight box: the new unit's boxes show the weight already held, not what was last typed in
+  // them (or nothing).
+  const [boxesUnit, setBoxesUnit] = useState(unit);
+  if (boxesUnit !== unit) {
+    setBoxesUnit(unit);
+    setText(kg != null ? String(kg) : '');
+    setSt(stLbFields(kg).st);
+    setLb(stLbFields(kg).lb);
+    setError(null);
+  }
 
   function pushStLb(nextSt: string, nextLb: string) {
     const parsed = parseStLb(nextSt, nextLb);
+    setError(parsed.ok ? null : parsed.error);
     onChange(parsed.ok && parsed.kg != null && parsed.kg > 0 ? parsed.kg : null);
   }
 
@@ -125,7 +138,11 @@ function WeightField({
           />
         </div>
       )}
-      {kg != null && unit === 'st_lb' && <p className="text-xs text-zinc-500">{kg.toFixed(1)} kg</p>}
+      {unit === 'st_lb' && error ? (
+        <p className="text-xs font-semibold text-danger">{error}</p>
+      ) : (
+        kg != null && unit === 'st_lb' && <p className="text-xs text-zinc-500">{kg.toFixed(1)} kg</p>
+      )}
     </div>
   );
 }

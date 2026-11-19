@@ -28,9 +28,22 @@ function WeightField({ label, kg, onChange, unit, onUnit }: { label: string; kg:
   const [text, setText] = useState(kg != null ? String(kg) : '');
   const [st, setSt] = useState(() => stLbFields(kg).st);
   const [lb, setLb] = useState(() => stLbFields(kg).lb);
+  // Why the stones and pounds typed are not a weight ("Pounds should be a number from 0 to 13.9."), shown under the boxes.
+  const [error, setError] = useState<string | null>(null);
+  // The unit is switched here or on the other weight box: the new unit's boxes show the weight already held, not what was last typed in
+  // them (or nothing).
+  const [boxesUnit, setBoxesUnit] = useState(unit);
+  if (boxesUnit !== unit) {
+    setBoxesUnit(unit);
+    setText(kg != null ? String(kg) : '');
+    setSt(stLbFields(kg).st);
+    setLb(stLbFields(kg).lb);
+    setError(null);
+  }
 
   const pushStLb = (nextSt: string, nextLb: string) => {
     const parsed = parseStLb(nextSt, nextLb);
+    setError(parsed.ok ? null : parsed.error);
     onChange(parsed.ok && parsed.kg != null && parsed.kg > 0 ? parsed.kg : null);
   };
   return (
@@ -58,7 +71,11 @@ function WeightField({ label, kg, onChange, unit, onUnit }: { label: string; kg:
           <Input accessibilityLabel={`${label}, pounds`} style={{ flex: 1 }} keyboardType="decimal-pad" placeholder="lb" value={lb} maxLength={5} onChangeText={(v) => { setLb(v); pushStLb(st, v); }} />
         </View>
       )}
-      {kg != null && unit === 'st_lb' ? <AppText variant="small" color="muted">{kg.toFixed(1)} kg</AppText> : null}
+      {unit === 'st_lb' && error ? (
+        <AppText variant="small" color="danger" style={{ fontWeight: '600' }}>{error}</AppText>
+      ) : kg != null && unit === 'st_lb' ? (
+        <AppText variant="small" color="muted">{kg.toFixed(1)} kg</AppText>
+      ) : null}
     </View>
   );
 }
