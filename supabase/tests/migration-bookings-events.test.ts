@@ -163,13 +163,18 @@ describe('D13b in SQL: a booking\'s credit counts in the week the session runs',
     expect(body).toMatch(/weekly_left := greatest\(v_allowance - v_taken, 0\)/);
     // No weekly credits outside the plan's days.
     expect(body).toMatch(/p_date < v_started or \(v_end is not null and p_date > v_end\)/);
+    // With no open plan, a weekly balance left is spendable at once, as the screens show it.
+    expect(body).toMatch(/if v_started is null then\s+weekly_now := true;\s+weekly_left := greatest\(v_membership, 0\);\s+return next;/);
   });
 
   it('charge_booking charges a started week now, holds a later week, and bonus credits always now', () => {
     const body = code('charge_booking');
     expect(body).toMatch(/pg_advisory_xact_lock\(hashtext\('credits:'/);
     expect(body).toMatch(/if v_weekly > 0 and v_weekly_now then/);
-    expect(body).toMatch(/update bookings set weekly_credits = v_weekly where id = p_booking/);
+    // Weekly credits are recorded only with an open plan; without one the booking was paid when booked.
+    expect(body).toMatch(
+      /update bookings set weekly_credits = case\s+when exists \(select 1 from client_memberships cm where cm\.client_id = v_client and cm\.ended_at is null\) then v_weekly\s+else 0\s+end\s+where id = p_booking/
+    );
     expect(body).toMatch(/if v_bonus > greatest\(v_bonus_left, 0\) then\s+return false;/);
   });
 
@@ -406,6 +411,25 @@ describe('D13b week boundaries (model of the 0171 SQL)', () => {
     m.plan = { startedAt: '2026-11-28', scheduledEnd: null, lastResetWeek: null, perWeek: 2 };
     m.startWeek('2026-11-28');
     expect(m.balance('membership')).toBe(2);
+  });
+
+  it('with no plan, a weekly credit left by a refund is spendable at once, and a plan started later still gets its full allowance', () => {
+    const m = new ModelMember();
+    m.ledger.push({ delta: 1, bucket: 'membership', bookingId: null, reason: 'Refunded' }); // a stray +1 with no open plan
+    expect(m.sources('2026-11-23')).toMatchObject({ weeklyLeft: 1, weeklyNow: true });
+    const b = m.book('2026-11-23');
+    expect(b.weeklyCredits).toBe(0);
+    expect(m.ledger.filter((r) => r.bookingId === b.id).map((r) => [r.delta, r.bucket])).toEqual([[-1, 'membership']]);
+    expect(m.balance('membership')).toBe(0);
+    expect(() => m.book('2026-11-24')).toThrow('Not enough credits');
+    // A plan starts this week; its top-up and the next Saturday's reset give the full allowance, and the session is not charged again.
+    m.plan = { startedAt: '2026-11-19', scheduledEnd: null, lastResetWeek: null, perWeek: 2 };
+    m.startWeek(THIS_WEEK);
+    expect(m.balance('membership')).toBe(2);
+    expect(m.sources('2026-11-25').weeklyLeft).toBe(2);
+    m.startWeek(NEXT_WEEK);
+    expect(m.balance('membership')).toBe(2);
+    expect(m.ledger.filter((r) => r.bookingId === b.id)).toHaveLength(1);
   });
 
   it('no weekly credits after a plan\'s planned last day or before it starts, and booking after the last day is refused', () => {

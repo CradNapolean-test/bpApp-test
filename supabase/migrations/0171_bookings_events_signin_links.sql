@@ -35,7 +35,9 @@
 --        the top-up when a plan starts or changes), the balance is set to the allowance less what that week's sessions already took, and
 --        each held booking is charged ("Booked <session>, <day date at time>"), so the ledger still has one charge row per booking.
 --      * Bonus credits pay what the weekly credits can't, and are charged at once whichever week the session is in.
---      * A day after the plan's planned last day, or before it starts, has no weekly credits; no plan, no weekly credits.
+--      * A day after the plan's planned last day, or before it starts, has no weekly credits. With no plan at all, a weekly balance still
+--        left (a refund made after a plan ended can leave one) is spent at once, as every screen shows it, and the booking is recorded
+--        as paid when booked (weekly_credits 0), so a plan started later neither counts it in its week nor charges it again.
 --    Cancelling: a held booking cancelled in time had nothing charged, so nothing comes back. refund_booking_credits (the one refund
 --      path: a member's cancel, a coach's removal with a refund, a cancelled or retired session, a plan's end) now also drops the hold
 --      (weekly_credits back to 0), so that week's credits are free again. A held booking cancelled after its deadline, or removed by a
@@ -310,11 +312,12 @@ revoke execute on function public.clear_membership_credits(uuid) from public, an
 alter table public.bookings add column if not exists weekly_credits integer not null default 0 check (weekly_credits >= 0);
 
 -- What a member can pay for a session on p_date with, read-only:
---   weekly_left    weekly credits left for that session's credit week: 0 without a plan running on that day (none, not started yet, or
---                  past its planned last day). When the member's credit week has already started (the reset has run for that week:
---                  last_reset_week), it is their weekly balance. For a later week it is the plan's allowance less what that week's
---                  sessions already take: each booking's held weekly_credits (booked, or cancelled after its deadline), or what was
---                  charged for it if anything was.
+--   weekly_left    weekly credits left for that session's credit week: 0 on a day the open plan does not cover (not started yet, or
+--                  past its planned last day). With no open plan at all, the weekly balance left (a refund made after a plan ended can
+--                  leave one), charged at once, as every screen shows it. When the member's credit week has already started (the
+--                  reset has run for that week: last_reset_week), it is their weekly balance. For a later week it is the plan's
+--                  allowance less what that week's sessions already take: each booking's held weekly_credits (booked, or cancelled
+--                  after its deadline), or what was charged for it if anything was.
 --   weekly_now     true when those weekly credits are charged straight away, false when they are held until that week's reset.
 --   bonus_left     bonus credits (any week).
 --   plan_last_day  the plan's planned last day, if it has one.
@@ -352,7 +355,20 @@ begin
   weekly_left := 0;
   weekly_now := false;
 
-  if v_started is null or p_date is null or p_date < v_started or (v_end is not null and p_date > v_end) then
+  if p_date is null then
+    return next;
+    return;
+  end if;
+
+  -- No open plan: a weekly balance still left is spent at once (charge_booking records it as paid when booked, weekly_credits 0).
+  if v_started is null then
+    weekly_now := true;
+    weekly_left := greatest(v_membership, 0);
+    return next;
+    return;
+  end if;
+
+  if p_date < v_started or (v_end is not null and p_date > v_end) then
     return next;
     return;
   end if;
@@ -388,7 +404,9 @@ revoke execute on function public.session_credit_sources(uuid, date) from public
 -- Pays for a booking that has just been booked or moved off the waitlist: weekly credits of the session's week first, then bonus credits.
 -- Weekly credits of a week that has started are charged now; those of a later week are held (bookings.weekly_credits) and charged by
 -- that week's reset (start_credit_week). Bonus credits are always charged now. Answers false, and writes nothing, when the member cannot
--- pay. Locks the member's credits, as refunds and grants do, so two bookings at once cannot spend the same credit.
+-- pay. Locks the member's credits, as refunds and grants do, so two bookings at once cannot spend the same credit. With no open plan, a
+-- weekly balance left is charged at once and the booking records no weekly credits (paid when booked, as before 0171), so a plan started
+-- later neither counts that session in its week nor charges it again.
 create or replace function public.charge_booking(p_booking uuid, p_cost integer, p_reason text, p_by uuid)
 returns boolean
 language plpgsql
@@ -430,7 +448,11 @@ begin
     values (v_client, -v_bonus, p_reason, 'bonus', p_booking, p_by);
   end if;
 
-  update bookings set weekly_credits = v_weekly where id = p_booking;
+  update bookings set weekly_credits = case
+      when exists (select 1 from client_memberships cm where cm.client_id = v_client and cm.ended_at is null) then v_weekly
+      else 0
+    end
+  where id = p_booking;
   return true;
 end;
 $fn$;

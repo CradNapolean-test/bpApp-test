@@ -55,7 +55,9 @@ export class ModelMember {
     const bonusLeft = this.balance('bonus');
     const p = this.plan;
     const planLastDay = p?.scheduledEnd ?? null;
-    if (!p || date < p.startedAt || (p.scheduledEnd != null && date > p.scheduledEnd)) return { weeklyLeft: 0, weeklyNow: false, bonusLeft, planLastDay };
+    // No open plan: a weekly balance still left (a refund after a plan ended) is spent at once.
+    if (!p) return { weeklyLeft: Math.max(this.balance('membership'), 0), weeklyNow: true, bonusLeft, planLastDay };
+    if (date < p.startedAt || (p.scheduledEnd != null && date > p.scheduledEnd)) return { weeklyLeft: 0, weeklyNow: false, bonusLeft, planLastDay };
     const week = creditWeekStart(date);
     if (p.lastResetWeek != null && week <= p.lastResetWeek) {
       return { weeklyLeft: Math.max(this.balance('membership'), 0), weeklyNow: true, bonusLeft, planLastDay };
@@ -78,7 +80,8 @@ export class ModelMember {
     if (bonus > Math.max(s.bonusLeft, 0)) return false;
     if (weekly > 0 && s.weeklyNow) this.ledger.push({ delta: -weekly, bucket: 'membership', bookingId, reason: 'Booked' });
     if (bonus > 0) this.ledger.push({ delta: -bonus, bucket: 'bonus', bookingId, reason: 'Booked' });
-    b.weeklyCredits = weekly;
+    // With no open plan the booking is paid when booked (weekly_credits 0): a plan started later neither counts nor charges it.
+    b.weeklyCredits = this.plan ? weekly : 0;
     return true;
   }
 
