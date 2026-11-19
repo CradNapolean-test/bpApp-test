@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { searchFoods } from '@/lib/data/foods';
@@ -28,33 +28,77 @@ function kcalAndProtein(food: FoodRow, amount: number): string {
   return `${kcal} kcal · ${protein >= 10 ? Math.round(protein) : Math.round(protein * 10) / 10} g protein`;
 }
 
-// Shared by the search-results list and the Favorites/Recently Logged lists shown before a
-// query is typed -- same grams/units quantity picker either way, just a different source list.
-function FoodResultRow({
+// "per 100 g · 165 kcal · 31 g protein": what a food is per its own serving (the pack's) when it has one, else per 100 g, else per its unit.
+function perLine(food: FoodRow): string {
+  const stated = defaultUnit(unitsFor(food, []));
+  if (stated && !isSmallUnit(stated)) return `per ${unitText(stated)} · ${kcalAndProtein(food, stated.grams)}`;
+  return food.portion === '1 gram' ? `per 100 g · ${kcalAndProtein(food, 100)}` : `per ${food.portion} · ${kcalAndProtein(food, 1)}`;
+}
+
+// One result in a list (search, favourites, recently logged, usually with): the food's name with its calories and protein, nothing else,
+// so 5 or 6 fit on a phone screen (D23b, NU8: every result used to carry its whole amount picker, about 150px each). Tapping it opens the
+// amount step. `more` is the other rows for the same product (D23a), shown under it on request.
+function FoodResultItem({
   food,
-  qty,
-  onQtyChange,
+  onPick,
+  more,
+  nested = false,
+}: {
+  food: FoodRow;
+  onPick: (food: FoodRow) => void;
+  more?: { count: number; open: boolean; onToggle: () => void };
+  nested?: boolean;
+}) {
+  return (
+    <li className={nested ? 'pl-3' : undefined}>
+      <button
+        type="button"
+        onClick={() => onPick(food)}
+        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg py-2 text-left transition-colors hover:bg-black/[.03] dark:hover:bg-white/[.04]"
+      >
+        <span className="min-w-0">
+          {/* Two lines, like the phone: UK table names put what matters last ("Chicken, breast, grilled without skin, meat only"), so one
+              cut-off line hid whether a food was raw or cooked. */}
+          <span className="line-clamp-2 break-words text-sm font-medium text-black dark:text-zinc-50">{food.name}</span>
+          <span className="block text-xs text-zinc-500">{perLine(food)}</span>
+        </span>
+        <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-zinc-400" />
+      </button>
+      {more && (
+        <button type="button" aria-expanded={more.open} onClick={more.onToggle} className="mb-1.5 min-h-8 text-xs font-semibold text-accent hover:underline">
+          {more.open ? 'Hide the others' : moreLikeThis(more.count)}
+        </button>
+      )}
+    </li>
+  );
+}
+
+// The second step after tapping a food: how much (serving menu, own serving, quick amounts, the number), then Add. Back returns to the
+// list as it was.
+function FoodAmountStep({
+  food,
+  initialQty,
   onAdd,
+  onBack,
   isFavorite,
   onToggleFavorite,
   units = [],
   onSaveUnit,
   onDeleteUnit,
-  more,
 }: {
-  // The other rows for the same product (D23a): how many, whether they are showing, and the toggle.
-  more?: { count: number; open: boolean; onToggle: () => void };
   food: FoodRow;
-  qty: number;
-  onQtyChange: (value: number) => void;
+  initialQty: number;
   onAdd: (food: FoodRow, qty: number) => void;
+  onBack: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: (food: FoodRow, isFavorite: boolean) => void;
-  // Units for this food (built-in and the member's own), shown as buttons next to grams. What is added is always grams.
+  // Units for this food (built-in and the member's own), shown next to grams. What is added is always grams.
   units?: FoodUnit[];
   onSaveUnit?: (foodId: string, label: string, grams: number) => Promise<string | null>;
   onDeleteUnit?: (key: string) => void;
 }) {
+  const [qty, setQty] = useState(initialQty);
+  const onQtyChange = (value: number) => setQty(Math.max(0, value));
   // Most foods are stored per-1g (see docs/PROJECT_SPEC.md food data notes), so the quantity
   // field means grams and defaults to a plausible serving. A handful of foods without a known
   // gram weight (e.g. "1 Egg") keep their original per-unit values, so the field means a count
@@ -66,7 +110,7 @@ function FoodResultRow({
   // Starts on the food's own serving when the amount is exactly one of it (not for a usual-amount suggestion, which is its own weight).
   const [unitKey, setUnitKey] = useState<string | null>(() => {
     const stated = defaultUnit(units);
-    return stated && qty === stated.grams ? stated.key : null;
+    return stated && initialQty === stated.grams ? stated.key : null;
   });
   const [addingUnit, setAddingUnit] = useState(false);
   const [newLabel, setNewLabel] = useState('');
@@ -106,42 +150,35 @@ function FoodResultRow({
   const maxQty = isPerGram ? FOOD_LIMITS.grams : FOOD_LIMITS.portions;
   const qtyProblem = qty > 0 ? checkFoodNumber(qty, isPerGram ? 'grams' : 'portions') : null;
   const chip = (active: boolean) =>
-    `rounded-full border px-2 py-0.5 text-xs transition-colors ${
+    `min-h-8 rounded-full border px-2.5 py-1 text-xs transition-colors ${
       active
         ? 'border-accent bg-accent-soft text-accent'
         : 'border-black/10 text-zinc-500 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
     }`;
 
   return (
-    <li className="space-y-2 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5 text-sm">
-          {onToggleFavorite && (
-            <button
-              type="button"
-              onClick={() => onToggleFavorite(food, !isFavorite)}
-              aria-label={isFavorite ? 'Remove favorite' : 'Add favorite'}
-              className="shrink-0 text-zinc-400 hover:text-amber-500"
-            >
-              <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
-            </button>
-          )}
-          <div className="min-w-0">
-            {/* Two lines, like the phone: UK table names put what matters last ("Chicken, breast, grilled without skin, meat
-                only"), so one cut-off line hid whether a food was raw or cooked. */}
-            <p className="line-clamp-2 break-words font-medium text-black dark:text-zinc-50">{food.name}</p>
-            <p className="text-xs text-zinc-500">
-              {unit && !small
-                ? `per ${unitText(unit)} · ${kcalAndProtein(food, unit.grams)}`
-                : isPerGram
-                  ? `per 100 g · ${kcalAndProtein(food, 100)}`
-                  : `per ${food.portion} · ${kcalAndProtein(food, 1)}`}
-            </p>
-          </div>
+    <div className="space-y-3">
+      <button type="button" onClick={onBack} className="flex min-h-9 items-center gap-1 text-sm font-semibold text-accent">
+        <ChevronLeft aria-hidden className="h-4 w-4" /> Back to results
+      </button>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="break-words text-[15px] font-bold text-black dark:text-zinc-50">{food.name}</p>
+          <p className="text-xs text-zinc-500">
+            {unit && !small ? `per ${unitText(unit)} · ${kcalAndProtein(food, unit.grams)}` : perLine(food)}
+          </p>
         </div>
-        <Button variant="primary" size="sm" disabled={!(qty > 0) || qtyProblem != null} onClick={() => onAdd(food, qty)}>
-          Add
-        </Button>
+        {onToggleFavorite && (
+          <button
+            type="button"
+            onClick={() => onToggleFavorite(food, !isFavorite)}
+            aria-label={isFavorite ? 'Remove favorite' : 'Add favorite'}
+            aria-pressed={isFavorite}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:text-amber-500"
+          >
+            <Star className={`h-5 w-5 ${isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+          </button>
+        )}
       </div>
 
       {isPerGram && onSaveUnit && (
@@ -153,7 +190,7 @@ function FoodResultRow({
             id={`serving-${food.id}`}
             value={unitKey ?? ''}
             onChange={(e) => chooseUnit(units.find((u) => u.key === e.target.value) ?? null)}
-            className="max-w-full rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-sm dark:border-white/10"
+            className="max-w-full rounded-lg border border-black/[.16] bg-transparent px-2 py-1.5 text-sm dark:border-white/10"
           >
             <option value="">grams (g)</option>
             {units.map((u) => (
@@ -212,26 +249,35 @@ function FoodResultRow({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {presets.map((p) => (
-          <button
-            key={p}
-            onClick={() => {
-              setDraft(null);
-              setShown(p);
-            }}
-            className={chip(shown === p)}
-          >
-            {unit ? `${p} ${unit.label}` : isPerGram ? `${p}g` : `${p}×`}
-          </button>
-        ))}
-      </div>
+      {presets.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                setDraft(null);
+                setShown(p);
+              }}
+              className={chip(shown === p)}
+            >
+              {unit ? `${p} ${unit.label}` : isPerGram ? `${p}g` : `${p}×`}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5">
-        <Button variant="outline" size="sm" onClick={() => {
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
             setDraft(null);
             setShown(shown - step);
-          }} aria-label="Decrease quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
+          }}
+          aria-label="Decrease quantity"
+          className="!p-0 flex h-10 w-10 items-center justify-center"
+        >
           −
         </Button>
         <input
@@ -247,26 +293,31 @@ function FoodResultRow({
           }}
           onBlur={() => setDraft(null)}
           aria-label={unit ? unit.label : isPerGram ? 'Grams' : 'Quantity'}
-          className="w-16 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-center text-sm dark:border-white/10"
+          className="h-10 w-20 rounded-lg border border-black/[.16] bg-transparent px-2 text-center text-base dark:border-white/10"
         />
-        <Button variant="outline" size="sm" onClick={() => {
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
             setDraft(null);
             setShown(shown + step);
-          }} aria-label="Increase quantity" className="!p-0 flex h-8 w-8 items-center justify-center">
+          }}
+          aria-label="Increase quantity"
+          className="!p-0 flex h-10 w-10 items-center justify-center"
+        >
           +
         </Button>
         {isPerGram && <span className="text-xs text-zinc-500">{unit ? `× ${unit.label} = ${Math.round(qty)} g` : 'g'}</span>}
-        <span className="ml-1 text-xs text-zinc-500">
-          {Math.round(calories)} kcal · {Math.round(protein)}P / {Math.round(carbs)}C / {Math.round(fat)}F
-        </span>
       </div>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <span className="font-semibold text-black dark:text-zinc-50">{Math.round(calories)} kcal</span> · {Math.round(protein)}P / {Math.round(carbs)}C /{' '}
+        {Math.round(fat)}F
+      </p>
       {qtyProblem && <p className="text-xs font-semibold text-danger">{qtyProblem}</p>}
-      {more && (
-        <button type="button" aria-expanded={more.open} onClick={more.onToggle} className="text-xs font-semibold text-accent hover:underline">
-          {more.open ? 'Hide the others' : moreLikeThis(more.count)}
-        </button>
-      )}
-    </li>
+      <Button variant="primary" className="w-full" disabled={!(qty > 0) || qtyProblem != null} onClick={() => onAdd(food, qty)}>
+        Add
+      </Button>
+    </div>
   );
 }
 
@@ -370,7 +421,9 @@ export function FoodSearchPicker({
       else next.add(id);
       return next;
     });
-  const [grams, setGrams] = useState<Record<string, number>>({});
+  // The food tapped in a list, and the amount its step starts at (D23b). The list, query and results stay as they were for "Back".
+  const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
+  const pick = (food: FoodRow, qty = startingAmount(food)) => setPicked({ food, qty });
   const [servings, setServings] = useState<Record<string, number>>({});
   const [isPending, setIsPending] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -542,6 +595,35 @@ export function FoodSearchPicker({
     );
   }
 
+  // Tap a food, then choose the amount (D23b): the amount step replaces the list, and "Back to results" brings the list back as it was.
+  if (picked) {
+    return (
+      <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
+        <FoodAmountStep
+          key={picked.food.id}
+          food={picked.food}
+          initialQty={picked.qty}
+          onAdd={onAdd}
+          onBack={() => setPicked(null)}
+          isFavorite={favoriteIds?.has(picked.food.id) ?? false}
+          onToggleFavorite={onToggleFavorite}
+          {...unitProps(picked.food)}
+        />
+      </div>
+    );
+  }
+
+  const shortcutList = (title: string, foods: FoodRow[], qtyOf: (food: FoodRow) => number = startingAmount) => (
+    <div>
+      <p className="px-0.5 text-xs font-semibold text-zinc-500">{title}</p>
+      <ul className="divide-y divide-black/5 dark:divide-white/5">
+        {foods.map((food) => (
+          <FoodResultItem key={food.id} food={food} onPick={(f) => pick(f, qtyOf(f))} />
+        ))}
+      </ul>
+    </div>
+  );
+
   return (
     <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
       {modes.length > 1 && (
@@ -577,79 +659,25 @@ export function FoodSearchPicker({
       {isPending && <p className="mt-2 text-xs text-zinc-500">Searching…</p>}
 
       {query === '' && !isPending && results.length === 0 && ((goesWith && goesWith.length > 0) || (favorites && favorites.length > 0) || (recentlyLogged && recentlyLogged.length > 0)) ? (
-        <div className="mt-2 max-h-80 space-y-3 overflow-y-auto">
-          {goesWith && goesWith.length > 0 && (
-            <div>
-              <p className="px-0.5 text-xs font-semibold text-zinc-500">Goes with what&apos;s in this meal</p>
-              <ul className="divide-y divide-black/5 dark:divide-white/5">
-                {goesWith.map(({ food, portions }) => (
-                  <FoodResultRow
-                    key={food.id}
-                    food={food}
-                    qty={grams[food.id] ?? portions}
-                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
-                    onAdd={onAdd}
-                    isFavorite={favoriteIds?.has(food.id) ?? false}
-                    onToggleFavorite={onToggleFavorite}
-                    {...unitProps(food)}
-                  />
-                ))}
-              </ul>
-            </div>
+        <div className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto">
+          {goesWith && goesWith.length > 0 && shortcutList(
+            'Goes with what’s in this meal',
+            goesWith.map((g) => g.food),
+            (food) => goesWith.find((g) => g.food.id === food.id)?.portions ?? startingAmount(food)
           )}
-          {favorites && favorites.length > 0 && (
-            <div>
-              <p className="px-0.5 text-xs font-semibold text-zinc-500">Favorites</p>
-              <ul className="divide-y divide-black/5 dark:divide-white/5">
-                {favorites.map((food) => (
-                  <FoodResultRow
-                    key={food.id}
-                    food={food}
-                    qty={grams[food.id] ?? startingAmount(food)}
-                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
-                    onAdd={onAdd}
-                    isFavorite={favoriteIds?.has(food.id) ?? true}
-                    onToggleFavorite={onToggleFavorite}
-                    {...unitProps(food)}
-                  />
-                ))}
-              </ul>
-            </div>
-          )}
-          {recentlyLogged && recentlyLogged.length > 0 && (
-            <div>
-              <p className="px-0.5 text-xs font-semibold text-zinc-500">Recently logged</p>
-              <ul className="divide-y divide-black/5 dark:divide-white/5">
-                {recentlyLogged.map((food) => (
-                  <FoodResultRow
-                    key={food.id}
-                    food={food}
-                    qty={grams[food.id] ?? startingAmount(food)}
-                    onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
-                    onAdd={onAdd}
-                    isFavorite={favoriteIds?.has(food.id) ?? false}
-                    onToggleFavorite={onToggleFavorite}
-                    {...unitProps(food)}
-                  />
-                ))}
-              </ul>
-            </div>
-          )}
+          {favorites && favorites.length > 0 && shortcutList('Favorites', favorites)}
+          {recentlyLogged && recentlyLogged.length > 0 && shortcutList('Recently logged', recentlyLogged)}
         </div>
       ) : (
-        <ul className="mt-2 max-h-80 divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
+        <ul className="mt-2 max-h-[50vh] divide-y divide-black/5 overflow-y-auto dark:divide-white/5">
           {groups.map(({ food: shown, others }) => {
             const open = expanded.has(shown.id);
             return [shown, ...(open ? others : [])].map((food, i) => (
-              <FoodResultRow
+              <FoodResultItem
                 key={food.id}
                 food={food}
-                qty={grams[food.id] ?? startingAmount(food)}
-                onQtyChange={(v) => setGrams((g) => ({ ...g, [food.id]: Math.max(0, v) }))}
-                onAdd={onAdd}
-                isFavorite={favoriteIds?.has(food.id) ?? false}
-                onToggleFavorite={onToggleFavorite}
-                {...unitProps(food)}
+                onPick={(f) => pick(f)}
+                nested={i > 0}
                 more={i === 0 && others.length > 0 ? { count: others.length, open, onToggle: () => toggleGroup(shown.id) } : undefined}
               />
             ));

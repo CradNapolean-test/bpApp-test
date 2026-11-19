@@ -254,18 +254,50 @@ export function EditEntrySheet({ entry, sections = [], onSave, onSaveQuick, onRe
 // ml-sized units (under 5 g each) preset and step in bigger counts than a rasher or a slice.
 const isSmallUnit = (u: FoodUnit) => u.grams < 5;
 
-function FoodResultRow({ food, selected, qty, onQty, onSelect, onAdd, isFavorite, onToggleFavorite, units, onSaveUnit, onDeleteUnit }: {
-  food: FoodRow; selected: boolean; qty: number; onQty: (n: number) => void; onSelect: () => void; onAdd: () => void; isFavorite: boolean; onToggleFavorite: () => void;
+// "per 100 g · 165 kcal · 31 g protein": what a food is per its own serving (the pack's) when it has one, else per 100 g, else per its unit.
+function perLine(food: FoodRow): string {
+  const stated = defaultUnit(unitsFor(food, []));
+  if (stated && !isSmallUnit(stated)) return `per ${unitText(stated)} · ${kcalAndProtein(food, stated.grams)}`;
+  return quantityConfig(food).perGram ? `per 100 g · ${kcalAndProtein(food, 100)}` : `per ${food.portion} · ${kcalAndProtein(food, 1)}`;
+}
+
+// One result in a list: the name with its calories and protein, nothing else, so 5 or 6 fit on a screen (D23b, NU8). Tapping it opens
+// the amount step. `more` is the other rows for the same product (D23a), shown under it on request.
+function FoodResultItem({ food, onPress, more, nested = false }: { food: FoodRow; onPress: () => void; more?: { count: number; open: boolean; onToggle: () => void }; nested?: boolean }) {
+  const t = useTheme();
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: t.border, paddingLeft: nested ? spacing.md : 0 }}>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityHint="Choose how much" style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8, minHeight: 48 }}>
+        <View style={{ flex: 1 }}>
+          <AppText numberOfLines={2} style={{ fontWeight: '600' }}>{food.name}</AppText>
+          <AppText variant="small" color="muted">{perLine(food)}</AppText>
+        </View>
+        <Icon name="chevronRight" size={18} color={t.muted} />
+      </Pressable>
+      {more ? (
+        <Pressable onPress={more.onToggle} accessibilityRole="button" accessibilityState={{ expanded: more.open }} hitSlop={6} style={{ paddingBottom: 8 }}>
+          <AppText variant="small" color="accent" style={{ fontWeight: '700' }}>{more.open ? 'Hide the others' : moreLikeThis(more.count)}</AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+// The second step after tapping a food: how much (servings, own serving, quick amounts, the number), then Add. Back returns to the list.
+function FoodAmountStep({ food, initialQty, onAdd, onBack, isFavorite, onToggleFavorite, units, onSaveUnit, onDeleteUnit }: {
+  food: FoodRow; initialQty: number; onAdd: (qty: number) => void; onBack: () => void; isFavorite: boolean; onToggleFavorite: () => void;
   // Units for this food (built-in and the member's own) next to grams. What is added is always grams.
   units: FoodUnit[]; onSaveUnit: (foodId: string, label: string, grams: number) => Promise<string | null>; onDeleteUnit: (key: string) => void;
 }) {
   const t = useTheme();
   const cfg = quantityConfig(food);
+  const [qty, setQty] = useState(initialQty);
+  const onQty = (n: number) => setQty(Math.max(0, n));
   const [text, setText] = useState<string | null>(null);
   // Starts on the food's own serving when the amount is exactly one of it.
   const [unitKey, setUnitKey] = useState<string | null>(() => {
     const stated = defaultUnit(units);
-    return stated && qty === stated.grams ? stated.key : null;
+    return stated && initialQty === stated.grams ? stated.key : null;
   });
   const [adding, setAdding] = useState(false);
   const [newLabel, setNewLabel] = useState('');
@@ -299,53 +331,51 @@ function FoodResultRow({ food, selected, qty, onQty, onSelect, onAdd, isFavorite
   };
 
   return (
-    <View style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.border, gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <Pressable onPress={onToggleFavorite} accessibilityLabel={isFavorite ? 'Remove favorite' : 'Add favorite'} hitSlop={10}>
-          <Icon name="star" size={22} color={isFavorite ? t.warning : t.muted} fill={isFavorite ? t.warning : 'none'} />
-        </Pressable>
-        <Pressable onPress={onSelect} style={{ flex: 1 }} accessibilityRole="button">
-          <AppText numberOfLines={2} style={{ fontWeight: '600' }}>{food.name}</AppText>
-          <AppText variant="small" color="muted">
-            {unit && !small
-              ? `per ${unitText(unit)} · ${kcalAndProtein(food, unit.grams)}`
-              : cfg.perGram ? `per 100 g · ${kcalAndProtein(food, 100)}` : `per ${food.portion} · ${kcalAndProtein(food, 1)}`}
-          </AppText>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: spacing.sm }}>
+      <Pressable onPress={onBack} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6 }}>
+        <Icon name="chevronLeft" size={18} color={t.accent} />
+        <AppText color="accent" style={{ fontWeight: '700' }}>Back to results</AppText>
+      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <View style={{ flex: 1 }}>
+          <AppText variant="heading">{food.name}</AppText>
+          <AppText variant="small" color="muted">{unit && !small ? `per ${unitText(unit)} · ${kcalAndProtein(food, unit.grams)}` : perLine(food)}</AppText>
+        </View>
+        <Pressable onPress={onToggleFavorite} accessibilityRole="button" accessibilityLabel={isFavorite ? 'Remove favorite' : 'Add favorite'} accessibilityState={{ selected: isFavorite }} hitSlop={10} style={{ padding: 6 }}>
+          <Icon name="star" size={24} color={isFavorite ? t.warning : t.muted} fill={isFavorite ? t.warning : 'none'} />
         </Pressable>
       </View>
-      {selected ? (
-        <View style={{ gap: spacing.sm }}>
-          {cfg.perGram ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              <Chip label="grams" active={unit == null} onPress={() => chooseUnit(null)} />
-              {units.map((u) => <Chip key={u.key} label={unitText(u)} active={unitKey === u.key} onPress={() => chooseUnit(u)} />)}
-              <Chip label={adding ? 'Cancel' : '+ Own serving'} active={false} onPress={() => setAdding((v) => !v)} />
-            </View>
-          ) : null}
-          {adding ? (
-            <View style={{ gap: spacing.sm }}>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <View style={{ flex: 2 }}><TextField label="1 … (e.g. rasher)" value={newLabel} maxLength={MAX_UNIT_LABEL} onChangeText={(v) => { setNewLabel(v); setUnitError(null); }} /></View>
-                <View style={{ flex: 1 }}><TextField label="= grams" value={newGrams} keyboardType="decimal-pad" onChangeText={(v) => { setNewGrams(v); setUnitError(null); }} /></View>
-              </View>
-              {unitError ? <AppText color="danger" style={{ fontWeight: '600' }}>{unitError}</AppText> : null}
-              <SmallButton title="Save unit" onPress={saveNewUnit} />
-            </View>
-          ) : null}
-          {unit?.own ? <SmallButton title={`Remove "${unit.label}"`} tone="muted" onPress={() => { onDeleteUnit(unit.key); setUnitKey(null); }} /> : null}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {presets.map((p) => <Chip key={p} label={unit ? `${p} ${unit.label}` : cfg.perGram ? `${p}g` : `${p}×`} active={shown === p} onPress={() => { setText(null); setShown(p); }} />)}
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <SmallButton title="−" tone="muted" onPress={() => { setText(null); setShown(Math.max(0, shown - step)); }} />
-            <View style={{ width: 90 }}><TextField label={unit ? unit.label : cfg.perGram ? 'Grams' : 'Quantity'} value={text ?? String(shown)} keyboardType="decimal-pad" onChangeText={(v) => { setText(v); setShown(parseQuantity(v)); }} onBlur={() => setText(null)} /></View>
-            <SmallButton title="+" tone="muted" onPress={() => { setText(null); setShown(shown + step); }} />
-          </View>
-          <AppText variant="small" color={problem && qty > 0 ? 'danger' : 'muted'}>{problem && qty > 0 ? problem : `${unit ? `${Math.round(qty)} g · ` : ''}${Math.round(cal)} kcal · ${Math.round(food.protein * qty)}P / ${Math.round(food.carbs * qty)}C / ${Math.round(food.fat * qty)}F`}</AppText>
-          <Button title="Add" disabled={!!problem} onPress={onAdd} />
+      {cfg.perGram ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          <Chip label="grams" active={unit == null} onPress={() => chooseUnit(null)} />
+          {units.map((u) => <Chip key={u.key} label={unitText(u)} active={unitKey === u.key} onPress={() => chooseUnit(u)} />)}
+          <Chip label={adding ? 'Cancel' : '+ Own serving'} active={false} onPress={() => setAdding((v) => !v)} />
         </View>
       ) : null}
-    </View>
+      {adding ? (
+        <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flex: 2 }}><TextField label="1 … (e.g. rasher)" value={newLabel} maxLength={MAX_UNIT_LABEL} onChangeText={(v) => { setNewLabel(v); setUnitError(null); }} /></View>
+            <View style={{ flex: 1 }}><TextField label="= grams" value={newGrams} keyboardType="decimal-pad" onChangeText={(v) => { setNewGrams(v); setUnitError(null); }} /></View>
+          </View>
+          {unitError ? <AppText color="danger" style={{ fontWeight: '600' }}>{unitError}</AppText> : null}
+          <SmallButton title="Save unit" onPress={saveNewUnit} />
+        </View>
+      ) : null}
+      {unit?.own ? <SmallButton title={`Remove "${unit.label}"`} tone="muted" onPress={() => { onDeleteUnit(unit.key); setUnitKey(null); }} /> : null}
+      {presets.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {presets.map((p) => <Chip key={p} label={unit ? `${p} ${unit.label}` : cfg.perGram ? `${p}g` : `${p}×`} active={shown === p} onPress={() => { setText(null); setShown(p); }} />)}
+        </View>
+      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <SmallButton title="−" tone="muted" onPress={() => { setText(null); setShown(Math.max(0, shown - step)); }} />
+        <View style={{ width: 100 }}><TextField label={unit ? unit.label : cfg.perGram ? 'Grams' : 'Quantity'} value={text ?? String(shown)} keyboardType="decimal-pad" onChangeText={(v) => { setText(v); setShown(parseQuantity(v)); }} onBlur={() => setText(null)} /></View>
+        <SmallButton title="+" tone="muted" onPress={() => { setText(null); setShown(shown + step); }} />
+      </View>
+      <AppText variant="small" color={problem && qty > 0 ? 'danger' : 'muted'}>{problem && qty > 0 ? problem : `${unit ? `${Math.round(qty)} g · ` : ''}${Math.round(cal)} kcal · ${Math.round(food.protein * qty)}P / ${Math.round(food.carbs * qty)}C / ${Math.round(food.fat * qty)}F`}</AppText>
+      <Button title="Add" disabled={!!problem} onPress={() => onAdd(qty)} />
+    </ScrollView>
   );
 }
 
@@ -379,7 +409,7 @@ export function QuickAddForm({ onAdd, initial, submitLabel = 'Add' }: { onAdd: (
   );
 }
 
-// Search, favourites and recently logged, with an amount picker on the food you tap. `onAdd` gets the food and the amount.
+// Search, favourites and recently logged. Tap a food, then choose how much (D23b). `onAdd` gets the food and the amount.
 // Shared by the diary's Add food sheet, the recipe ingredient picker and the Meal Planner.
 export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: number) => void }) {
   const [text, setText] = useState('');
@@ -389,8 +419,8 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
   const recents = useRecentFoods();
   const toggleFavorite = useToggleFavorite();
   const own = useOwnFoodUnits();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [qtys, setQtys] = useState<Record<string, number>>({});
+  // The food tapped, and the amount its step starts at. The search text and results stay as they were for "Back".
+  const [picked, setPicked] = useState<{ food: FoodRow; qty: number } | null>(null);
 
   // Near-duplicate products shown as one result per brand and product, the rest behind "N more like this" (D23a).
   const groups = useMemo(() => groupFoodResults(search.data ?? []), [search.data]);
@@ -412,38 +442,35 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
         ...(recents.data?.length ? [{ title: 'Recently logged', groups: plain(recents.data) }] : []),
       ];
 
-  const groupRows = ({ food, others }: FoodGroup<FoodRow>) => {
-    const open = expanded.has(food.id);
+  if (picked) {
+    const { food } = picked;
     return (
-      <View key={food.id}>
-        {row(food)}
-        {open ? others.map(row) : null}
-        {others.length > 0 ? (
-          <Pressable onPress={() => toggleGroup(food.id)} accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={6} style={{ paddingBottom: 8 }}>
-            <AppText variant="small" color="accent" style={{ fontWeight: '700' }}>{open ? 'Hide the others' : moreLikeThis(others.length)}</AppText>
-          </Pressable>
-        ) : null}
-      </View>
-    );
-  };
-
-  const row = (food: FoodRow) => {
-    const qty = qtys[food.id] ?? startingAmount(food);
-    return (
-      <FoodResultRow
+      <FoodAmountStep
         key={food.id}
         food={food}
-        selected={selectedId === food.id}
-        qty={qty}
-        onQty={(n) => setQtys((p) => ({ ...p, [food.id]: n }))}
-        onSelect={() => setSelectedId((cur) => (cur === food.id ? null : food.id))}
-        onAdd={() => onAdd(food, qty)}
+        initialQty={picked.qty}
+        onAdd={(qty) => onAdd(food, qty)}
+        onBack={() => setPicked(null)}
         isFavorite={favoriteIds.has(food.id)}
         onToggleFavorite={() => toggleFavorite.mutate({ food, isFavorite: !favoriteIds.has(food.id) })}
         units={unitsFor(food, own.units)}
         onSaveUnit={own.save}
         onDeleteUnit={own.remove}
       />
+    );
+  }
+
+  const groupRows = ({ food, others }: FoodGroup<FoodRow>) => {
+    const open = expanded.has(food.id);
+    return (
+      <View key={food.id}>
+        <FoodResultItem
+          food={food}
+          onPress={() => setPicked({ food, qty: startingAmount(food) })}
+          more={others.length > 0 ? { count: others.length, open, onToggle: () => toggleGroup(food.id) } : undefined}
+        />
+        {open ? others.map((o) => <FoodResultItem key={o.id} food={o} nested onPress={() => setPicked({ food: o, qty: startingAmount(o) })} />) : null}
+      </View>
     );
   };
 
@@ -455,8 +482,8 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
         keyExtractor={(g, i) => g.title ?? 'results' + i}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item: group }) => (
-          <View style={{ gap: 2, marginBottom: spacing.sm }}>
-            {group.title ? <AppText variant="small" color="muted" style={{ fontWeight: '700' }}>{group.title}</AppText> : null}
+          <View style={{ marginBottom: spacing.sm }}>
+            {group.title ? <AppText variant="small" color="muted" style={{ fontWeight: '700', marginBottom: 2 }}>{group.title}</AppText> : null}
             {group.groups.map(groupRows)}
           </View>
         )}
