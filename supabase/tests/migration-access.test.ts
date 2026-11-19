@@ -77,7 +77,8 @@ describe('row-level security rules after every migration', () => {
 });
 
 // NU18 (0169): a member's own food is a row in foods that only they and their gym's coaches can read (their own coach, and read-only the
-// other coaches at their gym, as for the diary it is logged in: 0053), and only they can save as theirs.
+// other coaches at their gym, as for the diary it is logged in: 0053), and only they can save as theirs. These read the SQL text only; the
+// rules in a database are checked by supabase/tests/security-audit/own-foods-check.cjs (sandbox).
 describe("a member's own foods are private to them and their gym's coaches (NU18, 0169)", () => {
   const migrationsDir = path.resolve(__dirname, '../migrations');
   const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
