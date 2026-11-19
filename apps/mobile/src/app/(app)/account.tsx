@@ -88,7 +88,8 @@ export default function Account() {
         <ListGroup>
           {hasPushRow(push.status) ? <PushSettingRow controls={push} /> : null}
           <SwitchRow
-            title="Check-in reminders"
+            title="Reminders"
+            subtitle="Check-ins, booked classes and birthday wishes"
             value={profile?.notifications_enabled ?? true}
             onChange={(next) => setting.mutate({ notifications_enabled: next })}
           />

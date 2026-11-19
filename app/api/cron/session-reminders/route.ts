@@ -16,8 +16,9 @@ import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 // Never twice for the same booking: each due booking is first claimed in session_reminders (migration 0160; the booking id is its primary
 // key, so a second claim, from a later run or one running at the same time, adds nothing), and only the bookings this run claimed are
 // pushed. If the claim fails nothing is pushed. While push is switched off (no VAPID keys, lib/push.ts) nothing is claimed either, so the
-// table only holds reminders that were really attempted. Members who turned reminders off (client_profiles.notifications_enabled, the
-// same switch the birthday and check-in pushes follow) are left out.
+// table only holds reminders that were really attempted. Members who turned reminders off are left out: client_profiles.
+// notifications_enabled, the "Reminders" switch in Account ("Check-ins, booked classes and birthday wishes"), which the check-in and
+// birthday pushes follow too. The pushes about something the coach did (plan ready, programme, credits, lib/memberNotify.ts) do not.
 
 const PAGE = 1000;
 const MAX_PAGES = 10;

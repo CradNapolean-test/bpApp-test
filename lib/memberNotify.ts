@@ -13,7 +13,9 @@ import {
 // Tells a member about something their coach just did for them (decision D20): the in-app notice, then the push. Server-only. The server
 // actions call these with after(), once their database call has succeeded, so a slow push service never slows the coach down and nothing
 // here can fail or undo the action. Never throws. The admin client writes the notice because a coach cannot write a member's
-// notifications; nothing read here goes back to the coach.
+// notifications; nothing read here goes back to the coach. These are not reminders, so they do not follow the member's "Reminders"
+// switch in Account (client_profiles.notifications_enabled: check-ins, booked classes and birthday wishes); a member stops the pushes by
+// turning push off on the device.
 
 export async function notifyMember(label: string, clientId: string, message: MemberMessage): Promise<void> {
   try {

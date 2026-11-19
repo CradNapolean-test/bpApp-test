@@ -187,7 +187,15 @@ export function AccountTab({
       <div>
         <SectionLabel>Notifications</SectionLabel>
         <ListGroup>
-          <SwitchRow title="Check-in reminders" checked={enabled} onChange={handleToggle} label="Toggle check-in reminders" />
+          {/* client_profiles.notifications_enabled: the check-in reminders, the reminder before a booked session and the birthday push
+              follow it; what a coach does for the member (plan ready, a programme, credits) and chat do not. */}
+          <SwitchRow
+            title="Reminders"
+            subtitle="Check-ins, booked classes and birthday wishes"
+            checked={enabled}
+            onChange={handleToggle}
+            label="Toggle reminders"
+          />
           {pushSupported && (
             <SwitchRow
               title="Push notifications"
