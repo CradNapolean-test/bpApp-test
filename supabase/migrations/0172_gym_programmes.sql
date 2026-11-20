@@ -21,7 +21,7 @@
 --       - who already has a copy from that rollout (never a second copy);
 --       - who has another programme that runs over the same dates (a 1:1 programme their coach gave them, or a group one). Theirs is not
 --         replaced: the member is listed on the template as "Not given" with the programme in their way, and their coach (or a gym admin)
---         picks "Give it to them" (it takes over from today; theirs stays on file, and one that has not started yet, or starts today, now
+--         picks "Give it to them" (it takes over from today; theirs stays on file, and any of theirs that has not started yet, or starts today, now
 --         starts the Monday after the gym programme's last week, so it cannot take over part-way) or "Keep theirs" (gym_programme_waiting,
 --         new). A programme with no workouts yet counts as one week long, so a 1:1 programme a coach has only just made still counts;
 --       - when the gym programme has ended or the gym has none.
@@ -29,7 +29,8 @@
 --     "Not given" with reason 'failed' so the coach can give it from the template.
 --   * gym_programmes(): for the coach's template list, "Gym programme: Salford Quays from 9 Nov · 16 members": the programme the coach's
 --     gym is on today while its last week has not finished, ended or not, with the members still on it (as programme_rollout_usage, 0167),
---     how many joined later, and the members waiting (the coach's own members; every one for a gym admin). Coaches at that gym only.
+--     how many joined later, and the members waiting (the coach's own members; every one for a gym admin), each with every programme of
+--     theirs "Give it to them" would move, so the confirm names them all. Coaches at that gym only.
 --   * end_gym_programme(rollout): stops new members getting it. The members on it keep it to the end and nothing they logged changes.
 --     A gym admin only, as starting a programme for everyone is (0133). It cannot be re-opened: starting a new one for everyone takes over.
 --   * resolve_gym_programme_waiting(rollout, member, give): "Give it to them" / "Keep theirs" for a member listed as Not given. The member's
@@ -168,7 +169,7 @@ begin
       ('_gym_programme_today', '0172', array['63d299a9c29db8643c15e20d43a70bdb']),
       ('_give_gym_programme', '0172', array['4e10dc123d27774dee84ee6b08b3726e']),
       ('client_profiles_join_gym_programme', '0172', array['558f876ecd679247dc956a8f67bb5f0e']),
-      ('gym_programmes', '0172', array['662073fea310d8827b69bac083e593f6']),
+      ('gym_programmes', '0172', array['8784850cd1412c5abd4b9bee1fd1a14a']),
       ('end_gym_programme', '0172', array['8ff5f37461f44cd1e11e25c9a4cea232']),
       ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
       ('program_templates_refuse_gym_programme_delete', '0172', array['e417964f898305816cc6a55ad7148e23']),
@@ -530,11 +531,23 @@ begin
                'client_id', q.client_id,
                'name', coalesce(nullif(btrim(cp.name), ''), p.email, 'A member'),
                'reason', q.reason,
+               'other_program_id', op.id,
                'other_program', op.name,
                'other_starts', op.start_date,
                'other_until', case when op.id is null then null else
                  least(coalesce(op.week_one, op.start_date), op.start_date)
-                 + 7 * greatest(coalesce((select max(d.week_num) from workout_program_days d where d.program_id = op.id), 0), 1) - 1 end
+                 + 7 * greatest(coalesce((select max(d.week_num) from workout_program_days d where d.program_id = op.id), 0), 1) - 1 end,
+               -- Every programme of theirs "Give it to them" moves to the Monday after the gym programme (as _give_gym_programme picks
+               -- them), so the confirm can name each one, not only the one in the way.
+               'moves', (
+                 select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'starts', x.start_date)
+                                           order by x.start_date, x.created_at), '[]'::jsonb)
+                 from workout_programs x
+                 where x.client_id = q.client_id
+                   and x.start_date is not null
+                   and x.rollout_id is distinct from t.rollout_id
+                   and x.start_date >= t.today
+                   and x.start_date <= t.last_day)
              ) order by q.created_at) as list
       from gym_programme_waiting q
       join profiles p on p.id = q.client_id

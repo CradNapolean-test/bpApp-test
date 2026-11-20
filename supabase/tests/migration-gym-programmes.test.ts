@@ -263,6 +263,11 @@ describe('giving it to a member who joins later', () => {
     const list = squeeze(code('gym_programmes'));
     expect(list).toContain("'other_starts', op.start_date");
     expect(list).toContain('t.last_day, t.today,');
+    // and every programme of theirs it moves, picked as the update above picks them, so the confirm names each one
+    expect(list).toContain("'other_program_id', op.id");
+    expect(list).toContain(
+      "'moves', ( select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'starts', x.start_date) order by x.start_date, x.created_at), '[]'::jsonb) from workout_programs x where x.client_id = q.client_id and x.start_date is not null and x.rollout_id is distinct from t.rollout_id and x.start_date >= t.today and x.start_date <= t.last_day)"
+    );
   });
 
   it('starts today on the gym’s current week: the copy’s week 1 is the gym programme’s Monday', () => {

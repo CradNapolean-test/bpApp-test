@@ -38,9 +38,11 @@ const own: GymProgrammeWaiting = {
   clientId: 'c1',
   name: 'Sam Jones',
   reason: 'own_programme',
+  otherProgramId: null,
   otherProgram: 'Sam 1:1',
   otherStarts: '2026-11-16',
   otherUntil: '2026-12-06',
+  moves: null,
 };
 // A 1:1 programme a coach made for a new member, starting the coming Monday.
 const upcoming: GymProgrammeWaiting = { ...own, otherStarts: '2026-11-23', otherUntil: '2026-12-13' };
@@ -76,7 +78,35 @@ describe('reading gym_programmes()', () => {
         null,
       ],
     });
-    expect(p?.waiting).toEqual([own, { clientId: 'c2', name: 'A member', reason: 'failed', otherProgram: null, otherStarts: null, otherUntil: null }]);
+    expect(p?.waiting).toEqual([
+      own,
+      { clientId: 'c2', name: 'A member', reason: 'failed', otherProgramId: null, otherProgram: null, otherStarts: null, otherUntil: null, moves: null },
+    ]);
+  });
+
+  it('reads the programmes giving it would move, dropping any without an id or start', () => {
+    const p = readGymProgramme({
+      ...row,
+      waiting: [
+        {
+          client_id: 'c1',
+          name: 'Sam Jones',
+          reason: 'own_programme',
+          other_program_id: 'p1',
+          other_program: 'Sam 1:1',
+          other_starts: '2026-11-16',
+          other_until: '2026-12-06',
+          moves: [{ id: 'p2', name: 'Sam block 2', starts: '2026-11-23' }, { id: 'p3', name: '', starts: '2026-11-27' }, { id: 'p4' }, null],
+        },
+        { client_id: 'c2', reason: 'failed', moves: [] },
+      ],
+    });
+    expect(p?.waiting[0].otherProgramId).toBe('p1');
+    expect(p?.waiting[0].moves).toEqual([
+      { id: 'p2', name: 'Sam block 2', starts: '2026-11-23' },
+      { id: 'p3', name: 'Their programme', starts: '2026-11-27' },
+    ]);
+    expect(p?.waiting[1].moves).toEqual([]);
   });
 
   it('refuses a row without its rollout, template or dates', () => {
@@ -189,6 +219,30 @@ describe('members it was not given to', () => {
     expect(giveWaitingConfirmation(gp(), { ...upcoming, otherStarts: '2026-11-20' }).body).toBe(moved);
     // starting after the gym programme's last day: it does not take over part-way, so nothing moves
     expect(giveWaitingConfirmation(gp(), { ...upcoming, otherStarts: '2026-11-30' }).body).toBe(
+      'It starts today on week 2, the same as everyone at Salford Quays. Their own programme “Sam 1:1” still starts Mon 30 Nov, after the gym programme.'
+    );
+  });
+
+  it('giving it names every programme of theirs it moves, not only the one in the way', () => {
+    const block2 = { id: 'p2', name: 'Sam block 2', starts: '2026-11-23' };
+    // a running 1:1 in the way, and a later one the coach made since
+    expect(giveWaitingConfirmation(gp(), { ...own, otherProgramId: 'p1', moves: [block2] }).body).toBe(
+      'It starts today on week 2, the same as everyone at Salford Quays, and takes over from “Sam 1:1”. Their own programme and everything logged on it stay on file. “Sam block 2” moves to start Mon 30 Nov, after the gym programme.'
+    );
+    // listed because giving it failed when they joined
+    expect(giveWaitingConfirmation(gp(), { ...own, reason: 'failed', otherProgram: null, otherStarts: null, otherUntil: null, moves: [block2] }).body).toBe(
+      'It starts today on week 2, the same as everyone at Salford Quays. Their own programme “Sam block 2” moves to start Mon 30 Nov, after the gym programme.'
+    );
+    // the one in the way is moved too, with another
+    const upcomingOwn = { ...upcoming, otherProgramId: 'p1', moves: [{ id: 'p1', name: 'Sam 1:1', starts: '2026-11-23' }, { id: 'p3', name: 'Sam extras', starts: '2026-11-25' }] };
+    expect(giveWaitingConfirmation(gp(), upcomingOwn).body).toBe(
+      'It starts today on week 2, the same as everyone at Salford Quays. Their own programmes “Sam 1:1” and “Sam extras” move to start Mon 30 Nov, after the gym programme.'
+    );
+    expect(
+      giveWaitingConfirmation(gp(), { ...upcomingOwn, moves: [...upcomingOwn.moves, { id: 'p4', name: 'Sam mobility', starts: '2026-11-29' }] }).body
+    ).toMatch(/Their own programmes “Sam 1:1”, “Sam extras” and “Sam mobility” move to start Mon 30 Nov/);
+    // the list says nothing moves: the one in the way starts after the gym programme (moved since)
+    expect(giveWaitingConfirmation(gp(), { ...upcoming, otherProgramId: 'p1', otherStarts: '2026-11-30', moves: [] }).body).toBe(
       'It starts today on week 2, the same as everyone at Salford Quays. Their own programme “Sam 1:1” still starts Mon 30 Nov, after the gym programme.'
     );
   });

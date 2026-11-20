@@ -12,10 +12,14 @@ export interface GymProgrammeWaiting {
   name: string;
   // 'own_programme': another programme of theirs runs over the same dates; 'failed': it could not be given when they finished setting up.
   reason: 'own_programme' | 'failed';
+  otherProgramId: string | null;
   otherProgram: string | null;
   // That programme's start date and last day (YYYY-MM-DD). It may not have started yet.
   otherStarts: string | null;
   otherUntil: string | null;
+  // Every programme of theirs "Give it to them" moves to the Monday after the gym programme (one that starts between today and its last
+  // day), soonest first. null from an older gym_programmes(), which only told the one in the way.
+  moves: { id: string; name: string; starts: string }[] | null;
 }
 
 export interface GymProgramme {
@@ -61,13 +65,26 @@ export function readGymProgramme(row: unknown): GymProgramme | null {
       const x = w as Record<string, unknown>;
       const clientId = str(x.client_id);
       if (!clientId) return null;
+      const moves = Array.isArray(x.moves)
+        ? x.moves
+            .map((m): { id: string; name: string; starts: string } | null => {
+              if (!m || typeof m !== 'object') return null;
+              const y = m as Record<string, unknown>;
+              const id = str(y.id);
+              const starts = str(y.starts);
+              return id && starts ? { id, name: str(y.name) ?? 'Their programme', starts } : null;
+            })
+            .filter((m): m is { id: string; name: string; starts: string } => m !== null)
+        : null;
       return {
         clientId,
         name: str(x.name) ?? 'A member',
         reason: x.reason === 'failed' ? 'failed' : 'own_programme',
+        otherProgramId: str(x.other_program_id),
         otherProgram: str(x.other_program),
         otherStarts: str(x.other_starts),
         otherUntil: str(x.other_until),
+        moves,
       };
     })
     .filter((w): w is GymProgrammeWaiting => w !== null);
@@ -139,24 +156,39 @@ export function waitingReason(p: Pick<GymProgramme, 'today'>, w: GymProgrammeWai
   return `On their own programme “${w.otherProgram}”${w.otherUntil ? ` until ${day(w.otherUntil)}` : ''}`;
 }
 
-// Giving it moves their own programme when it starts today or later, before the gym programme's last day: it would otherwise take over on
-// its start date. It then starts the Monday after the gym programme's last week (as _give_gym_programme does, migration 0172).
-function movesOther(p: Pick<GymProgramme, 'today' | 'lastDay'>, w: GymProgrammeWaiting): boolean {
-  return !!(w.otherStarts && p.today && w.otherStarts >= p.today && w.otherStarts <= p.lastDay);
+// Giving it moves every programme of theirs that starts today or later, before the gym programme's last day: each would otherwise take
+// over on its start date. They then start the Monday after the gym programme's last week (as _give_gym_programme does, migration 0172).
+// From an older gym_programmes() without the list: the programme in the way, when it starts in those dates.
+function programmesMoved(p: Pick<GymProgramme, 'today' | 'lastDay'>, w: GymProgrammeWaiting): { id: string | null; name: string; starts: string }[] {
+  if (w.moves) return w.moves;
+  return w.otherProgram && w.otherStarts && p.today && w.otherStarts >= p.today && w.otherStarts <= p.lastDay
+    ? [{ id: w.otherProgramId, name: w.otherProgram, starts: w.otherStarts }]
+    : [];
 }
 
 export function giveWaitingConfirmation(p: GymProgramme, w: GymProgrammeWaiting): { title: string; body: string; confirmLabel: string } {
   const start = `It starts today on week ${p.currentWeek}, the same as everyone at ${gymOf(p)}`;
+  const moved = programmesMoved(p, w);
+  const otherMoved = moved.some((m) =>
+    m.id && w.otherProgramId ? m.id === w.otherProgramId : m.name === w.otherProgram && m.starts === w.otherStarts
+  );
   let body = `${start}.`;
-  if (w.reason === 'own_programme' && w.otherProgram) {
-    if (movesOther(p, w)) {
-      body = `${start}. Their own programme “${w.otherProgram}” moves to start ${day(toIsoDate(addDays(new Date(`${p.lastDay}T00:00:00Z`), 1)))}, after the gym programme.`;
-    } else if (w.otherStarts && p.today && w.otherStarts > p.today) {
+  let takesOver = false;
+  if (w.reason === 'own_programme' && w.otherProgram && !otherMoved) {
+    if (w.otherStarts && p.today && w.otherStarts > p.today) {
       // Moved since by their coach to after the gym programme: nothing to take over from.
       body = `${start}. Their own programme “${w.otherProgram}” still starts ${day(w.otherStarts)}, after the gym programme.`;
     } else {
       body = `${start}, and takes over from “${w.otherProgram}”. Their own programme and everything logged on it stay on file.`;
+      takesOver = true;
     }
+  }
+  if (moved.length > 0) {
+    const quoted = moved.map((m) => `“${m.name}”`);
+    const names = quoted.length > 1 ? `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}` : quoted[0];
+    const whose = takesOver ? '' : moved.length > 1 ? 'Their own programmes ' : 'Their own programme ';
+    const after = day(toIsoDate(addDays(new Date(`${p.lastDay}T00:00:00Z`), 1)));
+    body += ` ${whose}${names} ${moved.length > 1 ? 'move' : 'moves'} to start ${after}, after the gym programme.`;
   }
   return { title: `Give “${p.programName}” to ${w.name}?`, body, confirmLabel: 'Give it to them' };
 }
