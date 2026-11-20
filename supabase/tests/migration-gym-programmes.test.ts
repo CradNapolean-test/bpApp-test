@@ -26,13 +26,13 @@ const file = '0172_gym_programmes.sql';
 const migration = fs.readFileSync(path.resolve(__dirname, '../migrations', file), 'utf8').replace(/\r\n/g, '\n');
 const migrationCode = migration.replace(/--.*$/gm, '');
 
-// The body exactly as written in this file (between the dollar quotes), for the guard's md5.
-function bodyInFile(name: string): string {
+// The body exactly as written in this file (or another migration's text), between the dollar quotes, for the guard's md5.
+function bodyInFile(name: string, sql = migration): string {
   const re = new RegExp(`create\\s+(?:or\\s+replace\\s+)?function\\s+(?:public\\.)?${name}\\s*\\([\\s\\S]*?\\)\\s*returns[\\s\\S]*?(\\$[a-z_]*\\$)`, 'gi');
-  const all = [...migration.matchAll(re)];
+  const all = [...sql.matchAll(re)];
   expect(all).toHaveLength(1);
   const start = (all[0].index ?? 0) + all[0][0].length;
-  return migration.slice(start, migration.indexOf(all[0][1], start));
+  return sql.slice(start, sql.indexOf(all[0][1], start));
 }
 // As the SQL does with prosrc: every run of white space squeezed to one space, trimmed.
 const bodyMd5 = (body: string) => crypto.createHash('md5').update(body.replace(/[ \t\n\r\f\v]+/g, ' ').trim()).digest('hex');
@@ -44,6 +44,9 @@ const guardRows = [...migration.matchAll(/\('(\w+)', '(\d{4})', array\[([^\]]*)\
 }));
 
 const created = ['_gym_programme_today', '_give_gym_programme', 'client_profiles_join_gym_programme', 'gym_programmes', 'end_gym_programme', 'resolve_gym_programme_waiting'];
+// Replaced from an earlier migration (the one named in its guard row).
+const replaced = ['set_programme_week_one'];
+const file0167 = fs.readFileSync(path.resolve(__dirname, '../migrations', '0167_programme_rollout_updates.sql'), 'utf8').replace(/\r\n/g, '\n');
 
 describe('migration 0172 is safe to paste into the SQL editor', () => {
   it('stops before changing anything when something it uses is missing or a function it creates has another body', () => {
@@ -59,8 +62,8 @@ describe('migration 0172 is safe to paste into the SQL editor', () => {
   });
 
   it('guards every function it creates with that function’s own body, so a second run passes and another branch’s is not overwritten', () => {
-    expect(guardRows.map((r) => r.name).sort()).toEqual([...created].sort());
-    for (const row of guardRows) {
+    expect(guardRows.map((r) => r.name).sort()).toEqual([...created, ...replaced].sort());
+    for (const row of guardRows.filter((r) => created.includes(r.name))) {
       expect(row.from).toBe('0172');
       expect(row.accepted).toEqual([bodyMd5(bodyInFile(row.name))]);
     }
@@ -68,7 +71,14 @@ describe('migration 0172 is safe to paste into the SQL editor', () => {
     expect(migration).toMatch(/if v_md5 is not null and not \(v_md5 = any \(v_check\.accepted\)\) then/);
   });
 
-  it('replaces no function from an earlier migration', () => {
+  it('the function it replaces must be 0167’s or this file’s', () => {
+    const row = guardRows.find((r) => r.name === 'set_programme_week_one');
+    expect(row?.from).toBe('0167');
+    expect(row?.accepted).toEqual([bodyMd5(bodyInFile('set_programme_week_one', file0167)), bodyMd5(bodyInFile('set_programme_week_one'))]);
+    expect(latest('set_programme_week_one').file).toBe(file);
+  });
+
+  it('replaces no other function from an earlier migration', () => {
     const earlier = new Set(fns.filter((f) => f.file !== file).map((f) => f.name));
     for (const name of created) expect(earlier.has(name)).toBe(false);
     for (const untouched of ['apply_programme_rollout', 'schedule_programme_rollout', 'instantiate_template_core', 'apply_template_to_rollout', 'programme_rollout_usage']) {
@@ -159,6 +169,20 @@ describe('which programme a gym is on, and when it stops reaching new members', 
   it('counts week 1 from the Monday of its start date, as week_one does (0167)', () => {
     expect(body).toContain('r.start_date - (extract(isodow from r.start_date)::integer - 1) as week_one');
     expect(code('set_programme_week_one')).toContain("new.start_date - (extract(isodow from new.start_date)::integer - 1)");
+  });
+
+  it('a late joiner’s copy keeps the gym’s week 1 when a coach moves its start date; every other copy as in 0167', () => {
+    const trigger = squeeze(code('set_programme_week_one'));
+    // as 0167: only a rollout copy, on insert without a week 1 or when its start date changes
+    expect(trigger).toContain(
+      "if new.rollout_id is not null and new.start_date is not null and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then"
+    );
+    // a late joiner: week 1 before the week its copy started in (only _give_gym_programme sets that), kept while the new start is on or after it
+    expect(trigger).toContain(
+      "if tg_op = 'UPDATE' and old.week_one is not null and old.start_date is not null and old.week_one < old.start_date - (extract(isodow from old.start_date)::integer - 1) and new.start_date >= old.week_one then new.week_one := old.week_one; else new.week_one := new.start_date - (extract(isodow from new.start_date)::integer - 1); end if;"
+    );
+    // still fired by 0167's trigger, which this migration leaves as it is
+    expect(migrationCode).not.toMatch(/trigger workout_programs_week_one/);
   });
 
   it('is open until a coach ends it or the Sunday of its last week has passed', () => {

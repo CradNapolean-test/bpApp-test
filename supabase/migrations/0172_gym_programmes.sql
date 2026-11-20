@@ -39,6 +39,8 @@
 --     rollouts and cancel one that has not been given out yet (what the app does, cancelProgrammeRollout), one for everyone only as a gym
 --     admin; everything else goes through the functions (schedule_programme_rollout, apply_programme_rollout, end_gym_programme), which run
 --     as the table owner.
+--   * set_programme_week_one (the start-date trigger of 0167) replaced: a late joiner's copy keeps its week 1 (the gym's Monday) when a
+--     coach moves its start date, so the member stays on the gym's week instead of going back to week 1. Every other copy as before.
 --
 -- Not changed: apply_programme_rollout, apply_due_programme_rollouts, schedule_programme_rollout, instantiate_template_core (called as it
 -- is), apply_template_to_rollout, programme_rollout_usage. The migration itself gives nobody a programme and changes no programme: late
@@ -48,7 +50,8 @@
 -- new "members who join later get it too" wording in Start a programme is true from the deploy.
 --
 -- Guard: the migration stops before changing anything when a table, column or function it uses is missing ("... is missing"), or when a
--- function it creates already exists with a different body ("... is not the one from migration 0172"). Safe to run twice.
+-- function it creates already exists with a different body ("... is not the one from migration 0172"), or set_programme_week_one is
+-- neither 0167's nor this file's ("... from migration 0167"). Safe to run twice.
 --
 -- PRE-FLIGHT (read-only):
 --   select to_regclass('public.gym_programme_waiting') is not null as waiting_table,
@@ -111,7 +114,8 @@
 -- scheduled start for everyone (direct delete), but can cancel one for chosen members; a member cannot call gym_programmes,
 -- end_gym_programme or resolve_gym_programme_waiting.
 --
--- ROLLBACK: drop trigger client_profiles_gym_programme on public.client_profiles; drop function public.client_profiles_join_gym_programme();
+-- ROLLBACK: run set_programme_week_one's definition from migration 0167 again (its trigger stays);
+--           drop trigger client_profiles_gym_programme on public.client_profiles; drop function public.client_profiles_join_gym_programme();
 --           drop function public.resolve_gym_programme_waiting(uuid, uuid, boolean); drop function public.end_gym_programme(uuid);
 --           drop function public.gym_programmes(); drop function public._give_gym_programme(uuid, uuid, boolean);
 --           drop function public._gym_programme_today(uuid); drop table public.gym_programme_waiting;
@@ -146,7 +150,8 @@ begin
   if to_regprocedure('public.my_gym_id()') is null then raise exception 'my_gym_id is missing (migration 0052)'; end if;
   if to_regprocedure('public.is_admin_of_gym(uuid)') is null then raise exception 'is_admin_of_gym is missing (migration 0056)'; end if;
 
-  -- The functions this migration creates: none may exist yet with another body (a second run finds its own).
+  -- The functions this migration creates: none may exist yet with another body (a second run finds its own). The one it replaces must be
+  -- the one from 0167 or this file's.
   for v_check in
     select * from (values
       ('_gym_programme_today', '0172', array['63d299a9c29db8643c15e20d43a70bdb']),
@@ -154,7 +159,9 @@ begin
       ('client_profiles_join_gym_programme', '0172', array['558f876ecd679247dc956a8f67bb5f0e']),
       ('gym_programmes', '0172', array['662073fea310d8827b69bac083e593f6']),
       ('end_gym_programme', '0172', array['8ff5f37461f44cd1e11e25c9a4cea232']),
-      ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950'])
+      ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
+      -- replaced: the one from 0167, or this file's (a second run)
+      ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '836a65083143b6a9bf93df50b68a7bec'])
     ) as t(name, migration, accepted)
   loop
     v_md5 := null;
@@ -244,6 +251,29 @@ as $fn$
 $fn$;
 
 revoke all on function public._gym_programme_today(uuid) from public, anon, authenticated;
+
+-- A rollout copy follows the gym's week: week 1 is the Monday-to-Sunday week it starts in (0167). A late joiner's copy of a gym programme
+-- (_give_gym_programme below) has its week 1 on the gym's Monday, before the week it started in: when a coach moves its start date, it keeps
+-- that week 1 while the new start is on or after it, so the member stays on the gym's week. Every other copy is as in 0167.
+create or replace function public.set_programme_week_one()
+returns trigger
+language plpgsql
+set search_path = public
+as $fn$
+begin
+  if new.rollout_id is not null and new.start_date is not null
+     and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then
+    if tg_op = 'UPDATE' and old.week_one is not null and old.start_date is not null
+       and old.week_one < old.start_date - (extract(isodow from old.start_date)::integer - 1)
+       and new.start_date >= old.week_one then
+      new.week_one := old.week_one;
+    else
+      new.week_one := new.start_date - (extract(isodow from new.start_date)::integer - 1);
+    end if;
+  end if;
+  return new;
+end;
+$fn$;
 
 -- Gives a member the gym programme their gym is on today, as their own copy starting today on the gym's current week. No permission check
 -- of its own: the trigger below (the member's own profile) and resolve_gym_programme_waiting (after its checks) call it.
