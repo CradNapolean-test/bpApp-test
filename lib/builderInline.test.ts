@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { INLINE_BOX, PRESCRIPTION_ERRORS, inlineDetails, inlineTarget, inlineText, readInlineBox, readSetsText, readTargetText } from './builderInline';
+import {
+  INLINE_BOX,
+  PRESCRIPTION_ERRORS,
+  editFailed,
+  editSaved,
+  holdEdit,
+  inlineDetails,
+  inlineTarget,
+  inlineText,
+  readInlineBox,
+  readSetsText,
+  readTargetText,
+  releaseSaved,
+  withHeldEdits,
+} from './builderInline';
 import { TRACKING_TYPES } from './workoutTracking';
 
 const base = {
@@ -117,5 +131,52 @@ describe('inlineDetails', () => {
   it('leaves out a weight the exercise does not record, and a time that has its own box', () => {
     expect(inlineDetails(ex({ tracking_type: 'reps', load: 20 }))).toEqual([]);
     expect(inlineDetails(ex({ tracking_type: 'time', target_seconds: 45 }))).toEqual([]);
+  });
+});
+
+describe('held box values', () => {
+  const rows = [
+    { id: 'a', sets: 3, reps: '8-10' },
+    { id: 'b', sets: 4, reps: '5' },
+  ];
+
+  it('shows a box’s new value over the page’s copy at once, so a sheet opened before the save is back reads it', () => {
+    const held = holdEdit({}, 'a', { reps: '5' });
+    expect(withHeldEdits(rows, held)).toEqual([{ id: 'a', sets: 3, reps: '5' }, rows[1]]);
+  });
+
+  it('keeps it through a reload that lands while its save is still on its way', () => {
+    const held = holdEdit({}, 'a', { reps: '5' });
+    expect(releaseSaved(held)).toBe(held);
+  });
+
+  it('lets it go at the first reload after its save is back', () => {
+    const saved = editSaved(holdEdit({}, 'a', { reps: '5' }), 'a', { reps: '5' });
+    expect(withHeldEdits(rows, saved)[0].reps).toBe('5');
+    expect(releaseSaved(saved)).toEqual({});
+  });
+
+  it('keeps a newer value typed in the same box while the older save was on its way', () => {
+    let held = holdEdit({}, 'a', { sets: 4 });
+    held = holdEdit(held, 'a', { sets: 5 });
+    held = releaseSaved(editSaved(held, 'a', { sets: 4 }));
+    expect(withHeldEdits(rows, held)[0].sets).toBe(5);
+    held = releaseSaved(editSaved(held, 'a', { sets: 5 }));
+    expect(held).toEqual({});
+  });
+
+  it('goes back to what is saved when the save fails, leaving other boxes held', () => {
+    let held = holdEdit({}, 'a', { sets: 5 });
+    held = holdEdit(held, 'a', { reps: '6' });
+    held = editFailed(held, 'a', { sets: 5 });
+    expect(withHeldEdits(rows, held)[0]).toEqual({ id: 'a', sets: 3, reps: '6' });
+    expect(editFailed(held, 'a', { reps: '6' })).toEqual({});
+  });
+
+  it('hands back the same rows and map when nothing changes', () => {
+    expect(withHeldEdits(rows, {})).toBe(rows);
+    const held = holdEdit({}, 'a', { sets: 5 });
+    expect(editSaved(held, 'b', { sets: 5 })).toBe(held);
+    expect(editFailed(held, 'a', { sets: 6 })).toBe(held);
   });
 });

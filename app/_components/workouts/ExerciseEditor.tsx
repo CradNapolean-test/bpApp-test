@@ -30,7 +30,23 @@ import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
 import { guessTrackingType } from '@/lib/trackingGuess';
 import { exerciseNameKey, findLibraryMatch } from '@/lib/libraryMatch';
 import { canAddLibraryExercises, createLibraryExerciseByName } from '@/lib/data/exerciseLibrary';
-import { INLINE_BOX, inlineDetails, inlineTarget, inlineText, readInlineBox, readSetsText, readTargetText, type InlineBox } from '@/lib/builderInline';
+import {
+  INLINE_BOX,
+  editFailed,
+  editSaved,
+  holdEdit,
+  inlineDetails,
+  inlineTarget,
+  inlineText,
+  readInlineBox,
+  readSetsText,
+  readTargetText,
+  releaseSaved,
+  withHeldEdits,
+  type HeldEdits,
+  type InlineBox,
+  type InlineChange,
+} from '@/lib/builderInline';
 
 // An exercise's picture is a link a coach pasted. It loads only from the gym's own storage and the hosts named in NEXT_PUBLIC_IMAGE_HOSTS
 // (comma separated), never sends a referrer, and otherwise the muscle-group icon shows instead (R23).
@@ -797,18 +813,17 @@ function BuilderRow<T extends EditableExercise>({
   library,
   menuItems,
   onOpen,
-  onSaveFields,
+  onCommitBox,
 }: {
   exercise: T;
   index: number;
   library: ExerciseLibraryRow[];
   menuItems: DropdownMenuItem[];
   onOpen: () => void;
-  // Saves a box on the line, the way the sheet saves (live review item 4).
-  onSaveFields: (fields: ExerciseUpdate) => Promise<unknown>;
+  // Leaving a box on the line: what to save, or why it cannot be (live review item 4).
+  onCommitBox: (change: InlineChange) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
-  const { run } = useAction();
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const libraryEntry = exercise.exercise_library_id ? library.find((e) => e.id === exercise.exercise_library_id) : undefined;
   const Icon = MUSCLE_GROUP_ICONS[libraryEntry?.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
@@ -818,22 +833,6 @@ function BuilderRow<T extends EditableExercise>({
   const boxes: InlineBox[] = isCircuit ? [] : target ? ['sets', target] : ['sets'];
   // Under the name: an instructions line's first line, else what the boxes do not show ("20kg · RPE 8 · rest 60s").
   const details = isCircuit ? (exercise.notes ? exercise.notes.split('\n')[0] : 'Instructions') : inlineDetails(exercise).join(' · ') || 'Tap for more';
-
-  // Leaving a box saves it if it changed. A number that cannot be saved is said in a toast and the box goes back to what is saved.
-  function commit(input: HTMLInputElement, box: InlineBox) {
-    const saved = inlineText(exercise, box);
-    const change = readInlineBox(exercise, box, input.value);
-    if (change.kind === 'none') {
-      input.value = saved;
-      return;
-    }
-    void run(async () => {
-      if (change.kind === 'error') throw new Error(change.error);
-      return onSaveFields(change.fields);
-    }).then((ok) => {
-      if (!ok) input.value = saved;
-    });
-  }
 
   return (
     <div
@@ -871,37 +870,39 @@ function BuilderRow<T extends EditableExercise>({
       </button>
       {boxes.length > 0 && (
         <div className="flex shrink-0 items-center gap-1">
-          {boxes.map((box, i) => {
-            const saved = inlineText(exercise, box);
-            return (
-              <Fragment key={box}>
-                {i > 0 && (
-                  <span aria-hidden className="text-xs font-bold text-zinc-400">
-                    ×
-                  </span>
-                )}
-                <input
-                  // A new key when the saved value changes (after a save, or an edit in the sheet) starts the box again from it.
-                  key={`${box}:${saved}`}
-                  defaultValue={saved}
-                  type="text"
-                  inputMode={INLINE_BOX[box].inputMode}
-                  enterKeyHint="done"
-                  autoComplete="off"
-                  aria-label={`${INLINE_BOX[box].label} for ${exercise.name}`}
-                  placeholder={INLINE_BOX[box].placeholder}
-                  maxLength={box === 'sets' ? 3 : 12}
-                  onBlur={(e) => commit(e.currentTarget, box)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur();
-                  }}
-                  className={`h-10 rounded-lg border border-black/10 bg-transparent px-1 text-center text-base font-bold tabular-nums text-black placeholder:text-[11px] placeholder:font-medium placeholder:text-zinc-400 dark:border-white/10 dark:text-zinc-50 ${
-                    box === 'sets' ? 'w-10 sm:w-12' : 'w-14 sm:w-20'
-                  }`}
-                />
-              </Fragment>
-            );
-          })}
+          {boxes.map((box, i) => (
+            <Fragment key={box}>
+              {i > 0 && (
+                <span aria-hidden className="text-xs font-bold text-zinc-400">
+                  ×
+                </span>
+              )}
+              <input
+                // A new key when the value shown changes (a box's new value, a failed save, an edit in the sheet) starts the box again from it.
+                key={`${box}:${inlineText(exercise, box)}`}
+                defaultValue={inlineText(exercise, box)}
+                type="text"
+                inputMode={INLINE_BOX[box].inputMode}
+                enterKeyHint="done"
+                autoComplete="off"
+                aria-label={`${INLINE_BOX[box].label} for ${exercise.name}`}
+                placeholder={INLINE_BOX[box].placeholder}
+                maxLength={box === 'sets' ? 3 : 12}
+                // Leaving a box saves it if it changed; a number that cannot be saved is said in a toast and the box shows what is saved.
+                onBlur={(e) => {
+                  const change = readInlineBox(exercise, box, e.currentTarget.value);
+                  if (change.kind !== 'save') e.currentTarget.value = inlineText(exercise, box);
+                  onCommitBox(change);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+                className={`h-10 rounded-lg border border-black/10 bg-transparent px-1 text-center text-base font-bold tabular-nums text-black placeholder:text-[11px] placeholder:font-medium placeholder:text-zinc-400 dark:border-white/10 dark:text-zinc-50 ${
+                  box === 'sets' ? 'w-10 sm:w-12' : 'w-14 sm:w-20'
+                }`}
+              />
+            </Fragment>
+          ))}
         </div>
       )}
       <DropdownMenu items={menuItems} triggerLabel={`${exercise.name} actions`} />
@@ -1094,7 +1095,16 @@ export function ExerciseEditor<T extends EditableExercise>({
 }) {
   const { run: runReorder } = useAction();
   const { run: runMutate } = useAction();
-  const sorted = [...exercises].sort((a, b) => a.sort_order - b.sort_order);
+  const { run: runBox } = useAction();
+  // The boxes' new values, shown until the page's copy has them (lib/builderInline.ts).
+  const [held, setHeld] = useState<HeldEdits>({});
+  // A reload of the page's copy lets go of the held values whose saves are back.
+  const [seenExercises, setSeenExercises] = useState(exercises);
+  if (seenExercises !== exercises) {
+    setSeenExercises(exercises);
+    setHeld(releaseSaved);
+  }
+  const sorted = withHeldEdits([...exercises].sort((a, b) => a.sort_order - b.sort_order), held);
   const idsKey = sorted.map((e) => e.id).join(',');
   const [orderedIds, setOrderedIds] = useState<string[]>(() => sorted.map((e) => e.id));
   const prevIdsKey = useRef(idsKey);
@@ -1253,6 +1263,21 @@ export function ExerciseEditor<T extends EditableExercise>({
     if (!created.ok) return created;
     setCreatedEntries((c) => (c.some((e) => e.id === created.entry.id) ? c : [...c, created.entry]));
     return addFromLibrary(key, created.entry);
+  }
+
+  // Leaving a box on a line: the new value shows at once and is held until the page's copy has it, so the sheet and Duplicate read it
+  // too. If the save fails the box goes back to what is saved.
+  function commitBox(id: string, change: InlineChange) {
+    if (change.kind === 'none') return;
+    if (change.kind === 'error') {
+      void runBox(async () => {
+        throw new Error(change.error);
+      });
+      return;
+    }
+    const { fields } = change;
+    setHeld((h) => holdEdit(h, id, fields));
+    void runBox(() => onUpdate(id, fields)).then((ok) => setHeld((h) => (ok ? editSaved(h, id, fields) : editFailed(h, id, fields))));
   }
 
   const updateMany = (ids: string[], fields: ExerciseUpdate) =>
@@ -1633,7 +1658,7 @@ export function ExerciseEditor<T extends EditableExercise>({
                                   library={library}
                                   menuItems={menuFor(ex, rows)}
                                   onOpen={() => setSheet({ kind: 'edit', id: ex.id })}
-                                  onSaveFields={(fields) => onUpdate(ex.id, fields)}
+                                  onCommitBox={(change) => commitBox(ex.id, change)}
                                 />
                                 {renderBuilderExtra?.(ex)}
                               </Fragment>

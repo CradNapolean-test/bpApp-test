@@ -115,3 +115,72 @@ export function inlineDetails(ex: InlineFields & { rpe: number | null; rest_seco
   if (ex.rest_seconds != null) parts.push(`rest ${ex.rest_seconds}s`);
   return parts;
 }
+
+// A box's new value is held on screen from when it is typed until the page's own copy of the exercise has it. The line, the sheet and
+// Duplicate all read the held value, so a sheet opened before the save is back no longer shows the old value and saves it back (the
+// sheet saves every field). A held value is let go when its save fails, or at the first reload after its save is back.
+type HeldValue = { value: InlineUpdate[keyof InlineUpdate]; saved: boolean };
+export type HeldEdits = Record<string, Partial<Record<keyof InlineUpdate, HeldValue>>>;
+
+// Changes the held values of one exercise's fields that still hold what was saved; the same map back when nothing changes.
+function changeHeld(held: HeldEdits, id: string, fields: InlineUpdate, next: (h: HeldValue) => HeldValue | null): HeldEdits {
+  const mine = held[id];
+  if (!mine) return held;
+  const out = { ...mine };
+  let changed = false;
+  for (const key of Object.keys(fields) as (keyof InlineUpdate)[]) {
+    const h = out[key];
+    if (!h || h.value !== fields[key]) continue;
+    const n = next(h);
+    if (n) out[key] = n;
+    else delete out[key];
+    changed = true;
+  }
+  if (!changed) return held;
+  const rest = { ...held };
+  if (Object.keys(out).length > 0) rest[id] = out;
+  else delete rest[id];
+  return rest;
+}
+
+export function holdEdit(held: HeldEdits, id: string, fields: InlineUpdate): HeldEdits {
+  const out = { ...held[id] };
+  for (const key of Object.keys(fields) as (keyof InlineUpdate)[]) out[key] = { value: fields[key], saved: false };
+  return { ...held, [id]: out };
+}
+
+// The save is back: the value is let go at the next reload, which carries it. A newer value typed meanwhile stays held.
+export function editSaved(held: HeldEdits, id: string, fields: InlineUpdate): HeldEdits {
+  return changeHeld(held, id, fields, (h) => ({ ...h, saved: true }));
+}
+
+// The save failed: the box goes back to what is saved.
+export function editFailed(held: HeldEdits, id: string, fields: InlineUpdate): HeldEdits {
+  return changeHeld(held, id, fields, () => null);
+}
+
+// The page's copy was reloaded: the values whose saves are back are let go; those still on their way stay held.
+export function releaseSaved(held: HeldEdits): HeldEdits {
+  let changed = false;
+  const out: HeldEdits = {};
+  for (const [id, fields] of Object.entries(held)) {
+    const kept: Partial<Record<keyof InlineUpdate, HeldValue>> = {};
+    for (const [key, h] of Object.entries(fields) as [keyof InlineUpdate, HeldValue][]) {
+      if (h.saved) changed = true;
+      else kept[key] = h;
+    }
+    if (Object.keys(kept).length > 0) out[id] = kept;
+  }
+  return changed ? out : held;
+}
+
+// The exercises as the coach sees them: each with its held values over the page's copy.
+export function withHeldEdits<E extends { id: string }>(rows: E[], held: HeldEdits): E[] {
+  if (Object.keys(held).length === 0) return rows;
+  return rows.map((row) => {
+    const mine = held[row.id];
+    if (!mine) return row;
+    const values = Object.fromEntries(Object.entries(mine).map(([key, h]) => [key, h.value]));
+    return { ...row, ...values };
+  });
+}
