@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { after } from 'next/server';
 import { notifyProgrammeAssigned, notifyStartedRollout } from '@/lib/memberNotify';
 import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
+import { readGymProgramme, type GymProgramme, type WaitingOutcome } from '@/lib/gymProgramme';
 import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type {
   ProgrammeRolloutRow,
@@ -497,4 +498,48 @@ export async function applyTemplateToRollout(
   const { data, error } = await supabase.rpc('apply_template_to_rollout', { p_rollout_id: rolloutId, p_dry_run: false });
   if (error) return fail(error, 'Could not update that programme') as { ok: false; error: string };
   return { ok: true, counts: readUpdateCounts(data) };
+}
+
+// Item 7 (migration 0172): the programme the coach's gym is on today ("Gym programme: Salford Quays from 9 Nov · 16 members"), while its
+// last week has not finished, with the members it was not given to. Empty until migration 0172 is applied, rather than breaking the library.
+export async function getGymProgrammes(): Promise<GymProgramme[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('gym_programmes');
+  if (error || !Array.isArray(data)) return [];
+  return data.map(readGymProgramme).filter((p): p is GymProgramme => p !== null);
+}
+
+// Stops members who join the gym from now on getting it. The members on it keep it. A gym admin only (checked in the database).
+export async function endGymProgramme(rolloutId: string, expectedGymId?: string | null): Promise<ActionResult> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
+  const { error } = await supabase.rpc('end_gym_programme', { p_rollout_id: rolloutId });
+  return error ? fail(error, 'Could not end the gym programme') : ok();
+}
+
+// "Give it to them" (give) or "Keep theirs" for a member the gym programme was not given to when they joined. Their coach or a gym admin.
+export async function resolveGymProgrammeWaiting(input: {
+  rolloutId: string;
+  clientId: string;
+  give: boolean;
+  expectedGymId?: string | null;
+}): Promise<{ ok: true; outcome: WaitingOutcome } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, input.expectedGymId);
+  if (stale) return stale as { ok: false; error: string };
+  const { data, error } = await supabase.rpc('resolve_gym_programme_waiting', {
+    p_rollout_id: input.rolloutId,
+    p_client_id: input.clientId,
+    p_give: input.give,
+  });
+  if (error) return fail(error, 'Could not do that') as { ok: false; error: string };
+  const outcome: WaitingOutcome = data === 'given' || data === 'has_it' ? data : 'kept';
+  // D20: a member is told when a coach sets them up with a programme. The name is the rollout's own, read here rather than sent by the page.
+  if (outcome === 'given') {
+    const { data: rollout } = await supabase.from('programme_rollouts').select('program_name').eq('id', input.rolloutId).maybeSingle();
+    const clientId = input.clientId;
+    after(() => notifyProgrammeAssigned(clientId, rollout?.program_name ?? null));
+  }
+  return { ok: true, outcome };
 }

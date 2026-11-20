@@ -37,11 +37,13 @@ export function rolloutConfirmation(plan: RolloutPlan): RolloutConfirmation | nu
   if (plan.audience !== 'all') return null;
   const who = plan.memberCount == null ? 'everyone at the gym' : membersLabel(plan.memberCount);
   const keep = 'Their old programmes and every weight and rep logged stay on file.';
+  // Item 7 (migration 0172): a programme for everyone is the gym's programme, so members who join later get it too.
+  const later = 'Members who join the gym later get it too, on the gym’s current week, until it ends.';
   return {
     title: 'Start this programme for everyone?',
     body: plan.startsNow
-      ? `This will replace the current programme for ${who} today. ${keep}`
-      : `On ${plan.startLabel} this will replace the current programme for ${who}. ${keep}`,
+      ? `This will replace the current programme for ${who} today. ${keep} ${later}`
+      : `On ${plan.startLabel} this will replace the current programme for ${who}. ${keep} ${later}`,
     confirmLabel: plan.startsNow ? `Start for ${who}` : `Schedule for ${who}`,
   };
 }

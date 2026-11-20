@@ -38,6 +38,9 @@ import {
   previewTemplateToRollout,
   applyTemplateToRollout,
   type RolloutUsageRow,
+  getGymProgrammes,
+  endGymProgramme,
+  resolveGymProgrammeWaiting,
   reorderTemplateExercises,
   updateTemplateDay,
   updateTemplateExercise,
@@ -47,6 +50,17 @@ import { toTemplateExport } from '@/lib/data/templateTransfer';
 import { downloadTextFile } from '@/lib/utils/csv';
 import { DEFAULT_ROLLOUT_AUDIENCE, membersLabel, rolloutButtonLabel, rolloutConfirmation, rolloutSuccessMessage, type RolloutPlan } from '@/lib/rolloutPlan';
 import { NOTHING_TO_UPDATE, rolloutUpdateConfirmation, rolloutUpdateDone, templateInUseLabel } from '@/lib/rolloutUpdate';
+import {
+  endGymProgrammeConfirmation,
+  giveWaitingConfirmation,
+  gymProgrammeLabel,
+  gymProgrammeStatus,
+  waitingDone,
+  waitingHeading,
+  waitingReason,
+  type GymProgramme,
+  type GymProgrammeWaiting,
+} from '@/lib/gymProgramme';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgrammeRolloutRow, ProgramTemplateWithDays } from '@/lib/data/types';
 
@@ -204,6 +218,8 @@ export function ProgramTemplateManager({
   // D8: the rollouts members are still on, for "In use by N members" and "Apply to everyone on this rollout". Read again after the page
   // refreshes (a programme started or a template changed) and after applying.
   const [usage, setUsage] = useState<RolloutUsageRow[]>([]);
+  // Item 7: the programme the gym is on ("Gym programme: Salford Quays from 9 Nov · 16 members"), read with the usage.
+  const [gymProgrammes, setGymProgrammes] = useState<GymProgramme[]>([]);
   const [usageVersion, setUsageVersion] = useState(0);
   useEffect(() => {
     let live = true;
@@ -212,10 +228,43 @@ export function ProgramTemplateManager({
         if (live) setUsage(rows);
       })
       .catch(() => {});
+    getGymProgrammes()
+      .then((rows) => {
+        if (live) setGymProgrammes(rows);
+      })
+      .catch(() => {});
     return () => {
       live = false;
     };
   }, [initialTemplates, usageVersion]);
+
+  // Members who join the gym from now on stop getting it, after a confirm. The members on it keep it.
+  async function handleEndGymProgramme(g: GymProgramme) {
+    if (!(await confirm({ ...endGymProgrammeConfirmation(g), destructive: true }))) return;
+    await runMutate(() => endGymProgramme(g.rolloutId, gymId), {
+      success: 'Gym programme ended',
+      onDone: () => setUsageVersion((v) => v + 1),
+    });
+  }
+
+  // A member it wasn't given to when they joined (their own programme runs over the same dates): give it to them, or keep theirs.
+  async function handleWaiting(g: GymProgramme, w: GymProgrammeWaiting, give: boolean) {
+    if (give && !(await confirm(giveWaitingConfirmation(g, w)))) return;
+    let message = '';
+    await runMutate(
+      async () => {
+        const result = await resolveGymProgrammeWaiting({ rolloutId: g.rolloutId, clientId: w.clientId, give, expectedGymId: gymId });
+        if (result.ok) message = waitingDone(result.outcome, w.name);
+        return result;
+      },
+      {
+        onDone: () => {
+          toast.success(message);
+          setUsageVersion((v) => v + 1);
+        },
+      }
+    );
+  }
 
   // Copies the template into everyone's copy on a rollout for the weeks they haven't reached yet, after a confirm naming how many members.
   async function handleApplyToRollout(r: RolloutUsageRow) {
@@ -459,6 +508,11 @@ export function ProgramTemplateManager({
     ? initialTemplates.flatMap((t) => t.program_template_days).find((d) => d.id === openDayId)
     : undefined;
   const previewTemplate = previewId ? initialTemplates.find((t) => t.id === previewId) : undefined;
+  // The gym programme gets its own panel (with its own Apply), so the "In use by" rows are the template's other rollouts.
+  const previewGymProgramme = previewTemplate ? gymProgrammes.find((g) => g.templateId === previewTemplate.id) : undefined;
+  const previewUsage = previewTemplate
+    ? usage.filter((u) => u.templateId === previewTemplate.id && u.rolloutId !== previewGymProgramme?.rolloutId)
+    : [];
   const previewWeeks = previewTemplate
     ? Array.from(new Set(previewTemplate.program_template_days.map((d) => d.week_num))).sort((a, b) => a - b)
     : [];
@@ -529,7 +583,9 @@ export function ProgramTemplateManager({
           const weekNums = Array.from(new Set(template.program_template_days.map((d) => d.week_num)));
           const perWeek = Math.max(0, ...weekNums.map((w) => template.program_template_days.filter((d) => d.week_num === w).length));
           const exercises = template.program_template_days.reduce((n, d) => n + d.program_template_exercises.length, 0);
-          const inUse = templateInUseLabel(usage.filter((u) => u.templateId === template.id));
+          const gymProgramme = gymProgrammes.find((g) => g.templateId === template.id);
+          // The gym programme's members are on its own line, so "In use by" counts the template's other rollouts.
+          const inUse = templateInUseLabel(usage.filter((u) => u.templateId === template.id && u.rolloutId !== gymProgramme?.rolloutId));
           return (
             <div
               key={template.id}
@@ -541,6 +597,12 @@ export function ProgramTemplateManager({
                   <p className="text-[15px] font-bold text-black dark:text-zinc-50">{template.name}</p>
                   {template.description && (
                     <p className="mt-0.5 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{template.description}</p>
+                  )}
+                  {gymProgramme && (
+                    <p className="mt-1 mr-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
+                      {gymProgrammeLabel(gymProgramme)}
+                      {!gymProgramme.isOpen && ' · ended'}
+                    </p>
                   )}
                   {inUse && (
                     <p className="mt-1 mr-1 inline-block rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
@@ -632,36 +694,106 @@ export function ProgramTemplateManager({
             </div>
           )}
 
-          {usage.filter((u) => u.templateId === previewTemplate.id).length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {usage
-                .filter((u) => u.templateId === previewTemplate.id)
-                .map((u) => (
-                  <div key={u.rolloutId} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm dark:border-white/10">
-                    <span className="min-w-0 flex-1">
-                      <span className="font-semibold text-black dark:text-zinc-50">
-                        In use by {membersLabel(u.members)}
+          {previewGymProgramme && (
+            <div className="mt-3 space-y-2 rounded-xl border border-accent/30 px-3 py-2.5 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-0 flex-1">
+                  <span className="font-semibold text-black dark:text-zinc-50">{gymProgrammeLabel(previewGymProgramme)}</span>
+                  <span className="block text-xs text-zinc-500">
+                    {gymProgrammeStatus(previewGymProgramme)}
+                    {previewGymProgramme.programName !== previewTemplate.name ? ` Given as “${previewGymProgramme.programName}”.` : ''}
+                  </span>
+                </span>
+                {previewGymProgramme.members > 0 && (
+                  <button
+                    type="button"
+                    disabled={mutating}
+                    onClick={() =>
+                      handleApplyToRollout({
+                        rolloutId: previewGymProgramme.rolloutId,
+                        templateId: previewGymProgramme.templateId,
+                        programName: previewGymProgramme.programName,
+                        startDate: previewGymProgramme.startDate,
+                        audience: 'all',
+                        members: previewGymProgramme.members,
+                      })
+                    }
+                    className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+                  >
+                    Apply to everyone on it
+                  </button>
+                )}
+                {previewGymProgramme.isOpen && (
+                  <button
+                    type="button"
+                    disabled={mutating}
+                    onClick={() => handleEndGymProgramme(previewGymProgramme)}
+                    className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-danger hover:bg-danger/10 disabled:opacity-50"
+                  >
+                    End gym programme
+                  </button>
+                )}
+              </div>
+              {previewGymProgramme.isOpen && previewGymProgramme.waiting.length > 0 && (
+                <div className="space-y-1.5 border-t border-black/10 pt-2 dark:border-white/10">
+                  <p className="text-xs font-bold text-zinc-600 dark:text-zinc-300">{waitingHeading(previewGymProgramme)}</p>
+                  {previewGymProgramme.waiting.map((w) => (
+                    <div key={w.clientId} className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="font-semibold text-black dark:text-zinc-50">{w.name}</span>
+                        <span className="block text-xs text-zinc-500">{waitingReason(w)}</span>
                       </span>
-                      <span className="block text-xs text-zinc-500">
-                        Started {longDate(u.startDate)} for {u.audience === 'all' ? 'everyone at the gym' : 'chosen members'}
-                        {u.programName !== previewTemplate.name ? ` as “${u.programName}”` : ''}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={mutating}
-                      onClick={() => handleApplyToRollout(u)}
-                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
-                    >
-                      Apply to everyone on this rollout
-                    </button>
-                  </div>
-                ))}
-              <p className="text-xs text-zinc-500">
-                Changes you make here reach members only when you apply them, and only for weeks they haven’t reached yet. Members given this
-                programme one at a time keep their own copy.
-              </p>
+                      <button
+                        type="button"
+                        disabled={mutating}
+                        onClick={() => handleWaiting(previewGymProgramme, w, true)}
+                        className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+                      >
+                        Give it to them
+                      </button>
+                      <button
+                        type="button"
+                        disabled={mutating}
+                        onClick={() => handleWaiting(previewGymProgramme, w, false)}
+                        className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-zinc-600 hover:bg-black/5 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/10"
+                      >
+                        Keep theirs
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
+
+          {previewUsage.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {previewUsage.map((u) => (
+                <div key={u.rolloutId} className="flex flex-wrap items-center gap-2 rounded-xl border border-black/10 px-3 py-2 text-sm dark:border-white/10">
+                  <span className="min-w-0 flex-1">
+                    <span className="font-semibold text-black dark:text-zinc-50">In use by {membersLabel(u.members)}</span>
+                    <span className="block text-xs text-zinc-500">
+                      Started {longDate(u.startDate)} for {u.audience === 'all' ? 'everyone at the gym' : 'chosen members'}
+                      {u.programName !== previewTemplate.name ? ` as “${u.programName}”` : ''}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={mutating}
+                    onClick={() => handleApplyToRollout(u)}
+                    className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+                  >
+                    Apply to everyone on this rollout
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {(previewUsage.length > 0 || (previewGymProgramme?.members ?? 0) > 0) && (
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Changes you make here reach members only when you apply them, and only for weeks they haven’t reached yet. Members given this
+              programme one at a time keep their own copy.
+            </p>
           )}
 
           <div className="mt-3">
@@ -828,6 +960,12 @@ export function ProgramTemplateManager({
                       </button>
                     ))}
                   </div>
+                  {assignAudience === 'all' && (
+                    <p className="text-xs text-zinc-500">
+                      It becomes the gym programme: members who join the gym later get it too, on the gym’s current week, until it ends.
+                      {gymProgrammes[0]?.isOpen ? ` From the start date new members get this one instead of “${gymProgrammes[0].programName}”.` : ''}
+                    </p>
+                  )}
                 </div>
                 {assignAudience === 'selected' && (
                   <>

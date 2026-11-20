@@ -43,7 +43,10 @@ describe('Start this programme (R5)', () => {
   describe('the confirmation', () => {
     it('is required for everyone and states the number being replaced', () => {
       const c = rolloutConfirmation(plan({ audience: 'all', memberCount: 90 }));
-      expect(c?.body).toBe('This will replace the current programme for 90 members today. Their old programmes and every weight and rep logged stay on file.');
+      expect(c?.body).toBe(
+        'This will replace the current programme for 90 members today. Their old programmes and every weight and rep logged stay on file. ' +
+          'Members who join the gym later get it too, on the gym’s current week, until it ends.'
+      );
       expect(c?.confirmLabel).toBe('Start for 90 members');
     });
     it('says when it happens if scheduled', () => {
