@@ -8,6 +8,7 @@ import { planLoggedMessage } from '@ballistic/shared/utils/planLogging';
 import { orderedSections, planEntrySectionId, type PlanPick } from '@ballistic/shared/utils/planSections';
 
 import { Pressable } from '@/components/press';
+import { AddProductSheet } from '@/components/barcodeFood';
 import { AddFoodButtons, CompleteScanSheet, FoodPickerSheet, QuantitySheet, ScanAmountSheet, ScannerSheet, TotalsCard } from '@/components/food';
 import { NutritionTabs } from '@/components/pagetabs';
 import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
@@ -128,6 +129,7 @@ export default function MealPlan() {
           onAddFood={(food, portions) => addFood.mutate({ sectionId: adding.id, food, portions })}
           recipes={recipesQ.data ?? []}
           onAddRecipe={(recipe, servings) => addRecipe.mutate({ sectionId: adding.id, recipe, servings })}
+          onScanBarcode={(name) => scan.start(adding, name)}
         />
       ) : null}
       {editing ? (
@@ -142,6 +144,7 @@ export default function MealPlan() {
       ) : null}
       {scan.scanTarget ? <ScannerSheet onClose={scan.cancelScan} onDetected={scan.handleDetected} /> : null}
       {scan.pending ? <CompleteScanSheet pending={scan.pending} onCancel={scan.cancelPending} onSave={scan.handleComplete} /> : null}
+      {scan.adding ? <AddProductSheet key={scan.adding.barcode} product={scan.adding} onSave={scan.handleAddProduct} onCancel={scan.cancelAdding} /> : null}
       <ScanAmountSheet scan={scan} />
     </>
   );

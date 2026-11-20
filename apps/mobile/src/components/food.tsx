@@ -519,7 +519,9 @@ export function QuickAddForm({ onAdd, initial, submitLabel = 'Add' }: { onAdd: (
 
 // Search, favourites and recently logged. Tap a food, then choose how much (D23b). `onAdd` gets the food and the amount.
 // Shared by the diary's Add food sheet, the recipe ingredient picker and the Meal Planner.
-export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: number) => void }) {
+// `onScanBarcode`: when a search finds nothing, "Has a barcode? Scan it to add it for everyone" (owner's list item 6), with what was
+// searched for to start the product's name. Left out where there is no scanner.
+export function FoodSearchList({ onAdd, onScanBarcode }: { onAdd: (food: FoodRow, portions: number) => void; onScanBarcode?: (name: string) => void }) {
   const [text, setText] = useState('');
   const q = useDebounced(text, 200);
   const search = useFoodSearch(q);
@@ -654,6 +656,11 @@ export function FoodSearchList({ onAdd }: { onAdd: (food: FoodRow, portions: num
               {search.isFetching ? 'Searching…' : searching ? `No results for "${text.trim()}"` : text ? 'Keep typing…' : 'Start typing to search foods'}
             </AppText>
             {searching && !search.isFetching ? ownFoodLink(`Save “${text.trim()}” as a food of your own`, text.trim()) : null}
+            {searching && !search.isFetching && onScanBarcode ? (
+              <Pressable onPress={() => onScanBarcode(text.trim())} accessibilityRole="button" hitSlop={6} style={{ paddingVertical: 8 }}>
+                <AppText color="accent" style={{ fontWeight: '700' }}>Has a barcode? Scan it to add it for everyone</AppText>
+              </Pressable>
+            ) : null}
           </View>
         }
       />
@@ -713,7 +720,20 @@ function SheetTabs<T extends string>({ value, onChange, options }: { value: T; o
 }
 
 // The "Add food" sheet: search, favourites, recently logged, saved recipes and Quick Add. Adding closes the sheet.
-export function AddFoodSheet({ section, date, onClose, recipes = [] }: { section: { id: string | null; label: string }; date: string; onClose: () => void; recipes?: RecipeWithIngredients[] }) {
+// `onScanBarcode`: search found nothing and the member chose to scan the product to add it; the sheet closes and the scanner opens.
+export function AddFoodSheet({
+  section,
+  date,
+  onClose,
+  recipes = [],
+  onScanBarcode,
+}: {
+  section: { id: string | null; label: string };
+  date: string;
+  onClose: () => void;
+  recipes?: RecipeWithIngredients[];
+  onScanBarcode?: (name: string) => void;
+}) {
   const [tab, setTab] = useState<'search' | 'recipes' | 'quick'>('search');
   const addFood = useAddFood(date);
   const addRecipe = useAddRecipe(date);
@@ -743,7 +763,10 @@ export function AddFoodSheet({ section, date, onClose, recipes = [] }: { section
           }}
         />
       ) : (
-        <FoodSearchList onAdd={(food, portions) => { addFood.mutate({ food, portions, sectionId: section.id }); onClose(); }} />
+        <FoodSearchList
+          onAdd={(food, portions) => { addFood.mutate({ food, portions, sectionId: section.id }); onClose(); }}
+          onScanBarcode={onScanBarcode ? (name) => { onClose(); onScanBarcode(name); } : undefined}
+        />
       )}
     </SheetFrame>
   );
@@ -756,12 +779,14 @@ export function FoodPickerSheet({
   onAddFood,
   recipes,
   onAddRecipe,
+  onScanBarcode,
 }: {
   title: string;
   onClose: () => void;
   onAddFood: (food: FoodRow, portions: number) => void;
   recipes?: RecipeWithIngredients[];
   onAddRecipe?: (recipe: RecipeWithIngredients, servings: number) => void;
+  onScanBarcode?: (name: string) => void;
 }) {
   const [tab, setTab] = useState<'search' | 'recipes'>('search');
   return (
@@ -770,7 +795,10 @@ export function FoodPickerSheet({
       {tab === 'recipes' && onAddRecipe ? (
         <RecipePickList recipes={recipes ?? []} onAdd={(r, n) => { onAddRecipe(r, n); onClose(); }} />
       ) : (
-        <FoodSearchList onAdd={(food, portions) => { onAddFood(food, portions); onClose(); }} />
+        <FoodSearchList
+          onAdd={(food, portions) => { onAddFood(food, portions); onClose(); }}
+          onScanBarcode={onScanBarcode ? (name) => { onClose(); onScanBarcode(name); } : undefined}
+        />
       )}
     </SheetFrame>
   );

@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import type { FoodDiaryEntryRow, FoodRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
 import { lookupBarcode } from '@ballistic/shared/openFoodFacts';
 import { barcodeVariants } from '@ballistic/shared/utils/barcode';
+import { addedProduct, type BarcodeFoodFields } from '@ballistic/shared/utils/barcodeFoods';
 import { recipeLogFields, refiledEntries, relinkRecipeCopies } from '@ballistic/shared/utils/diaryLines';
 import { SEARCH_LIMIT } from '@ballistic/shared/utils/foodResults';
 import type { OwnUnitRow, ServingOption } from '@ballistic/shared/utils/foodUnits';
@@ -474,6 +475,29 @@ async function findByBarcode(barcode: string): Promise<FoodRow | null> {
 export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null> {
   const found = await findByBarcode(barcode);
   return found && !found.hidden ? found : null;
+}
+
+// The scan's first look, as on the web: the food for this barcode, or that a coach has hidden it (so the scan can say so instead of
+// looking it up on Open Food Facts or offering to add it again, which the database would refuse).
+export async function findFoodByBarcode(barcode: string): Promise<{ food: FoodRow | null; hidden: boolean }> {
+  const found = await findByBarcode(barcode);
+  return { food: found && !found.hidden ? found : null, hidden: found?.hidden === true };
+}
+
+// "Add this product" (owner's list item 6, migration 0173): a product nobody has added, typed in from the pack, into the shared food list.
+// One food per barcode: if someone added it first, theirs comes back with existing true. A refusal comes back as its message.
+export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields): Promise<{ food: FoodRow; existing: boolean } | { error: string }> {
+  const { data, error } = await supabase.rpc('add_barcode_food', {
+    p_barcode: barcode,
+    p_name: fields.name,
+    p_brand: fields.brand,
+    p_protein: fields.protein,
+    p_carbs: fields.carbs,
+    p_fat: fields.fat,
+    p_serving_options: fields.serving_options,
+  });
+  if (error) return { error: error.message?.trim() || 'Could not add that product. Try again.' };
+  return addedProduct(data) ?? { error: 'Could not add that product. Try again.' };
 }
 
 // Caches a scanned product in the shared foods table. Never overwrites an existing row for that barcode

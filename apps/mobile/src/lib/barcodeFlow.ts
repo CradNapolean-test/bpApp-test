@@ -1,21 +1,24 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { FoodRow } from '@ballistic/shared/data/types';
 import { extractBarcode } from '@ballistic/shared/utils/barcode';
+import { ADDED_BY_SOMEONE_ELSE, PRODUCT_TAKEN_OFF, productBarcode, type BarcodeFoodFields } from '@ballistic/shared/utils/barcodeFoods';
 import { scanSuggestedAmount } from '@ballistic/shared/utils/foodQuantity';
 import { defaultUnit, unitsFor, type ServingOption } from '@ballistic/shared/utils/foodUnits';
 
-import { getFoodByBarcode, lookupBarcode, setFoodServings, upsertFoodFromBarcode } from '@/lib/food';
+import { addBarcodeFood, findFoodByBarcode, lookupBarcode, setFoodServings, upsertFoodFromBarcode } from '@/lib/food';
 
 export type ScanTarget = { id: string | null; label: string };
 export type PendingScan = { barcode: string; name: string; protein: number | null; carbs: number | null; fat: number | null; servingGrams: number | null; serving: ServingOption | null; target: ScanTarget | null };
 // A scanned food waiting for the member to say how much (FT7).
 export type ScanConfirm = { food: FoodRow; amount: number; target: ScanTarget | null };
+// A product nobody has added (not in the food list, not on Open Food Facts), waiting to be added from the pack (owner's list item 6).
+export type NewProduct = { barcode: string; name: string; target: ScanTarget | null };
 
 // The barcode flow, same order as the web: start a scan aimed at a diary section, look the code up (our food
 // database first, then Open Food Facts), then ASK how much (the pack's serving size is filled in when it has one) before the food
 // is handed back to be added. If Open Food Facts has the product but not every nutrient, ask for just what is missing instead of
-// treating it as a total miss.
+// treating it as a total miss. If nobody has it at all, the member can add it from the pack, for everyone (migration 0173).
 // The pack's own serving when the food has one, else the usual suggestion (100 g).
 const suggestedAmount = (food: FoodRow, servingGrams: number | null) => defaultUnit(unitsFor(food, []))?.grams ?? scanSuggestedAmount(food, servingGrams);
 
@@ -24,8 +27,12 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
   const [status, setStatus] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingScan | null>(null);
   const [confirming, setConfirming] = useState<ScanConfirm | null>(null);
+  const [adding, setAdding] = useState<NewProduct | null>(null);
+  // What the member had searched for when they chose to scan instead ("Has a barcode?"), to start the product's name with.
+  const nameHint = useRef('');
 
-  function start(target: ScanTarget) {
+  function start(target: ScanTarget, name = '') {
+    nameHint.current = name;
     setScanTarget(target);
     setStatus(null);
   }
@@ -36,7 +43,13 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
     setScanTarget(null);
     setStatus('Looking up…');
     try {
-      let food = await getFoodByBarcode(barcode);
+      const known = await findFoodByBarcode(barcode);
+      // A coach took this product off the list because it was wrong: say so, rather than caching it or adding it again.
+      if (known.hidden) {
+        setStatus(PRODUCT_TAKEN_OFF);
+        return;
+      }
+      let food = known.food;
       let servingGrams: number | null = null;
       if (food && (food.source === 'scan' || food.source === 'off') && !food.serving_options?.length) {
         // Scanned before servings existed: take the pack's serving from Open Food Facts now, once, so it is offered from here on.
@@ -46,7 +59,14 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
       if (!food) {
         const product = await lookupBarcode(barcode);
         if (!product) {
-          setStatus(`No product found for barcode ${barcode}. Try search instead.`);
+          // Nobody has this product: the member can add it from the pack, for everyone. Not something that is not a product number.
+          const code = productBarcode(barcode);
+          if (!code) {
+            setStatus(`No product found for barcode ${barcode}. Try search instead.`);
+            return;
+          }
+          setStatus(null);
+          setAdding({ barcode: code, name: nameHint.current, target });
           return;
         }
         if (product.protein == null || product.carbs == null || product.fat == null) {
@@ -79,6 +99,20 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
     }
   }
 
+  // "Add this product": into the shared food list, then on to how much, as for any scan. If someone added it first, theirs is used.
+  // Returns a message for the form when it could not be added.
+  async function handleAddProduct(fields: BarcodeFoodFields): Promise<string | null> {
+    if (!adding) return null;
+    const { barcode, target } = adding;
+    const result = await addBarcodeFood(barcode, fields).catch(() => null);
+    if (!result) return 'Could not add that product. Check your connection and try again.';
+    if ('error' in result) return result.error;
+    setAdding(null);
+    setStatus(result.existing ? ADDED_BY_SOMEONE_ELSE : null);
+    setConfirming({ food: result.food, amount: suggestedAmount(result.food, null), target });
+    return null;
+  }
+
   // The member said how much: now the food is added.
   function confirmAmount(amount: number) {
     const c = confirming;
@@ -88,5 +122,21 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
     setStatus(`Added ${c.food.name} to ${c.target?.label ?? 'Other'}.`);
   }
 
-  return { scanTarget, status, pending, confirming, confirmAmount, cancelConfirm: () => setConfirming(null), start, clearStatus: () => setStatus(null), cancelScan: () => setScanTarget(null), cancelPending: () => setPending(null), handleDetected, handleComplete };
+  return {
+    scanTarget,
+    status,
+    pending,
+    confirming,
+    adding,
+    confirmAmount,
+    cancelConfirm: () => setConfirming(null),
+    start,
+    clearStatus: () => setStatus(null),
+    cancelScan: () => setScanTarget(null),
+    cancelPending: () => setPending(null),
+    cancelAdding: () => setAdding(null),
+    handleDetected,
+    handleComplete,
+    handleAddProduct,
+  };
 }

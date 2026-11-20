@@ -8,6 +8,7 @@ import { recipeServingText, recipeServingWeight } from '@ballistic/shared/utils/
 
 import { Pressable } from '@/components/press';
 import { FieldLabel, Input } from '@/components/fields';
+import { AddProductSheet } from '@/components/barcodeFood';
 import { CompleteScanSheet, FoodPickerSheet, QuantitySheet, ScanAmountSheet, ScannerSheet } from '@/components/food';
 import { FormsEmpty } from '@/components/forms';
 import { Icon } from '@/components/icons';
@@ -203,6 +204,7 @@ export default function Recipes() {
           title={`Add ingredient · ${q.data.find((r) => r.id === adding)?.name ?? 'Recipe'}`}
           onClose={() => setAdding(null)}
           onAddFood={(food, portions) => addIngredient.mutate({ recipeId: adding, food, portions })}
+          onScanBarcode={(name) => scan.start({ id: adding, label: q.data.find((r) => r.id === adding)?.name ?? 'Recipe' }, name)}
         />
       ) : null}
       {editing ? (
@@ -225,6 +227,7 @@ export default function Recipes() {
       ) : null}
       {scan.scanTarget ? <ScannerSheet onClose={scan.cancelScan} onDetected={scan.handleDetected} /> : null}
       {scan.pending ? <CompleteScanSheet pending={scan.pending} onCancel={scan.cancelPending} onSave={scan.handleComplete} /> : null}
+      {scan.adding ? <AddProductSheet key={scan.adding.barcode} product={scan.adding} onSave={scan.handleAddProduct} onCancel={scan.cancelAdding} /> : null}
       <ScanAmountSheet scan={scan} />
     </>
   );

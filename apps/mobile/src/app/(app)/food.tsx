@@ -8,6 +8,7 @@ import { recipeRowCount, type RecipeLine } from '@ballistic/shared/utils/diaryLi
 
 import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
+import { AddProductSheet } from '@/components/barcodeFood';
 import { AddFoodSheet, CoachFeedbackCard, CompleteScanSheet, DateNav, DiarySection, EditEntrySheet, ScanAmountSheet, ScannerSheet, shortDate, TotalsCard } from '@/components/food';
 import { ManualDiaryScreen } from '@/components/manualMacros';
 import { NutritionTabs } from '@/components/pagetabs';
@@ -144,7 +145,15 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
         {other.length ? <DiarySection label="Other" entries={other} onAdd={() => setAddTarget({ id: null, label: 'Other' })} onScan={() => scan.start({ id: null, label: 'Other' })} onEdit={setEditing} onRemoveRecipe={setRemovingRecipe} /> : null}
       </ScrollScreen>
 
-      {addTarget ? <AddFoodSheet section={addTarget} date={date} recipes={areas.recipes ? recipesQ.data ?? [] : []} onClose={() => setAddTarget(null)} /> : null}
+      {addTarget ? (
+        <AddFoodSheet
+          section={addTarget}
+          date={date}
+          recipes={areas.recipes ? recipesQ.data ?? [] : []}
+          onScanBarcode={(name) => scan.start(addTarget, name)}
+          onClose={() => setAddTarget(null)}
+        />
+      ) : null}
       {editing ? (
         <EditEntrySheet
           entry={editing}
@@ -166,6 +175,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
       ) : null}
       {scan.scanTarget ? <ScannerSheet onClose={scan.cancelScan} onDetected={scan.handleDetected} /> : null}
       {scan.pending ? <CompleteScanSheet pending={scan.pending} onCancel={scan.cancelPending} onSave={scan.handleComplete} /> : null}
+      {scan.adding ? <AddProductSheet key={scan.adding.barcode} product={scan.adding} onSave={scan.handleAddProduct} onCancel={scan.cancelAdding} /> : null}
       <ScanAmountSheet scan={scan} />
     </>
   );
