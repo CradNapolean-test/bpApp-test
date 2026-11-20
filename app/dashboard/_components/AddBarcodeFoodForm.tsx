@@ -99,7 +99,7 @@ export function AddBarcodeFoodForm({
         </label>
         <label className={labelCls}>
           <span className={captionCls}>{text.per === 'serving' ? 'It weighs (g)' : 'It weighs (g, if known)'}</span>
-          <input type="number" inputMode="decimal" min={0} value={text.grams} onChange={set('grams')} placeholder={text.per === 'serving' ? '45' : 'optional'} className={inputCls} />
+          <input type="number" inputMode="decimal" step="any" min={0} value={text.grams} onChange={set('grams')} placeholder={text.per === 'serving' ? '45' : 'optional'} className={inputCls} />
         </label>
       </div>
       <div>
@@ -110,9 +110,9 @@ export function AddBarcodeFoodForm({
         </div>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        <input type="number" inputMode="decimal" min={0} value={text.protein} onChange={set('protein')} placeholder="protein g" aria-label="Protein in grams" className={inputCls} />
-        <input type="number" inputMode="decimal" min={0} value={text.carbs} onChange={set('carbs')} placeholder="carbs g" aria-label="Carbs in grams" className={inputCls} />
-        <input type="number" inputMode="decimal" min={0} value={text.fat} onChange={set('fat')} placeholder="fat g" aria-label="Fat in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" step="any" min={0} value={text.protein} onChange={set('protein')} placeholder="protein g" aria-label="Protein in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" step="any" min={0} value={text.carbs} onChange={set('carbs')} placeholder="carbs g" aria-label="Carbs in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" step="any" min={0} value={text.fat} onChange={set('fat')} placeholder="fat g" aria-label="Fat in grams" className={inputCls} />
       </div>
       {preview.ok && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">

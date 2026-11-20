@@ -391,14 +391,14 @@ function OwnFoodForm({ initialName, onSave, onCancel }: { initialName: string; o
         </label>
         <label className={labelCls}>
           <span className={captionCls}>It weighs (g, if known)</span>
-          <input type="number" inputMode="decimal" min={0} value={text.grams} onChange={set('grams')} placeholder="optional" className={inputCls} />
+          <input type="number" inputMode="decimal" step="any" min={0} value={text.grams} onChange={set('grams')} placeholder="optional" className={inputCls} />
         </label>
       </div>
       <p className={captionCls}>In one {serving}</p>
       <div className="grid grid-cols-3 gap-1.5">
-        <input type="number" inputMode="decimal" min={0} value={text.protein} onChange={set('protein')} placeholder="protein g" aria-label="Protein in grams" className={inputCls} />
-        <input type="number" inputMode="decimal" min={0} value={text.carbs} onChange={set('carbs')} placeholder="carbs g" aria-label="Carbs in grams" className={inputCls} />
-        <input type="number" inputMode="decimal" min={0} value={text.fat} onChange={set('fat')} placeholder="fat g" aria-label="Fat in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" step="any" min={0} value={text.protein} onChange={set('protein')} placeholder="protein g" aria-label="Protein in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" step="any" min={0} value={text.carbs} onChange={set('carbs')} placeholder="carbs g" aria-label="Carbs in grams" className={inputCls} />
+        <input type="number" inputMode="decimal" step="any" min={0} value={text.fat} onChange={set('fat')} placeholder="fat g" aria-label="Fat in grams" className={inputCls} />
       </div>
       {preview.ok && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -456,10 +456,10 @@ function QuickAddForm({ onAdd }: { onAdd: (fields: { name: string; calories: num
       <div className="space-y-2">
         <input type="text" placeholder="What is it?" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.kcal} placeholder="kcal" aria-label="Calories" value={calories} onChange={(e) => setCalories(e.target.value)} className={inputCls} />
-          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="protein g" aria-label="Protein in grams" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
-          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="carbs g" aria-label="Carbs in grams" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
-          <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="fat g" aria-label="Fat in grams" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.kcal} placeholder="kcal" aria-label="Calories" value={calories} onChange={(e) => setCalories(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.grams} placeholder="protein g" aria-label="Protein in grams" value={protein} onChange={(e) => setProtein(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.grams} placeholder="carbs g" aria-label="Carbs in grams" value={carbs} onChange={(e) => setCarbs(e.target.value)} className={inputCls} />
+          <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.grams} placeholder="fat g" aria-label="Fat in grams" value={fat} onChange={(e) => setFat(e.target.value)} className={inputCls} />
         </div>
         {problem && <p className="text-xs font-semibold text-danger">{problem}</p>}
         <Button type="submit" variant="primary" size="sm" disabled={!canSubmit}>

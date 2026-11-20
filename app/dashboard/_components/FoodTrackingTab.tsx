@@ -244,10 +244,10 @@ function EditEntrySheet({
           <div className="space-y-2">
             <input type="text" aria-label="Name" value={qName} onChange={(e) => setQName(e.target.value)} className={boxCls} />
             <div className="grid grid-cols-2 gap-1.5">
-              <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.kcal} placeholder="kcal" aria-label="Calories" value={qCalories} onChange={(e) => setQCalories(e.target.value)} className={boxCls} />
-              <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="protein g" aria-label="Protein in grams" value={qProtein} onChange={(e) => setQProtein(e.target.value)} className={boxCls} />
-              <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="carbs g" aria-label="Carbs in grams" value={qCarbs} onChange={(e) => setQCarbs(e.target.value)} className={boxCls} />
-              <input type="number" inputMode="decimal" min={0} max={FOOD_LIMITS.grams} placeholder="fat g" aria-label="Fat in grams" value={qFat} onChange={(e) => setQFat(e.target.value)} className={boxCls} />
+              <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.kcal} placeholder="kcal" aria-label="Calories" value={qCalories} onChange={(e) => setQCalories(e.target.value)} className={boxCls} />
+              <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.grams} placeholder="protein g" aria-label="Protein in grams" value={qProtein} onChange={(e) => setQProtein(e.target.value)} className={boxCls} />
+              <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.grams} placeholder="carbs g" aria-label="Carbs in grams" value={qCarbs} onChange={(e) => setQCarbs(e.target.value)} className={boxCls} />
+              <input type="number" inputMode="decimal" step="any" min={0} max={FOOD_LIMITS.grams} placeholder="fat g" aria-label="Fat in grams" value={qFat} onChange={(e) => setQFat(e.target.value)} className={boxCls} />
             </div>
             {quickProblem && <p className="text-xs font-semibold text-danger">{quickProblem}</p>}
           </div>
