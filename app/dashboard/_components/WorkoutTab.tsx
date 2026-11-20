@@ -716,13 +716,20 @@ function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | 
 
 // The rolling-block anchor: "current week" for check-in resolution is computed from this
 // date, not stored separately -- see lib/utils/checkin.ts.
+// Saved when the field is left (or on Enter), not on every change: typing a date passes through other dates (the day "23" goes through
+// the 2nd, a year through 0002, 0020 and 0202), and each one would be saved. A late joiner's copy of a gym programme moved before the
+// gym's week 1, even for a moment, starts again from week 1 (migration 0172).
 function ProgramStartDateInput({ programId, initial }: { programId: string; initial: string | null }) {
   const { run } = useAction();
   const [value, setValue] = useState(initial ?? '');
+  const saved = useRef(initial ?? '');
 
-  async function handleChange(next: string) {
-    setValue(next);
-    await run(() => updateProgram(programId, { start_date: next || null }));
+  async function save() {
+    if (value === saved.current) return;
+    const previous = saved.current;
+    saved.current = value;
+    // Not saved: leaving the field again tries again.
+    if (!(await run(() => updateProgram(programId, { start_date: value || null })))) saved.current = previous;
   }
 
   return (
@@ -732,7 +739,11 @@ function ProgramStartDateInput({ programId, initial }: { programId: string; init
         type="date"
         className="rounded-xl border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
         value={value}
-        onChange={(e) => handleChange(e.target.value)}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
       />
     </label>
   );
