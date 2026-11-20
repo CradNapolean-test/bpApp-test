@@ -29,6 +29,7 @@ import type { BlockType, ClientExerciseMaxRow, ExerciseLibraryRow, PrescriptionT
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
 import { guessTrackingType } from '@/lib/trackingGuess';
 import { exerciseNameKey, findLibraryMatch } from '@/lib/libraryMatch';
+import { canAddLibraryExercises, createLibraryExerciseByName } from '@/lib/data/exerciseLibrary';
 import { INLINE_BOX, inlineDetails, inlineTarget, inlineText, readInlineBox, readSetsText, readTargetText, type InlineBox } from '@/lib/builderInline';
 
 // An exercise's picture is a link a coach pasted. It loads only from the gym's own storage and the hosts named in NEXT_PUBLIC_IMAGE_HOSTS
@@ -455,6 +456,7 @@ function ExercisePickerSheet({
   title,
   onPick,
   onCustom,
+  onCreate,
   onClose,
 }: {
   library: ExerciseLibraryRow[];
@@ -463,6 +465,8 @@ function ExercisePickerSheet({
   title: string;
   onPick: (entry: ExerciseLibraryRow) => Promise<unknown>;
   onCustom: (name: string) => Promise<unknown>;
+  // Given to a coach who may add to the library: a name that is not in it is offered as "Create", which adds it to the library and here.
+  onCreate?: (name: string) => Promise<unknown>;
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
@@ -515,6 +519,27 @@ function ExercisePickerSheet({
               </button>
             </div>
           )}
+          {q && !exact && !libraryLoading && onCreate && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                run(() => onCreate(query.trim()), {
+                  success: `“${query.trim()}” is in the library and here`,
+                  onDone: () => {
+                    setAdded((a) => ({ ...a, [`created:${q}`]: (a[`created:${q}`] ?? 0) + 1 }));
+                    setQuery('');
+                  },
+                })
+              }
+              className="flex w-full flex-col items-start gap-0.5 px-3 py-3 text-left"
+            >
+              <span className="text-sm font-bold text-accent">+ Create “{query.trim()}”</span>
+              <span className="text-xs text-zinc-500">
+                Adds it to the exercise library too · records {TRACKING[guessTrackingType(query) ?? 'weight_reps'].label.toLowerCase()}
+              </span>
+            </button>
+          )}
           {q && !exact && !libraryLoading && (
             <button
               type="button"
@@ -527,9 +552,9 @@ function ExercisePickerSheet({
                   },
                 })
               }
-              className="flex w-full items-center gap-3 px-3 py-3 text-left text-sm font-bold text-accent"
+              className={`flex min-h-11 w-full items-center gap-3 px-3 text-left ${onCreate ? 'text-xs font-semibold text-zinc-600 dark:text-zinc-400' : 'py-3 text-sm font-bold text-accent'}`}
             >
-              + Add “{query.trim()}” as its own exercise
+              {onCreate ? `Add “${query.trim()}” to this workout only, not the library` : `+ Add “${query.trim()}” as its own exercise`}
             </button>
           )}
           {shown.map((entry) => {
@@ -1014,7 +1039,7 @@ type SheetState =
 
 export function ExerciseEditor<T extends EditableExercise>({
   exercises,
-  library,
+  library: libraryProp,
   canEdit,
   onAdd,
   onUpdate,
@@ -1082,6 +1107,25 @@ export function ExerciseEditor<T extends EditableExercise>({
   const [pendingSplit, setPendingSplit] = useState(false);
   // Conditioning block 2 as Breath / Burn, chosen before any exercise is in it.
   const [pendingBreathBurn, setPendingBreathBurn] = useState(false);
+  // Library exercises made here with "Create '<name>'" (item 5): listed with the library until the page's own copy has them.
+  const [createdEntries, setCreatedEntries] = useState<ExerciseLibraryRow[]>([]);
+  // Whether this coach may add to the library (the database's rule, asked the first time the picker opens); null until known.
+  const [mayAddToLibrary, setMayAddToLibrary] = useState<boolean | null>(null);
+  const pickerOpen = sheet?.kind === 'pick';
+  const library =
+    createdEntries.length === 0 ? libraryProp : [...libraryProp, ...createdEntries.filter((c) => !libraryProp.some((l) => l.id === c.id))];
+
+  useEffect(() => {
+    if (!canEdit || !pickerOpen || mayAddToLibrary != null) return;
+    let live = true;
+    canAddLibraryExercises().then(
+      (may) => live && setMayAddToLibrary(may),
+      () => live && setMayAddToLibrary(false)
+    );
+    return () => {
+      live = false;
+    };
+  }, [canEdit, pickerOpen, mayAddToLibrary]);
 
   useEffect(() => {
     if (prevIdsKey.current !== idsKey) {
@@ -1200,6 +1244,15 @@ export function ExerciseEditor<T extends EditableExercise>({
       reps: setsAndReps && hasMeasure(tracking, 'reps') ? '8-10' : null,
       tracking_type: tracking,
     });
+  }
+
+  // "Create '<name>'": the name goes into the library first (or the library's own row comes back, if it already had the name), then into
+  // the workout as that library exercise, so it is linked and starts as a library pick does.
+  async function createAndAdd(key: string, name: string) {
+    const created = await createLibraryExerciseByName(name);
+    if (!created.ok) return created;
+    setCreatedEntries((c) => (c.some((e) => e.id === created.entry.id) ? c : [...c, created.entry]));
+    return addFromLibrary(key, created.entry);
   }
 
   const updateMany = (ids: string[], fields: ExerciseUpdate) =>
@@ -1653,6 +1706,7 @@ export function ExerciseEditor<T extends EditableExercise>({
           title={`Add to ${keyLabel(sheet.key)}`}
           onPick={(entry) => addFromLibrary(sheet.key, entry)}
           onCustom={(name) => addCustom(sheet.key, name)}
+          onCreate={mayAddToLibrary ? (name) => createAndAdd(sheet.key, name) : undefined}
           onClose={() => setSheet(null)}
         />
       )}

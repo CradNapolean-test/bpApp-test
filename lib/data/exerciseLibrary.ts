@@ -4,6 +4,15 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ExerciseLibraryRow } from './types';
+import {
+  LIBRARY_ADD_REFUSED,
+  canAddToLibrary,
+  cleanExerciseName,
+  existingLibraryEntry,
+  libraryNamePattern,
+  libraryNameProblem,
+  newLibraryEntry,
+} from '@/lib/libraryCreate';
 
 export async function getExerciseLibrary(): Promise<ExerciseLibraryRow[]> {
   const supabase = await createClient();
@@ -67,6 +76,54 @@ export async function createLibraryExercise(
 
   const { error } = await supabase.from('exercise_library').insert({ ...fields, created_by: user.id });
   if (error) raise(error);
+}
+
+// Whether the signed-in person may add to the library: the workout builder's picker offers "Create '<name>'" only then (item 5).
+export async function canAddLibraryExercises(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase.from('profiles').select('role, gym_id').eq('id', user.id).maybeSingle();
+  return canAddToLibrary(data);
+}
+
+export type CreatedLibraryExercise = { ok: true; entry: ExerciseLibraryRow } | { ok: false; error: string };
+
+// "Create '<name>'" in the workout builder: adds a typed name to the library (tracking type read from the name) and hands the row back
+// for the picker to add to the workout, linked to it. A name the library already has once is handed back instead of being added again.
+export async function createLibraryExerciseByName(name: string): Promise<CreatedLibraryExercise> {
+  const refuse = (error: { message?: string } | null, fallback: string) => fail(error, fallback) as { ok: false; error: string };
+  const problem = libraryNameProblem(name);
+  if (problem) return { ok: false, error: problem };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'Not authenticated' };
+
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('role, gym_id').eq('id', user.id).maybeSingle();
+  if (profileError) return refuse(profileError, 'Could not check who you are');
+  if (!canAddToLibrary(profile)) return { ok: false, error: LIBRARY_ADD_REFUSED };
+
+  const { data: candidates, error: findError } = await supabase
+    .from('exercise_library')
+    .select('*')
+    .ilike('name', libraryNamePattern(name))
+    .limit(500);
+  if (findError) return refuse(findError, 'Could not check the library');
+  const existing = existingLibraryEntry((candidates ?? []) as ExerciseLibraryRow[], name);
+  if (existing.kind === 'one') return { ok: true, entry: existing.entry };
+  if (existing.kind === 'many') return { ok: false, error: `“${cleanExerciseName(name)}” is already in the library: pick it from the list.` };
+
+  const { data, error } = await supabase
+    .from('exercise_library')
+    .insert({ ...newLibraryEntry(name), created_by: user.id })
+    .select('*')
+    .single();
+  if (error || !data) return refuse(error, 'Could not add that exercise to the library');
+  return { ok: true, entry: data as ExerciseLibraryRow };
 }
 
 // Bulk-inserts an imported CSV in one round trip rather than looping createLibraryExercise --
