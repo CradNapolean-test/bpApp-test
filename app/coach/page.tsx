@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentUser } from '@/lib/supabase/currentUser';
+import { getCurrentUser, getMyCoachProfile } from '@/lib/supabase/currentUser';
 import { getCoachDashboard } from '@/lib/data/coachDashboard';
+import { activityFeedNames } from '@/lib/coachDashboardRules';
 import { getCoachUnreadTotal } from '@/lib/data/coach';
 import type { DashboardScope } from '@/lib/data/coachDashboard';
 import { AppShell } from '@/app/_components/AppShell';
@@ -23,25 +24,27 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
+  const requested: DashboardScope = scopeParam === 'gym' || scopeParam === 'coach' ? scopeParam : 'mine';
+  // The dashboard's reads and the header's unread total start now, alongside the "is this a coach?" check below, not after it (item 9).
+  // Nothing of them is shown unless the check passes: someone else is sent away and their reads, which the database limits to their own
+  // rows anyway, are dropped (the handlers stop a failed one being reported as unhandled). The header's message badge is always the
+  // coach's own unread, whichever view is showing.
+  const dashboardRead = getCoachDashboard(requested, coachParam ?? null);
+  dashboardRead.catch(() => {});
+  const unreadRead = getCoachUnreadTotal(supabase).catch(() => 0);
+
   // maybeSingle, not single -- and redirect to '/' (which explicitly handles a missing
   // profile), not straight to '/dashboard' -- redirecting directly between the two role pages
   // is what turned "no profile exists yet" into an actual infinite loop. See app/page.tsx.
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+  // The same read of the coach's own row as getCoachDashboard's (one trip, shared).
+  const profile = await getMyCoachProfile();
   if (!profile || profile.role !== 'coach') redirect('/');
 
-  const requested: DashboardScope = scopeParam === 'gym' || scopeParam === 'coach' ? scopeParam : 'mine';
-  // The header's message badge is always the coach's own unread, whichever view is showing. Read alongside the dashboard, not after it,
-  // so a scope switch (which runs this page again) waits for one round of reads instead of two.
-  const [data, unreadCount] = await Promise.all([getCoachDashboard(requested, coachParam ?? null), getCoachUnreadTotal(supabase).catch(() => 0)]);
+  const [data, unreadCount] = await Promise.all([dashboardRead, unreadRead]);
 
-  // The activity feed is gym-wide, so it includes members of other coaches too; their names come
-  // from the dashboard's own lookup where we have them, otherwise a quick query.
-  const names: Record<string, string> = { ...data.nameById };
-  const unknownIds = [...new Set(data.activity.map((e) => e.client_id))].filter((id) => !names[id]);
-  if (unknownIds.length) {
-    const { data: extra } = await supabase.from('client_profiles').select('client_id, name').in('client_id', unknownIds);
-    for (const p of extra ?? []) if (p.name) names[p.client_id] = p.name;
-  }
+  // The activity feed is gym-wide, so it includes members of other coaches too; their names come from the dashboard's own lookup where
+  // it has them, otherwise their profile names (read by the dashboard alongside its members).
+  const names = activityFeedNames(data.nameById, data.activityNames);
 
   return (
     <ClientOnly fallback={<PageSkeleton />}>

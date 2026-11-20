@@ -9,6 +9,20 @@ export function startedBy(startTime: string | null, nowMinute: number): boolean 
   return startTime != null && startTime !== '' && toMinutes(startTime) <= nowMinute;
 }
 
+// The number of meal photos on a logged day. The dashboard reads them as food_photo_entries(count), one row holding the count, instead
+// of a row per photo (item 9); no row at all reads as none.
+export function photoCount(entries: { count?: number | null }[] | null | undefined): number {
+  return entries?.[0]?.count ?? 0;
+}
+
+// Names for the activity feed: the dashboard's own members by the name it shows them under, then anyone else in the (gym-wide) feed by
+// their profile name, so a member of another coach reads as a name, not "A client".
+export function activityFeedNames(nameById: Record<string, string>, others: Record<string, string>): Record<string, string> {
+  const names: Record<string, string> = { ...nameById };
+  for (const [id, name] of Object.entries(others)) if (!names[id] && name) names[id] = name;
+  return names;
+}
+
 // The most review markers "Mark all reviewed" writes in one go (one database call for the lot).
 export const MARK_ALL_MAX = 200;
 

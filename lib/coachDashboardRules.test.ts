@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { MARK_ALL_MAX, reviewRows, startedBy } from './coachDashboardRules';
+import { MARK_ALL_MAX, activityFeedNames, photoCount, reviewRows, startedBy } from './coachDashboardRules';
+
+describe('meal photos on a day, read as a count (item 9)', () => {
+  it('reads the count the database sends', () => {
+    expect(photoCount([{ count: 3 }])).toBe(3);
+    expect(photoCount([{ count: 0 }])).toBe(0);
+  });
+
+  it('reads no count, or no row, as none', () => {
+    expect(photoCount([])).toBe(0);
+    expect(photoCount(null)).toBe(0);
+    expect(photoCount(undefined)).toBe(0);
+    expect(photoCount([{ count: null }])).toBe(0);
+  });
+});
+
+describe('names in the activity feed', () => {
+  it("keeps the dashboard's own name for its members and adds the others' profile names", () => {
+    const names = activityFeedNames({ a: 'Sam (dashboard)', b: 'b@example.com' }, { a: 'Sam (profile)', c: 'Alex' });
+    expect(names).toEqual({ a: 'Sam (dashboard)', b: 'b@example.com', c: 'Alex' });
+  });
+
+  it('leaves out a blank profile name and does not change the lookup it was given', () => {
+    const own = { a: 'Sam' };
+    expect(activityFeedNames(own, { c: '' })).toEqual({ a: 'Sam' });
+    expect(own).toEqual({ a: 'Sam' });
+  });
+});
 
 describe('started by now ("this time last week")', () => {
   it('counts a session that started at or before now', () => {
