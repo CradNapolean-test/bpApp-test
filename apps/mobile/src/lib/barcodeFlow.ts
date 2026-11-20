@@ -19,6 +19,10 @@ export type NewProduct = { barcode: string; name: string; target: ScanTarget | n
 // database first, then Open Food Facts), then ASK how much (the pack's serving size is filled in when it has one) before the food
 // is handed back to be added. If Open Food Facts has the product but not every nutrient, ask for just what is missing instead of
 // treating it as a total miss. If nobody has it at all, the member can add it from the pack, for everyone (migration 0173).
+// iOS does not show a sheet (a Modal) asked for while another is still sliding away, so a hand-over from one sheet straight to the next
+// waits this long. (Hand-overs with a lookup in between, such as scanner to "how much", are slower than this anyway.)
+export const SHEET_HANDOFF_MS = 400;
+
 // The pack's own serving when the food has one, else the usual suggestion (100 g).
 const suggestedAmount = (food: FoodRow, servingGrams: number | null) => defaultUnit(unitsFor(food, []))?.grams ?? scanSuggestedAmount(food, servingGrams);
 
@@ -109,7 +113,9 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
     if ('error' in result) return result.error;
     setAdding(null);
     setStatus(result.existing ? ADDED_BY_SOMEONE_ELSE : null);
-    setConfirming({ food: result.food, amount: suggestedAmount(result.food, null), target });
+    // the "Add this product" sheet slides away first, then "how much" opens
+    const confirm = { food: result.food, amount: suggestedAmount(result.food, null), target };
+    setTimeout(() => setConfirming(confirm), SHEET_HANDOFF_MS);
     return null;
   }
 

@@ -20,7 +20,7 @@ import { Pressable } from '@/components/press';
 import { Icon } from '@/components/icons';
 import { ProgressRing } from '@/components/ProgressRing';
 import { AppText, Button, Card, Chip, SheetFrame, SmallButton, TextField } from '@/components/ui';
-import type { PendingScan } from '@/lib/barcodeFlow';
+import { SHEET_HANDOFF_MS, type PendingScan } from '@/lib/barcodeFlow';
 import { newRecipeLogId, useAddFood, useAddQuickAdd, useAddRecipe, useFavoriteFoods, useFoodSearch, useOwnFoods, useOwnFoodUnits, useRecentFoods, useToggleFavorite, type QuickAddFields } from '@/lib/food';
 import { useDebounced } from '@/lib/hooks';
 import { radius, spacing, useTheme } from '@/theme';
@@ -765,7 +765,7 @@ export function AddFoodSheet({
       ) : (
         <FoodSearchList
           onAdd={(food, portions) => { addFood.mutate({ food, portions, sectionId: section.id }); onClose(); }}
-          onScanBarcode={onScanBarcode ? (name) => { onClose(); onScanBarcode(name); } : undefined}
+          onScanBarcode={onScanBarcode ? (name) => { onClose(); setTimeout(() => onScanBarcode(name), SHEET_HANDOFF_MS); } : undefined}
         />
       )}
     </SheetFrame>
@@ -797,7 +797,7 @@ export function FoodPickerSheet({
       ) : (
         <FoodSearchList
           onAdd={(food, portions) => { onAddFood(food, portions); onClose(); }}
-          onScanBarcode={onScanBarcode ? (name) => { onClose(); onScanBarcode(name); } : undefined}
+          onScanBarcode={onScanBarcode ? (name) => { onClose(); setTimeout(() => onScanBarcode(name), SHEET_HANDOFF_MS); } : undefined}
         />
       )}
     </SheetFrame>

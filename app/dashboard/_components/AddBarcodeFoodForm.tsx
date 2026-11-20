@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/app/_components/Button';
 import {
   BARCODE_FOOD_BRAND_MAX,
@@ -30,6 +30,14 @@ export function AddBarcodeFoodForm({
   const [text, setText] = useState<BarcodeFoodText>({ ...EMPTY_BARCODE_FOOD, name: initialName });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // The form appears where the screen keeps its scan panel, which may be off screen after the scanner closes: bring it into view and
+  // start at the name.
+  const formRef = useRef<HTMLFormElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: 'nearest' });
+    nameRef.current?.focus({ preventScroll: true });
+  }, []);
   const set = (key: Exclude<keyof BarcodeFoodText, 'per'>) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setText((t) => ({ ...t, [key]: e.target.value }));
     setError(null);
@@ -68,7 +76,7 @@ export function AddBarcodeFoodForm({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
       <div>
         <p className="text-[15px] font-bold text-black dark:text-zinc-50">Add this product</p>
         <p className="text-xs text-zinc-500">
@@ -78,7 +86,7 @@ export function AddBarcodeFoodForm({
       </div>
       <label className={labelCls}>
         <span className={captionCls}>Name</span>
-        <input type="text" value={text.name} onChange={set('name')} maxLength={BARCODE_FOOD_NAME_MAX} placeholder="Salted caramel protein bar" className={inputCls} />
+        <input ref={nameRef} type="text" value={text.name} onChange={set('name')} maxLength={BARCODE_FOOD_NAME_MAX} placeholder="Salted caramel protein bar" className={inputCls} />
       </label>
       <label className={labelCls}>
         <span className={captionCls}>Brand (if there is one)</span>
