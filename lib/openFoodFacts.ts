@@ -24,9 +24,16 @@ export function servingFrom(raw: unknown): number | null {
   return Number.isFinite(grams) && grams > 0 && grams <= 2000 ? Math.round(grams * 10) / 10 : null;
 }
 
+// Said when Open Food Facts could not be asked (no connection, or it answered with an error such as 503 or 429). That is not "nobody has
+// this product", so the scan says to try again rather than offering to add the product for everyone from the pack.
+export const OFF_UNAVAILABLE = 'Could not reach the online product list just now. Try the scan again in a moment, or search instead.';
+
+// Null only when Open Food Facts says it does not have the product (404, or status 0); any other failure throws OFF_UNAVAILABLE.
 export async function lookupBarcode(barcode: string): Promise<OpenFoodFactsProduct | null> {
-  const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-  if (!res.ok) return null;
+  const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`).catch(() => null);
+  if (!res) throw new Error(OFF_UNAVAILABLE);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(OFF_UNAVAILABLE);
 
   const data = await res.json();
   if (data.status !== 1 || !data.product) return null;
