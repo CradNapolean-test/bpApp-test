@@ -715,7 +715,8 @@ export function ProgramTemplateManager({
                     {previewGymProgramme.programName !== previewTemplate.name ? ` Given as “${previewGymProgramme.programName}”.` : ''}
                   </span>
                 </span>
-                {previewGymProgramme.members > 0 && (
+                {/* A gym admin only, as the database checks: anyone else would only be refused. */}
+                {isGymAdmin && previewGymProgramme.members > 0 && (
                   <button
                     type="button"
                     disabled={mutating}
@@ -734,7 +735,7 @@ export function ProgramTemplateManager({
                     Apply to everyone on it
                   </button>
                 )}
-                {previewGymProgramme.isOpen && (
+                {isGymAdmin && previewGymProgramme.isOpen && (
                   <button
                     type="button"
                     disabled={mutating}
@@ -788,14 +789,16 @@ export function ProgramTemplateManager({
                       {u.programName !== previewTemplate.name ? ` as “${u.programName}”` : ''}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    disabled={mutating}
-                    onClick={() => handleApplyToRollout(u)}
-                    className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
-                  >
-                    Apply to everyone on this rollout
-                  </button>
+                  {(u.audience !== 'all' || isGymAdmin) && (
+                    <button
+                      type="button"
+                      disabled={mutating}
+                      onClick={() => handleApplyToRollout(u)}
+                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      Apply to everyone on this rollout
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
