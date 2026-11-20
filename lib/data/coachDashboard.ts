@@ -14,7 +14,8 @@ import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
 import { getScheduleOccurrences } from './classes';
 import { getRedFlagReport } from './redFlags';
-import { FOLLOW_UP_RELATIONS, followUpFilters, followUpOfRow, followUpSince } from './followUps';
+import { followUpFilters, followUpOfRow, followUpSince } from './followUps';
+import { MEMBERS_SELECT, MEMBERS_SELECT_BEFORE_0087, MEMBERS_SELECT_BEFORE_0166 } from './coachDashboardSelect';
 import { fetchAllPages } from '@/lib/paging';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
@@ -198,22 +199,6 @@ interface MemberRow {
 const shortDay = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-// Only the columns the lists below read (item 9): a day's photos come as a count, not a row each, and the bookings are filtered to
-// still-booked ones without carrying the status. Checked against the full select on the live project: the same facts, 16% fewer bytes.
-const SELECT = `
-  id, email, coach_id, created_at,
-  client_profiles(name, nutrition_tracking_mode, onboarding_completed_at, needs_coach_review, review_reasons, checkin_reminder_days, checkin_reminders_stopped_at),
-  client_memberships!client_id(id, started_at, scheduled_end, ended_at, membership_packages(credits_per_week, duration_weeks, name)),
-  daily_logs(log_date, calories, protein, carbs, fat, fibre, water, bodyweight, steps, sleep, gym_session, hunger, energy, motivation, stress, period_started, notes, food_photo_entries(count)),
-  nutrition_feedback!client_id(log_date),
-  coach_reviews!client_id(kind, ref),
-  form_assignments!client_id(id, completed_at, form_templates(name)),
-  bookings!client_id(booking_date, attended, no_show, class:classes(start_time)),
-  big_dog_results!client_id(exercise_key, self_reported, result_text, created_at),
-  workout_programs(id, name, start_date, week_one, workout_program_days(week_num)),
-  ${FOLLOW_UP_RELATIONS}
-`;
-
 // Everything the coach dashboard needs in one go. `scope` narrows it to the coach's own members
 // ('mine'), one coach's members ('coach', gym admins only) or the whole gym ('gym', gym admins
 // only). A non-admin asking for more than their own gets their own.
@@ -311,13 +296,12 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       const { rows, error } = await fetchAllPages((from, to) => buildQuery(select).order('id').range(from, to));
       return { data: rows, error };
     };
-    const first = await read(SELECT);
+    const first = await read(MEMBERS_SELECT);
     if (!first.error) return first;
     // Before migration 0166 there is no checkin_reminders_stopped_at: the dashboard loads without the "Reminders unanswered" To do.
-    const before0166 = SELECT.replace(', checkin_reminders_stopped_at', '');
-    const second = await read(before0166);
+    const second = await read(MEMBERS_SELECT_BEFORE_0166);
     if (!second.error) return second;
-    return read(before0166.replace('coach_reviews!client_id(kind, ref),', ''));
+    return read(MEMBERS_SELECT_BEFORE_0087);
   };
 
   const [{ data: rows, error }, occurrences, chatOverview, activity, activityNames, flagResult, coaches] = await Promise.all([
