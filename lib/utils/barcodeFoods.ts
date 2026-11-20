@@ -112,10 +112,50 @@ export function readBarcodeFood(text: BarcodeFoodText): BarcodeFoodRead {
   };
 }
 
-// A scanned product's figures as a coach corrects them (Library > Foods): name, brand and per 100 g, checked as above.
+// A scanned product's figures as a coach corrects them (Library > Foods): name, brand and per 100 g, checked by readProductCorrection.
 export function productText(food: Pick<FoodRow, 'name' | 'brand' | 'protein' | 'carbs' | 'fat'>): BarcodeFoodText {
   const per100 = (n: number) => String(Math.round(Number(n) * 1000) / 10);
   return { ...EMPTY_BARCODE_FOOD, name: food.name, brand: food.brand ?? '', protein: per100(food.protein), carbs: per100(food.carbs), fat: per100(food.fat) };
+}
+
+// A coach's correction is checked by the rule for changing a scanned product (migration 0128), which is wider than adding one: a product
+// cached from Open Food Facts can have a name of up to 200 characters, and a drink can be 0 / 0 / 0.
+export const CORRECTED_NAME_MAX = 200;
+
+export type ProductCorrection = Partial<Pick<FoodRow, 'name' | 'brand' | 'protein' | 'carbs' | 'fat'>>;
+export type ProductCorrectionRead = { ok: true; changes: ProductCorrection; per100: { calories: number } } | { ok: false; error: string };
+
+// What the coach changed, from the text productText filled in. Only what they changed is sent: a figure left as shown keeps its stored
+// value (the text rounds it to 0.1 g per 100 g), so fixing a name does not move the figures in anybody's days. `changes` is empty when
+// nothing was changed.
+export function readProductCorrection(food: Pick<FoodRow, 'name' | 'brand' | 'protein' | 'carbs' | 'fat'>, text: BarcodeFoodText): ProductCorrectionRead {
+  const refuse = (error: string) => ({ ok: false as const, error });
+  const changes: ProductCorrection = {};
+  const name = text.name.trim();
+  if (!name) return refuse('Give the product its name from the pack.');
+  if (name.length > CORRECTED_NAME_MAX) return refuse(`A product name can be up to ${CORRECTED_NAME_MAX} characters.`);
+  if (name !== food.name) changes.name = name;
+  const brand = text.brand.trim();
+  if (brand !== (food.brand ?? '')) {
+    if (brand.length > BARCODE_FOOD_BRAND_MAX) return refuse(`Keep the brand under ${BARCODE_FOOD_BRAND_MAX} characters.`);
+    changes.brand = brand || null;
+  }
+
+  const shown = productText(food);
+  const per = { protein: Number(food.protein), carbs: Number(food.carbs), fat: Number(food.fat) };
+  for (const key of ['protein', 'carbs', 'fat'] as const) {
+    const typed = text[key].trim();
+    if (typed === shown[key]) continue;
+    if (typed === '') return refuse('Enter the protein, carbs and fat from the pack (0 if there is none).');
+    const value = num(typed);
+    if (!Number.isFinite(value) || value < 0) return refuse('Protein, carbs and fat must be numbers, 0 or more.');
+    per[key] = perGram(value, 100);
+    changes[key] = per[key];
+  }
+  const heavier = (['protein', 'carbs', 'fat'] as const).find((key) => over(per[key], 1));
+  if (heavier) return refuse(`There is more ${heavier} than 100 g weighs. Check the figures on the pack.`);
+  if (over(per.protein + per.carbs + per.fat, 1.05)) return refuse('The protein, carbs and fat add up to more than 100 g weighs. Check the figures on the pack.');
+  return { ok: true, changes, per100: { calories: dayCalories(per.protein * 100, per.carbs * 100, per.fat * 100) } };
 }
 
 // What add_barcode_food answered: the food (the one just added, or the one someone added first) and whether it was already there. Null

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_BARCODE_FOOD, addedProduct, productBarcode, productText, readBarcodeFood, type BarcodeFoodText } from './barcodeFoods';
+import { EMPTY_BARCODE_FOOD, addedProduct, productBarcode, productText, readBarcodeFood, readProductCorrection, type BarcodeFoodText } from './barcodeFoods';
 
 const bar = (patch: Partial<BarcodeFoodText> = {}): BarcodeFoodText => ({ ...EMPTY_BARCODE_FOOD, name: 'Protein bar', protein: '20', carbs: '22', fat: '8', ...patch });
 const error = (text: BarcodeFoodText) => {
@@ -97,5 +97,43 @@ describe('addedProduct', () => {
     expect(addedProduct(null)).toBeNull();
     expect(addedProduct({ existing: true })).toBeNull();
     expect(addedProduct({ food: { name: 'no id' } })).toBeNull();
+  });
+});
+
+describe('readProductCorrection (a coach corrects a scanned product)', () => {
+  const cached = { name: 'Diet cola', brand: null, protein: 0.0333, carbs: 0, fat: 0 };
+
+  it('sends only what the coach changed, so a figure left as shown keeps its stored value', () => {
+    const read = readProductCorrection(cached, { ...productText(cached), name: 'Diet cola 330 ml' });
+    expect(read).toMatchObject({ ok: true, changes: { name: 'Diet cola 330 ml' } });
+    expect(read.ok && Object.keys(read.changes)).toEqual(['name']);
+    const figure = readProductCorrection(cached, { ...productText(cached), carbs: '10.6' });
+    expect(figure.ok && figure.changes).toEqual({ carbs: 0.106 });
+  });
+
+  it('nothing changed is no changes', () => {
+    expect(readProductCorrection(cached, productText(cached))).toMatchObject({ ok: true, changes: {} });
+  });
+
+  it('allows what the rule for correcting allows: 0 / 0 / 0, and a name of up to 200 characters', () => {
+    const drink = { name: 'Sparkling water', brand: null, protein: 0, carbs: 0, fat: 0 };
+    expect(readProductCorrection(drink, { ...productText(drink), name: 'Still water' })).toMatchObject({ ok: true, changes: { name: 'Still water' } });
+    const long = { ...cached, name: 'x'.repeat(150) };
+    expect(readProductCorrection(long, { ...productText(long), protein: '1' })).toMatchObject({ ok: true, changes: { protein: 0.01 } });
+    expect(readProductCorrection(cached, { ...productText(cached), name: 'x'.repeat(201) })).toMatchObject({ ok: false });
+  });
+
+  it('checks the brand only when it changed, and clears it when emptied', () => {
+    const branded = { ...cached, brand: 'Tesco' };
+    expect(readProductCorrection(branded, { ...productText(branded), brand: '' })).toMatchObject({ ok: true, changes: { brand: null } });
+    expect(readProductCorrection(branded, { ...productText(branded), brand: 'x'.repeat(61) })).toMatchObject({ ok: false });
+  });
+
+  it('refuses figures a food cannot have, counting the stored ones it keeps', () => {
+    const bar = { name: 'Bar', brand: null, protein: 0.5, carbs: 0.5, fat: 0 };
+    expect(readProductCorrection(bar, { ...productText(bar), fat: '10' })).toMatchObject({ ok: false, error: expect.stringMatching(/add up to more/) });
+    expect(readProductCorrection(bar, { ...productText(bar), protein: '120' })).toMatchObject({ ok: false, error: expect.stringMatching(/more protein/) });
+    expect(readProductCorrection(bar, { ...productText(bar), carbs: '' })).toMatchObject({ ok: false });
+    expect(readProductCorrection(bar, { ...productText(bar), carbs: '-1' })).toMatchObject({ ok: false });
   });
 });

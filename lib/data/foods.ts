@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { PairHistoryRow } from '@/lib/foodPairs';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 import type { ServingOption } from '@/lib/utils/foodUnits';
-import { addedProduct, type BarcodeFoodFields } from '@/lib/utils/barcodeFoods';
+import { addedProduct, type BarcodeFoodFields, type ProductCorrection } from '@/lib/utils/barcodeFoods';
 import type { ActivityRow, FoodAddition, FoodRow, ScannedFoodRow } from './types';
 
 // `limit`: the Add food picker asks for more than it shows, because it folds near-duplicate products into one result (D23a).
@@ -211,15 +211,18 @@ export async function listMemberAddedFoods(query: string): Promise<ScannedFoodRo
 
 // A coach corrects a scanned product's name, brand and figures (per gram), for every member at every gym: the shared list has one food per
 // barcode. Days that already include it count the corrected figures. Only coaches can, and only on scanned products (migration 0128); a
-// row that cannot be changed updates nothing, so say so.
-export async function correctScannedFood(
-  foodId: string,
-  fields: { name: string; brand: string | null; protein: number; carbs: number; fat: number }
-): Promise<ActionResult> {
+// row that cannot be changed updates nothing, so say so. Only the fields given are written (what the coach changed, readProductCorrection),
+// so a figure the coach left alone keeps its stored value.
+export async function correctScannedFood(foodId: string, fields: ProductCorrection): Promise<ActionResult> {
+  const changes: ProductCorrection = {};
+  for (const key of ['name', 'brand', 'protein', 'carbs', 'fat'] as const) {
+    if (fields[key] !== undefined) Object.assign(changes, { [key]: fields[key] });
+  }
+  if (Object.keys(changes).length === 0) return fail({ message: 'Nothing has changed yet. Change what is wrong, or Cancel.' });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('foods')
-    .update({ name: fields.name, brand: fields.brand, protein: fields.protein, carbs: fields.carbs, fat: fields.fat })
+    .update(changes)
     .eq('id', foodId)
     .eq('source', 'scan')
     .select('id');

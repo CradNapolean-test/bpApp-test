@@ -225,6 +225,13 @@ describe('shared barcode foods (owner list item 6, migration 0173)', () => {
     expect(rows.map((r) => [r.id, r.addition?.adder_name])).toEqual([['a', 'Coach Name']]);
   });
 
+  it('a correction writes only the fields the coach changed, and nothing changed is said so', async () => {
+    const { calls } = fakeClient([{ data: [{ id: 'a' }] }]);
+    expect(await correctScannedFood('a', { name: 'Oat bar' })).toEqual({ ok: true });
+    expect(calls).toContainEqual(['update', [{ name: 'Oat bar' }]]);
+    expect(await correctScannedFood('a', {})).toMatchObject({ ok: false, error: expect.stringMatching(/Nothing has changed/) });
+  });
+
   it('a coach corrects a scanned product, and is told when nothing could be changed', async () => {
     const { calls } = fakeClient([{ data: [{ id: 'a' }] }]);
     expect(await correctScannedFood('a', { name: 'Oat bar', brand: null, protein: 0.1, carbs: 0.6, fat: 0.1 })).toEqual({ ok: true });

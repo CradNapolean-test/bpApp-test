@@ -9,7 +9,7 @@ import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { correctScannedFood, listMemberAddedFoods, searchAllFoodsForCoach, searchScannedFoods, setFoodHidden, setFoodServings } from '@/lib/data/foods';
 import type { FoodAddition, FoodRow } from '@/lib/data/types';
-import { BARCODE_FOOD_BRAND_MAX, BARCODE_FOOD_NAME_MAX, productText, readBarcodeFood, type BarcodeFoodText } from '@/lib/utils/barcodeFoods';
+import { BARCODE_FOOD_BRAND_MAX, CORRECTED_NAME_MAX, productText, readProductCorrection, type BarcodeFoodText } from '@/lib/utils/barcodeFoods';
 import { MAX_SERVINGS, cleanServings, unitText, type ServingDraft } from '@/lib/utils/foodUnits';
 
 // Per 100 g, which is how packaging reads (the database keeps it per gram).
@@ -24,7 +24,8 @@ function addedLine(a: FoodAddition): string {
 }
 
 // A coach corrects a scanned product's name, brand and figures per 100 g. The shared list has one food per barcode, so every member at
-// every gym gets the correction, and days that already include it count the corrected figures. Checked as the member's form checks them.
+// every gym gets the correction, and days that already include it count the corrected figures. Checked by the rule for correcting a
+// scanned product (0128); only what the coach changed is saved, so a figure left as shown keeps its stored value.
 function CorrectEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () => void; onCancel: () => void }) {
   const { run, busy } = useAction();
   const [text, setText] = useState<BarcodeFoodText>(() => productText(food));
@@ -33,13 +34,13 @@ function CorrectEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () =
     setError(null);
     setText((t) => ({ ...t, [key]: e.target.value }));
   };
-  const preview = readBarcodeFood(text);
+  const preview = readProductCorrection(food, text);
 
   async function save() {
-    const read = readBarcodeFood(text);
+    const read = readProductCorrection(food, text);
     if (!read.ok) return setError(read.error);
-    const { name, brand, protein, carbs, fat } = read.fields;
-    await run(() => correctScannedFood(food.id, { name, brand, protein, carbs, fat }), { success: 'Product corrected for everyone.', refresh: false, onDone });
+    if (Object.keys(read.changes).length === 0) return setError('Nothing has changed yet. Change what is wrong, or Cancel.');
+    await run(() => correctScannedFood(food.id, read.changes), { success: 'Product corrected for everyone.', refresh: false, onDone });
   }
 
   return (
@@ -49,7 +50,7 @@ function CorrectEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () =
         corrected figures.
       </p>
       <div className="grid gap-1.5 sm:grid-cols-2">
-        <input value={text.name} onChange={set('name')} maxLength={BARCODE_FOOD_NAME_MAX} aria-label="Product name" placeholder="Name" className={inputCls} />
+        <input value={text.name} onChange={set('name')} maxLength={CORRECTED_NAME_MAX} aria-label="Product name" placeholder="Name" className={inputCls} />
         <input value={text.brand} onChange={set('brand')} maxLength={BARCODE_FOOD_BRAND_MAX} aria-label="Brand" placeholder="Brand (optional)" className={inputCls} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
