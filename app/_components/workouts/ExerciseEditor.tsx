@@ -1071,6 +1071,7 @@ export function ExerciseEditor<T extends EditableExercise>({
   memberChoices,
   libraryLoading = false,
   onRetryLibrary,
+  onLibraryAdded,
 }: {
   exercises: T[];
   library: ExerciseLibraryRow[];
@@ -1106,6 +1107,8 @@ export function ExerciseEditor<T extends EditableExercise>({
   // Given when reading the whole library failed: the picker says so, with a button that reads it again. Only the programme's own
   // exercises are listed meanwhile, and "Add as its own exercise" is offered again (nothing is on its way to check against).
   onRetryLibrary?: () => void;
+  // A library exercise made here with "Create '<name>'", for a caller that keeps its own copy of the library: it outlives this editor.
+  onLibraryAdded?: (entry: ExerciseLibraryRow) => void;
 }) {
   const { run: runReorder } = useAction();
   const { run: runMutate } = useAction();
@@ -1276,6 +1279,7 @@ export function ExerciseEditor<T extends EditableExercise>({
     const created = await createLibraryExerciseByName(name);
     if (!created.ok) return created;
     setCreatedEntries((c) => (c.some((e) => e.id === created.entry.id) ? c : [...c, created.entry]));
+    onLibraryAdded?.(created.entry);
     return addFromLibrary(key, created.entry);
   }
 

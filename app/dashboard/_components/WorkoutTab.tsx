@@ -1499,6 +1499,8 @@ export function WorkoutTab({
             library={library}
             libraryLoading={isCoachView && wholeLibrary == null && !libraryFailed}
             onRetryLibrary={isCoachView && wholeLibrary == null && libraryFailed ? () => setLibraryFailed(false) : undefined}
+            // A row made with "Create '<name>'" joins the library read here, so it is still linked when the day is opened again.
+            onLibraryAdded={(entry) => setWholeLibrary((rows) => (rows && !rows.some((r) => r.id === entry.id) ? [...rows, entry] : rows))}
             canEdit={isCoachView}
             // A coach opening a day sees the plan as a builder; what the member actually lifted goes under each exercise (CR2).
             renderBuilderExtra={
