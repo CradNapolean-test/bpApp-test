@@ -39,6 +39,10 @@
 --     rollouts and cancel one that has not been given out yet (what the app does, cancelProgrammeRollout), one for everyone only as a gym
 --     admin; everything else goes through the functions (schedule_programme_rollout, apply_programme_rollout, end_gym_programme), which run
 --     as the table owner.
+--   * Deleting a template deletes its rollouts too (on delete cascade, 0094), past those rules. A new trigger on program_templates
+--     (program_templates_refuse_gym_programme_delete) lets only a gym admin delete a template whose rollout for everyone has not started
+--     yet or is the gym's programme (until its last week is over), so a coach can't cancel a start for everyone or end the gym programme
+--     that way. The app says so on Delete template.
 --   * set_programme_week_one (the start-date trigger of 0167) replaced: a late joiner's copy keeps its week 1 (the gym's Monday) when a
 --     coach moves its start date, so the member stays on the gym's week instead of going back to week 1. Every other copy as before.
 --
@@ -95,8 +99,9 @@
 --          to_regprocedure('public.resolve_gym_programme_waiting(uuid, uuid, boolean)') is not null,
 --          (select relrowsecurity from pg_class where oid = 'public.gym_programme_waiting'::regclass),
 --          (select count(*) from pg_policies where schemaname = 'public' and tablename = 'gym_programme_waiting'),
---          exists (select 1 from pg_trigger where tgrelid = 'public.client_profiles'::regclass and tgname = 'client_profiles_gym_programme');
--- Expected: true, true, true, true, 0, true (the waiting list has no rules: only the functions read and write it).
+--          exists (select 1 from pg_trigger where tgrelid = 'public.client_profiles'::regclass and tgname = 'client_profiles_gym_programme'),
+--          exists (select 1 from pg_trigger where tgrelid = 'public.program_templates'::regclass and tgname = 'program_templates_refuse_gym_programme_delete');
+-- Expected: true, true, true, true, 0, true, true (the waiting list has no rules: only the functions read and write it).
 --   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'programme_rollouts' order by 1;
 -- Expected: "gym coaches cancel scheduled programme_rollouts" DELETE, "gym coaches read programme_rollouts" SELECT.
 --   select g.name, t.program_name, t.week_one, t.weeks, t.last_day, t.is_open from public.gyms g cross join lateral public._gym_programme_today(g.id) t;
@@ -111,11 +116,14 @@
 -- copy; a member with a running 1:1 programme -> no copy, listed for their coach, "Give it to them" -> copy, "Keep theirs" -> off the list;
 -- a member whose 1:1 starts next Monday -> listed, "Give it to them" -> copy, and the 1:1 now starts the Monday after the gym programme;
 -- after end_gym_programme, or after the last Sunday -> nothing; a non-admin coach cannot end it (function or direct update), nor cancel a
--- scheduled start for everyone (direct delete), but can cancel one for chosen members; a member cannot call gym_programmes,
--- end_gym_programme or resolve_gym_programme_waiting.
+-- scheduled start for everyone (direct delete), but can cancel one for chosen members; a non-admin coach cannot delete the template of the
+-- gym programme or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose gym programme's last week is
+-- over, and a gym admin can delete either; a member cannot call gym_programmes, end_gym_programme or resolve_gym_programme_waiting.
 --
 -- ROLLBACK: run set_programme_week_one's definition from migration 0167 again (its trigger stays);
 --           drop trigger client_profiles_gym_programme on public.client_profiles; drop function public.client_profiles_join_gym_programme();
+--           drop trigger program_templates_refuse_gym_programme_delete on public.program_templates;
+--           drop function public.program_templates_refuse_gym_programme_delete();
 --           drop function public.resolve_gym_programme_waiting(uuid, uuid, boolean); drop function public.end_gym_programme(uuid);
 --           drop function public.gym_programmes(); drop function public._give_gym_programme(uuid, uuid, boolean);
 --           drop function public._gym_programme_today(uuid); drop table public.gym_programme_waiting;
@@ -160,6 +168,7 @@ begin
       ('gym_programmes', '0172', array['662073fea310d8827b69bac083e593f6']),
       ('end_gym_programme', '0172', array['8ff5f37461f44cd1e11e25c9a4cea232']),
       ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
+      ('program_templates_refuse_gym_programme_delete', '0172', array['e417964f898305816cc6a55ad7148e23']),
       -- replaced: the one from 0167, or this file's (a second run)
       ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '836a65083143b6a9bf93df50b68a7bec'])
     ) as t(name, migration, accepted)
@@ -251,6 +260,71 @@ as $fn$
 $fn$;
 
 revoke all on function public._gym_programme_today(uuid) from public, anon, authenticated;
+
+-- Deleting a template deletes its rollouts with it (programme_rollouts.template_id is on delete cascade, 0094), and a cascade skips the
+-- rules above: by deleting the template, any coach at the gym could cancel a start for everyone or end the gym programme, which only a gym
+-- admin can do. Only a gym admin (or nobody signed in: the SQL editor, the service role) can delete a template with a rollout for everyone
+-- that:
+--   - has not started yet (scheduled, or given out ahead of its start date);
+--   - is the gym's programme today until its last week is over, ended or not (as gym_programmes() shows it on the template);
+--   - is the gym's programme today after its last week, while the gym's programme before it is still open: deleting it would open that one
+--     again.
+create or replace function public.program_templates_refuse_gym_programme_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_r programme_rollouts;
+  v_today date;
+  v_g record;
+  v_reopens boolean;
+  v_prev_name text;
+begin
+  if auth.uid() is null then
+    return old;
+  end if;
+  for v_r in
+    select r.* from programme_rollouts r where r.template_id = old.id and r.audience = 'all' order by r.start_date
+  loop
+    continue when public.is_admin_of_gym(v_r.gym_id);
+    select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id;
+    if v_r.applied_at is null or v_r.start_date > v_today then
+      raise exception '“%” is set to start for everyone at the gym on %, so only a gym admin can delete this template.',
+        v_r.program_name, to_char(v_r.start_date, 'Dy FMDD Mon');
+    end if;
+    select * into v_g from public._gym_programme_today(v_r.gym_id);
+    continue when v_g.rollout_id is distinct from v_r.id;
+    if v_g.today <= v_g.last_day then
+      raise exception '“%” is the gym programme until %, so only a gym admin can delete this template.',
+        v_r.program_name, to_char(v_g.last_day, 'Dy FMDD Mon');
+    end if;
+    -- After its last week: without it, the gym's programme would be the one before it (not this template's), as _gym_programme_today picks.
+    select x.ended_at is null and tw.weeks > 0 and v_today <= x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1,
+           x.program_name
+      into v_reopens, v_prev_name
+    from programme_rollouts x
+    cross join lateral (
+      select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = x.template_id
+    ) tw
+    where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and x.template_id <> old.id
+    order by x.start_date desc, x.created_at desc
+    limit 1;
+    if coalesce(v_reopens, false) then
+      raise exception 'Deleting this template would give members who join the gym “%” again, so only a gym admin can delete it.', v_prev_name;
+    end if;
+  end loop;
+  return old;
+end;
+$fn$;
+
+revoke all on function public.program_templates_refuse_gym_programme_delete() from public, anon, authenticated;
+
+drop trigger if exists program_templates_refuse_gym_programme_delete on program_templates;
+create trigger program_templates_refuse_gym_programme_delete
+  before delete on program_templates
+  for each row execute function public.program_templates_refuse_gym_programme_delete();
 
 -- A rollout copy follows the gym's week: week 1 is the Monday-to-Sunday week it starts in (0167). A late joiner's copy of a gym programme
 -- (_give_gym_programme below) has its week 1 on the gym's Monday, before the week it started in: when a coach moves its start date, it keeps

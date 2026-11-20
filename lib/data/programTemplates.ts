@@ -125,10 +125,13 @@ export async function deleteTemplateWeek(templateId: string, weekNum: number): P
     if (moveError) raise(moveError);
   }
 }
-export async function deleteProgramTemplate(templateId: string): Promise<void> {
+// Returned, not thrown, so the coach reads why it was refused: only a gym admin can delete the template of the gym programme or of a start
+// for everyone (migration 0172).
+export async function deleteProgramTemplate(templateId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('program_templates').delete().eq('id', templateId);
-  if (error) raise(error);
+  if (error) return fail(error, 'Could not delete that template');
+  return ok();
 }
 
 export async function addTemplateDay(

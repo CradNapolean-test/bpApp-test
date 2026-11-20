@@ -51,6 +51,8 @@ import { downloadTextFile } from '@/lib/utils/csv';
 import { DEFAULT_ROLLOUT_AUDIENCE, membersLabel, rolloutButtonLabel, rolloutConfirmation, rolloutSuccessMessage, type RolloutPlan } from '@/lib/rolloutPlan';
 import { NOTHING_TO_UPDATE, rolloutUpdateConfirmation, rolloutUpdateDone, templateInUseLabel } from '@/lib/rolloutUpdate';
 import {
+  deleteTemplateConfirmation,
+  deleteTemplateRefusal,
   endGymProgrammeConfirmation,
   giveWaitingConfirmation,
   gymProgrammeLabel,
@@ -390,12 +392,16 @@ export function ProgramTemplateManager({
     });
   }
 
+  // Its rollouts go with it, so the gym programme or a start for everyone is a gym admin's to delete (refused in the database too).
   async function handleDeleteTemplate(templateId: string, name: string) {
-    const ok = await confirm({
-      title: `Delete “${name}”?`,
-      body: 'This removes every week, day and exercise in the template. Clients who already started this programme keep their own copy.',
-      destructive: true,
-    });
+    const gym = gymProgrammes.find((g) => g.templateId === templateId);
+    const scheduled = rollouts.filter((r) => r.template_id === templateId);
+    const refusal = isGymAdmin ? null : deleteTemplateRefusal(gym, scheduled);
+    if (refusal) {
+      toast.error(refusal);
+      return;
+    }
+    const ok = await confirm({ ...deleteTemplateConfirmation(name, gym, scheduled), destructive: true });
     if (!ok) return;
     await runMutate(() => deleteProgramTemplate(templateId), {
       success: 'Template deleted',

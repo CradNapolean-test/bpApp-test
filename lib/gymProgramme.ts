@@ -161,6 +161,35 @@ export function giveWaitingConfirmation(p: GymProgramme, w: GymProgrammeWaiting)
   return { title: `Give “${p.programName}” to ${w.name}?`, body, confirmLabel: 'Give it to them' };
 }
 
+// Deleting a template deletes its rollouts too: the gym programme it is, and the starts it has scheduled. So while it is the gym programme
+// (until its last week is over) or a start for everyone is scheduled, only a gym admin can delete it (refused in the database too,
+// migration 0172). `scheduled` is the template's rollouts not given out yet.
+type ScheduledStart = { audience: 'all' | 'selected'; start_date: string };
+
+// For a coach who isn't a gym admin: why they can't delete it. null when they can.
+export function deleteTemplateRefusal(gym: Pick<GymProgramme, 'gymName' | 'lastDay'> | undefined, scheduled: ScheduledStart[]): string | null {
+  if (gym) return `This template is the gym programme at ${gymOf(gym)} until ${day(gym.lastDay)}, so only a gym admin can delete it.`;
+  const forAll = scheduled.filter((r) => r.audience === 'all').sort((a, b) => a.start_date.localeCompare(b.start_date));
+  if (forAll.length > 0) return `This template is set to start for everyone at the gym on ${day(forAll[0].start_date)}, so only a gym admin can delete it.`;
+  return null;
+}
+
+export function deleteTemplateConfirmation(
+  name: string,
+  gym: Pick<GymProgramme, 'gymName'> | undefined,
+  scheduled: ScheduledStart[]
+): { title: string; body: string } {
+  let body = 'This removes every week, day and exercise in the template. Clients who already started this programme keep their own copy.';
+  if (gym) body += ` It’s the gym programme at ${gymOf(gym)}, so members who join from now on won’t get it.`;
+  const starts = [...scheduled].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  if (starts.length === 1) {
+    body += ` Its start on ${day(starts[0].start_date)}${starts[0].audience === 'all' ? ' for everyone at the gym' : ''} is cancelled.`;
+  } else if (starts.length > 1) {
+    body += ` Its ${starts.length} scheduled starts are cancelled.`;
+  }
+  return { title: `Delete “${name}”?`, body };
+}
+
 export function waitingDone(outcome: WaitingOutcome, name: string): string {
   if (outcome === 'given') return `${name} is on it from today`;
   if (outcome === 'has_it') return `${name} already has it`;
