@@ -11,6 +11,7 @@ import {
   defaultConfigFor,
   inputsFromResult,
   isBlankResult,
+  readConfigInputs,
   readResultInputs,
   resultFields,
   resultForConfig,
@@ -71,6 +72,32 @@ describe('configForStorage / blockConfigOf', () => {
     expect(blockConfigOf([{ block_config: null }, { block_config: { scoring: 'time' } }])).toEqual({ scoring: 'time' });
     expect(blockConfigOf([{}])).toEqual(NO_CONFIG);
     expect(blockConfigOf(undefined)).toEqual(NO_CONFIG);
+  });
+});
+
+describe('readConfigInputs (the format sheet)', () => {
+  const blank = { cap: '', rounds: '', work: '', rest: '', unit: '' };
+  it('leaves blank boxes out', () => {
+    expect(readConfigInputs('none', blank)).toEqual({ ok: true, config: { scoring: 'none' } });
+    expect(readConfigInputs('time', { ...blank, cap: '  ' })).toEqual({ ok: true, config: { scoring: 'time' } });
+  });
+  it('reads the cap in minutes, whole rounds, and work and rest in seconds', () => {
+    expect(readConfigInputs('time', { ...blank, cap: '12.5' })).toEqual({ ok: true, config: { scoring: 'time', cap_seconds: 750 } });
+    expect(readConfigInputs('rounds', { ...blank, cap: '1,5', rounds: '7.6', work: '20', rest: '10' })).toEqual({
+      ok: true,
+      config: { scoring: 'rounds', cap_seconds: 90, rounds: 8, work_seconds: 20, rest_seconds: 10 },
+    });
+  });
+  it('keeps the unit only for a score', () => {
+    expect(readConfigInputs('score', { ...blank, unit: ' calories ' })).toEqual({ ok: true, config: { scoring: 'score', unit: 'calories' } });
+    expect(readConfigInputs('time', { ...blank, unit: 'calories' })).toEqual({ ok: true, config: { scoring: 'time' } });
+  });
+  it('says which number cannot be saved, the first one in the sheet', () => {
+    expect(readConfigInputs('time', { ...blank, cap: '0' })).toEqual({ ok: false, error: 'The time cap needs to be a number above zero.' });
+    expect(readConfigInputs('rounds', { ...blank, rounds: '-3' })).toEqual({ ok: false, error: 'Rounds needs to be a number above zero.' });
+    expect(readConfigInputs('rounds', { ...blank, work: 'abc' })).toEqual({ ok: false, error: 'Work seconds needs to be a number above zero.' });
+    expect(readConfigInputs('rounds', { ...blank, rest: 'Infinity' })).toEqual({ ok: false, error: 'Rest seconds needs to be a number above zero.' });
+    expect(readConfigInputs('rounds', { ...blank, cap: '-1', rounds: '0' })).toEqual({ ok: false, error: 'The time cap needs to be a number above zero.' });
   });
 });
 

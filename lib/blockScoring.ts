@@ -93,6 +93,29 @@ export function configForStorage(config: BlockConfig): BlockConfig | null {
   return clean.scoring === 'none' && Object.keys(clean).length === 1 ? null : clean;
 }
 
+// The format sheet's boxes as typed: the time cap in minutes, the rounds, work and rest seconds, and what a score is counted in.
+export type ConfigInputs = Record<ConfigField, string> & { unit: string };
+const CONFIG_INPUT_LABEL: Record<ConfigField, string> = { cap: 'The time cap', rounds: 'Rounds', work: 'Work seconds', rest: 'Rest seconds' };
+
+// The format sheet's boxes read as the config to save (a blank box is left out), or the first number that cannot be saved and why.
+export function readConfigInputs(scoring: Scoring, inputs: ConfigInputs): { ok: true; config: BlockConfig } | { ok: false; error: string } {
+  const numbers: Partial<Record<ConfigField, number>> = {};
+  for (const field of CONFIG_FIELDS) {
+    const text = inputs[field].trim();
+    if (text === '') continue;
+    const n = Number(text.replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) return { ok: false, error: `${CONFIG_INPUT_LABEL[field]} needs to be a number above zero.` };
+    numbers[field] = n;
+  }
+  const config: BlockConfig = { scoring };
+  if (numbers.cap != null) config.cap_seconds = Math.round(numbers.cap * 60);
+  if (numbers.rounds != null) config.rounds = Math.round(numbers.rounds);
+  if (numbers.work != null) config.work_seconds = numbers.work;
+  if (numbers.rest != null) config.rest_seconds = numbers.rest;
+  if (scoring === 'score' && inputs.unit.trim()) config.unit = inputs.unit.trim();
+  return { ok: true, config };
+}
+
 // The block's config: the first exercise in it that has one (the coach sets it once for the block; every row carries a copy).
 export function blockConfigOf(rows: { block_config?: unknown }[] | undefined): BlockConfig {
   const withConfig = rows?.find((r) => r.block_config != null);

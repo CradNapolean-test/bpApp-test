@@ -79,6 +79,7 @@ import {
   configForStorage,
   configSummary,
   defaultConfigFor,
+  readConfigInputs,
   sanitiseConfig,
   type BlockConfig,
   type ConfigField,
@@ -698,24 +699,17 @@ function FormatSheet({
     setRest(d.rest_seconds == null ? '' : String(d.rest_seconds));
   }
 
+  // The numbers are read inside run(), so one that cannot be saved is said in a toast and the sheet stays open, as the exercise sheet
+  // does. They were read before run() took over, so Save just did nothing.
   function save() {
-    const num = (label: string, text: string): number | undefined => {
-      if (text.trim() === '') return undefined;
-      const n = Number(text.replace(',', '.'));
-      if (!Number.isFinite(n) || n <= 0) throw new Error(`${label} needs to be a number above zero.`);
-      return n;
-    };
-    const cap = num('The time cap', capMinutes);
-    const next: BlockConfig = { scoring };
-    if (cap != null) next.cap_seconds = Math.round(cap * 60);
-    const r = num('Rounds', rounds);
-    if (r != null) next.rounds = Math.round(r);
-    const w = num('Work seconds', work);
-    if (w != null) next.work_seconds = w;
-    const rs = num('Rest seconds', rest);
-    if (rs != null) next.rest_seconds = rs;
-    if (scoring === 'score' && unit.trim()) next.unit = unit.trim();
-    return run(() => onSave(format, configForStorage(next)), { onDone: onClose });
+    return run(
+      async () => {
+        const read = readConfigInputs(scoring, { cap: capMinutes, rounds, work, rest, unit });
+        if (!read.ok) return read;
+        return onSave(format, configForStorage(read.config));
+      },
+      { onDone: onClose }
+    );
   }
 
   // Only the numbers this scoring uses, plus any already set; "More numbers" shows the rest (TR26: all four showed for every format).
