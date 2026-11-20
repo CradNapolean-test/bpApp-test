@@ -807,6 +807,37 @@ function FormatSheet({
 
 // ------------------------------------------------------------------ rows
 
+// A box on an exercise's line. While the coach is in it, it keeps what they type; otherwise it shows the exercise's value. A save or
+// reload landing while they are back in the box no longer rebuilds it and throws their typing away.
+function LineBox({ box, value, exerciseName, onDone }: { box: InlineBox; value: string; exerciseName: string; onDone: (text: string) => void }) {
+  const [typing, setTyping] = useState<string | null>(null);
+  return (
+    <input
+      value={typing ?? value}
+      type="text"
+      inputMode={INLINE_BOX[box].inputMode}
+      enterKeyHint="done"
+      autoComplete="off"
+      aria-label={`${INLINE_BOX[box].label} for ${exerciseName}`}
+      placeholder={INLINE_BOX[box].placeholder}
+      maxLength={box === 'sets' ? 3 : 12}
+      onFocus={() => setTyping(value)}
+      onChange={(e) => setTyping(e.target.value)}
+      onBlur={(e) => {
+        const text = e.currentTarget.value;
+        setTyping(null);
+        onDone(text);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+      className={`h-10 rounded-lg border border-black/10 bg-transparent px-1 text-center text-base font-bold tabular-nums text-black placeholder:text-[11px] placeholder:font-medium placeholder:text-zinc-400 dark:border-white/10 dark:text-zinc-50 ${
+        box === 'sets' ? 'w-10 sm:w-12' : 'w-14 sm:w-20'
+      }`}
+    />
+  );
+}
+
 function BuilderRow<T extends EditableExercise>({
   exercise,
   index,
@@ -877,29 +908,12 @@ function BuilderRow<T extends EditableExercise>({
                   ×
                 </span>
               )}
-              <input
-                // A new key when the value shown changes (a box's new value, a failed save, an edit in the sheet) starts the box again from it.
-                key={`${box}:${inlineText(exercise, box)}`}
-                defaultValue={inlineText(exercise, box)}
-                type="text"
-                inputMode={INLINE_BOX[box].inputMode}
-                enterKeyHint="done"
-                autoComplete="off"
-                aria-label={`${INLINE_BOX[box].label} for ${exercise.name}`}
-                placeholder={INLINE_BOX[box].placeholder}
-                maxLength={box === 'sets' ? 3 : 12}
-                // Leaving a box saves it if it changed; a number that cannot be saved is said in a toast and the box shows what is saved.
-                onBlur={(e) => {
-                  const change = readInlineBox(exercise, box, e.currentTarget.value);
-                  if (change.kind !== 'save') e.currentTarget.value = inlineText(exercise, box);
-                  onCommitBox(change);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur();
-                }}
-                className={`h-10 rounded-lg border border-black/10 bg-transparent px-1 text-center text-base font-bold tabular-nums text-black placeholder:text-[11px] placeholder:font-medium placeholder:text-zinc-400 dark:border-white/10 dark:text-zinc-50 ${
-                  box === 'sets' ? 'w-10 sm:w-12' : 'w-14 sm:w-20'
-                }`}
+              {/* Leaving a box saves it if it changed; a number that cannot be saved is said in a toast and the box shows what is saved. */}
+              <LineBox
+                box={box}
+                value={inlineText(exercise, box)}
+                exerciseName={exercise.name}
+                onDone={(text) => onCommitBox(readInlineBox(exercise, box, text))}
               />
             </Fragment>
           ))}
