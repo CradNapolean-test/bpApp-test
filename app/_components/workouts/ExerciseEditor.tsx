@@ -807,8 +807,10 @@ function FormatSheet({
 
 // ------------------------------------------------------------------ rows
 
-// A box on an exercise's line. While the coach is in it, it keeps what they type; otherwise it shows the exercise's value. A save or
-// reload landing while they are back in the box no longer rebuilds it and throws their typing away.
+// A box on an exercise's line. Once the coach types in it, it keeps what they typed; otherwise it shows the exercise's value. A save or
+// reload landing while they are back in the box no longer rebuilds it and throws their typing away. Only typing is saved: a box the
+// coach clicked into and left untouched shows the live value (a newer save, or the saved value again after a failed save) and never
+// writes back the value it showed when they clicked in.
 function LineBox({ box, value, exerciseName, onDone }: { box: InlineBox; value: string; exerciseName: string; onDone: (text: string) => void }) {
   const [typing, setTyping] = useState<string | null>(null);
   return (
@@ -821,9 +823,9 @@ function LineBox({ box, value, exerciseName, onDone }: { box: InlineBox; value: 
       aria-label={`${INLINE_BOX[box].label} for ${exerciseName}`}
       placeholder={INLINE_BOX[box].placeholder}
       maxLength={box === 'sets' ? 3 : 12}
-      onFocus={() => setTyping(value)}
       onChange={(e) => setTyping(e.target.value)}
       onBlur={(e) => {
+        if (typing === null) return;
         const text = e.currentTarget.value;
         setTyping(null);
         onDone(text);
@@ -908,7 +910,7 @@ function BuilderRow<T extends EditableExercise>({
                   ×
                 </span>
               )}
-              {/* Leaving a box saves it if it changed; a number that cannot be saved is said in a toast and the box shows what is saved. */}
+              {/* Leaving a box the coach typed in saves it if it changed; a number that cannot be saved is said in a toast and the box shows what is saved. */}
               <LineBox
                 box={box}
                 value={inlineText(exercise, box)}
