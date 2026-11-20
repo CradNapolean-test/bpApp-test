@@ -3,7 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({ client: null as unknown }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => state.client) }));
 
-import { getFavoriteFoods, getFoodByBarcode, getFoodPairHistory, getRecentlyLoggedFoods, searchFoods, searchScannedFoods, setFoodHidden, upsertFoodFromBarcode } from './foods';
+import {
+  addBarcodeFood,
+  correctScannedFood,
+  findFoodByBarcode,
+  getFavoriteFoods,
+  getFoodByBarcode,
+  getFoodPairHistory,
+  getRecentlyLoggedFoods,
+  listMemberAddedFoods,
+  searchFoods,
+  searchScannedFoods,
+  setFoodHidden,
+  upsertFoodFromBarcode,
+} from './foods';
 
 type Result = { data?: unknown; error?: { code?: string; message?: string } | null };
 
@@ -115,7 +128,7 @@ describe('the coach list of scanned foods', () => {
     expect(calls).toContainEqual(['eq', ['source', 'scan']]);
     expect(calls.some(([m, a]) => m === 'eq' && (a as unknown[])[0] === 'hidden')).toBe(false);
     const or = calls.find(([m]) => m === 'or');
-    expect(or?.[1]).toEqual(['name.ilike.%oat bar%,barcode.ilike.%oat bar%']);
+    expect(or?.[1]).toEqual(['name.ilike.%oat bar%,barcode.ilike.%oat bar%,brand.ilike.%oat bar%']);
   });
 
   it('hides a food, and says so when nothing was changed', async () => {
@@ -129,5 +142,89 @@ describe('the coach list of scanned foods', () => {
     fakeClient([{ data: null, error: { message: 'permission denied for table foods' } }]);
     const result = await setFoodHidden('a', false);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('shared barcode foods (owner list item 6, migration 0173)', () => {
+  const fields = { name: 'Protein bar', brand: 'Test', protein: 0.2, carbs: 0.22, fat: 0.08, serving_options: [{ label: 'bar', grams: 45, default: true as const }] };
+
+  it('a scan of a product a coach hid says so, and finds nothing to add', async () => {
+    fakeClient([{ data: [food('a', { barcode: '5000', hidden: true })] }]);
+    expect(await findFoodByBarcode('5000')).toEqual({ food: null, hidden: true });
+    fakeClient([{ data: [food('b', { barcode: '5001' })] }]);
+    expect(await findFoodByBarcode('5001')).toMatchObject({ food: { id: 'b' }, hidden: false });
+    fakeClient([{ data: [] }]);
+    expect(await findFoodByBarcode('5002')).toEqual({ food: null, hidden: false });
+  });
+
+  it('adds a product through add_barcode_food, and hands back the food someone added first', async () => {
+    fakeClient([], { data: { food: food('new', { barcode: '5000' }), existing: false }, error: null });
+    expect(await addBarcodeFood('5000', fields)).toMatchObject({ ok: true, existing: false, food: { id: 'new' } });
+    const rpc = (state.client as { rpc: ReturnType<typeof vi.fn> }).rpc;
+    expect(rpc).toHaveBeenCalledWith('add_barcode_food', {
+      p_barcode: '5000',
+      p_name: 'Protein bar',
+      p_brand: 'Test',
+      p_protein: 0.2,
+      p_carbs: 0.22,
+      p_fat: 0.08,
+      p_serving_options: fields.serving_options,
+    });
+    fakeClient([], { data: { food: food('first'), existing: true }, error: null });
+    expect(await addBarcodeFood('5000', fields)).toMatchObject({ ok: true, existing: true, food: { id: 'first' } });
+  });
+
+  it("hands the database's refusal back as a result, not a thrown error (production would hide its words)", async () => {
+    fakeClient([], { data: null, error: { message: 'A coach has taken this product off the food list. Use Quick Add for it, or ask your coach.' } });
+    expect(await addBarcodeFood('5000', fields)).toEqual({ ok: false, error: 'A coach has taken this product off the food list. Use Quick Add for it, or ask your coach.' });
+    fakeClient([], { data: { nothing: true }, error: null });
+    expect(await addBarcodeFood('5000', fields)).toEqual({ ok: false, error: 'Could not add that product. Try again.' });
+  });
+
+  it("the coach's scanned list says who added each product, where the coach can see it", async () => {
+    fakeClient([
+      { data: [food('a', { barcode: '5000' }), food('b', { barcode: '5001' })] },
+      { data: [{ food_id: 'a', added_by: 'm1', added_at: '2026-11-20T10:00:00Z', typed: true }] },
+      { data: [{ id: 'm1', display_name: null, client_profiles: { name: 'Sam Member' } }] },
+    ]);
+    const rows = await searchScannedFoods('');
+    expect(rows.map((r) => [r.id, r.addition])).toEqual([
+      ['a', { added_by: 'm1', added_at: '2026-11-20T10:00:00Z', typed: true, adder_name: 'Sam Member' }],
+      ['b', null],
+    ]);
+  });
+
+  it('the scanned list still loads when who-added cannot be read (0173 not applied yet)', async () => {
+    fakeClient([{ data: [food('a')] }, { data: null, error: { message: 'relation "food_additions" does not exist' } }]);
+    expect((await searchScannedFoods('')).map((r) => [r.id, r.addition])).toEqual([['a', null]]);
+  });
+
+  it('"Added by members" lists typed-in products newest first, filtered by name, brand or barcode', async () => {
+    const { calls } = fakeClient([
+      {
+        data: [
+          { food_id: 'a', added_by: 'm1', added_at: '2026-11-20T10:00:00Z', typed: true, food: food('a', { name: 'Oat bar', brand: 'Tesco', barcode: '5000' }) },
+          { food_id: 'b', added_by: null, added_at: '2026-11-19T10:00:00Z', typed: true, food: food('b', { name: 'Cola', barcode: '5001' }) },
+          { food_id: 'c', added_by: 'm1', added_at: '2026-11-18T10:00:00Z', typed: true, food: null },
+        ],
+      },
+      { data: [{ id: 'm1', display_name: 'Coach Name', client_profiles: [] }] },
+    ]);
+    const rows = await listMemberAddedFoods('tesco');
+    expect(calls).toContainEqual(['eq', ['typed', true]]);
+    expect(calls).toContainEqual(['order', ['added_at', { ascending: false }]]);
+    expect(rows.map((r) => [r.id, r.addition?.adder_name])).toEqual([['a', 'Coach Name']]);
+  });
+
+  it('a coach corrects a scanned product, and is told when nothing could be changed', async () => {
+    const { calls } = fakeClient([{ data: [{ id: 'a' }] }]);
+    expect(await correctScannedFood('a', { name: 'Oat bar', brand: null, protein: 0.1, carbs: 0.6, fat: 0.1 })).toEqual({ ok: true });
+    expect(calls).toContainEqual(['update', [{ name: 'Oat bar', brand: null, protein: 0.1, carbs: 0.6, fat: 0.1 }]]);
+    expect(calls).toContainEqual(['eq', ['source', 'scan']]);
+    fakeClient([{ data: [] }]);
+    expect(await correctScannedFood('a', { name: 'Oat bar', brand: null, protein: 0.1, carbs: 0.6, fat: 0.1 })).toEqual({
+      ok: false,
+      error: 'Only scanned products can be corrected, and only by a coach.',
+    });
   });
 });

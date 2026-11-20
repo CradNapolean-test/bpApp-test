@@ -22,9 +22,12 @@ export function AddFoodSheet({
   recentlyLogged,
   favoriteIds,
   onToggleFavorite,
+  onScanBarcode,
   onClose,
 }: {
   sectionLabel: string;
+  // Search found nothing and the member chose to scan the product to add it (owner's list item 6): the sheet closes and the scanner opens.
+  onScanBarcode?: (name: string) => void;
   // These return whether the add worked (or nothing, which counts as worked). The sheet closes only on success, so a failed add keeps
   // what was typed (FS5).
   onAdd: (food: FoodRow, portions: number) => unknown;
@@ -87,6 +90,14 @@ export function AddFoodSheet({
             recentlyLogged={recentlyLogged}
             favoriteIds={favoriteIds}
             onToggleFavorite={onToggleFavorite}
+            onScanBarcode={
+              onScanBarcode
+                ? (name) => {
+                    onClose();
+                    onScanBarcode(name);
+                  }
+                : undefined
+            }
           />
         </div>
       </div>

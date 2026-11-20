@@ -122,6 +122,18 @@ export interface FoodRow {
   serving_options?: { label: string; grams: number; default?: boolean }[] | null;
 }
 
+// Who added a scanned product and when (migration 0173): readable by that member, their own coach and the other coaches at their gym only.
+// `typed`: typed in from the pack (not found on Open Food Facts). `adder_name`: their name, when the coach can read it.
+export interface FoodAddition {
+  added_by: string | null;
+  added_at: string;
+  typed: boolean;
+  adder_name: string | null;
+}
+
+// A scanned product in the coach's Library > Foods, with who added it (null: added before 0173, or by someone the coach cannot see).
+export type ScannedFoodRow = FoodRow & { addition: FoodAddition | null };
+
 export interface RecipeIngredientRow {
   id: string;
   recipe_id: string;

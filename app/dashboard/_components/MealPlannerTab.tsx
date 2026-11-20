@@ -298,6 +298,7 @@ export function MealPlannerTab({
           recentlyLogged={recentlyLogged}
           favoriteIds={favoriteIds}
           onToggleFavorite={toggleFavorite}
+          onScanBarcode={(name) => scan.start(addFoodSection, name)}
           onClose={() => setAddFoodSection(null)}
         />
       )}

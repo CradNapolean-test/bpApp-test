@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Barcode, Search } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
-import { getFavoriteFoods, getFoodByBarcode, getFoodPairHistory, getRecentlyLoggedFoods, setFavoriteFood, setFoodServings, upsertFoodFromBarcode } from '@/lib/data/foods';
+import { addBarcodeFood, findFoodByBarcode, getFavoriteFoods, getFoodPairHistory, getRecentlyLoggedFoods, setFavoriteFood, setFoodServings, upsertFoodFromBarcode } from '@/lib/data/foods';
 import { buildPairIndex, type PairIndex } from '@/lib/foodPairs';
 import { lookupBarcode } from '@/lib/openFoodFacts';
 import { useToast } from '@/app/_components/ToastProvider';
+import { AddBarcodeFoodForm } from './AddBarcodeFoodForm';
 import { BarcodeScanner } from './BarcodeScanner';
 import { QuantitySheet } from './QuantitySheet';
 import type { FoodRow } from '@/lib/data/types';
+import { ADDED_BY_SOMEONE_ELSE, PRODUCT_TAKEN_OFF, productBarcode, type BarcodeFoodFields } from '@/lib/utils/barcodeFoods';
 import { defaultUnit, unitsFor, type ServingOption } from '@/lib/utils/foodUnits';
 
 // Shared by Food Tracking, the Meal Planner and Recipes so adding a food looks and works the same
@@ -158,8 +160,13 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
   } | null>(null);
   // A product that was found and is waiting for the member to say how much.
   const [quantity, setQuantity] = useState<{ food: FoodRow; target: FoodTarget | null; initial: number } | null>(null);
+  // A product nobody has added (not in the food list, not on Open Food Facts), waiting to be added from the pack (owner's list item 6).
+  const [adding, setAdding] = useState<{ barcode: string; target: FoodTarget | null; name: string } | null>(null);
+  // What the member had searched for when they chose to scan instead ("Has a barcode?"), to start the product's name with.
+  const nameHint = useRef('');
 
-  function start(target: FoodTarget) {
+  function start(target: FoodTarget, name = '') {
+    nameHint.current = name;
     setScanTarget(target);
     setStatus(null);
   }
@@ -170,7 +177,13 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     setScanTarget(null);
     setStatus('Looking up…');
     try {
-      let food = await getFoodByBarcode(barcode);
+      const known = await findFoodByBarcode(barcode);
+      // A coach took this product off the list because it was wrong: say so, rather than caching it or adding it again.
+      if (known.hidden) {
+        setStatus(PRODUCT_TAKEN_OFF);
+        return;
+      }
+      let food = known.food;
       let servingGrams: number | null = null;
       if (food && (food.source === 'scan' || food.source === 'off') && !food.serving_options?.length) {
         // Scanned before servings existed: take the pack's serving from Open Food Facts now, once, so it is offered from here on.
@@ -183,7 +196,14 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
       if (!food) {
         const product = await lookupBarcode(barcode);
         if (!product) {
-          setStatus(`No product found for barcode ${barcode} — try search instead.`);
+          // Nobody has this product: the member can add it from the pack, for everyone. Not something that is not a product number.
+          const code = productBarcode(barcode);
+          if (!code) {
+            setStatus(`No product found for barcode ${barcode} — try search instead.`);
+            return;
+          }
+          setStatus(null);
+          setAdding({ barcode: code, target, name: nameHint.current });
           return;
         }
         if (product.protein == null || product.carbs == null || product.fat == null) {
@@ -227,10 +247,25 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     }
   }
 
+  // "Add this product": into the shared food list, then on to how much, as for any scan. If someone added it first, theirs is used.
+  async function handleAddProduct(fields: BarcodeFoodFields): Promise<string | null> {
+    if (!adding) return null;
+    const { barcode, target } = adding;
+    const result = await addBarcodeFood(barcode, fields).catch(() => null);
+    if (!result) return 'Could not add that product. Check your connection and try again.';
+    if (!result.ok) return result.error;
+    setAdding(null);
+    setStatus(result.existing ? ADDED_BY_SOMEONE_ELSE : null);
+    const stated = defaultUnit(unitsFor(result.food, []));
+    setQuantity({ food: result.food, target, initial: stated?.grams ?? 100 });
+    return null;
+  }
+
   const panel = (
     <>
       {scanTarget && <BarcodeScanner onDetected={handleDetected} onClose={() => setScanTarget(null)} />}
       {pending && <CompleteScannedFoodForm product={pending} onCancel={() => setPending(null)} onSave={handleComplete} />}
+      {adding && <AddBarcodeFoodForm key={adding.barcode} barcode={adding.barcode} initialName={adding.name} onSave={handleAddProduct} onCancel={() => setAdding(null)} />}
       {quantity && (
         <QuantitySheet
           title={quantity.food.name}

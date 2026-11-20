@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/server';
 import type { PairHistoryRow } from '@/lib/foodPairs';
 import { addDays, toIsoDate } from '@/lib/utils/dates';
 import type { ServingOption } from '@/lib/utils/foodUnits';
-import type { ActivityRow, FoodRow } from './types';
+import { addedProduct, type BarcodeFoodFields } from '@/lib/utils/barcodeFoods';
+import type { ActivityRow, FoodAddition, FoodRow, ScannedFoodRow } from './types';
 
 // `limit`: the Add food picker asks for more than it shows, because it folds near-duplicate products into one result (D23a).
 export async function searchFoods(query: string, limit = 25): Promise<FoodRow[]> {
@@ -61,6 +62,38 @@ export async function getFoodByBarcode(barcode: string): Promise<FoodRow | null>
   return found && !found.hidden ? found : null;
 }
 
+// The scan's first look: the food for this barcode, or that a coach has hidden it (so the scan can say so instead of looking it up on
+// Open Food Facts or offering to add it again, which the database would refuse).
+export async function findFoodByBarcode(barcode: string): Promise<{ food: FoodRow | null; hidden: boolean }> {
+  const found = await findByBarcode(barcode);
+  return { food: found && !found.hidden ? found : null, hidden: found?.hidden === true };
+}
+
+export type AddBarcodeFoodResult = { ok: true; food: FoodRow; existing: boolean } | { ok: false; error: string };
+
+// "Add this product" (owner's list item 6, migration 0173): a product nobody has added, typed in from the pack, into the shared food list.
+// One food per barcode: if someone added it first, theirs comes back with existing true. A refusal (figures, a hidden product, too many in
+// a day) comes back as its message rather than being thrown, which production would hide.
+export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields): Promise<AddBarcodeFoodResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('add_barcode_food', {
+    p_barcode: barcode,
+    p_name: fields.name,
+    p_brand: fields.brand,
+    p_protein: fields.protein,
+    p_carbs: fields.carbs,
+    p_fat: fields.fat,
+    p_serving_options: fields.serving_options,
+  });
+  if (error) {
+    const failed = fail(error, 'Could not add that product. Try again.');
+    if (!failed.ok) return failed;
+  }
+  const added = addedProduct(data);
+  if (!added) return { ok: false, error: 'Could not add that product. Try again.' };
+  return { ok: true, ...added };
+}
+
 // Caches a barcode-scanned product into the shared foods table. Never overwrites an
 // existing row for that barcode (ON CONFLICT DO NOTHING) — if a lookup lands on a barcode
 // someone already cached (or that was in the original seed data), we just hand back what's
@@ -105,14 +138,89 @@ export async function searchAllFoodsForCoach(query: string): Promise<FoodRow[]> 
 
 // The coach's list of foods that members added by scanning a barcode (M12), by name, hidden ones included so they can be brought back.
 // Looks at the name, brand and barcode. Reading is open to any signed-in user; changing a row is the coach-only rule in migration 0128.
-export async function searchScannedFoods(query: string): Promise<FoodRow[]> {
+export async function searchScannedFoods(query: string): Promise<ScannedFoodRow[]> {
   const supabase = await createClient();
   const q = query.trim().replace(/[%,()]/g, ' ').trim();
   let request = supabase.from('foods').select('*').eq('source', 'scan').order('name').limit(40);
-  if (q) request = request.or(`name.ilike.%${q}%,barcode.ilike.%${q}%`);
+  if (q) request = request.or(`name.ilike.%${q}%,barcode.ilike.%${q}%,brand.ilike.%${q}%`);
   const { data, error } = await request;
   if (error) raise(error);
-  return (data ?? []) as FoodRow[];
+  const foods = (data ?? []) as FoodRow[];
+  const additions = await readAdditions(supabase, foods.map((f) => f.id));
+  return foods.map((f) => ({ ...f, addition: additions.get(f.id) ?? null }));
+}
+
+type AdditionRow = { food_id: string; added_by: string | null; added_at: string; typed: boolean };
+
+// Who added these products (migration 0173), with names where the coach can read them. The read rule only shows additions by members of
+// the coach's own gym. Missing (0173 not applied yet) or failing, it is no additions: the list still works without "Added by".
+async function readAdditions(supabase: Awaited<ReturnType<typeof createClient>>, foodIds: string[]): Promise<Map<string, FoodAddition>> {
+  const out = new Map<string, FoodAddition>();
+  if (foodIds.length === 0) return out;
+  const { data, error } = await supabase.from('food_additions').select('food_id, added_by, added_at, typed').in('food_id', foodIds);
+  if (error || !data) return out;
+  const names = await adderNames(supabase, (data as AdditionRow[]).map((a) => a.added_by));
+  for (const a of data as AdditionRow[]) {
+    out.set(a.food_id, { added_by: a.added_by, added_at: a.added_at, typed: a.typed, adder_name: a.added_by ? names.get(a.added_by) ?? null : null });
+  }
+  return out;
+}
+
+// A member's name from their profile, a coach's display name; only the people this coach may read (the profiles read rules decide).
+async function adderNames(supabase: Awaited<ReturnType<typeof createClient>>, ids: (string | null)[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter((id): id is string => !!id))];
+  const names = new Map<string, string>();
+  if (unique.length === 0) return names;
+  const { data } = await supabase.from('profiles').select('id, display_name, client_profiles(name)').in('id', unique);
+  for (const p of (data ?? []) as { id: string; display_name: string | null; client_profiles: { name: string | null } | { name: string | null }[] | null }[]) {
+    const member = Array.isArray(p.client_profiles) ? p.client_profiles[0] : p.client_profiles;
+    const name = member?.name?.trim() || p.display_name?.trim();
+    if (name) names.set(p.id, name);
+  }
+  return names;
+}
+
+// "Added by members" in Library > Foods: products this coach's gym's members typed in from the pack (0173), newest first, hidden ones
+// included so they can be brought back. Filtered by name, brand or barcode here (the list is at most the latest 100).
+export async function listMemberAddedFoods(query: string): Promise<ScannedFoodRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('food_additions')
+    .select('food_id, added_by, added_at, typed, food:foods(*)')
+    .eq('typed', true)
+    .order('added_at', { ascending: false })
+    .limit(100);
+  if (error) raise(error);
+  const rows = (data ?? []) as unknown as (AdditionRow & { food: FoodRow | null })[];
+  const names = await adderNames(supabase, rows.map((r) => r.added_by));
+  const q = query.trim().toLowerCase();
+  return rows
+    .filter((r): r is AdditionRow & { food: FoodRow } => r.food != null)
+    .filter((r) => !q || [r.food.name, r.food.brand ?? '', r.food.barcode ?? ''].some((s) => s.toLowerCase().includes(q)))
+    .slice(0, 40)
+    .map((r) => ({
+      ...r.food,
+      addition: { added_by: r.added_by, added_at: r.added_at, typed: r.typed, adder_name: r.added_by ? names.get(r.added_by) ?? null : null },
+    }));
+}
+
+// A coach corrects a scanned product's name, brand and figures (per gram), for every member at every gym: the shared list has one food per
+// barcode. Days that already include it count the corrected figures. Only coaches can, and only on scanned products (migration 0128); a
+// row that cannot be changed updates nothing, so say so.
+export async function correctScannedFood(
+  foodId: string,
+  fields: { name: string; brand: string | null; protein: number; carbs: number; fat: number }
+): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('foods')
+    .update({ name: fields.name, brand: fields.brand, protein: fields.protein, carbs: fields.carbs, fat: fields.fat })
+    .eq('id', foodId)
+    .eq('source', 'scan')
+    .select('id');
+  if (error) return fail(error, 'Could not save that correction.');
+  if (!data || data.length === 0) return fail({ message: 'Only scanned products can be corrected, and only by a coach.' });
+  return ok();
 }
 
 // Hides a wrong scanned food from every member's search, favourites and scans, or brings it back. Deleting is not offered: a food that

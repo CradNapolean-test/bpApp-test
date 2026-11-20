@@ -1241,6 +1241,7 @@ export function FoodTrackingTab({
           recentlyLogged={recentlyLogged}
           favoriteIds={favoriteIds}
           onToggleFavorite={handleToggleFavorite}
+          onScanBarcode={(name) => scan.start(addFoodTarget, name)}
           onClose={() => setAddFoodTarget(null)}
         />
       )}

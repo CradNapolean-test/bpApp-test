@@ -329,6 +329,7 @@ export function RecipesTab({
           recentlyLogged={recentlyLogged}
           favoriteIds={favoriteIds}
           onToggleFavorite={toggleFavorite}
+          onScanBarcode={(name) => scan.start({ id: openRecipeId, label: initialRecipes.find((r) => r.id === openRecipeId)?.name ?? 'Recipe' }, name)}
           onClose={() => setAddingIngredient(false)}
         />
       )}

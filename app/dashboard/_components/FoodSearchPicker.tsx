@@ -480,8 +480,12 @@ export function FoodSearchPicker({
   recentlyLogged,
   favoriteIds,
   onToggleFavorite,
+  onScanBarcode,
 }: {
   onAdd: (food: FoodRow, grams: number) => unknown;
+  // When a search finds nothing: "Has a barcode? Scan it to add it for everyone" (owner's list item 6), with what was searched for to start
+  // the product's name. Left out where there is no scanner.
+  onScanBarcode?: (name: string) => void;
   // When provided (even empty), a "Foods / Recipes" toggle appears so the same picker can
   // fan a saved recipe out into diary/meal-plan entries instead of one food at a time.
   recipes?: RecipeRow[];
@@ -852,6 +856,11 @@ export function FoodSearchPicker({
               {query.trim().length >= 2 && (
                 <button type="button" onClick={() => setCreating({ name: query.trim() })} className="mx-auto mb-2 block min-h-9 text-[13px] font-semibold text-accent hover:underline">
                   Save &ldquo;{query.trim()}&rdquo; as a food of your own
+                </button>
+              )}
+              {query.trim().length >= 2 && onScanBarcode && (
+                <button type="button" onClick={() => onScanBarcode(query.trim())} className="mx-auto mb-2 block min-h-9 text-[13px] font-semibold text-accent hover:underline">
+                  Has a barcode? Scan it to add it for everyone
                 </button>
               )}
             </li>
