@@ -5,6 +5,7 @@ import {
   gymProgrammeLabel,
   gymProgrammeStatus,
   readGymProgramme,
+  waitingCountLabel,
   waitingDone,
   waitingHeading,
   waitingReason,
@@ -116,6 +117,10 @@ describe('on the template', () => {
 describe('members it was not given to', () => {
   it('counts them and says why', () => {
     expect(waitingHeading(gp({ waiting: [own] }))).toBe('Not given to 1 member who joined');
+    // on the template card too, while it is open
+    expect(waitingCountLabel(gp({ waiting: [own, upcoming] }))).toBe('2 not given');
+    expect(waitingCountLabel(gp())).toBeNull();
+    expect(waitingCountLabel(gp({ waiting: [own], isOpen: false }))).toBeNull();
     expect(waitingReason(gp(), own)).toBe('On their own programme “Sam 1:1” until Sun 6 Dec');
     expect(waitingReason(gp(), { ...own, otherUntil: null })).toBe('On their own programme “Sam 1:1”');
     expect(waitingReason(gp(), { ...own, otherProgram: null })).toBe('On their own programme');

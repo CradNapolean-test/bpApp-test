@@ -121,6 +121,11 @@ export function endGymProgrammeConfirmation(p: GymProgramme): { title: string; b
   };
 }
 
+// On the template card, so the coach sees there is something to decide without opening the template: "1 not given". null when none.
+export function waitingCountLabel(p: Pick<GymProgramme, 'waiting' | 'isOpen'>): string | null {
+  return p.isOpen && p.waiting.length > 0 ? `${p.waiting.length} not given` : null;
+}
+
 // "Not given to 2 members who joined"
 export function waitingHeading(p: Pick<GymProgramme, 'waiting'>): string {
   return `Not given to ${membersLabel(p.waiting.length)} who joined`;

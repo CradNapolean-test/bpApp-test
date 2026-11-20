@@ -55,6 +55,7 @@ import {
   giveWaitingConfirmation,
   gymProgrammeLabel,
   gymProgrammeStatus,
+  waitingCountLabel,
   waitingDone,
   waitingHeading,
   waitingReason,
@@ -605,6 +606,11 @@ export function ProgramTemplateManager({
                     <p className="mt-1 mr-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
                       {gymProgrammeLabel(gymProgramme)}
                       {!gymProgramme.isOpen && ' · ended'}
+                    </p>
+                  )}
+                  {gymProgramme && waitingCountLabel(gymProgramme) && (
+                    <p className="mt-1 mr-1 inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning">
+                      {waitingCountLabel(gymProgramme)}
                     </p>
                   )}
                   {inUse && (
