@@ -500,17 +500,21 @@ export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields)
   return addedProduct(data) ?? { error: 'Could not add that product. Try again.' };
 }
 
+const SCAN_SAVE_FAILED = 'Could not save that product. Try again.';
+
 // Caches a scanned product in the shared foods table. Never overwrites an existing row for that barcode
 // (the unique barcode column makes a duplicate insert a harmless 23505), so curated macros are not clobbered.
+// Every failure is thrown as an Error, which the scan shows: Supabase's own error is a plain object, so the scan would show a generic text
+// instead. A refusal the database words for the member (P0001: too many new products today, migration 0173) keeps its message, as on the web.
 export async function upsertFoodFromBarcode(
   barcode: string,
   fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null; serving_options?: ServingOption[] | null },
 ): Promise<FoodRow> {
   // The insert policy (0106) allows names of 1-200 characters; Open Food Facts names can be longer.
   const { error } = await supabase.from('foods').insert({ barcode, source: 'scan', ...fields, name: fields.name.trim().slice(0, 200) });
-  if (error && error.code !== '23505') throw error;
+  if (error && error.code !== '23505') throw new Error((error.code === 'P0001' && error.message?.trim()) || SCAN_SAVE_FAILED);
   const existing = await findByBarcode(barcode);
-  if (!existing) throw new Error('Failed to cache scanned food');
+  if (!existing) throw new Error(SCAN_SAVE_FAILED);
   // The product was scanned before and a coach hid it (it was wrong). Say so, rather than adding it again or failing without a reason.
   if (existing.hidden) throw new Error('This product has been taken off the food list. Add it with Quick Add instead, or ask your coach.');
   return existing;
