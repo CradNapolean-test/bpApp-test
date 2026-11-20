@@ -7,12 +7,72 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
-import { searchAllFoodsForCoach, searchScannedFoods, setFoodHidden, setFoodServings } from '@/lib/data/foods';
-import type { FoodRow } from '@/lib/data/types';
+import { correctScannedFood, listMemberAddedFoods, searchAllFoodsForCoach, searchScannedFoods, setFoodHidden, setFoodServings } from '@/lib/data/foods';
+import type { FoodAddition, FoodRow } from '@/lib/data/types';
+import { BARCODE_FOOD_BRAND_MAX, BARCODE_FOOD_NAME_MAX, productText, readBarcodeFood, type BarcodeFoodText } from '@/lib/utils/barcodeFoods';
 import { MAX_SERVINGS, cleanServings, unitText, type ServingDraft } from '@/lib/utils/foodUnits';
 
 // Per 100 g, which is how packaging reads (the database keeps it per gram).
 const per100 = (n: number) => Math.round(n * 1000) / 10;
+
+type ListedFood = FoodRow & { addition?: FoodAddition | null };
+
+// "Typed in by Sam Smith on 20 Nov" / "Scanned by ..." (migration 0173). Shown only for members of this coach's gym (the database decides).
+function addedLine(a: FoodAddition): string {
+  const when = new Date(a.added_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${a.typed ? 'Typed in from the pack' : 'Scanned'} by ${a.adder_name ?? 'a member'} on ${when}`;
+}
+
+// A coach corrects a scanned product's name, brand and figures per 100 g. The shared list has one food per barcode, so every member at
+// every gym gets the correction, and days that already include it count the corrected figures. Checked as the member's form checks them.
+function CorrectEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () => void; onCancel: () => void }) {
+  const { run, busy } = useAction();
+  const [text, setText] = useState<BarcodeFoodText>(() => productText(food));
+  const [error, setError] = useState<string | null>(null);
+  const set = (key: 'name' | 'brand' | 'protein' | 'carbs' | 'fat') => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    setText((t) => ({ ...t, [key]: e.target.value }));
+  };
+  const preview = readBarcodeFood(text);
+
+  async function save() {
+    const read = readBarcodeFood(text);
+    if (!read.ok) return setError(read.error);
+    const { name, brand, protein, carbs, fat } = read.fields;
+    await run(() => correctScannedFood(food.id, { name, brand, protein, carbs, fat }), { success: 'Product corrected for everyone.', refresh: false, onDone });
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-xl bg-black/[.03] p-3 dark:bg-white/5">
+      <p className="text-xs text-zinc-500">
+        Fix what the pack says, per 100 g. Every member gets the change, at both gyms, and days that already include this product count the
+        corrected figures.
+      </p>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        <input value={text.name} onChange={set('name')} maxLength={BARCODE_FOOD_NAME_MAX} aria-label="Product name" placeholder="Name" className={inputCls} />
+        <input value={text.brand} onChange={set('brand')} maxLength={BARCODE_FOOD_BRAND_MAX} aria-label="Brand" placeholder="Brand (optional)" className={inputCls} />
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(['protein', 'carbs', 'fat'] as const).map((key) => (
+          <label key={key} className="flex items-center gap-1 text-xs text-zinc-500">
+            <input value={text[key]} onChange={set(key)} inputMode="decimal" aria-label={`${key} per 100 g`} className={`${inputCls} !w-20 text-center`} />
+            g {key}
+          </label>
+        ))}
+        <span className="text-xs text-zinc-500">per 100 g{preview.ok ? ` · ${Math.round(preview.per100.calories)} kcal` : ''}</span>
+      </div>
+      {error && <p className="text-xs font-semibold text-danger">{error}</p>}
+      <div className="flex gap-2">
+        <Button variant="primary" size="sm" disabled={busy} onClick={save}>
+          Save correction
+        </Button>
+        <Button variant="outline" size="sm" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 // What a food's servings are, as a coach edits them: "1 egg = 50 g". The database keeps them on the food, so every member sees the change.
 function ServingsEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () => void; onCancel: () => void }) {
@@ -93,15 +153,21 @@ function ServingsEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () 
   );
 }
 
-// Foods that members added by scanning a barcode (M12). The first scan of a product is cached for everyone, so a wrong entry stays wrong
-// until someone takes it off the list. Hiding removes it from every member's search, favourites and scans; it can be brought back.
+// Foods that members added by scanning a barcode (M12), or typed in from the pack when nobody had the product (owner's list item 6, 0173).
+// The first one for a product is shared with everyone, so a wrong entry stays wrong until a coach corrects it or takes it off the list.
+// Hiding removes it from every member's search, favourites and scans; it can be brought back.
+const SCOPES = { scanned: 'Scanned products', members: 'Added by members', all: 'All foods' } as const;
+type Scope = keyof typeof SCOPES;
+
 export function FoodsPane() {
   const [query, setQuery] = useState('');
-  const [foods, setFoods] = useState<FoodRow[] | null>(null);
+  const [foods, setFoods] = useState<ListedFood[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Scanned products only, or every food (to set the servings on an egg or a rasher of bacon).
-  const [scope, setScope] = useState<'scanned' | 'all'>('scanned');
+  // Scanned products, the ones this gym's members typed in (newest first, to check), or every food (to set the servings on an egg).
+  const [scope, setScope] = useState<Scope>('scanned');
+  // The food whose servings or figures are open, and which.
   const [editing, setEditing] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
   const { run, busy } = useAction();
   const confirm = useConfirm();
@@ -111,8 +177,15 @@ export function FoodsPane() {
   useEffect(() => {
     const ticket = ++latest.current;
     const timer = setTimeout(() => {
-      (scope === 'all' ? (query.trim().length >= 2 ? searchAllFoodsForCoach(query) : Promise.resolve([])) : searchScannedFoods(query))
-        .then((rows) => {
+      (scope === 'all'
+        ? query.trim().length >= 2
+          ? searchAllFoodsForCoach(query)
+          : Promise.resolve([])
+        : scope === 'members'
+          ? listMemberAddedFoods(query)
+          : searchScannedFoods(query)
+      )
+        .then((rows: ListedFood[]) => {
           if (ticket !== latest.current) return;
           setFailed(false);
           setFoods(rows);
@@ -148,11 +221,12 @@ export function FoodsPane() {
       <div>
         <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Foods</h2>
         <p className="mt-1 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">
-          Set the servings a food comes in (1 egg, 1 rasher, 1 tbsp) so members can log by serving instead of grams. Products members scanned also show here; if one
-          has the wrong numbers, hide it so nobody logs it by mistake.
+          Set the servings a food comes in (1 egg, 1 rasher, 1 tbsp) so members can log by serving instead of grams. Products members scanned, or typed in
+          from the pack when nobody had them, also show here and are shared with every member; if one has the wrong numbers, correct it, or hide it so
+          nobody logs it by mistake.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {(['scanned', 'all'] as const).map((sc) => (
+          {(Object.keys(SCOPES) as Scope[]).map((sc) => (
             <button
               key={sc}
               type="button"
@@ -160,6 +234,7 @@ export function FoodsPane() {
                 setScope(sc);
                 setFoods(null);
                 setEditing(null);
+                setCorrecting(null);
               }}
               aria-pressed={scope === sc}
               className={`h-11 rounded-full px-4 text-sm font-bold ${
@@ -168,7 +243,7 @@ export function FoodsPane() {
                   : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
               }`}
             >
-              {sc === 'scanned' ? 'Scanned products' : 'All foods'}
+              {SCOPES[sc]}
             </button>
           ))}
         </div>
@@ -177,7 +252,7 @@ export function FoodsPane() {
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={scope === 'all' ? 'Search any food (2+ letters)' : 'Search by name or barcode'}
+        placeholder={scope === 'all' ? 'Search any food (2+ letters)' : 'Search by name, brand or barcode'}
         aria-label="Search foods"
         className="h-11 w-full rounded-xl border border-black/[.16] bg-card px-3.5 text-base sm:max-w-md sm:text-[15px] dark:border-white/15"
       />
@@ -185,7 +260,17 @@ export function FoodsPane() {
       {foods === null ? (
         <p className="text-sm text-zinc-500">Loading…</p>
       ) : foods.length === 0 ? (
-        <EmptyState icon={ScanBarcode} title={query.trim() ? 'No food matches that' : scope === 'all' ? 'Search for a food' : 'No scanned foods yet'} hint={scope === 'all' ? 'Type at least two letters.' : 'Products appear here once a member scans their barcode.'} />
+        <EmptyState
+          icon={ScanBarcode}
+          title={query.trim() ? 'No food matches that' : scope === 'all' ? 'Search for a food' : scope === 'members' ? 'No products added by members yet' : 'No scanned foods yet'}
+          hint={
+            scope === 'all'
+              ? 'Type at least two letters.'
+              : scope === 'members'
+                ? 'Products your gym’s members type in from the pack, when nobody had them yet, appear here newest first.'
+                : 'Products appear here once a member scans their barcode.'
+          }
+        />
       ) : (
         <ul className="divide-y divide-black/[.07] overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:divide-white/10 dark:border-white/10">
           {foods.map((f) => (
@@ -199,13 +284,14 @@ export function FoodsPane() {
                         f.source === 'scan' ? 'bg-accent-soft text-accent' : 'bg-black/[.06] text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
                       }`}
                     >
-                      {f.source === 'scan' ? 'Barcode' : 'Built in'}
+                      {f.source === 'scan' ? (f.addition?.typed ? 'Typed in' : 'Barcode') : 'Built in'}
                     </span>
                   </p>
                   <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
-                    per 100 g: {per100(f.protein)} protein · {per100(f.carbs)} carbs · {per100(f.fat)} fat
+                    {f.brand ? `${f.brand} · ` : ''}per 100 g: {per100(f.protein)} protein · {per100(f.carbs)} carbs · {per100(f.fat)} fat
                     {f.barcode ? ` · ${f.barcode}` : ''}
                   </p>
+                  {f.addition && <p className="text-[13px] text-zinc-500 dark:text-zinc-400">{addedLine(f.addition)}</p>}
                   <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
                     Servings:{' '}
                     {f.serving_options?.length
@@ -214,9 +300,30 @@ export function FoodsPane() {
                   </p>
                   {f.hidden && <p className="text-xs font-medium text-warning">Hidden from members</p>}
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                  {!f.hidden && f.source === 'scan' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditing(null);
+                        setCorrecting(correcting === f.id ? null : f.id);
+                      }}
+                    >
+                      Correct
+                    </Button>
+                  )}
                   {!f.hidden && (
-                    <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing(editing === f.id ? null : f.id)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setCorrecting(null);
+                        setEditing(editing === f.id ? null : f.id);
+                      }}
+                    >
                       Servings
                     </Button>
                   )}
@@ -227,6 +334,17 @@ export function FoodsPane() {
                   )}
                 </div>
               </div>
+              {correcting === f.id && (
+                <CorrectEditor
+                  key={f.id}
+                  food={f}
+                  onCancel={() => setCorrecting(null)}
+                  onDone={() => {
+                    setCorrecting(null);
+                    setReloads((n) => n + 1);
+                  }}
+                />
+              )}
               {editing === f.id && (
                 <ServingsEditor
                   food={f}
