@@ -442,8 +442,11 @@ export async function getGymMemberCount(): Promise<number> {
 }
 export async function cancelProgrammeRollout(rolloutId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.from('programme_rollouts').delete().eq('id', rolloutId).is('applied_at', null);
-  return error ? fail(error, 'Could not cancel that') : ok();
+  const { data, error } = await supabase.from('programme_rollouts').delete().eq('id', rolloutId).is('applied_at', null).select('id');
+  if (error) return fail(error, 'Could not cancel that');
+  // Nothing deleted: it has started already, or it is for everyone at the gym and only a gym admin can cancel that (migration 0172).
+  if (!data || data.length === 0) return fail(null, 'That couldn’t be cancelled: it has started, or only a gym admin can cancel one for everyone.');
+  return ok();
 }
 
 // D8 (LB1, TR18): who is still on each rollout of a template, and copying the template's later weeks into their copies (migration 0167).

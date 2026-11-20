@@ -9,7 +9,7 @@ import { flashWeek, showWeekRow } from '@/app/_components/motion/programWeeks';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
 import { dayHighlights } from '@/lib/workoutSections';
-import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
+import { useActiveGymId, useCoachGyms } from '@/app/coach/_components/CoachGymsContext';
 import { useToast } from '@/app/_components/ToastProvider';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
@@ -193,6 +193,9 @@ export function ProgramTemplateManager({
   const toast = useToast();
   const lenis = useLenis();
   const gymId = useActiveGymId();
+  // Only a gym admin can cancel, end or change a programme for everyone at the gym (checked in the database too). Shown when the coach's
+  // gyms could not be loaded, so an admin is never left without the buttons; the database refuses anyone else.
+  const isGymAdmin = useCoachGyms().find((g) => g.isActive)?.isGymAdmin !== false;
   const { run: runCreate, busy: creating } = useAction();
   const { run: runMutate, busy: mutating } = useAction();
   const { run: runAssign, busy: assigning } = useAction();
@@ -673,22 +676,24 @@ export function ProgramTemplateManager({
                     <span className="min-w-0 flex-1 font-semibold text-accent">
                       Starts {longDate(r.start_date)} for {r.audience === 'all' ? 'everyone at the gym' : `${r.client_ids.length} member${r.client_ids.length === 1 ? '' : 's'}`}
                     </span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        // It went on one tap (LB2).
-                        const ok = await confirm({
-                          title: `Stop “${r.program_name}” starting on ${longDate(r.start_date)}?`,
-                          body: `It is scheduled for ${r.audience === 'all' ? 'everyone at the gym' : `${r.client_ids.length} member${r.client_ids.length === 1 ? '' : 's'}`}. Nobody has it yet, so nothing else changes, and you can schedule it again.`,
-                          confirmLabel: 'Stop it starting',
-                          destructive: true,
-                        });
-                        if (ok) await runMutate(() => cancelProgrammeRollout(r.id), { success: 'Scheduled start cancelled' });
-                      }}
-                      className="shrink-0 text-xs font-bold text-danger"
-                    >
-                      Cancel
-                    </button>
+                    {(r.audience !== 'all' || isGymAdmin) && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          // It went on one tap (LB2).
+                          const ok = await confirm({
+                            title: `Stop “${r.program_name}” starting on ${longDate(r.start_date)}?`,
+                            body: `It is scheduled for ${r.audience === 'all' ? 'everyone at the gym' : `${r.client_ids.length} member${r.client_ids.length === 1 ? '' : 's'}`}. Nobody has it yet, so nothing else changes, and you can schedule it again.`,
+                            confirmLabel: 'Stop it starting',
+                            destructive: true,
+                          });
+                          if (ok) await runMutate(() => cancelProgrammeRollout(r.id), { success: 'Scheduled start cancelled' });
+                        }}
+                        className="shrink-0 text-xs font-bold text-danger"
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 ))}
             </div>

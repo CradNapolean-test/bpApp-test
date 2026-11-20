@@ -35,8 +35,9 @@
 --     coach or a gym admin, at the member's gym, while the gym programme is open.
 --   * programme_rollouts rules: the one "for all" rule let any coach at the gym change a rollout straight through the API: end a gym
 --     programme without being a gym admin, open an ended one again, or turn chosen members into everyone. Now a coach can read their gym's
---     rollouts and cancel one that has not been given out yet (what the app does, cancelProgrammeRollout); everything else goes through the
---     functions (schedule_programme_rollout, apply_programme_rollout, end_gym_programme), which run as the table owner.
+--     rollouts and cancel one that has not been given out yet (what the app does, cancelProgrammeRollout), one for everyone only as a gym
+--     admin; everything else goes through the functions (schedule_programme_rollout, apply_programme_rollout, end_gym_programme), which run
+--     as the table owner.
 --
 -- Not changed: apply_programme_rollout, apply_due_programme_rollouts, schedule_programme_rollout, instantiate_template_core (called as it
 -- is), apply_template_to_rollout, programme_rollout_usage. The migration itself gives nobody a programme and changes no programme: late
@@ -104,8 +105,9 @@
 -- Write tests to run with test accounts on a sandbox project (not the live one): a new member at a gym with an open gym programme finishes
 -- onboarding -> one copy, start today, week_one = the gym programme's Monday, a notice; finishing again (or a second save) -> no second
 -- copy; a member with a running 1:1 programme -> no copy, listed for their coach, "Give it to them" -> copy, "Keep theirs" -> off the list;
--- after end_gym_programme, or after the last Sunday -> nothing; a non-admin coach cannot end it (function or direct update); a member
--- cannot call gym_programmes, end_gym_programme or resolve_gym_programme_waiting.
+-- after end_gym_programme, or after the last Sunday -> nothing; a non-admin coach cannot end it (function or direct update), nor cancel a
+-- scheduled start for everyone (direct delete), but can cancel one for chosen members; a member cannot call gym_programmes,
+-- end_gym_programme or resolve_gym_programme_waiting.
 --
 -- ROLLBACK: drop trigger client_profiles_gym_programme on public.client_profiles; drop function public.client_profiles_join_gym_programme();
 --           drop function public.resolve_gym_programme_waiting(uuid, uuid, boolean); drop function public.end_gym_programme(uuid);
@@ -140,6 +142,7 @@ begin
   if to_regprocedure('public.client_gym_id(uuid)') is null then raise exception 'client_gym_id is missing (migration 0056)'; end if;
   if to_regprocedure('public.is_coach_of(uuid)') is null then raise exception 'is_coach_of is missing'; end if;
   if to_regprocedure('public.my_gym_id()') is null then raise exception 'my_gym_id is missing (migration 0052)'; end if;
+  if to_regprocedure('public.is_admin_of_gym(uuid)') is null then raise exception 'is_admin_of_gym is missing (migration 0056)'; end if;
 
   -- The functions this migration creates: none may exist yet with another body (a second run finds its own).
   for v_check in
@@ -201,10 +204,11 @@ create policy "gym coaches read programme_rollouts"
   on programme_rollouts for select
   using (gym_id = public.my_gym_id());
 
+-- One for everyone at the gym only by a gym admin, as only a gym admin can start one (0133) or end one (end_gym_programme).
 drop policy if exists "gym coaches cancel scheduled programme_rollouts" on programme_rollouts;
 create policy "gym coaches cancel scheduled programme_rollouts"
   on programme_rollouts for delete
-  using (gym_id = public.my_gym_id() and applied_at is null);
+  using (gym_id = public.my_gym_id() and applied_at is null and (audience <> 'all' or public.is_admin_of_gym(gym_id)));
 
 
 -- Functions --------------------------------------------------------------------------------------------------------------------------------

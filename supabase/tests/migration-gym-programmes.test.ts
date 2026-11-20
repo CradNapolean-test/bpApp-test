@@ -101,7 +101,11 @@ describe('who can do what (Row Level Security and function access)', () => {
       'gym coaches read programme_rollouts': 'select',
       'gym coaches cancel scheduled programme_rollouts': 'delete',
     });
-    expect(squeeze(migrationCode)).toContain('on programme_rollouts for delete using (gym_id = public.my_gym_id() and applied_at is null)');
+    // One for everyone at the gym only by a gym admin, as starting (0133) and ending one are.
+    expect(squeeze(migrationCode)).toContain(
+      "on programme_rollouts for delete using (gym_id = public.my_gym_id() and applied_at is null and (audience <> 'all' or public.is_admin_of_gym(gym_id)))"
+    );
+    expect(migration).toContain("to_regprocedure('public.is_admin_of_gym(uuid)') is null");
   });
 
   it('the internal functions and the trigger function cannot be called by anyone signed in; the three coach functions only when signed in', () => {
