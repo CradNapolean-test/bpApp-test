@@ -1,7 +1,7 @@
 ---
 title: Privacy Policy
-version: 0.2-draft
-updated: 2026-11-06
+version: 0.3-draft
+updated: 2026-11-20
 status: draft
 ---
 
