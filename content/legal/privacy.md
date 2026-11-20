@@ -33,13 +33,14 @@ To run your coaching: set your targets, plan your training, take bookings, let y
 - **Other coaches at your gym** (every coach who works at the gym you belong to, not only your own coach) can read most of the same information. The two lists below say exactly what they can and cannot see.
 - **Gym administrators** are coaches with extra rights at your gym, so they can read what any coach at your gym can read.
 - **The gym owner** sees membership and attendance figures, activity figures (for example how many check-ins and messages there were, not what they say), and lists of members with their name, email, coach, plan and status. Your health details, diary and messages are not shown to the owner. If the owner also coaches at your gym, they can read what a coach at your gym can read.
+- **Other members** see the products you add to the shared food list after scanning a barcode (the product's name, brand, barcode and figures), so they can log them too, but not that you added them.
 - **No one outside the gym** sees it, except the services below that run the app for us.
 
 ### What other coaches at your gym can read
 
 - **Your profile:** name, email, phone number, address, date of birth, gender, emergency contact, age, height, starting and goal weight, measurements and lifts, your goals, and your health notes.
 - **Check-ins:** your daily logs (weight, sleep, steps, water, calories and macros, hunger, energy, motivation and stress ratings, period tracking, and notes) and your body measurements.
-- **Food:** your food diary, calories and macros you add by hand, meal plans, recipes, saved foods, and the details of each meal photo entry (the meal, your description and the estimated calories), but not the photo itself.
+- **Food:** your food diary, calories and macros you add by hand, meal plans, recipes, saved foods, which products you added to the shared food list and when, and the details of each meal photo entry (the meal, your description and the estimated calories), but not the photo itself.
 - **Training:** your programmes, workout logs, feedback on your workouts, and your tested maxes.
 - **Forms:** the forms and questionnaires sent to you and your answers, including intake and health questions.
 - **Habits and courses:** your habits and the days you ticked them off, and the courses and lessons assigned to you and completed.
