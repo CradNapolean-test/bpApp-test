@@ -98,10 +98,12 @@ export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields)
 // existing row for that barcode (ON CONFLICT DO NOTHING) — if a lookup lands on a barcode
 // someone already cached (or that was in the original seed data), we just hand back what's
 // already there rather than risk clobbering curated macros with a lower-quality OFF entry.
+// A refusal the member must read (a hidden product, too many new products in a day, migration 0173) comes back as its message rather than
+// being thrown, which production would hide.
 export async function upsertFoodFromBarcode(
   barcode: string,
   fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null; serving_options?: ServingOption[] | null }
-): Promise<FoodRow> {
+): Promise<{ ok: true; food: FoodRow } | { ok: false; error: string }> {
   const supabase = await createClient();
   const { error: insertError } = await supabase
     .from('foods')
@@ -111,13 +113,16 @@ export async function upsertFoodFromBarcode(
     .maybeSingle();
   // Conflict on the unique barcode column is expected/harmless when another session (or a
   // prior scan) already cached this barcode — fall through to the select below either way.
-  if (insertError && insertError.code !== '23505') raise(insertError);
+  if (insertError && insertError.code !== '23505') {
+    const failed = fail(insertError, 'Could not save that product. Try again.');
+    if (!failed.ok) return failed;
+  }
 
   const existing = await findByBarcode(barcode);
-  if (!existing) throw new Error('Failed to cache scanned food');
+  if (!existing) return { ok: false, error: 'Could not save that product. Try again.' };
   // The product was scanned before and a coach hid it (it was wrong). Say so, rather than adding it again or failing without a reason.
-  if (existing.hidden) throw new Error('This product has been taken off the food list. Add it with Quick Add instead, or ask your coach.');
-  return existing;
+  if (existing.hidden) return { ok: false, error: 'This product has been taken off the food list. Add it with Quick Add instead, or ask your coach.' };
+  return { ok: true, food: existing };
 }
 
 // Sets what a food's servings are ("1 biscuit = 15 g"), or clears them with null. A coach can do this on any food; a member can only fill

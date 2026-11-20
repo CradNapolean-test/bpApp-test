@@ -214,7 +214,7 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           return;
         }
         servingGrams = product.servingGrams;
-        food = await upsertFoodFromBarcode(barcode, {
+        const saved = await upsertFoodFromBarcode(barcode, {
           name: product.name,
           portion: '1 gram',
           protein: product.protein,
@@ -223,6 +223,11 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
           fibre: product.fibre,
           serving_options: product.serving ? [product.serving] : null,
         });
+        if (!saved.ok) {
+          setStatus(saved.error);
+          return;
+        }
+        food = saved.food;
       }
       setStatus(null);
       const stated = defaultUnit(unitsFor(food, []));
@@ -238,10 +243,14 @@ export function useBarcodeAdd(onAddFood: (food: FoodRow, portions: number, targe
     setPending(null);
     setStatus('Saving…');
     try {
-      const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros, serving_options: serving ? [serving] : null });
+      const saved = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', ...macros, serving_options: serving ? [serving] : null });
+      if (!saved.ok) {
+        setStatus(saved.error);
+        return;
+      }
       setStatus(null);
-      const stated = defaultUnit(unitsFor(food, []));
-      setQuantity({ food, target, initial: stated?.grams ?? servingGrams ?? 100 });
+      const stated = defaultUnit(unitsFor(saved.food, []));
+      setQuantity({ food: saved.food, target, initial: stated?.grams ?? servingGrams ?? 100 });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Save failed.');
     }

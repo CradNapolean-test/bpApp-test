@@ -67,13 +67,22 @@ describe('hidden foods stay out of what a member sees (M12)', () => {
 
   it('caching a product whose barcode a coach hid says why, instead of adding it again', async () => {
     fakeClient([{ error: { code: '23505', message: 'duplicate key' } }, { data: [food('a', { barcode: '5000', hidden: true })] }]);
-    await expect(upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 })).rejects.toThrow(/taken off the food list/);
+    expect(await upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 })).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/taken off the food list/),
+    });
   });
 
   it('caching a product someone already scanned hands back the existing row', async () => {
     fakeClient([{ error: { code: '23505', message: 'duplicate key' } }, { data: [food('a', { barcode: '5000' })] }]);
-    const row = await upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 });
-    expect(row.id).toBe('a');
+    const saved = await upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 });
+    expect(saved).toMatchObject({ ok: true, food: { id: 'a' } });
+  });
+
+  it('a refused cache (too many new products today) comes back as its message, which a thrown error would lose in production', async () => {
+    const limit = 'You have added a lot of new products today. Try again tomorrow, or use Quick Add for now.';
+    fakeClient([{ error: { code: 'P0001', message: limit } }]);
+    expect(await upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 })).toEqual({ ok: false, error: limit });
   });
 
   it('favourites leave out hidden foods', async () => {
