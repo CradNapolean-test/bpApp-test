@@ -183,6 +183,19 @@ describe('shared barcode foods: one per barcode, and who added one stays with th
     expect(record && access(record)).toEqual({ anon: false, authenticated: false });
     expect(sql).toMatch(/after insert on public\.foods\s+for each row\s+when \(new\.source = 'scan'\)/);
   });
+
+  it('a scanned product inserted straight into foods under another spelling of a number already there is refused as a duplicate', () => {
+    const refuse = fn('refuse_duplicate_barcode_food');
+    expect(refuse?.securityDefiner).toBe(true);
+    expect(refuse?.searchPath).toBeTruthy();
+    expect(refuse && access(refuse)).toEqual({ anon: false, authenticated: false });
+    const check = body('refuse_duplicate_barcode_food');
+    // the same lock as add_barcode_food, and every spelling of the number
+    expect(check).toMatch(/pg_advisory_xact_lock\(hashtextextended\('add_barcode_food:' \|\| v_stripped, 0\)\)/);
+    expect(check).toMatch(/lpad\(v_stripped, n, '0'\) from generate_series\(char_length\(v_stripped\), 14\)/);
+    expect(check).toMatch(/using errcode = '23505'/);
+    expect(sql).toMatch(/before insert on public\.foods\s+for each row\s+when \(new\.source = 'scan'\)\s+execute function public\.refuse_duplicate_barcode_food\(\)/);
+  });
 });
 
 // Decision D3 (4 Nov 2026): chat is between a member and their own coach. 0053 opened chat_messages and chat_threads to every coach

@@ -106,6 +106,9 @@ const randomPassword = () => 'Zz1!' + crypto.randomBytes(9).toString('base64url'
     must(await X.c.from('foods').update({ hidden: true }).eq('id', foodId), 'hide');
     const hidden = await add(B, bar(upc));
     check('adding a product a coach hid is refused', !!hidden.error && /taken this product off/.test(hidden.error.message), hidden.error?.message);
+    // straight into foods under the 0106 rule, as a 14-digit spelling the unique column does not see as the same: that would undo the hide
+    const direct = await B.c.from('foods').insert({ barcode: '00' + upc, source: 'scan', portion: '1 gram', name: TAG + ' direct', protein: 0.1, carbs: 0.1, fat: 0.1 });
+    check('inserting it straight into foods under another spelling is refused as a duplicate', direct.error?.code === '23505', direct.error?.message);
 
     console.log('At most 30 new products a day for a member');
     let refused = null;
@@ -117,6 +120,7 @@ const randomPassword = () => 'Zz1!' + crypto.randomBytes(9).toString('base64url'
     check('the 31st product of the day is refused', refused?.i === 39 && /a lot of new products/.test(refused.message), JSON.stringify(refused));
   } finally {
     must(await admin.from('foods').delete().like('barcode', PREFIX.slice(0, -1) + '%'), 'clean-up products');
+    must(await admin.from('foods').delete().in('barcode', ['0' + PREFIX + '1', '00' + PREFIX + '1']), 'clean-up other spellings');
     for (const id of created.users) await admin.auth.admin.deleteUser(id);
     if (created.gyms.length) {
       await admin.from('coach_gym_memberships').delete().in('gym_id', created.gyms);

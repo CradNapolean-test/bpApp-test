@@ -11,9 +11,10 @@
 -- does not exist until this has run (the form would say "Could not add that product" for everyone). The coach's Library > Foods reads
 -- food_additions and shows the list without "Added by" if it is missing, so that screen keeps working either way.
 --
--- Guard: before changing anything, the migration checks that add_barcode_food and record_barcode_food_addition do not exist yet (or are
--- already this file's, so it is safe to run twice), that the helpers it uses exist (my_gym_id, owns_client, is_same_gym_as_client,
--- valid_serving_options), and that the scanned-food insert rule it runs under ("authenticated users cache scanned foods", 0106) is there.
+-- Guard: before changing anything, the migration checks that add_barcode_food, record_barcode_food_addition and
+-- refuse_duplicate_barcode_food do not exist yet (or are already this file's, so it is safe to run twice), that the helpers it uses
+-- exist (my_gym_id, owns_client, is_same_gym_as_client, valid_serving_options), and that the scanned-food insert rule it runs under
+-- ("authenticated users cache scanned foods", 0106) is there.
 -- If not, nothing is changed and it stops with "... already exists and is not this file's ...", "... is missing ..." or "the scanned-food
 -- insert rule is missing ...". Then send the PRE-FLIGHT's results to the developer instead.
 --
@@ -36,17 +37,23 @@
 --      0, and so on), that food is returned with "existing" true and nothing is added; two members adding the same product at the same
 --      moment wait for each other (a lock per product number), so the second gets the first one's food. A product a coach hid is refused
 --      ("A coach has taken this product off the food list ..."), not added again. Returns {"food": <the foods row>, "existing": bool}.
+--   4. A trigger on foods (before a scanned product is inserted by a signed-in user, by any route) that keeps one food per product number
+--      there too: the unique barcode column only stops the exact same spelling, so before this a member could insert a second food under
+--      another spelling straight into foods (the 0106 rule allows it), even of a product a coach hid, which undid the hide for every scan.
+--      It is refused with the unique column's error code (23505), so the app's scan treats it as "already there" and uses the food that
+--      is there (or says a coach hid it). It takes the same lock per product number as 3., so a scan and an add at the same moment end
+--      with one food. A load or fix run by the developer (service role) is not checked.
 --
 -- PRE-FLIGHT (read-only):
 --   select to_regclass('public.food_additions') as table_exists;
 -- Expected before: null.
 --   select p.proname, md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) as body_md5, p.prosecdef
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace
---     and p.proname in ('add_barcode_food', 'record_barcode_food_addition', 'my_gym_id', 'owns_client', 'is_same_gym_as_client',
---                       'valid_serving_options')
+--     and p.proname in ('add_barcode_food', 'record_barcode_food_addition', 'refuse_duplicate_barcode_food', 'my_gym_id', 'owns_client',
+--                       'is_same_gym_as_client', 'valid_serving_options')
 --   order by 1;
--- Expected before: my_gym_id, owns_client, is_same_gym_as_client and valid_serving_options only (no add_barcode_food or
--- record_barcode_food_addition).
+-- Expected before: my_gym_id, owns_client, is_same_gym_as_client and valid_serving_options only (no add_barcode_food,
+-- record_barcode_food_addition or refuse_duplicate_barcode_food).
 --   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'foods' order by 1;
 -- Expected before: "authenticated users cache scanned foods" INSERT, "authenticated users read foods" SELECT, "coaches correct scanned
 -- foods" UPDATE, "coaches delete scanned foods" DELETE, "members save their own foods" INSERT.
@@ -69,13 +76,14 @@
 -- Expected: one row, "the adder and their gym's coaches read food_additions" SELECT with qual ((added_by = auth.uid()) OR
 -- owns_client(added_by) OR is_same_gym_as_client(added_by)).
 --   (the PRE-FLIGHT's pg_proc query again)
--- Expected after: also add_barcode_food a802ee322f31f0f3115753e96c36e64b false and record_barcode_food_addition
--- 07ad68a8531d183c2f63b21066fce3f6 true (this file's bodies; the same values as in the guard below).
+-- Expected after: also add_barcode_food 0063203e9cd178b3a682166f5e04c927 false, record_barcode_food_addition
+-- 07ad68a8531d183c2f63b21066fce3f6 true and refuse_duplicate_barcode_food 31a2edf7372acea7e7502b7f15ddaa24 true (this file's bodies; the
+-- same values as in the guard below).
 --   select has_function_privilege('authenticated', 'public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb)', 'execute') as members,
 --          has_function_privilege('anon', 'public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb)', 'execute') as anyone;
 -- Expected: true, false.
 --   (the PRE-FLIGHT's pg_trigger query again)
--- Expected after: foods_record_barcode_addition.
+-- Expected after: foods_record_barcode_addition and foods_refuse_duplicate_barcode.
 --   (the PRE-FLIGHT's pg_policies query on foods, and the count query, again)
 -- Expected after: the same five rules and the same numbers as before (nothing about foods' rules or rows changes).
 --   select count(*) from public.food_additions;
@@ -83,17 +91,18 @@
 -- Write checks (test accounts, sandbox): node supabase/tests/security-audit/barcode-foods-check.cjs --ref=<sandbox project ref> adds a
 -- product as member A, finds it as member B by the same and another spelling of its number, checks B adding it again gets A's food
 -- ("existing"), that nobody can write food_additions, that A, A's coach and another coach at A's gym can see who added it and that member
--- B and a coach at another gym cannot, that the figures are checked, that a hidden product is refused, and that the 31st product in a day
--- is refused.
+-- B and a coach at another gym cannot, that the figures are checked, that a hidden product is refused, that a member cannot insert it
+-- straight into foods under another spelling of its number, and that the 31st product in a day is refused.
 -- Then, in the app (test member): scan, or type into "Can't scan it?", a barcode that is in neither list (Open Food Facts has nothing for
 -- it), fill in "Add this product" and add it: it goes on to "how much" and into the diary. As another test member, scan the same barcode:
 -- it is found straight away, on the web and the phone. As a coach, Library > Foods > "Added by members" lists it with who added it; correct
 -- its figures there, then hide it: the second member's scan says a coach took it off the list.
 --
--- REVERSE: drop trigger if exists foods_record_barcode_addition on public.foods; drop function if exists public.add_barcode_food(text, text,
---   text, numeric, numeric, numeric, jsonb); drop function if exists public.record_barcode_food_addition(); drop table if exists
---   public.food_additions. The products members added stay in foods as ordinary scanned products (the 0128 rules still let coaches correct,
---   hide or delete them); only the record of who added them goes.
+-- REVERSE: drop trigger if exists foods_refuse_duplicate_barcode on public.foods; drop function if exists
+--   public.refuse_duplicate_barcode_food(); drop trigger if exists foods_record_barcode_addition on public.foods; drop function if exists
+--   public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb); drop function if exists
+--   public.record_barcode_food_addition(); drop table if exists public.food_additions. The products members added stay in foods as
+--   ordinary scanned products (the 0128 rules still let coaches correct, hide or delete them); only the record of who added them goes.
 --
 -- Safe to run again. No temporary tables.
 
@@ -105,8 +114,10 @@ declare
 begin
   for v_check in
     select * from (values
-      ('add_barcode_food', array['a802ee322f31f0f3115753e96c36e64b']),
-      ('record_barcode_food_addition', array['07ad68a8531d183c2f63b21066fce3f6'])
+      -- (the second value is this file's first version, so a sandbox that ran it can run this one)
+      ('add_barcode_food', array['0063203e9cd178b3a682166f5e04c927', 'a802ee322f31f0f3115753e96c36e64b']),
+      ('record_barcode_food_addition', array['07ad68a8531d183c2f63b21066fce3f6']),
+      ('refuse_duplicate_barcode_food', array['31a2edf7372acea7e7502b7f15ddaa24'])
     ) as t(name, accepted)
   loop
     select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_md5
@@ -271,9 +282,20 @@ begin
     values (v_name, v_brand, '1 gram', p_protein, p_carbs, p_fat, v_digits, 'scan', p_serving_options)
     returning * into v_food;
   exception when unique_violation then
-    -- A scan cached this very number a moment ago (that route does not wait for the lock above): use that food.
+    -- The product got in another way a moment ago (a load by the developer does not wait for the lock above): use that food.
     perform set_config('ballistic.typed_barcode_food', 'off', true);
-    select f.* into v_food from public.foods f where f.barcode = v_digits;
+    select f.* into v_food
+    from public.foods f
+    where f.barcode in (
+      select v_digits
+      union select v_stripped
+      union select lpad(v_stripped, n, '0') from generate_series(char_length(v_stripped), 14) as n
+    )
+    order by f.hidden, f.id
+    limit 1;
+    if not found then
+      raise exception 'Could not add that product. Try again.';
+    end if;
     if v_food.hidden then
       raise exception 'A coach has taken this product off the food list. Use Quick Add for it, or ask your coach.';
     end if;
@@ -286,5 +308,51 @@ $fn$;
 
 revoke execute on function public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb) from public, anon;
 grant execute on function public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb) to authenticated;
+
+-- =====================================================================================================================================
+-- 4. One shared food per product number, by any route
+-- =====================================================================================================================================
+create or replace function public.refuse_duplicate_barcode_food()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_digits text := regexp_replace(coalesce(new.barcode, ''), '[^0-9]', '', 'g');
+  v_stripped text;
+begin
+  -- a load or fix run by the developer (service role) is left to the developer; the insert rule refuses a scan with no number
+  if auth.uid() is null or v_digits = '' then
+    return new;
+  end if;
+  v_stripped := coalesce(nullif(ltrim(v_digits, '0'), ''), v_digits);
+  -- the same lock as add_barcode_food (3.), so a scan's cache and an add of the same product at the same moment end with one food
+  perform pg_advisory_xact_lock(hashtextextended('add_barcode_food:' || v_stripped, 0));
+  if exists (
+    select 1
+    from public.foods f
+    where f.barcode in (
+      select new.barcode
+      union select v_digits
+      union select v_stripped
+      union select lpad(v_stripped, n, '0') from generate_series(char_length(v_stripped), 14) as n
+    )
+  ) then
+    -- the unique barcode column's error code, so the app treats it as "already there" and uses (or reports as hidden) the food there
+    raise exception 'This product is already in the food list.' using errcode = '23505';
+  end if;
+  return new;
+end;
+$fn$;
+
+revoke execute on function public.refuse_duplicate_barcode_food() from public, anon, authenticated;
+
+drop trigger if exists foods_refuse_duplicate_barcode on public.foods;
+create trigger foods_refuse_duplicate_barcode
+  before insert on public.foods
+  for each row
+  when (new.source = 'scan')
+  execute function public.refuse_duplicate_barcode_food();
 
 notify pgrst, 'reload schema';
