@@ -140,6 +140,51 @@ describe("a member's own foods are private to them and their gym's coaches (NU18
   });
 });
 
+// Shared barcode foods (owner's list item 6, 0173): a member adds a product nobody has added yet, for everyone. Who added it is about that
+// member, so it reads like their diary; nobody writes it but the trigger. The live rules are checked by
+// supabase/tests/security-audit/barcode-foods-check.cjs (sandbox).
+describe('shared barcode foods: one per barcode, and who added one stays with their gym (0173)', () => {
+  const migrationsDir = path.resolve(__dirname, '../migrations');
+  const sql = fs.readFileSync(path.join(migrationsDir, '0173_shared_barcode_foods.sql'), 'utf8').replace(/--.*$/gm, '');
+  const fn = (name: string) => parseFunctions().find((f) => f.name === name);
+  const body = (name: string) => {
+    const from = sql.indexOf(`create or replace function public.${name}(`);
+    return sql.slice(from, sql.indexOf('$fn$;', from));
+  };
+
+  it('food_additions has row-level security and one read rule: the adder, their own coach and the coaches at their gym', () => {
+    expect(sql).toMatch(/alter table public\.food_additions enable row level security;/);
+    expect([...(replayPolicies().get('food_additions') ?? new Map()).entries()]).toEqual([["the adder and their gym's coaches read food_additions", 'select']]);
+    expect(sql.replace(/\s+/g, ' ')).toMatch(
+      /on public\.food_additions for select to authenticated using \(added_by = auth\.uid\(\) or public\.owns_client\(added_by\) or public\.is_same_gym_as_client\(added_by\)\);/
+    );
+  });
+
+  it('adding a product runs as the member, so the scanned-food insert rule (0106) still decides what goes in', () => {
+    const add = fn('add_barcode_food');
+    expect(add?.securityDefiner).toBe(false);
+    expect(add && access(add)).toEqual({ anon: false, authenticated: true });
+    expect(body('add_barcode_food')).toMatch(/values \(v_name, v_brand, '1 gram', p_protein, p_carbs, p_fat, v_digits, 'scan', p_serving_options\)/);
+    // it can never make a member's own food (0169), which has an owner and no barcode
+    expect(body('add_barcode_food')).not.toMatch(/owner_id/);
+  });
+
+  it('a product already there under any spelling of its number is returned, not added again', () => {
+    const add = body('add_barcode_food');
+    expect(add).toMatch(/pg_advisory_xact_lock\(/);
+    expect(add).toMatch(/lpad\(v_stripped, n, '0'\) from generate_series\(char_length\(v_stripped\), 14\)/);
+    expect(add).toMatch(/'existing', true/);
+  });
+
+  it('only the trigger writes who added a product, and nobody can call it', () => {
+    const record = fn('record_barcode_food_addition');
+    expect(record?.securityDefiner).toBe(true);
+    expect(record?.searchPath).toBeTruthy();
+    expect(record && access(record)).toEqual({ anon: false, authenticated: false });
+    expect(sql).toMatch(/after insert on public\.foods\s+for each row\s+when \(new\.source = 'scan'\)/);
+  });
+});
+
 // Decision D3 (4 Nov 2026): chat is between a member and their own coach. 0053 opened chat_messages and chat_threads to every coach
 // in the gym through a loop (dynamic SQL, which replayPolicies cannot see), and 0153 closes them again.
 describe('chat is readable by the member and their own coach only (D3, 0153)', () => {
