@@ -44,7 +44,9 @@
 --     yet or is the gym's programme (until its last week is over), so a coach can't cancel a start for everyone or end the gym programme
 --     that way. The app says so on Delete template.
 --   * set_programme_week_one (the start-date trigger of 0167) replaced: a late joiner's copy keeps its week 1 (the gym's Monday) when a
---     coach moves its start date, so the member stays on the gym's week instead of going back to week 1. Every other copy as before.
+--     coach moves its start date within the copy's weeks, so the member stays on the gym's week instead of going back to week 1. Moved
+--     past its last week, it starts again from week 1 as before (kept, it would be finished on the day it starts). Every other copy as
+--     before.
 --
 -- Not changed: apply_programme_rollout, apply_due_programme_rollouts, schedule_programme_rollout, instantiate_template_core (called as it
 -- is), apply_template_to_rollout, programme_rollout_usage. The migration itself gives nobody a programme and changes no programme: late
@@ -115,6 +117,7 @@
 -- onboarding -> one copy, start today, week_one = the gym programme's Monday, a notice; finishing again (or a second save) -> no second
 -- copy; a member with a running 1:1 programme -> no copy, listed for their coach, "Give it to them" -> copy, "Keep theirs" -> off the list;
 -- a member whose 1:1 starts next Monday -> listed, "Give it to them" -> copy, and the 1:1 now starts the Monday after the gym programme;
+-- a late joiner's copy (3 weeks, week_one 9 Nov) moved to start 23 Nov -> week_one stays 9 Nov, moved to 30 Nov -> week_one 30 Nov;
 -- after end_gym_programme, or after the last Sunday -> nothing; a non-admin coach cannot end it (function or direct update), nor cancel a
 -- scheduled start for everyone (direct delete), but can cancel one for chosen members; a non-admin coach cannot delete the template of the
 -- gym programme or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose gym programme's last week is
@@ -170,7 +173,7 @@ begin
       ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
       ('program_templates_refuse_gym_programme_delete', '0172', array['e417964f898305816cc6a55ad7148e23']),
       -- replaced: the one from 0167, or this file's (a second run)
-      ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '836a65083143b6a9bf93df50b68a7bec'])
+      ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '8a258730266312d0344c534b09087221'])
     ) as t(name, migration, accepted)
   loop
     v_md5 := null;
@@ -328,7 +331,9 @@ create trigger program_templates_refuse_gym_programme_delete
 
 -- A rollout copy follows the gym's week: week 1 is the Monday-to-Sunday week it starts in (0167). A late joiner's copy of a gym programme
 -- (_give_gym_programme below) has its week 1 on the gym's Monday, before the week it started in: when a coach moves its start date, it keeps
--- that week 1 while the new start is on or after it, so the member stays on the gym's week. Every other copy is as in 0167.
+-- that week 1 while the new start is still within the copy's weeks (on or after that Monday, up to the Sunday of its last week; a copy with
+-- no workouts counts as one week), so the member stays on the gym's week. A new start after its last week starts again from week 1, as in
+-- 0167: keeping the gym's Monday would make it finished on the day it starts. Every other copy is as in 0167.
 create or replace function public.set_programme_week_one()
 returns trigger
 language plpgsql
@@ -339,7 +344,9 @@ begin
      and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then
     if tg_op = 'UPDATE' and old.week_one is not null and old.start_date is not null
        and old.week_one < old.start_date - (extract(isodow from old.start_date)::integer - 1)
-       and new.start_date >= old.week_one then
+       and new.start_date >= old.week_one
+       and new.start_date <= old.week_one
+         + 7 * greatest(coalesce((select max(d.week_num) from workout_program_days d where d.program_id = new.id), 0), 1) - 1 then
       new.week_one := old.week_one;
     else
       new.week_one := new.start_date - (extract(isodow from new.start_date)::integer - 1);

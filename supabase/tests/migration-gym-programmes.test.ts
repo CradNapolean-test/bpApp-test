@@ -214,9 +214,10 @@ describe('which programme a gym is on, and when it stops reaching new members', 
     expect(trigger).toContain(
       "if new.rollout_id is not null and new.start_date is not null and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then"
     );
-    // a late joiner: week 1 before the week its copy started in (only _give_gym_programme sets that), kept while the new start is on or after it
+    // a late joiner: week 1 before the week its copy started in (only _give_gym_programme sets that), kept while the new start is within the
+    // copy's weeks (from that Monday to the Sunday of its last week, as the app counts them); after its last week, from week 1 again as 0167
     expect(trigger).toContain(
-      "if tg_op = 'UPDATE' and old.week_one is not null and old.start_date is not null and old.week_one < old.start_date - (extract(isodow from old.start_date)::integer - 1) and new.start_date >= old.week_one then new.week_one := old.week_one; else new.week_one := new.start_date - (extract(isodow from new.start_date)::integer - 1); end if;"
+      "if tg_op = 'UPDATE' and old.week_one is not null and old.start_date is not null and old.week_one < old.start_date - (extract(isodow from old.start_date)::integer - 1) and new.start_date >= old.week_one and new.start_date <= old.week_one + 7 * greatest(coalesce((select max(d.week_num) from workout_program_days d where d.program_id = new.id), 0), 1) - 1 then new.week_one := old.week_one; else new.week_one := new.start_date - (extract(isodow from new.start_date)::integer - 1); end if;"
     );
     // still fired by 0167's trigger, which this migration leaves as it is
     expect(migrationCode).not.toMatch(/trigger workout_programs_week_one/);
