@@ -3,7 +3,7 @@
 // day, the gym calendar of D9), until its last week ends or a gym admin ends it. A member whose own programme runs over the same dates is
 // not given it automatically: their coach decides. These are the words around it on the template, kept as plain functions so they can be
 // tested.
-import { DEFAULT_TIMEZONE, formatLongDate, formatShortDate } from './utils/dates';
+import { DEFAULT_TIMEZONE, addDays, formatLongDate, formatShortDate, toIsoDate } from './utils/dates';
 import { shortGymName } from './gymNames';
 import { membersLabel } from './rolloutPlan';
 
@@ -13,7 +13,8 @@ export interface GymProgrammeWaiting {
   // 'own_programme': another programme of theirs runs over the same dates; 'failed': it could not be given when they finished setting up.
   reason: 'own_programme' | 'failed';
   otherProgram: string | null;
-  // The last day of that programme (YYYY-MM-DD).
+  // That programme's start date and last day (YYYY-MM-DD). It may not have started yet.
+  otherStarts: string | null;
   otherUntil: string | null;
 }
 
@@ -28,6 +29,8 @@ export interface GymProgramme {
   weeks: number;
   // The Sunday of its last week.
   lastDay: string;
+  // The gym's today (YYYY-MM-DD); null from an older gym_programmes().
+  today: string | null;
   currentWeek: number;
   // New members get it (not ended, last week not over).
   isOpen: boolean;
@@ -63,6 +66,7 @@ export function readGymProgramme(row: unknown): GymProgramme | null {
         name: str(x.name) ?? 'A member',
         reason: x.reason === 'failed' ? 'failed' : 'own_programme',
         otherProgram: str(x.other_program),
+        otherStarts: str(x.other_starts),
         otherUntil: str(x.other_until),
       };
     })
@@ -76,6 +80,7 @@ export function readGymProgramme(row: unknown): GymProgramme | null {
     weekOne,
     weeks: num(r.weeks),
     lastDay,
+    today: str(r.today),
     currentWeek: num(r.current_week),
     isOpen: r.is_open === true,
     endedAt: str(r.ended_at),
@@ -121,22 +126,34 @@ export function waitingHeading(p: Pick<GymProgramme, 'waiting'>): string {
   return `Not given to ${membersLabel(p.waiting.length)} who joined`;
 }
 
-export function waitingReason(w: GymProgrammeWaiting): string {
+export function waitingReason(p: Pick<GymProgramme, 'today'>, w: GymProgrammeWaiting): string {
   if (w.reason === 'failed') return 'It couldn’t be given when they finished setting up';
   if (!w.otherProgram) return 'On their own programme';
+  // Not started yet: a 1:1 programme a coach made for a new member usually starts the coming Monday.
+  if (w.otherStarts && p.today && w.otherStarts > p.today) return `Their own programme “${w.otherProgram}” starts ${day(w.otherStarts)}`;
   return `On their own programme “${w.otherProgram}”${w.otherUntil ? ` until ${day(w.otherUntil)}` : ''}`;
+}
+
+// Giving it moves their own programme when it starts today or later, before the gym programme's last day: it would otherwise take over on
+// its start date. It then starts the Monday after the gym programme's last week (as _give_gym_programme does, migration 0172).
+function movesOther(p: Pick<GymProgramme, 'today' | 'lastDay'>, w: GymProgrammeWaiting): boolean {
+  return !!(w.otherStarts && p.today && w.otherStarts >= p.today && w.otherStarts <= p.lastDay);
 }
 
 export function giveWaitingConfirmation(p: GymProgramme, w: GymProgrammeWaiting): { title: string; body: string; confirmLabel: string } {
   const start = `It starts today on week ${p.currentWeek}, the same as everyone at ${gymOf(p)}`;
-  return {
-    title: `Give “${p.programName}” to ${w.name}?`,
-    body:
-      w.reason === 'own_programme' && w.otherProgram
-        ? `${start}, and takes over from “${w.otherProgram}”. Their own programme and everything logged on it stay on file.`
-        : `${start}.`,
-    confirmLabel: 'Give it to them',
-  };
+  let body = `${start}.`;
+  if (w.reason === 'own_programme' && w.otherProgram) {
+    if (movesOther(p, w)) {
+      body = `${start}. Their own programme “${w.otherProgram}” moves to start ${day(toIsoDate(addDays(new Date(`${p.lastDay}T00:00:00Z`), 1)))}, after the gym programme.`;
+    } else if (w.otherStarts && p.today && w.otherStarts > p.today) {
+      // Moved since by their coach to after the gym programme: nothing to take over from.
+      body = `${start}. Their own programme “${w.otherProgram}” still starts ${day(w.otherStarts)}, after the gym programme.`;
+    } else {
+      body = `${start}, and takes over from “${w.otherProgram}”. Their own programme and everything logged on it stay on file.`;
+    }
+  }
+  return { title: `Give “${p.programName}” to ${w.name}?`, body, confirmLabel: 'Give it to them' };
 }
 
 export function waitingDone(outcome: WaitingOutcome, name: string): string {

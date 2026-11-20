@@ -185,7 +185,22 @@ describe('giving it to a member who joins later', () => {
     // weeks counted as the app does (programWeekStart), a programme with no workouts counting as one week
     expect(give).toContain('least(coalesce(wp.week_one, wp.start_date), wp.start_date) + 7 * greatest(coalesce(');
     expect(give).toMatch(/insert into gym_programme_waiting \(rollout_id, client_id, reason, other_program_id\) values \(p_rollout_id, p_client_id, 'own_programme', v_other\)/);
-    expect(give).toMatch(/if not coalesce\(p_force, false\) then/);
+    // only when the coach has not chosen "Give it to them"
+    expect(give).toMatch(/if coalesce\(p_force, false\) then .* else .*select wp\.id into v_other/);
+  });
+
+  it('"Give it to them" moves a programme of theirs that would take over part-way to the Monday after the gym programme', () => {
+    // one that starts today (a tie) or later, up to the gym programme's last day; nothing that has started before today
+    expect(give).toContain(
+      'if coalesce(p_force, false) then update workout_programs wp set start_date = v_g.last_day + 1 where wp.client_id = p_client_id and wp.start_date is not null and wp.rollout_id is distinct from p_rollout_id and wp.start_date >= v_g.today and wp.start_date <= v_g.last_day; else'
+    );
+    // after the has_it check, under the lock, and before the copy is made
+    expect(give.indexOf('set start_date = v_g.last_day + 1')).toBeGreaterThan(give.indexOf("return 'has_it'"));
+    expect(give.indexOf('set start_date = v_g.last_day + 1')).toBeLessThan(give.indexOf('instantiate_template_core'));
+    // the coach list says when their programme starts and what the gym's today is, so the wording and the confirm can tell
+    const list = squeeze(code('gym_programmes'));
+    expect(list).toContain("'other_starts', op.start_date");
+    expect(list).toContain('t.last_day, t.today,');
   });
 
   it('starts today on the gym’s current week: the copy’s week 1 is the gym programme’s Monday', () => {

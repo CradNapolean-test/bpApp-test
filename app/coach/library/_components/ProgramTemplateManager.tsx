@@ -746,7 +746,7 @@ export function ProgramTemplateManager({
                     <div key={w.clientId} className="flex flex-wrap items-center gap-2">
                       <span className="min-w-0 flex-1">
                         <span className="font-semibold text-black dark:text-zinc-50">{w.name}</span>
-                        <span className="block text-xs text-zinc-500">{waitingReason(w)}</span>
+                        <span className="block text-xs text-zinc-500">{waitingReason(previewGymProgramme, w)}</span>
                       </span>
                       <button
                         type="button"

@@ -21,8 +21,9 @@
 --       - who already has a copy from that rollout (never a second copy);
 --       - who has another programme that runs over the same dates (a 1:1 programme their coach gave them, or a group one). Theirs is not
 --         replaced: the member is listed on the template as "Not given" with the programme in their way, and their coach (or a gym admin)
---         picks "Give it to them" (it takes over from today; theirs stays on file) or "Keep theirs" (gym_programme_waiting, new). A
---         programme with no workouts yet counts as one week long, so a 1:1 programme a coach has only just made still counts;
+--         picks "Give it to them" (it takes over from today; theirs stays on file, and one that has not started yet, or starts today, now
+--         starts the Monday after the gym programme's last week, so it cannot take over part-way) or "Keep theirs" (gym_programme_waiting,
+--         new). A programme with no workouts yet counts as one week long, so a 1:1 programme a coach has only just made still counts;
 --       - when the gym programme has ended or the gym has none.
 --     Giving it can never stop a member finishing their profile: an error is caught, nothing is half-made, and the member is listed as
 --     "Not given" with reason 'failed' so the coach can give it from the template.
@@ -105,6 +106,7 @@
 -- Write tests to run with test accounts on a sandbox project (not the live one): a new member at a gym with an open gym programme finishes
 -- onboarding -> one copy, start today, week_one = the gym programme's Monday, a notice; finishing again (or a second save) -> no second
 -- copy; a member with a running 1:1 programme -> no copy, listed for their coach, "Give it to them" -> copy, "Keep theirs" -> off the list;
+-- a member whose 1:1 starts next Monday -> listed, "Give it to them" -> copy, and the 1:1 now starts the Monday after the gym programme;
 -- after end_gym_programme, or after the last Sunday -> nothing; a non-admin coach cannot end it (function or direct update), nor cancel a
 -- scheduled start for everyone (direct delete), but can cancel one for chosen members; a member cannot call gym_programmes,
 -- end_gym_programme or resolve_gym_programme_waiting.
@@ -148,9 +150,9 @@ begin
   for v_check in
     select * from (values
       ('_gym_programme_today', '0172', array['63d299a9c29db8643c15e20d43a70bdb']),
-      ('_give_gym_programme', '0172', array['cf7a55ac7070064badad8d57f5fcf6b4']),
+      ('_give_gym_programme', '0172', array['4e10dc123d27774dee84ee6b08b3726e']),
       ('client_profiles_join_gym_programme', '0172', array['558f876ecd679247dc956a8f67bb5f0e']),
-      ('gym_programmes', '0172', array['258803277f01433fb85bba3a2c1b4b46']),
+      ('gym_programmes', '0172', array['662073fea310d8827b69bac083e593f6']),
       ('end_gym_programme', '0172', array['8ff5f37461f44cd1e11e25c9a4cea232']),
       ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950'])
     ) as t(name, migration, accepted)
@@ -277,7 +279,17 @@ begin
     return 'has_it';
   end if;
 
-  if not coalesce(p_force, false) then
+  if coalesce(p_force, false) then
+    -- "Give it to them". A programme of theirs that starts today or later, before the gym programme's last day, would take over from it
+    -- on its start date (the app's programme is the latest start that has arrived; starting the same day, the two would tie), so it now
+    -- starts the Monday after the gym programme's last week. The coach is told so before they give it (giveWaitingConfirmation).
+    update workout_programs wp set start_date = v_g.last_day + 1
+    where wp.client_id = p_client_id
+      and wp.start_date is not null
+      and wp.rollout_id is distinct from p_rollout_id
+      and wp.start_date >= v_g.today
+      and wp.start_date <= v_g.last_day;
+  else
     -- Another programme of theirs that runs over the same dates (today to the gym programme's last day), counted as the app counts weeks
     -- (programWeekStart): from week_one when it is set and not after the start date, else the start date. One with no workouts yet counts
     -- as one week.
@@ -375,8 +387,8 @@ create trigger client_profiles_gym_programme
 -- For the coach's template list: the programme the coach's gym is on today, while its last week has not finished (ended or not).
 create or replace function public.gym_programmes()
 returns table (rollout_id uuid, template_id uuid, program_name text, gym_name text, start_date date, week_one date, weeks integer,
-               last_day date, current_week integer, is_open boolean, ended_at timestamptz, members integer, joined_later integer,
-               waiting jsonb)
+               last_day date, today date, current_week integer, is_open boolean, ended_at timestamptz, members integer,
+               joined_later integer, waiting jsonb)
 language plpgsql
 stable
 security definer
@@ -392,7 +404,7 @@ begin
   end if;
   v_admin := exists (select 1 from profiles p where p.id = auth.uid() and p.is_gym_admin);
   return query
-    select t.rollout_id, t.template_id, t.program_name, g.name, t.start_date, t.week_one, t.weeks, t.last_day,
+    select t.rollout_id, t.template_id, t.program_name, g.name, t.start_date, t.week_one, t.weeks, t.last_day, t.today,
            ((t.today - t.week_one) / 7 + 1)::integer, t.is_open, t.ended_at, u.n, u.later, coalesce(w.list, '[]'::jsonb)
     from public._gym_programme_today(v_gym) t
     join gyms g on g.id = v_gym
@@ -408,6 +420,7 @@ begin
                'name', coalesce(nullif(btrim(cp.name), ''), p.email, 'A member'),
                'reason', q.reason,
                'other_program', op.name,
+               'other_starts', op.start_date,
                'other_until', case when op.id is null then null else
                  least(coalesce(op.week_one, op.start_date), op.start_date)
                  + 7 * greatest(coalesce((select max(d.week_num) from workout_program_days d where d.program_id = op.id), 0), 1) - 1 end
