@@ -329,16 +329,16 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
   const supabase = await createClient();
   const gymId = forGymId ?? (await resolveScopingGymId(supabase));
 
-  const { data: classes, error: classesError } = await supabase
-    .from('classes')
-    .select('*')
-    .eq('gym_id', gymId);
-  if (classesError) raise(classesError);
-
+  // The sessions and the gym's row are read together, not one after the other (item 9: this was six trips to the database in a row, the
+  // longest wait on the coach dashboard; now three).
   // Gym blackout window (0064). If the migration hasn't been applied yet the columns don't
   // exist -- fall back to no blackout rather than failing the whole dashboard load.
   // The timezone (same migration) says when a session has started, for "to mark".
-  const { data: gym } = await supabase.from('gyms').select('blackout_start, blackout_end, timezone').eq('id', gymId).maybeSingle();
+  const [{ data: classes, error: classesError }, { data: gym }] = await Promise.all([
+    supabase.from('classes').select('*').eq('gym_id', gymId),
+    supabase.from('gyms').select('blackout_start, blackout_end, timezone').eq('id', gymId).maybeSingle(),
+  ]);
+  if (classesError) raise(classesError);
   const blackoutStart: string | null = gym?.blackout_start ?? null;
   const blackoutEnd: string | null = gym?.blackout_end ?? null;
 
@@ -396,8 +396,20 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
   // rather than flagged, matching the virtual-generation model: a cancelled date simply isn't
   // a bookable/attendable occurrence anymore.
   // The reason column needs migration 0100; without it, fall back to no reasons rather than failing.
+  // The cancellations, the bookings and the booking totals all need only the sessions and dates, so the three are read together.
+  // A member can only read their own bookings, so the bookings give only their count. The totals (counts only, never who) make "spots
+  // left" right for everyone; without migration 0094 the own-bookings count stands.
+  const [withReason, { data: bookings, error: bookingsError }, { data: totals, error: totalsError }] = await Promise.all([
+    supabase.from('class_exceptions').select('class_id, occurrence_date, reason').in('class_id', classIds).in('occurrence_date', dates),
+    supabase
+      .from('bookings')
+      .select('class_id, booking_date, status, attended, no_show')
+      .in('class_id', classIds)
+      .in('booking_date', dates)
+      .in('status', ['booked', 'waitlist']),
+    supabase.rpc('class_booking_counts', { p_class_ids: classIds, p_dates: dates }),
+  ]);
   let exceptions: { class_id: string; occurrence_date: string; reason?: string | null }[] | null = null;
-  const withReason = await supabase.from('class_exceptions').select('class_id, occurrence_date, reason').in('class_id', classIds).in('occurrence_date', dates);
   if (withReason.error) {
     const plain = await supabase.from('class_exceptions').select('class_id, occurrence_date').in('class_id', classIds).in('occurrence_date', dates);
     if (plain.error) raise(plain.error);
@@ -408,13 +420,6 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
   const cancelledKeys = new Map((exceptions ?? []).map((e) => [`${e.class_id}|${e.occurrence_date}`, e.reason ?? null]));
   const activeOccurrences = includeCancelled ? occurrences : occurrences.filter((o) => !cancelledKeys.has(`${o.classId}|${o.date}`));
   if (activeOccurrences.length === 0) return [];
-
-  const { data: bookings, error: bookingsError } = await supabase
-    .from('bookings')
-    .select('class_id, booking_date, status, attended, no_show')
-    .in('class_id', classIds)
-    .in('booking_date', dates)
-    .in('status', ['booked', 'waitlist']);
   if (bookingsError) raise(bookingsError);
 
   // Booked places, the waitlist, and booked places the coach hasn't marked attended or no-show yet once the session has started (at the
@@ -425,13 +430,7 @@ export async function getScheduleOccurrences(weeksAhead = 3, weeksBack = 0, incl
   const countMap = counts.booked;
   const unmarkedMap = counts.unmarked;
 
-  // A member can only read their own bookings, so the count above is only theirs. Ask for the real
-  // per-session totals (counts only, never who) so "spots left" is right for everyone. Falls back to
-  // the count above if migration 0094 has not been applied yet.
-  const { data: totals, error: totalsError } = await supabase.rpc('class_booking_counts', {
-    p_class_ids: classIds,
-    p_dates: dates,
-  });
+  // The real per-session totals replace the own-bookings count when they could be read.
   if (totalsError) console.warn('class_booking_counts failed, using own-bookings count:', totalsError.message);
   if (!totalsError && totals) {
     countMap.clear();
