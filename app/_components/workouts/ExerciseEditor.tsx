@@ -29,6 +29,7 @@ import type { BlockType, ClientExerciseMaxRow, ExerciseLibraryRow, PrescriptionT
 import { groupBySuperset, nextSupersetLetter } from './exerciseGrouping';
 import { guessTrackingType } from '@/lib/trackingGuess';
 import { exerciseNameKey, findLibraryMatch } from '@/lib/libraryMatch';
+import { INLINE_BOX, inlineDetails, inlineTarget, inlineText, readInlineBox, readSetsText, readTargetText, type InlineBox } from '@/lib/builderInline';
 
 // An exercise's picture is a link a coach pasted. It loads only from the gym's own storage and the hosts named in NEXT_PUBLIC_IMAGE_HOSTS
 // (comma separated), never sends a referrer, and otherwise the muscle-group icon shows instead (R23).
@@ -73,10 +74,6 @@ import {
   formatDistance,
   formatDuration,
   hasMeasure,
-  parseDistance,
-  parseDuration,
-  parseNumberText,
-  prescriptionParts,
   trackingOf,
   type TrackingType,
 } from '@/lib/workoutTracking';
@@ -190,15 +187,6 @@ function keyLabel(key: string) {
   return blockLabel(section, blockNo, part);
 }
 
-// One line saying what to do, e.g. "3 × 8-10 · 20kg · RPE 8 · rest 60s".
-function prescriptionSummary(ex: EditableExercise): string {
-  if (ex.block_type === 'circuit') return ex.notes ? ex.notes.split('\n')[0] : 'Instructions';
-  const parts = prescriptionParts(ex);
-  if (ex.rpe != null) parts.push(`RPE ${ex.rpe}`);
-  if (ex.rest_seconds != null) parts.push(`rest ${ex.rest_seconds}s`);
-  return parts.length > 0 ? parts.join(' · ') : 'Tap to set sets and reps';
-}
-
 // ------------------------------------------------------------------ edit sheet
 
 function ExerciseSheet<T extends EditableExercise>({
@@ -248,18 +236,22 @@ function ExerciseSheet<T extends EditableExercise>({
   const linked = exercise.exercise_library_id != null && library.some((l) => l.id === exercise.exercise_library_id);
   const percentNeedsLink = !isCircuit && hasMeasure(tracking, 'weight') && prescription === 'percent_1rm' && !linked;
 
-  async function save() {
+  // The numbers are read as the boxes on the builder's line read them (lib/builderInline.ts). A number that cannot be saved is said in a
+  // toast: it was thrown before run() took over, so the sheet just did nothing.
+  function fieldsToSave(): ExerciseUpdate {
     const fields: ExerciseUpdate = { name: name.trim() || exercise.name, notes: notes.trim() || null };
     if (!isCircuit) {
-      const seconds = parseDuration(targetTime);
-      const distance = parseDistance(targetDistance);
-      const calories = parseNumberText(targetCalories);
-      if (hasMeasure(tracking, 'time') && targetTime.trim() !== '' && (seconds == null || seconds <= 0)) throw new Error('Target time can be seconds (45) or minutes and seconds (1:30).');
-      if (hasMeasure(tracking, 'distance') && targetDistance.trim() !== '' && (distance == null || distance <= 0)) throw new Error('Target distance can be metres (400) or kilometres (5 km).');
-      if (hasMeasure(tracking, 'calories') && targetCalories.trim() !== '' && (calories == null || calories <= 0)) throw new Error('Target calories need to be a number above zero.');
+      const value = (read: { ok: true; value: number | null } | { ok: false; error: string }) => {
+        if (!read.ok) throw new Error(read.error);
+        return read.value;
+      };
+      const setCount = value(readSetsText(sets));
+      const seconds = hasMeasure(tracking, 'time') ? value(readTargetText('time', targetTime)) : null;
+      const distance = hasMeasure(tracking, 'distance') ? value(readTargetText('distance', targetDistance)) : null;
+      const calories = hasMeasure(tracking, 'calories') ? value(readTargetText('calories', targetCalories)) : null;
       const isPercent = hasMeasure(tracking, 'weight') && prescription === 'percent_1rm';
       Object.assign(fields, {
-        sets: num(sets),
+        sets: setCount,
         reps: hasMeasure(tracking, 'reps') ? reps.trim() || null : null,
         tracking_type: tracking,
         target_seconds: hasMeasure(tracking, 'time') ? seconds : null,
@@ -292,8 +284,10 @@ function ExerciseSheet<T extends EditableExercise>({
         if (!fields.video_url) fields.video_url = match.video_url ?? null;
       }
     }
-    await run(() => onSave(fields), { success: 'Saved', onDone: onClose });
+    return fields;
   }
+
+  const save = () => run(async () => onSave(fieldsToSave()), { success: 'Saved', onDone: onClose });
 
   return (
     <BottomSheet title={isCircuit ? 'Instructions' : exercise.name} onClose={onClose}>
@@ -778,17 +772,44 @@ function BuilderRow<T extends EditableExercise>({
   library,
   menuItems,
   onOpen,
+  onSaveFields,
 }: {
   exercise: T;
   index: number;
   library: ExerciseLibraryRow[];
   menuItems: DropdownMenuItem[];
   onOpen: () => void;
+  // Saves a box on the line, the way the sheet saves (live review item 4).
+  onSaveFields: (fields: ExerciseUpdate) => Promise<unknown>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercise.id });
+  const { run } = useAction();
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const libraryEntry = exercise.exercise_library_id ? library.find((e) => e.id === exercise.exercise_library_id) : undefined;
   const Icon = MUSCLE_GROUP_ICONS[libraryEntry?.muscle_group ?? ''] ?? DefaultMuscleGroupIcon;
+  const isCircuit = exercise.block_type === 'circuit';
+  // The sets box, and the target box for what the exercise records (reps, distance, calories or time; none for tick when done).
+  const target = inlineTarget(trackingOf(exercise.tracking_type));
+  const boxes: InlineBox[] = isCircuit ? [] : target ? ['sets', target] : ['sets'];
+  // Under the name: an instructions line's first line, else what the boxes do not show ("20kg · RPE 8 · rest 60s").
+  const details = isCircuit ? (exercise.notes ? exercise.notes.split('\n')[0] : 'Instructions') : inlineDetails(exercise).join(' · ') || 'Tap for more';
+
+  // Leaving a box saves it if it changed. A number that cannot be saved is said in a toast and the box goes back to what is saved.
+  function commit(input: HTMLInputElement, box: InlineBox) {
+    const saved = inlineText(exercise, box);
+    const change = readInlineBox(exercise, box, input.value);
+    if (change.kind === 'none') {
+      input.value = saved;
+      return;
+    }
+    void run(async () => {
+      if (change.kind === 'error') throw new Error(change.error);
+      return onSaveFields(change.fields);
+    }).then((ok) => {
+      if (!ok) input.value = saved;
+    });
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -803,11 +824,12 @@ function BuilderRow<T extends EditableExercise>({
       >
         <GripVertical className="h-4 w-4" />
       </button>
+      {/* At phone width the number and the picture give their room to the name and the boxes. */}
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/5 text-[11px] font-bold text-zinc-500 dark:bg-white/10 dark:text-zinc-400">
+        <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/5 text-[11px] font-bold text-zinc-500 sm:flex dark:bg-white/10 dark:text-zinc-400">
           {index + 1}
         </span>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/5 dark:bg-white/10">
+        <span className="hidden h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black/5 sm:flex dark:bg-white/10">
           {isAllowedImage(libraryEntry?.image_url, IMAGE_HOSTS) ? (
             // eslint-disable-next-line @next/next/no-img-element -- coach-entered URLs from an allow-listed host; no remote-image config configured
             <img src={libraryEntry?.image_url ?? undefined} alt="" referrerPolicy="no-referrer" loading="lazy" className="h-full w-full object-cover" />
@@ -816,10 +838,47 @@ function BuilderRow<T extends EditableExercise>({
           )}
         </span>
         <span className="min-w-0">
-          <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{exercise.name}</span>
-          <span className="block truncate text-xs text-zinc-500">{prescriptionSummary(exercise)}</span>
+          <span className={`block text-sm font-bold text-black dark:text-zinc-50 ${boxes.length > 0 ? 'line-clamp-2 break-words' : 'truncate'}`}>
+            {exercise.name}
+          </span>
+          <span className="block truncate text-xs text-zinc-500">{details}</span>
         </span>
       </button>
+      {boxes.length > 0 && (
+        <div className="flex shrink-0 items-center gap-1">
+          {boxes.map((box, i) => {
+            const saved = inlineText(exercise, box);
+            return (
+              <Fragment key={box}>
+                {i > 0 && (
+                  <span aria-hidden className="text-xs font-bold text-zinc-400">
+                    ×
+                  </span>
+                )}
+                <input
+                  // A new key when the saved value changes (after a save, or an edit in the sheet) starts the box again from it.
+                  key={`${box}:${saved}`}
+                  defaultValue={saved}
+                  type="text"
+                  inputMode={INLINE_BOX[box].inputMode}
+                  enterKeyHint="done"
+                  autoComplete="off"
+                  aria-label={`${INLINE_BOX[box].label} for ${exercise.name}`}
+                  placeholder={INLINE_BOX[box].placeholder}
+                  maxLength={box === 'sets' ? 3 : 12}
+                  onBlur={(e) => commit(e.currentTarget, box)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                  className={`h-10 rounded-lg border border-black/10 bg-transparent px-1 text-center text-base font-bold tabular-nums text-black placeholder:text-[11px] placeholder:font-medium placeholder:text-zinc-400 dark:border-white/10 dark:text-zinc-50 ${
+                    box === 'sets' ? 'w-10 sm:w-12' : 'w-14 sm:w-20'
+                  }`}
+                />
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
       <DropdownMenu items={menuItems} triggerLabel={`${exercise.name} actions`} />
     </div>
   );
@@ -1521,6 +1580,7 @@ export function ExerciseEditor<T extends EditableExercise>({
                                   library={library}
                                   menuItems={menuFor(ex, rows)}
                                   onOpen={() => setSheet({ kind: 'edit', id: ex.id })}
+                                  onSaveFields={(fields) => onUpdate(ex.id, fields)}
                                 />
                                 {renderBuilderExtra?.(ex)}
                               </Fragment>
