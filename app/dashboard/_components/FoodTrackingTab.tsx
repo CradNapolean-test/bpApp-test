@@ -847,6 +847,10 @@ export function FoodTrackingTab({
         if (intoViewed && viewingRef.current === date) {
           setCurrentDailyLogId(copied.dailyLogId);
           setEntries(copied.entries);
+        } else {
+          // The food went to a day not on screen: its ring on the strip follows straight away (copied.entries is that day's whole list).
+          const landed: FoodDay = { calories: totalMacros(copied.entries).calories, hasFood: copied.entries.length > 0 };
+          setChangedDays((prev) => ({ ...prev, [request.toDate]: landed }));
         }
         const where = intoViewed ? `from ${dayLabel(request.fromDate, todayIso, true)}` : `to ${dayLabel(request.toDate, todayIso, true)}`;
         toast.success(copyMessage(copied.added, copied.found, where));
