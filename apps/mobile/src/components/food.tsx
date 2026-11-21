@@ -55,22 +55,25 @@ export function CoachFeedbackCard({ items }: { items: NutritionFeedbackRow[] }) 
 }
 
 // ---------- date navigation + totals ----------
-// `ahead` is how many days past today food can be planned (1 = tomorrow).
-export function DateNav({ date, today, ahead = 0, onChange }: { date: string; today: string; ahead?: number; onChange: (d: string) => void }) {
+// `ahead` is how many days past today food can be planned (1 = tomorrow); `back`, how many days before today can be looked at (the
+// photo diary passes BROWSE_DAYS, as the web stops at; no limit when left out).
+export function DateNav({ date, today, ahead = 0, back, onChange }: { date: string; today: string; ahead?: number; back?: number; onChange: (d: string) => void }) {
   const t = useTheme();
   const shift = (n: number) => {
     const d = new Date(date + 'T00:00:00Z');
     d.setUTCDate(d.getUTCDate() + n);
     onChange(d.toISOString().slice(0, 10));
   };
-  const yesterday = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
-  const last = (() => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + ahead); return d.toISOString().slice(0, 10); })();
+  const fromToday = (n: number) => { const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const yesterday = fromToday(-1);
+  const last = fromToday(ahead);
+  const canGoBack = back == null || date > fromToday(-back);
   const label = date === today ? 'Today' : date === yesterday ? 'Yesterday' : ahead > 0 && date === last ? 'Tomorrow' : new Date(date + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   // As on the web: plain chevrons either side of the day, no tiles.
   const arrow = { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' } as const;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Previous day" onPress={() => shift(-1)} style={arrow}><Icon name="chevronLeft" size={20} color={t.muted} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Previous day" onPress={() => canGoBack && shift(-1)} style={[arrow, { opacity: canGoBack ? 1 : 0.3 }]} disabled={!canGoBack}><Icon name="chevronLeft" size={20} color={t.muted} /></Pressable>
       <Pressable onPress={() => date !== today && onChange(today)} style={{ alignItems: 'center' }}>
         <AppText variant="heading">{label}</AppText>
         {date !== today ? <AppText variant="small" color="accent">Back to today</AppText> : null}
@@ -148,22 +151,29 @@ export function AddFoodButtons({ onAdd, onScan, scanLabel }: { onAdd: () => void
   );
 }
 
-function EntryLine({ entry, onEdit, nested = false }: { entry: FoodDiaryEntryRow; onEdit: (e: FoodDiaryEntryRow) => void; nested?: boolean }) {
+// With no `onEdit` (a day that can no longer be changed) the line is only read, not a button.
+function EntryLine({ entry, onEdit, nested = false }: { entry: FoodDiaryEntryRow; onEdit?: (e: FoodDiaryEntryRow) => void; nested?: boolean }) {
   const t = useTheme();
-  return (
-    <Pressable onPress={() => onEdit(entry)} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 10, paddingLeft: nested ? spacing.md : 0, borderTopWidth: 1, borderTopColor: t.border }}>
+  const style = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: 10, paddingLeft: nested ? spacing.md : 0, borderTopWidth: 1, borderTopColor: t.border } as const;
+  const body = (
+    <>
       <View style={{ flexShrink: 1 }}>
         <AppText style={{ fontWeight: '600' }} numberOfLines={1}>{entryName(entry)}</AppText>
         <AppText variant="small" color="muted">{entry.food ? formatQuantity(entry) : 'Quick add'}</AppText>
       </View>
       <AppText style={{ fontWeight: '600' }}>{kcal(entry)} <AppText variant="small" color="muted">kcal</AppText></AppText>
-    </Pressable>
+    </>
+  );
+  return onEdit ? (
+    <Pressable onPress={() => onEdit(entry)} accessibilityRole="button" style={style}>{body}</Pressable>
+  ) : (
+    <View accessible style={style}>{body}</View>
   );
 }
 
 // A logged recipe is one line (D23c): its name, servings and calories, which opens to show its ingredients (each still editable) and a
 // way to remove the whole recipe.
-function RecipeLineView({ line, onEdit, onRemove }: { line: RecipeLine<FoodDiaryEntryRow>; onEdit: (e: FoodDiaryEntryRow) => void; onRemove?: (line: RecipeLine<FoodDiaryEntryRow>) => void }) {
+function RecipeLineView({ line, onEdit, onRemove }: { line: RecipeLine<FoodDiaryEntryRow>; onEdit?: (e: FoodDiaryEntryRow) => void; onRemove?: (line: RecipeLine<FoodDiaryEntryRow>) => void }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   const total = totalMacros(line.entries);
@@ -194,7 +204,7 @@ function RecipeLineView({ line, onEdit, onRemove }: { line: RecipeLine<FoodDiary
 }
 
 export function DiarySection({
-  label, entries, onAdd, onScan, onEdit, onRemoveRecipe,
+  label, entries, onAdd, onScan, onEdit, onRemoveRecipe, locked = false,
 }: {
   label: string;
   entries: FoodDiaryEntryRow[];
@@ -202,8 +212,11 @@ export function DiarySection({
   onScan: () => void;
   onEdit: (e: FoodDiaryEntryRow) => void;
   onRemoveRecipe?: (line: RecipeLine<FoodDiaryEntryRow>) => void;
+  // A day more than two weeks old (canEditFoodDay): its food is shown, but nothing can be added, changed or removed, as on the web.
+  locked?: boolean;
 }) {
   const sectionKcal = Math.round(entries.reduce((s, e) => s + entryMacros(e).calories, 0));
+  const edit = locked ? undefined : onEdit;
   return (
     <Card style={{ gap: spacing.sm }}>
       {/* The meal's calories sit right beside its name, as on the web. */}
@@ -213,9 +226,9 @@ export function DiarySection({
       </View>
       {entries.length === 0 ? <AppText variant="small" color="muted">Nothing logged yet.</AppText> : null}
       {diaryLines(entries).map((line) =>
-        line.kind === 'entry' ? <EntryLine key={line.entry.id} entry={line.entry} onEdit={onEdit} /> : <RecipeLineView key={line.id} line={line} onEdit={onEdit} onRemove={onRemoveRecipe} />,
+        line.kind === 'entry' ? <EntryLine key={line.entry.id} entry={line.entry} onEdit={edit} /> : <RecipeLineView key={line.id} line={line} onEdit={edit} onRemove={locked ? undefined : onRemoveRecipe} />,
       )}
-      <AddFoodButtons onAdd={onAdd} onScan={onScan} scanLabel={`Scan a barcode into ${label}`} />
+      {locked ? null : <AddFoodButtons onAdd={onAdd} onScan={onScan} scanLabel={`Scan a barcode into ${label}`} />}
     </Card>
   );
 }

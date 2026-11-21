@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
 import type { FoodPhotoEntryRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
+import { BROWSE_DAYS, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { canAddPhoto, groupByMealSection, MAX_PHOTO_DESCRIPTION, MAX_PHOTOS_PER_DAY, suggestMealSection, validateMealEntry } from '@ballistic/shared/utils/photoDiary';
 
 import { Pressable } from '@/components/press';
@@ -32,7 +33,8 @@ function MealPicture({ path, note, onOpen }: { path: string; note: string; onOpe
   );
 }
 
-function MealPhotoCard({ photo, feedback, onOpen, onDelete }: { photo: FoodPhotoEntryRow; feedback: NutritionFeedbackRow[]; onOpen: (url: string, caption: string) => void; onDelete: () => void }) {
+// With no `onDelete` (a day that can no longer be changed) there is no bin.
+function MealPhotoCard({ photo, feedback, onOpen, onDelete }: { photo: FoodPhotoEntryRow; feedback: NutritionFeedbackRow[]; onOpen: (url: string, caption: string) => void; onDelete?: () => void }) {
   const t = useTheme();
   const note = photo.description || 'Meal photo';
   return (
@@ -45,9 +47,11 @@ function MealPhotoCard({ photo, feedback, onOpen, onDelete }: { photo: FoodPhoto
             <AppText style={{ fontWeight: '700' }}>{note}</AppText>
             <AppText variant="small" color="muted">{timeOf(photo.created_at)}</AppText>
           </View>
-          <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel={photo.storage_path ? 'Delete photo' : 'Delete meal'} hitSlop={10} style={{ padding: 6 }}>
-            <Icon name="trash2" size={18} color={t.muted} />
-          </Pressable>
+          {onDelete ? (
+            <Pressable onPress={onDelete} accessibilityRole="button" accessibilityLabel={photo.storage_path ? 'Delete photo' : 'Delete meal'} hitSlop={10} style={{ padding: 6 }}>
+              <Icon name="trash2" size={18} color={t.muted} />
+            </Pressable>
+          ) : null}
         </View>
         {feedback.map((f) => (
           <View key={f.id} style={{ borderLeftWidth: 3, borderLeftColor: t.accent, paddingLeft: spacing.sm, gap: 2 }}>
@@ -97,6 +101,8 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
   const t = useTheme();
   const [picked, setPicked] = useState<string | null>(null);
   const date = picked ?? today;
+  // As on the web (PhotoDiaryTab): meals are added to and deleted from the last two weeks, and the diary goes back a month.
+  const locked = !canEditDay(date, today);
   const diaryQ = usePhotoDiary(date);
   const feedbackQ = useNutritionFeedback(date);
   const add = useAddMealPhoto(date);
@@ -133,34 +139,53 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
     <>
       <ScrollScreen refreshing={diaryQ.isRefetching} onRefresh={() => diaryQ.refetch()}>
         <NutritionTabs current="food" />
-        <DateNav date={date} today={today} onChange={(d) => setPicked(d === today ? null : d)} />
-        <Pressable
-          onPress={() => setMenu(true)}
-          disabled={full}
-          accessibilityRole="button"
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: t.accent, borderRadius: radius.lg, paddingVertical: 14, opacity: full ? 0.5 : 1 }}>
-          <Icon name="camera" size={20} color={t.accentForeground} />
-          <AppText style={{ color: t.accentForeground, fontWeight: '800' }}>Add a meal photo</AppText>
-        </Pressable>
-        <Pressable
-          onPress={() => {
-            add.reset();
+        {/* Another day: nothing opened for this one carries over (a sheet hidden by the lock would otherwise come back there). */}
+        <DateNav
+          date={date}
+          today={today}
+          back={BROWSE_DAYS}
+          onChange={(d) => {
+            setPickError(null);
+            setMenu(false);
+            setComposing(false);
             setPhoto(null);
-            setComposing(true);
+            setDeleting(null);
+            setPicked(d === today ? null : d);
           }}
-          disabled={full}
-          accessibilityRole="button"
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, paddingVertical: 12, opacity: full ? 0.5 : 1 }}>
-          <AppText style={{ fontWeight: '700' }}>Add without a photo</AppText>
-        </Pressable>
-        {full ? <AppText variant="small" color="muted">A day can hold {MAX_PHOTOS_PER_DAY} photos.</AppText> : null}
+        />
+        {locked ? (
+          <AppText variant="small" color="warning" style={{ fontWeight: '600' }}>{LOCKED_DAY_MESSAGE}</AppText>
+        ) : (
+          <>
+            <Pressable
+              onPress={() => setMenu(true)}
+              disabled={full}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: t.accent, borderRadius: radius.lg, paddingVertical: 14, opacity: full ? 0.5 : 1 }}>
+              <Icon name="camera" size={20} color={t.accentForeground} />
+              <AppText style={{ color: t.accentForeground, fontWeight: '800' }}>Add a meal photo</AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                add.reset();
+                setPhoto(null);
+                setComposing(true);
+              }}
+              disabled={full}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: t.border, borderRadius: radius.lg, paddingVertical: 12, opacity: full ? 0.5 : 1 }}>
+              <AppText style={{ fontWeight: '700' }}>Add without a photo</AppText>
+            </Pressable>
+            {full ? <AppText variant="small" color="muted">A day can hold {MAX_PHOTOS_PER_DAY} photos.</AppText> : null}
+          </>
+        )}
         {pickError ? <AppText variant="small" color="danger">{pickError}</AppText> : null}
         <CoachFeedbackCard items={feedback.filter((f) => !f.photo_id)} />
         {diaryQ.isError ? <AppText color="danger">Could not load this day: {diaryQ.error.message}</AppText> : null}
         {diaryQ.isSuccess && photos.length === 0 ? (
           <Card style={{ gap: spacing.xs }}>
             <AppText variant="heading">{date === today ? 'No meals logged yet' : 'No meals logged this day'}</AppText>
-            <AppText color="muted">Photograph each meal and add a short note, or just describe it if you have no photo. Your coach looks through your diary.</AppText>
+            {locked ? null : <AppText color="muted">Photograph each meal and add a short note, or just describe it if you have no photo. Your coach looks through your diary.</AppText>}
           </Card>
         ) : null}
         {del.isError ? <AppText color="danger">{del.error.message}</AppText> : null}
@@ -168,14 +193,15 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
           <View key={group.section?.id ?? 'none'} style={{ gap: spacing.md }}>
             {all.length > 1 || group.section ? <AppText variant="small" color="muted" style={{ fontWeight: '700', textTransform: 'uppercase' }}>{group.section?.label ?? 'Other'}</AppText> : null}
             {group.entries.map((p) => (
-              <MealPhotoCard key={p.id} photo={p} feedback={feedback.filter((f) => f.photo_id === p.id)} onOpen={(url, caption) => setViewing({ url, caption })} onDelete={() => setDeleting(p)} />
+              <MealPhotoCard key={p.id} photo={p} feedback={feedback.filter((f) => f.photo_id === p.id)} onOpen={(url, caption) => setViewing({ url, caption })} onDelete={locked ? undefined : () => setDeleting(p)} />
             ))}
           </View>
         ))}
       </ScrollScreen>
 
-      {menu ? <PhotoSourceMenu onPick={choose} onClose={() => setMenu(false)} /> : null}
-      {composing ? (
+      {/* Not on a locked day: a sheet left open as the day turned more than two weeks old (past midnight) closes. */}
+      {menu && !locked ? <PhotoSourceMenu onPick={choose} onClose={() => setMenu(false)} /> : null}
+      {composing && !locked ? (
         <AddPhotoSheet
           photo={photo}
           sections={sections}
@@ -191,7 +217,7 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
         />
       ) : null}
       <PhotoViewer src={viewing?.url ?? null} caption={viewing?.caption} onClose={() => setViewing(null)} />
-      {deleting ? (
+      {deleting && !locked ? (
         <ConfirmSheet
           title="Delete this photo?"
           onCancel={() => setDeleting(null)}

@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import type { ClientProfileRow, ManualMacroEntryRow } from '@ballistic/shared/data/types';
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
+import { canEditFoodDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { manualEntryKcal, manualTotals, validateManualEntry } from '@ballistic/shared/utils/manualMacros';
 
 import { Pressable } from '@/components/press';
@@ -22,7 +23,8 @@ const MACRO_COLORS = { protein: '#a07aff', carbs: '#e8a020', fat: '#2ecc71' } as
 
 type NewEntry = Parameters<ReturnType<typeof useAddManualEntry>['mutate']>[0]['entry'];
 
-function ManualRow({ entry, onRemove }: { entry: ManualMacroEntryRow; onRemove: () => void }) {
+// With no `onRemove` (a day that can no longer be changed) there is no bin.
+function ManualRow({ entry, onRemove }: { entry: ManualMacroEntryRow; onRemove?: () => void }) {
   const t = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.border }}>
@@ -36,9 +38,11 @@ function ManualRow({ entry, onRemove }: { entry: ManualMacroEntryRow; onRemove: 
           <AppText variant="small" style={{ color: MACRO_COLORS.fat }}>F {Math.round(entry.fat ?? 0)}g</AppText>
         </AppText>
       </View>
-      <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel="Remove entry" hitSlop={10} style={{ padding: 6 }}>
-        <Icon name="trash2" size={18} color={t.muted} />
-      </Pressable>
+      {onRemove ? (
+        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel="Remove entry" hitSlop={10} style={{ padding: 6 }}>
+          <Icon name="trash2" size={18} color={t.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -71,8 +75,8 @@ function ManualForm({ onAdd }: { onAdd: (entry: NewEntry) => void }) {
   );
 }
 
-// One meal section: its entries, and a form to add another.
-function ManualSection({ label, entries, onAdd, onRemove }: { label: string; entries: ManualMacroEntryRow[]; onAdd?: (entry: NewEntry) => void; onRemove: (id: string) => void }) {
+// One meal section: its entries, and a form to add another. Neither handler on a locked day.
+function ManualSection({ label, entries, onAdd, onRemove }: { label: string; entries: ManualMacroEntryRow[]; onAdd?: (entry: NewEntry) => void; onRemove?: (id: string) => void }) {
   const [adding, setAdding] = useState(false);
   const kcal = entries.reduce((sum, e) => sum + manualEntryKcal(e), 0);
   return (
@@ -82,7 +86,7 @@ function ManualSection({ label, entries, onAdd, onRemove }: { label: string; ent
         <AppText variant="small" color="muted">{kcal} kcal</AppText>
       </View>
       {entries.length === 0 ? <AppText variant="small" color="muted">Nothing logged yet.</AppText> : null}
-      {entries.map((e) => <ManualRow key={e.id} entry={e} onRemove={() => onRemove(e.id)} />)}
+      {entries.map((e) => <ManualRow key={e.id} entry={e} onRemove={onRemove ? () => onRemove(e.id) : undefined} />)}
       {onAdd ? (
         adding ? (
           <>
@@ -101,6 +105,8 @@ function ManualSection({ label, entries, onAdd, onRemove }: { label: string; ent
 export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRow | null; today: string }) {
   const [picked, setPicked] = useState<string | null>(null);
   const date = picked ?? today;
+  // As on the web: tomorrow, today and the last two weeks can be changed; an older day on the strip is only looked at.
+  const locked = !canEditFoodDay(date, today);
   const manualQ = useManualMacros(date);
   const sectionsQ = useMealSections();
   const feedbackQ = useNutritionFeedback(date);
@@ -129,17 +135,18 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
       <HighDayRow profile={profile} today={today} date={date} />
       <MyTargetsRow profile={profile} today={today} />
       <CoachFeedbackCard items={feedbackQ.data ?? []} />
+      {locked ? <AppText variant="small" color="warning" style={{ fontWeight: '600' }}>{LOCKED_DAY_MESSAGE}</AppText> : null}
       {manualQ.isError ? <AppText color="danger">Could not load this day: {manualQ.error.message}</AppText> : null}
       {sections.map((s) => (
         <ManualSection
           key={s.id}
           label={s.label}
           entries={entries.filter((e) => e.meal_section_id === s.id).sort(byCreated)}
-          onAdd={(entry) => add.mutate({ sectionId: s.id, entry })}
-          onRemove={(id) => remove.mutate({ id })}
+          onAdd={locked ? undefined : (entry) => add.mutate({ sectionId: s.id, entry })}
+          onRemove={locked ? undefined : (id) => remove.mutate({ id })}
         />
       ))}
-      {other.length ? <ManualSection label="Other" entries={other} onRemove={(id) => remove.mutate({ id })} /> : null}
+      {other.length ? <ManualSection label="Other" entries={other} onRemove={locked ? undefined : (id) => remove.mutate({ id })} /> : null}
     </ScrollScreen>
   );
 }

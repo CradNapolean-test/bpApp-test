@@ -4,6 +4,7 @@ import { ActivityIndicator } from 'react-native';
 import type { ClientProfileRow, FoodDiaryEntryRow } from '@ballistic/shared/data/types';
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
 import { addDays, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
+import { canEditFoodDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { recipeRowCount, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
 import { totalMacros } from '@ballistic/shared/utils/foodTotals';
 
@@ -60,6 +61,9 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
   const { areas } = useScreenAccess();
   const [picked, setPicked] = useState<string | null>(null);
   const date = picked ?? today;
+  // As on the web (FoodTrackingTab): tomorrow, today and the last two weeks can be changed. An older day on the strip (it goes back
+  // 30 days) is only looked at.
+  const locked = !canEditFoodDay(date, today);
 
   const diaryQ = useDiary(date);
   const feedbackQ = useNutritionFeedback(date);
@@ -104,6 +108,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
   const dayEmpty = diaryQ.isSuccess && entries.length === 0;
 
   async function copyYesterday() {
+    if (locked) return;
     const yesterday = toIsoDate(addDays(new Date(date + 'T00:00:00Z'), -1));
     setNote(null);
     try {
@@ -124,20 +129,31 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           date={date}
           live={diaryQ.isSuccess ? { calories: totalMacros(entries).calories, hasFood: entries.length > 0 } : null}
           liveTarget={target?.calories ?? null}
-          onSelect={(d) => { setNote(null); scan.clearStatus(); setPicked(d === today ? null : d); }}
+          // Another day: nothing opened for this one carries over (a scan still looking up its food is dropped, not added there). A tap
+          // on the day already shown only clears the messages, so a scan on its way still gets to "how much".
+          onSelect={(d) => {
+            setNote(null);
+            if (d === date) return scan.clearStatus();
+            scan.reset();
+            setAddTarget(null);
+            setEditing(null);
+            setRemovingRecipe(null);
+            setPicked(d === today ? null : d);
+          }}
         />
         <TotalsCard entries={entries} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
         <HighDayRow profile={profile} today={today} date={date} />
         <MyTargetsRow profile={profile} today={today} />
         <CoachFeedbackCard items={feedbackQ.data ?? []} />
         {date > today ? <AppText variant="small" color="muted">{"Planning tomorrow. This food counts towards tomorrow, and stays out of this week's averages until then."}</AppText> : null}
+        {locked ? <AppText variant="small" color="warning" style={{ fontWeight: '600' }}>{LOCKED_DAY_MESSAGE}</AppText> : null}
         {scan.status ? <AppText variant="small" color="muted">{scan.status}</AppText> : null}
         {note ? <AppText variant="small" color="muted">{note}</AppText> : null}
         {diaryQ.isError ? <AppText color="danger">Could not load this day: {diaryQ.error.message}</AppText> : null}
         {dayEmpty ? (
           <Card style={{ gap: spacing.sm }}>
-            <AppText color="muted">Nothing logged for this day yet.</AppText>
-            <Button title="Copy from the day before" variant="secondary" loading={copy.isPending} onPress={copyYesterday} />
+            <AppText color="muted">{locked ? 'Nothing logged this day.' : 'Nothing logged for this day yet.'}</AppText>
+            {locked ? null : <Button title="Copy from the day before" variant="secondary" loading={copy.isPending} onPress={copyYesterday} />}
           </Card>
         ) : null}
         {sections.map((s) => (
@@ -149,12 +165,14 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
             onScan={() => scan.start({ id: s.id, label: s.label })}
             onEdit={setEditing}
             onRemoveRecipe={setRemovingRecipe}
+            locked={locked}
           />
         ))}
-        {other.length ? <DiarySection label="Other" entries={other} onAdd={() => setAddTarget({ id: null, label: 'Other' })} onScan={() => scan.start({ id: null, label: 'Other' })} onEdit={setEditing} onRemoveRecipe={setRemovingRecipe} /> : null}
+        {other.length ? <DiarySection label="Other" entries={other} onAdd={() => setAddTarget({ id: null, label: 'Other' })} onScan={() => scan.start({ id: null, label: 'Other' })} onEdit={setEditing} onRemoveRecipe={setRemovingRecipe} locked={locked} /> : null}
       </ScrollScreen>
 
-      {addTarget ? (
+      {/* Not on a locked day: a sheet left open as the day turned more than two weeks old (past midnight) closes. */}
+      {addTarget && !locked ? (
         <AddFoodSheet
           section={addTarget}
           date={date}
@@ -163,7 +181,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           onClose={() => setAddTarget(null)}
         />
       ) : null}
-      {editing ? (
+      {editing && !locked ? (
         <EditEntrySheet
           entry={editing}
           sections={sections}
@@ -174,7 +192,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           onRefile={(sectionId) => { refile.mutate({ id: editing.id, sectionId, recipeLogId: editing.recipe_log_id ?? null }); setEditing(null); }}
         />
       ) : null}
-      {removingRecipe ? (
+      {removingRecipe && !locked ? (
         <ConfirmSheet
           title={`Remove ${removingRecipe.name}?`}
           body={`This takes all ${recipeRowCount(entries, removingRecipe.id) || removingRecipe.entries.length} of its ingredients off this day.`}
@@ -182,10 +200,11 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           onConfirm={() => { removeRecipe.mutate({ recipeLogId: removingRecipe.id }); setRemovingRecipe(null); }}
         />
       ) : null}
-      {scan.scanTarget ? <ScannerSheet onClose={scan.cancelScan} onDetected={scan.handleDetected} /> : null}
-      {scan.pending ? <CompleteScanSheet pending={scan.pending} onCancel={scan.cancelPending} onSave={scan.handleComplete} /> : null}
-      {scan.adding ? <AddProductSheet key={scan.adding.barcode} product={scan.adding} onSave={scan.handleAddProduct} onCancel={scan.cancelAdding} /> : null}
-      <ScanAmountSheet scan={scan} />
+      {/* The barcode flow too, as the web hides its scan panel on a locked day. */}
+      {scan.scanTarget && !locked ? <ScannerSheet onClose={scan.cancelScan} onDetected={scan.handleDetected} /> : null}
+      {scan.pending && !locked ? <CompleteScanSheet pending={scan.pending} onCancel={scan.cancelPending} onSave={scan.handleComplete} /> : null}
+      {scan.adding && !locked ? <AddProductSheet key={scan.adding.barcode} product={scan.adding} onSave={scan.handleAddProduct} onCancel={scan.cancelAdding} /> : null}
+      {locked ? null : <ScanAmountSheet scan={scan} />}
     </>
   );
 }

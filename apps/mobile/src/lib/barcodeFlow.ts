@@ -34,6 +34,9 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
   const [adding, setAdding] = useState<NewProduct | null>(null);
   // What the member had searched for when they chose to scan instead ("Has a barcode?"), to start the product's name with.
   const nameHint = useRef('');
+  // Moved on by reset(). A lookup or save still running when the member leaves the day (the food diary's strip) is dropped when it
+  // answers, so its "how much" sheet never opens over another day, and never over a day more than two weeks old.
+  const run = useRef(0);
 
   function start(target: ScanTarget, name = '') {
     nameHint.current = name;
@@ -41,13 +44,26 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
     setStatus(null);
   }
 
+  // Ends the scan wherever it is: the scanner, a lookup on its way, the missing-macros form, "Add this product" and "how much".
+  function reset() {
+    run.current += 1;
+    setScanTarget(null);
+    setPending(null);
+    setAdding(null);
+    setConfirming(null);
+    setStatus(null);
+  }
+
   async function handleDetected(scanned: string) {
     const barcode = extractBarcode(scanned);
     const target = scanTarget;
+    const mine = run.current;
+    const left = () => run.current !== mine;
     setScanTarget(null);
     setStatus('Looking up…');
     try {
       const known = await findFoodByBarcode(barcode);
+      if (left()) return;
       // A coach took this product off the list because it was wrong: say so, rather than caching it or adding it again.
       if (known.hidden) {
         setStatus(PRODUCT_TAKEN_OFF);
@@ -59,9 +75,11 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
         // Scanned before servings existed: take the pack's serving from Open Food Facts now, once, so it is offered from here on.
         const product = await lookupBarcode(barcode).catch(() => null);
         if (product?.serving && (await setFoodServings(food.id, [product.serving]).catch(() => false))) food = { ...food, serving_options: [product.serving] };
+        if (left()) return;
       }
       if (!food) {
         const product = await lookupBarcode(barcode);
+        if (left()) return;
         if (!product) {
           // Nobody has this product: the member can add it from the pack, for everyone. Not something that is not a product number.
           const code = productBarcode(barcode);
@@ -79,12 +97,13 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
           return;
         }
         food = await upsertFoodFromBarcode(barcode, { name: product.name, portion: '1 gram', protein: product.protein, carbs: product.carbs, fat: product.fat, fibre: product.fibre, serving_options: product.serving ? [product.serving] : null });
+        if (left()) return;
         servingGrams = product.servingGrams;
       }
       setStatus(null);
       setConfirming({ food, amount: suggestedAmount(food, servingGrams), target });
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Lookup failed.');
+      if (!left()) setStatus(err instanceof Error ? err.message : 'Lookup failed.');
     }
   }
 
@@ -92,14 +111,16 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
   async function handleComplete(per100: { protein: number; carbs: number; fat: number }) {
     if (!pending) return;
     const { barcode, name, target, servingGrams, serving } = pending;
+    const mine = run.current;
     setPending(null);
     setStatus('Saving…');
     try {
       const food = await upsertFoodFromBarcode(barcode, { name, portion: '1 gram', protein: per100.protein / 100, carbs: per100.carbs / 100, fat: per100.fat / 100, serving_options: serving ? [serving] : null });
+      if (run.current !== mine) return;
       setStatus(null);
       setConfirming({ food, amount: suggestedAmount(food, servingGrams), target });
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Save failed.');
+      if (run.current === mine) setStatus(err instanceof Error ? err.message : 'Save failed.');
     }
   }
 
@@ -108,14 +129,19 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
   async function handleAddProduct(fields: BarcodeFoodFields): Promise<string | null> {
     if (!adding) return null;
     const { barcode, target } = adding;
+    const mine = run.current;
     const result = await addBarcodeFood(barcode, fields).catch(() => null);
     if (!result) return 'Could not add that product. Check your connection and try again.';
     if ('error' in result) return result.error;
+    // (The product is in the list for everyone either way; only the "how much" for a day left is dropped.)
+    if (run.current !== mine) return null;
     setAdding(null);
     setStatus(result.existing ? ADDED_BY_SOMEONE_ELSE : null);
     // the "Add this product" sheet slides away first, then "how much" opens
     const confirm = { food: result.food, amount: suggestedAmount(result.food, null), target };
-    setTimeout(() => setConfirming(confirm), SHEET_HANDOFF_MS);
+    setTimeout(() => {
+      if (run.current === mine) setConfirming(confirm);
+    }, SHEET_HANDOFF_MS);
     return null;
   }
 
@@ -137,6 +163,7 @@ export function useBarcodeFlow(onAddFood: (food: FoodRow, grams: number, target:
     confirmAmount,
     cancelConfirm: () => setConfirming(null),
     start,
+    reset,
     clearStatus: () => setStatus(null),
     cancelScan: () => setScanTarget(null),
     cancelPending: () => setPending(null),
