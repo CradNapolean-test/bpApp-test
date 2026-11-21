@@ -80,9 +80,11 @@ describe('food and check-in look', () => {
     expect(html).toContain('rotate(-90 18 18)');
   });
 
-  it('marks the picked day as the current date, with the month, caption, Today button and the red no food', () => {
-    expect(html).toContain('aria-current="date"');
-    expect(html).not.toContain('aria-pressed');
+  it('marks the picked day as pressed and only today as the current date, with the month, caption, Today button and the red no food', () => {
+    expect(html).toMatch(/data-day="2026-11-17"[^>]*aria-pressed="true"/);
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(html).toMatch(/data-day="2026-11-19"[^>]*aria-current="date"/);
+    expect(html.match(/aria-current=/g)).toHaveLength(1);
     expect(html).toContain('>Nov</span>');
     expect(html).toContain('Food logged on 3 days this week.');
     expect(html).toContain('Today</button>');

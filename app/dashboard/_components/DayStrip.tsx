@@ -116,8 +116,8 @@ export function DayStrip({
             data-day={d.iso}
             disabled={disabled}
             onClick={() => onSelect(d.iso)}
-            aria-pressed={progress ? undefined : active}
-            aria-current={progress && active ? 'date' : undefined}
+            aria-pressed={active}
+            aria-current={progress && d.isToday ? 'date' : undefined}
             aria-label={d.label}
             className={`flex w-11 shrink-0 flex-col items-center gap-1.5 ${progress ? 'disabled:opacity-60' : ''}`}
           >
