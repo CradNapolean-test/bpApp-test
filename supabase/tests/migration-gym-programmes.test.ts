@@ -51,10 +51,19 @@ const created = [
   'end_gym_programme',
   'resolve_gym_programme_waiting',
   'program_templates_refuse_gym_programme_delete',
+  'program_template_days_refuse_gym_programme_shorten',
 ];
 // Replaced from an earlier migration (the one named in its guard row).
 const replaced = ['set_programme_week_one'];
 const file0167 = fs.readFileSync(path.resolve(__dirname, '../migrations', '0167_programme_rollout_updates.sql'), 'utf8').replace(/\r\n/g, '\n');
+// Bodies from earlier copies of this file, which may already be in the database: the copy handed out on 20 Nov 2026 (gym_programmes,
+// set_programme_week_one) and a later one (the template-delete trigger, set_programme_week_one). Each has the same arguments and result as
+// today's, so this file replaces it in place. Worked out from those copies' text as bodyMd5 does.
+const earlierCopies: Record<string, string[]> = {
+  gym_programmes: ['662073fea310d8827b69bac083e593f6'],
+  program_templates_refuse_gym_programme_delete: ['e417964f898305816cc6a55ad7148e23'],
+  set_programme_week_one: ['8a258730266312d0344c534b09087221', '836a65083143b6a9bf93df50b68a7bec'],
+};
 
 describe('migration 0172 is safe to paste into the SQL editor', () => {
   it('stops before changing anything when something it uses is missing or a function it creates has another body', () => {
@@ -73,16 +82,27 @@ describe('migration 0172 is safe to paste into the SQL editor', () => {
     expect(guardRows.map((r) => r.name).sort()).toEqual([...created, ...replaced].sort());
     for (const row of guardRows.filter((r) => created.includes(r.name))) {
       expect(row.from).toBe('0172');
-      expect(row.accepted).toEqual([bodyMd5(bodyInFile(row.name))]);
+      expect(row.accepted).toEqual([bodyMd5(bodyInFile(row.name)), ...(earlierCopies[row.name] ?? [])]);
     }
     // a function that does not exist yet passes; one that exists with another body stops the migration
     expect(migration).toMatch(/if v_md5 is not null and not \(v_md5 = any \(v_check\.accepted\)\) then/);
   });
 
+  it('can be run over an earlier copy of this file: their bodies are accepted, and none is today’s', () => {
+    for (const [name, md5s] of Object.entries(earlierCopies)) {
+      expect(guardRows.find((r) => r.name === name)?.accepted).toEqual(expect.arrayContaining(md5s));
+      expect(md5s).not.toContain(bodyMd5(bodyInFile(name)));
+    }
+  });
+
   it('the function it replaces must be 0167’s or this file’s', () => {
     const row = guardRows.find((r) => r.name === 'set_programme_week_one');
     expect(row?.from).toBe('0167');
-    expect(row?.accepted).toEqual([bodyMd5(bodyInFile('set_programme_week_one', file0167)), bodyMd5(bodyInFile('set_programme_week_one'))]);
+    expect(row?.accepted).toEqual([
+      bodyMd5(bodyInFile('set_programme_week_one', file0167)),
+      bodyMd5(bodyInFile('set_programme_week_one')),
+      ...earlierCopies.set_programme_week_one,
+    ]);
     expect(latest('set_programme_week_one').file).toBe(file);
   });
 
@@ -101,6 +121,9 @@ describe('migration 0172 is safe to paste into the SQL editor', () => {
     expect(migrationCode).toMatch(/drop trigger if exists client_profiles_gym_programme on client_profiles;\s*create trigger client_profiles_gym_programme/);
     expect(migrationCode).toMatch(
       /drop trigger if exists program_templates_refuse_gym_programme_delete on program_templates;\s*create trigger program_templates_refuse_gym_programme_delete/
+    );
+    expect(migrationCode).toMatch(
+      /drop trigger if exists program_template_days_refuse_gym_programme_shorten on program_template_days;\s*create trigger program_template_days_refuse_gym_programme_shorten/
     );
     for (const m of migrationCode.matchAll(/create policy "([^"]+)"/g)) {
       expect(migrationCode).toContain(`drop policy if exists "${m[1]}"`);
@@ -130,7 +153,13 @@ describe('who can do what (Row Level Security and function access)', () => {
   });
 
   it('the internal functions and the trigger function cannot be called by anyone signed in; the three coach functions only when signed in', () => {
-    for (const name of ['_gym_programme_today', '_give_gym_programme', 'client_profiles_join_gym_programme', 'program_templates_refuse_gym_programme_delete']) {
+    for (const name of [
+      '_gym_programme_today',
+      '_give_gym_programme',
+      'client_profiles_join_gym_programme',
+      'program_templates_refuse_gym_programme_delete',
+      'program_template_days_refuse_gym_programme_shorten',
+    ]) {
       expect(access(latest(name))).toEqual({ anon: false, authenticated: false });
     }
     for (const name of ['gym_programmes', 'end_gym_programme', 'resolve_gym_programme_waiting']) {
@@ -170,22 +199,55 @@ describe('who can do what (Row Level Security and function access)', () => {
       'before delete on program_templates for each row execute function public.program_templates_refuse_gym_programme_delete()'
     );
     const guard = squeeze(code('program_templates_refuse_gym_programme_delete'));
-    // nobody signed in (the SQL editor, the service role) and a gym admin of the rollout's gym delete as before
+    // nobody signed in (the SQL editor, the service role) deletes as before; a gym admin of the rollout's gym is never refused
     expect(guard).toContain('if auth.uid() is null then return old; end if;');
     expect(guard).toContain("select r.* from programme_rollouts r where r.template_id = old.id and r.audience = 'all'");
-    expect(guard).toContain('continue when public.is_admin_of_gym(v_r.gym_id);');
+    expect(guard).toContain('v_admin := public.is_admin_of_gym(v_r.gym_id);');
+    // each of its three refusals is for someone who isn't a gym admin there
+    expect(guard.match(/raise exception/g)).toHaveLength(3);
+    expect(guard.match(/if not v_admin\b/g)).toHaveLength(3);
     // not started yet: scheduled, or given out ahead of its start date
-    expect(guard).toMatch(/if v_r\.applied_at is null or v_r\.start_date > v_today then raise exception/);
+    expect(guard).toMatch(/if not v_admin and \(v_r\.applied_at is null or v_r\.start_date > v_today\) then raise exception/);
     // the gym's programme until its last week is over, ended or not (as gym_programmes() shows it)
     expect(guard).toContain('select * into v_g from public._gym_programme_today(v_r.gym_id); continue when v_g.rollout_id is distinct from v_r.id;');
-    expect(guard).toMatch(/if v_g\.today <= v_g\.last_day then raise exception/);
-    // after that, the gym's programme before it would be picked again (as _gym_programme_today picks), refused while that one is open
+    expect(guard).toMatch(/if not v_admin and v_g\.today <= v_g\.last_day then raise exception/);
+    // without it, the gym's programme before it would be picked again (as _gym_programme_today picks), worked out afresh for each rollout
+    expect(guard).toContain('v_prev_id := null; v_prev_name := null; v_reopens := false; select x.id, x.program_name,');
     expect(guard).toContain(
       "where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and x.template_id <> old.id order by x.start_date desc, x.created_at desc limit 1"
     );
     expect(guard).toContain('x.ended_at is null and tw.weeks > 0 and v_today <= x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1');
-    expect(guard).toMatch(/if coalesce\(v_reopens, false\) then raise exception/);
-    expect(guard).toMatch(/end loop; return old; end;\s*$/);
+    // while that one is open: refused, or for a gym admin it ends with this one, so an older gym programme is never opened again
+    expect(guard).toContain('if coalesce(v_reopens, false) then if not v_admin then raise exception');
+    expect(guard).toContain(
+      'end if; update programme_rollouts set ended_at = now(), ended_by = auth.uid() where id = v_prev_id and ended_at is null; end if; end loop; return old; end;'
+    );
+  });
+
+  it('taking the last week off the gym programme’s template is a gym admin’s to do, since it ends the gym programme sooner', () => {
+    // after the whole statement (deleteTemplateWeek's renumbering, a bulk delete), on a delete or a change of week or template only
+    expect(squeeze(migrationCode)).toContain(
+      'after update of week_num, template_id or delete on program_template_days for each row execute function public.program_template_days_refuse_gym_programme_shorten()'
+    );
+    const shorten = squeeze(code('program_template_days_refuse_gym_programme_shorten'));
+    // nobody signed in as before; a day staying in its template on the same or a later week changes nothing
+    expect(shorten).toContain(
+      "if auth.uid() is null or (tg_op = 'UPDATE' and new.template_id = old.template_id and new.week_num >= old.week_num) then return null; end if;"
+    );
+    // a template being deleted is the template trigger's to decide
+    expect(shorten).toContain('if not exists (select 1 from program_templates t where t.id = old.template_id) then return null; end if;');
+    // the template lost its last week: its last week now is before the week the day was in (as _gym_programme_today counts weeks)
+    expect(shorten).toContain(
+      'select coalesce(max(d.week_num), 0)::integer into v_weeks from program_template_days d where d.template_id = old.template_id; if v_weeks >= old.week_num then return null; end if;'
+    );
+    expect(squeeze(code('_gym_programme_today'))).toContain('select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = r.template_id');
+    // refused, unless a gym admin, while it is the gym's programme and its last week (before this change) is not over, ended or not
+    expect(shorten).toContain(
+      "select r.* from programme_rollouts r where r.template_id = old.template_id and r.audience = 'all' and r.applied_at is not null"
+    );
+    expect(shorten).toContain(
+      'continue when public.is_admin_of_gym(v_r.gym_id); select * into v_g from public._gym_programme_today(v_r.gym_id); continue when v_g.rollout_id is distinct from v_r.id; if v_g.today <= v_g.week_one + 7 * old.week_num - 1 then raise exception'
+    );
   });
 
   it('the coach list shows waiting members only to their coach or a gym admin, and only while the programme is open', () => {
@@ -210,9 +272,13 @@ describe('which programme a gym is on, and when it stops reaching new members', 
 
   it('a late joiner’s copy keeps the gym’s week 1 when a coach moves its start date; every other copy as in 0167', () => {
     const trigger = squeeze(code('set_programme_week_one'));
-    // as 0167: only a rollout copy, on insert without a week 1 or when its start date changes
+    // as 0167: only a rollout copy, on insert without a week 1 or when its start date changes; and now a copy whose rollout has gone (its
+    // template deleted empties rollout_id but leaves week_one), so its week 1 still follows a new start date
     expect(trigger).toContain(
-      "if new.rollout_id is not null and new.start_date is not null and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then"
+      "if (new.rollout_id is not null or (tg_op = 'UPDATE' and old.week_one is not null)) and new.start_date is not null and ((tg_op = 'INSERT' and new.week_one is null) or (tg_op = 'UPDATE' and new.start_date is distinct from old.start_date)) then"
+    );
+    expect(fs.readFileSync(path.resolve(__dirname, '../migrations', '0094_programme_rollouts.sql'), 'utf8')).toMatch(
+      /rollout_id uuid references programme_rollouts\(id\) on delete set null/
     );
     // a late joiner: week 1 before the week its copy started in (only _give_gym_programme sets that), kept while the new start is within the
     // copy's weeks (from that Monday to the Sunday of its last week, as the app counts them); after its last week, from week 1 again as 0167

@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { after } from 'next/server';
 import { notifyProgrammeAssigned, notifyStartedRollout } from '@/lib/memberNotify';
 import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
-import { readGymProgramme, type GymProgramme, type WaitingOutcome } from '@/lib/gymProgramme';
+import { deleteWeekRefusal, readGymProgramme, type GymProgramme, type WaitingOutcome } from '@/lib/gymProgramme';
 import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type {
   ProgrammeRolloutRow,
@@ -100,21 +100,27 @@ export async function createProgramTemplateAndGetId(name: string, expectedGymId?
 // Removes every day (and its exercises) in one week of a template.
 // Deletes one week of a template and closes the gap: weeks after it move down by one, so deleting week 2 of 4 leaves 1, 2, 3 and not
 // 1, 3, 4 (a gap hands members an empty programme week). The later weeks are renumbered in ascending order in the same call.
-export async function deleteTemplateWeek(templateId: string, weekNum: number): Promise<void> {
+// Either way the template ends a week sooner, and so would the gym programme it is: only a gym admin can do that (migration 0172).
+// Asked first, as the database would refuse only the last renumbering, after this week's workouts had gone. Returned, not thrown, so the
+// coach reads why.
+export async function deleteTemplateWeek(templateId: string, weekNum: number): Promise<ActionResult> {
   const supabase = await createClient();
+  const refusal = await deleteWeekRefusalFor(supabase, templateId);
+  if (refusal) return fail(null, refusal);
+
   const { error } = await supabase
     .from('program_template_days')
     .delete()
     .eq('template_id', templateId)
     .eq('week_num', weekNum);
-  if (error) raise(error);
+  if (error) return fail(error, 'Could not delete that week');
 
   const { data: later, error: laterError } = await supabase
     .from('program_template_days')
     .select('week_num')
     .eq('template_id', templateId)
     .gt('week_num', weekNum);
-  if (laterError) raise(laterError);
+  if (laterError) return fail(laterError, 'Could not move the weeks after it up');
   const weeks = Array.from(new Set((later ?? []).map((d) => d.week_num as number))).sort((x, y) => x - y);
   for (const week of weeks) {
     const { error: moveError } = await supabase
@@ -122,8 +128,30 @@ export async function deleteTemplateWeek(templateId: string, weekNum: number): P
       .update({ week_num: week - 1 })
       .eq('template_id', templateId)
       .eq('week_num', week);
-    if (moveError) raise(moveError);
+    if (moveError) return fail(moveError, 'Could not move the weeks after it up');
   }
+  return ok();
+}
+
+// Why this coach can't delete a week of the template: it is the gym programme (gym_programmes(), the coach's gym) and they are not a gym
+// admin there, as the database checks (is_admin_of_gym). null when they can, or when it can't be told (before migration 0172).
+async function deleteWeekRefusalFor(supabase: Awaited<ReturnType<typeof createClient>>, templateId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('gym_programmes');
+  if (error || !Array.isArray(data)) return null;
+  const gym = data.map(readGymProgramme).find((g) => g?.templateId === templateId);
+  if (!gym) return null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const gymId = await resolveScopingGymId(supabase);
+  const { data: membership } = await supabase
+    .from('coach_gym_memberships')
+    .select('is_gym_admin')
+    .eq('coach_id', user.id)
+    .eq('gym_id', gymId)
+    .maybeSingle();
+  return membership?.is_gym_admin === true ? null : deleteWeekRefusal(gym);
 }
 // Returned, not thrown, so the coach reads why it was refused: only a gym admin can delete the template of the gym programme or of a start
 // for everyone (migration 0172).
@@ -147,10 +175,13 @@ export async function addTemplateDay(
   if (error) raise(error);
 }
 
-export async function deleteTemplateDay(dayId: string): Promise<void> {
+// Returned, not thrown, so the coach reads why it was refused: the last workout of the gym programme's last week is a gym admin's to delete
+// (migration 0172).
+export async function deleteTemplateDay(dayId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from('program_template_days').delete().eq('id', dayId);
-  if (error) raise(error);
+  if (error) return fail(error, 'Could not delete that workout');
+  return ok();
 }
 
 export async function addTemplateExercise(

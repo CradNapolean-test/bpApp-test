@@ -195,7 +195,7 @@ export function giveWaitingConfirmation(p: GymProgramme, w: GymProgrammeWaiting)
 
 // Deleting a template deletes its rollouts too: the gym programme it is, and the starts it has scheduled. So while it is the gym programme
 // (until its last week is over) or a start for everyone is scheduled, only a gym admin can delete it (refused in the database too,
-// migration 0172). `scheduled` is the template's rollouts not given out yet.
+// migration 0172). The gym programme before it is not opened again: it ends too. `scheduled` is the template's rollouts not given out yet.
 type ScheduledStart = { audience: 'all' | 'selected'; start_date: string };
 
 // For a coach who isn't a gym admin: why they can't delete it. null when they can.
@@ -212,7 +212,7 @@ export function deleteTemplateConfirmation(
   scheduled: ScheduledStart[]
 ): { title: string; body: string } {
   let body = 'This removes every week, day and exercise in the template. Clients who already started this programme keep their own copy.';
-  if (gym) body += ` It’s the gym programme at ${gymOf(gym)}, so members who join from now on won’t get it.`;
+  if (gym) body += ` It’s the gym programme at ${gymOf(gym)}, so members who join from now on won’t get it, nor an older gym programme in its place.`;
   const starts = [...scheduled].sort((a, b) => a.start_date.localeCompare(b.start_date));
   if (starts.length === 1) {
     body += ` Its start on ${day(starts[0].start_date)}${starts[0].audience === 'all' ? ' for everyone at the gym' : ''} is cancelled.`;
@@ -220,6 +220,34 @@ export function deleteTemplateConfirmation(
     body += ` Its ${starts.length} scheduled starts are cancelled.`;
   }
   return { title: `Delete “${name}”?`, body };
+}
+
+// The gym programme lasts as many weeks as its template (its last week's number), so deleting a week ends it a week sooner: Delete week
+// moves every week after it up one (deleteTemplateWeek). While it is the gym programme, only a gym admin can (refused in the database too,
+// migration 0172). For a coach who isn't a gym admin: why they can't. null when they can.
+export function deleteWeekRefusal(gym: Pick<GymProgramme, 'gymName' | 'lastDay'> | undefined): string | null {
+  return gym ? `This template is the gym programme at ${gymOf(gym)} until ${day(gym.lastDay)}, so only a gym admin can delete one of its weeks.` : null;
+}
+
+// The template's weeks once `week` is deleted and the weeks after it have moved up one.
+export function weeksAfterDeleting(weekNums: number[], week: number): number {
+  return Math.max(0, ...weekNums.filter((w) => w !== week).map((w) => (w > week ? w - 1 : w)));
+}
+
+export function deleteWeekConfirmation(
+  week: number,
+  gym: Pick<GymProgramme, 'gymName' | 'weekOne' | 'today' | 'isOpen'> | undefined,
+  weeksAfter: number
+): { title: string; body: string } {
+  let body = 'Removes every workout and exercise in this week of the template. Members already on this programme keep their own copy.';
+  if (gym?.isOpen) {
+    const lastDay = toIsoDate(addDays(new Date(`${gym.weekOne}T00:00:00Z`), 7 * weeksAfter - 1));
+    body +=
+      weeksAfter > 0 && !(gym.today && lastDay < gym.today)
+        ? ` It’s the gym programme at ${gymOf(gym)}: without this week, members who join get it until ${day(lastDay)}.`
+        : ` It’s the gym programme at ${gymOf(gym)}: without this week it ends now, and members who join from now on won’t get it.`;
+  }
+  return { title: `Delete week ${week}?`, body };
 }
 
 export function waitingDone(outcome: WaitingOutcome, name: string): string {

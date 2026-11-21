@@ -53,6 +53,8 @@ import { NOTHING_TO_UPDATE, rolloutUpdateConfirmation, rolloutUpdateDone, templa
 import {
   deleteTemplateConfirmation,
   deleteTemplateRefusal,
+  deleteWeekConfirmation,
+  deleteWeekRefusal,
   endGymProgrammeConfirmation,
   giveWaitingConfirmation,
   gymProgrammeLabel,
@@ -61,6 +63,7 @@ import {
   waitingDone,
   waitingHeading,
   waitingReason,
+  weeksAfterDeleting,
   type GymProgramme,
   type GymProgrammeWaiting,
 } from '@/lib/gymProgramme';
@@ -379,12 +382,17 @@ export function ProgramTemplateManager({
     );
   }
 
+  // The weeks after it move up one, so the template (and the gym programme, if it is one) ends a week sooner: a gym admin's to do while it
+  // is the gym programme (refused in the database too).
   async function handleDeleteWeek(template: ProgramTemplateWithDays, week: number) {
-    const ok = await confirm({
-      title: `Delete week ${week}?`,
-      body: 'Removes every workout and exercise in this week of the template. Members already on this programme keep their own copy.',
-      destructive: true,
-    });
+    const gym = gymProgrammes.find((g) => g.templateId === template.id);
+    const refusal = isGymAdmin ? null : deleteWeekRefusal(gym);
+    if (refusal) {
+      toast.error(refusal);
+      return;
+    }
+    const weeksAfter = weeksAfterDeleting(template.program_template_days.map((d) => d.week_num), week);
+    const ok = await confirm({ ...deleteWeekConfirmation(week, gym, weeksAfter), destructive: true });
     if (!ok) return;
     await runMutate(() => deleteTemplateWeek(template.id, week), {
       success: `Week ${week} deleted`,
@@ -446,7 +454,10 @@ export function ProgramTemplateManager({
     await runMutate(
       async () => {
         await duplicateTemplateDay(day.id, next, day.day_label);
-        for (const old of existing) await deleteTemplateDay(old.id);
+        for (const old of existing) {
+          const removed = await deleteTemplateDay(old.id);
+          if (!removed.ok) return removed;
+        }
       },
       {
         success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week',

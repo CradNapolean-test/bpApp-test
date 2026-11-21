@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   deleteTemplateConfirmation,
   deleteTemplateRefusal,
+  deleteWeekConfirmation,
+  deleteWeekRefusal,
   endGymProgrammeConfirmation,
   giveWaitingConfirmation,
   gymProgrammeLabel,
@@ -11,6 +13,7 @@ import {
   waitingDone,
   waitingHeading,
   waitingReason,
+  weeksAfterDeleting,
   type GymProgramme,
   type GymProgrammeWaiting,
 } from './gymProgramme';
@@ -153,8 +156,9 @@ describe('on the template', () => {
   it('deleting the template: the confirm says the gym programme stops reaching new members and its scheduled starts are cancelled', () => {
     const plain = 'This removes every week, day and exercise in the template. Clients who already started this programme keep their own copy.';
     expect(deleteTemplateConfirmation('Weeks 9-11', undefined, [])).toEqual({ title: 'Delete “Weeks 9-11”?', body: plain });
+    // the gym programme before it ends with it (migration 0172), so nothing older takes over
     expect(deleteTemplateConfirmation('Weeks 9-11', gp(), []).body).toBe(
-      `${plain} It’s the gym programme at Salford Quays, so members who join from now on won’t get it.`
+      `${plain} It’s the gym programme at Salford Quays, so members who join from now on won’t get it, nor an older gym programme in its place.`
     );
     expect(deleteTemplateConfirmation('Weeks 9-11', undefined, [{ audience: 'all', start_date: '2026-11-30' }]).body).toBe(
       `${plain} Its start on Mon 30 Nov for everyone at the gym is cancelled.`
@@ -168,6 +172,37 @@ describe('on the template', () => {
         { audience: 'all', start_date: '2026-11-30' },
       ]).body
     ).toBe(`${plain} Its 2 scheduled starts are cancelled.`);
+  });
+
+  it('deleting a week: a coach who isn’t a gym admin is told only a gym admin can, while the template is the gym programme', () => {
+    expect(deleteWeekRefusal(gp())).toBe(
+      'This template is the gym programme at Salford Quays until Sun 29 Nov, so only a gym admin can delete one of its weeks.'
+    );
+    // ended, but its last week not over yet: still listed by gym_programmes(), and still refused (as in the database)
+    expect(deleteWeekRefusal(gp({ isOpen: false, endedAt: '2026-11-20T10:15:00+00:00' }))).toMatch(/only a gym admin can delete one of its weeks/);
+    expect(deleteWeekRefusal(undefined)).toBeNull();
+  });
+
+  it('deleting a week moves the weeks after it up one, so the template loses its last week wherever the week is', () => {
+    expect(weeksAfterDeleting([1, 1, 2, 3, 3], 3)).toBe(2);
+    expect(weeksAfterDeleting([1, 2, 2, 3], 1)).toBe(2);
+    expect(weeksAfterDeleting([1, 3], 3)).toBe(1);
+    expect(weeksAfterDeleting([1], 1)).toBe(0);
+  });
+
+  it('deleting a week: the confirm says until when members who join get the gym programme without it, or that it ends now', () => {
+    const plain = 'Removes every workout and exercise in this week of the template. Members already on this programme keep their own copy.';
+    expect(deleteWeekConfirmation(2, undefined, 2)).toEqual({ title: 'Delete week 2?', body: plain });
+    // 20 Nov, week 1 from Mon 9 Nov: two weeks left run to Sun 22 Nov
+    expect(deleteWeekConfirmation(3, gp(), 2).body).toBe(
+      `${plain} It’s the gym programme at Salford Quays: without this week, members who join get it until Sun 22 Nov.`
+    );
+    expect(deleteWeekConfirmation(2, gp({ today: '2026-11-23' }), 1).body).toBe(
+      `${plain} It’s the gym programme at Salford Quays: without this week it ends now, and members who join from now on won’t get it.`
+    );
+    expect(deleteWeekConfirmation(1, gp(), 0).body).toMatch(/without this week it ends now/);
+    // ended: new members don't get it either way
+    expect(deleteWeekConfirmation(3, gp({ isOpen: false }), 2).body).toBe(plain);
   });
 
   it('the end confirm names the programme, the members who keep it and that nothing logged changes', () => {
