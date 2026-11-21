@@ -377,7 +377,7 @@ describe('which programme a gym is on', () => {
     expect(backfill).toContain('where r.id = nx.id and nx.ends is not null;');
   });
 
-  it('the template list shows the gym’s programme, or when it has none the newest one ended early within its weeks', () => {
+  it('the template list shows the gym’s programme, or when it has none the newest one that has ended within its weeks', () => {
     const list = squeeze(code('gym_programmes'));
     expect(list).toContain(
       "where x.gym_id = g.id and x.audience = 'all' and x.applied_at is not null and x.start_date <= t.today and t.today <= xw.week_one + 7 * x.weeks - 1 order by (x.ended_at is null) desc, x.start_date desc, x.created_at desc limit 1"

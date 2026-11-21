@@ -512,7 +512,7 @@ export async function applyTemplateToRollout(
 }
 
 // Item 7 (migration 0172): the programme the coach's gym is on today ("Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov (3 weeks) ·
-// 16 members"), or the one a gym admin ended early while its weeks run, with the members it was not given to. Empty when the database
+// 16 members"), or the newest one that has ended while its weeks run, with the members it was not given to. Empty when the database
 // can't answer, rather than breaking the library.
 export async function getGymProgrammes(): Promise<GymProgramme[]> {
   const supabase = await createClient();

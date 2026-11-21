@@ -40,7 +40,7 @@
 --     Giving it can never stop a member finishing their profile: an error is caught, nothing is half-made, and the member is listed as
 --     "Not given" with reason 'failed' so the coach can give it from the template.
 --   * gym_programmes(): for the coach's template list, "Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov (3 weeks) · 16 members":
---     the gym's programme today, or when it has none, the newest one a gym admin ended early whose last day has not passed (shown as
+--     the gym's programme today, or when it has none, the newest one that has ended while its last day has not passed (shown as
 --     ended), with the members still on it (as programme_rollout_usage, 0167), how many joined later, and the members waiting (the coach's
 --     own members; every one for a gym admin), each with every programme of theirs "Give it to them" would move, so the confirm names
 --     them all. Coaches at that gym only.
@@ -586,7 +586,7 @@ create trigger client_profiles_gym_programme
   for each row execute function public.client_profiles_join_gym_programme();
 
 -- For the coach's template list: the gym's programme today (as _gym_programme_today picks it), or when it has none, the newest one that
--- ended early and whose last day has not passed (is_open false), so the template still says it ended and who is on it.
+-- has ended and whose last day has not passed (is_open false), so the template still says it ended and who is on it.
 create or replace function public.gym_programmes()
 returns table (rollout_id uuid, template_id uuid, program_name text, gym_name text, start_date date, week_one date, weeks integer,
                last_day date, today date, current_week integer, is_open boolean, ended_at timestamptz, members integer,
