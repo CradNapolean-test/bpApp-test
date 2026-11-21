@@ -4,7 +4,8 @@ import { ActivityIndicator } from 'react-native';
 import type { ClientProfileRow, FoodDiaryEntryRow } from '@ballistic/shared/data/types';
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
 import { addDays, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
-import { canEditFoodDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { BROWSE_DAYS, canEditFoodDay, FOOD_AHEAD_DAYS, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { foodStripDays } from '@ballistic/shared/utils/dayStrip';
 import { recipeRowCount, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
 import { totalMacros } from '@ballistic/shared/utils/foodTotals';
 
@@ -12,6 +13,7 @@ import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
 import { AddProductSheet } from '@/components/barcodeFood';
 import { FoodDayStrip } from '@/components/dayStrip';
+import { stripSwipe } from '@/components/daySwipe';
 import { AddFoodSheet, CoachFeedbackCard, CompleteScanSheet, DiarySection, EditEntrySheet, ScanAmountSheet, ScannerSheet, shortDate, TotalsCard } from '@/components/food';
 import { ManualDiaryScreen } from '@/components/manualMacros';
 import { NutritionTabs } from '@/components/pagetabs';
@@ -107,6 +109,19 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
   const other = entries.filter((e) => !e.meal_section_id || !known.has(e.meal_section_id)).sort(byCreated);
   const dayEmpty = diaryQ.isSuccess && entries.length === 0;
 
+  // A tap on the strip and a swipe across the diary both go here. Another day: nothing opened for this one carries over (a scan still
+  // looking up its food is dropped, not added there). A tap on the day already shown only clears the messages, so a scan on its way
+  // still gets to "how much".
+  function pickDay(d: string) {
+    setNote(null);
+    if (d === date) return scan.clearStatus();
+    scan.reset();
+    setAddTarget(null);
+    setEditing(null);
+    setRemovingRecipe(null);
+    setPicked(d === today ? null : d);
+  }
+
   async function copyYesterday() {
     if (locked) return;
     const yesterday = toIsoDate(addDays(new Date(date + 'T00:00:00Z'), -1));
@@ -121,7 +136,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
 
   return (
     <>
-      <ScrollScreen refreshing={diaryQ.isRefetching} onRefresh={() => diaryQ.refetch()}>
+      <ScrollScreen refreshing={diaryQ.isRefetching} onRefresh={() => diaryQ.refetch()} swipe={stripSwipe(foodStripDays(today, BROWSE_DAYS, FOOD_AHEAD_DAYS), date, pickDay)}>
         <NutritionTabs current="food" />
         <FoodDayStrip
           profile={profile}
@@ -129,17 +144,7 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
           date={date}
           live={diaryQ.isSuccess ? { calories: totalMacros(entries).calories, hasFood: entries.length > 0 } : null}
           liveTarget={target?.calories ?? null}
-          // Another day: nothing opened for this one carries over (a scan still looking up its food is dropped, not added there). A tap
-          // on the day already shown only clears the messages, so a scan on its way still gets to "how much".
-          onSelect={(d) => {
-            setNote(null);
-            if (d === date) return scan.clearStatus();
-            scan.reset();
-            setAddTarget(null);
-            setEditing(null);
-            setRemovingRecipe(null);
-            setPicked(d === today ? null : d);
-          }}
+          onSelect={pickDay}
         />
         <TotalsCard entries={entries} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
         <HighDayRow profile={profile} today={today} date={date} />

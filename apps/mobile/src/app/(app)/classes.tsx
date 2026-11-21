@@ -7,6 +7,7 @@ import { nowLocalMs } from '@ballistic/shared/utils/cancelDeadline';
 import { addDays, formatClassTime, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
 
 import { BookSheet, CancelSheet, CreditsHeader, DayStrip, dayLabel, MyBookingCard, SessionSlot } from '@/components/classes';
+import { stripSwipe } from '@/components/daySwipe';
 import { CardsSkeleton } from '@/components/skeleton';
 import { AppText, Button, Card, Screen, ScrollScreen, Segmented } from '@/components/ui';
 import { useBookClass, useCancelBooking, useMyBookings, useSchedule, useSessionCredits } from '@/lib/classes';
@@ -119,7 +120,8 @@ export default function Classes() {
 
   return (
     <>
-      <ScrollScreen refreshing={refreshing} onRefresh={refresh}>
+      {/* Swiping sideways goes to the day before or after on the strip, on the timetable only (an empty swipe keeps the list as it is). */}
+      <ScrollScreen refreshing={refreshing} onRefresh={refresh} swipe={view === 'book' ? stripSwipe(days, selected, setPicked) : {}}>
         <CreditsHeader balance={creditsQ.data?.balance ?? 0} membership={membership} nextReset={nextResetDate(todayIso)} />
         <Segmented<View_> value={view} onChange={(v) => { setNote(null); setView(v); }} options={[{ value: 'book', label: 'Book a session' }, { value: 'mine', label: bookings.length ? `My bookings (${bookings.length})` : 'My bookings' }]} />
         <AppText variant="small" color="muted">{policy}</AppText>

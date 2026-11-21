@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
 import type { FoodPhotoEntryRow, MealSectionRow, NutritionFeedbackRow } from '@ballistic/shared/data/types';
-import { BROWSE_DAYS, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { addDays, toIsoDate } from '@ballistic/shared/utils/dates';
+import { BROWSE_DAYS, canBrowseDate, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { canAddPhoto, groupByMealSection, MAX_PHOTO_DESCRIPTION, MAX_PHOTOS_PER_DAY, suggestMealSection, validateMealEntry } from '@ballistic/shared/utils/photoDiary';
 
 import { Pressable } from '@/components/press';
@@ -116,6 +117,24 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
   const [deleting, setDeleting] = useState<FoodPhotoEntryRow | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
 
+  // The arrows either side of the day and a swipe across the screen both go here. Another day: nothing opened for this one carries
+  // over (a sheet hidden by the lock would otherwise come back there).
+  function pickDay(d: string) {
+    setPickError(null);
+    setMenu(false);
+    setComposing(false);
+    setPhoto(null);
+    setDeleting(null);
+    setPicked(d === today ? null : d);
+  }
+  // Swiping sideways goes where the arrows go: back as far as a month (BROWSE_DAYS, where DateNav's arrow stops, as the web's does),
+  // on as far as today.
+  const shiftDay = (n: number) => toIsoDate(addDays(new Date(date + 'T00:00:00Z'), n));
+  const swipe = {
+    previous: canBrowseDate(shiftDay(-1), today) ? () => pickDay(shiftDay(-1)) : null,
+    next: date < today ? () => pickDay(shiftDay(1)) : null,
+  };
+
   const photos = diaryQ.data?.photos ?? [];
   const feedback = feedbackQ.data ?? [];
   const full = !canAddPhoto(photos.length);
@@ -137,22 +156,9 @@ export function PhotoDiaryScreen({ today }: { today: string }) {
 
   return (
     <>
-      <ScrollScreen refreshing={diaryQ.isRefetching} onRefresh={() => diaryQ.refetch()}>
+      <ScrollScreen refreshing={diaryQ.isRefetching} onRefresh={() => diaryQ.refetch()} swipe={swipe}>
         <NutritionTabs current="food" />
-        {/* Another day: nothing opened for this one carries over (a sheet hidden by the lock would otherwise come back there). */}
-        <DateNav
-          date={date}
-          today={today}
-          back={BROWSE_DAYS}
-          onChange={(d) => {
-            setPickError(null);
-            setMenu(false);
-            setComposing(false);
-            setPhoto(null);
-            setDeleting(null);
-            setPicked(d === today ? null : d);
-          }}
-        />
+        <DateNav date={date} today={today} back={BROWSE_DAYS} onChange={pickDay} />
         {locked ? (
           <AppText variant="small" color="warning" style={{ fontWeight: '600' }}>{LOCKED_DAY_MESSAGE}</AppText>
         ) : (

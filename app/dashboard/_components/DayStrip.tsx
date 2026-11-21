@@ -84,11 +84,12 @@ export function DayStrip({
   const shownDay = useRef<string | null>(null);
 
   // The day picked is kept in view, with a day's room either side, inside the strip only (the page itself never scrolls). It runs
-  // when the strip opens (today, at the right-hand end) and whenever the day changes some other way (the Today button), and only
-  // then: days added at the front (the coach's Earlier) leave the strip where it is, so the weeks just loaded show beside the button
-  // instead of the strip sliding back to the day picked. (days.length only lets a day not on the strip yet be found once it is.)
+  // when the strip opens (today, at the right-hand end) and whenever the day changes some other way (the Today button, a swipe across
+  // the screen), and only then: days added at the front (the coach's Earlier) leave the strip where it is, so the weeks just loaded
+  // show beside the button instead of the strip sliding back to the day picked. (days.length only lets a day not on the strip yet be
+  // found once it is.) Book's too, since swiping can walk its day off the end of the strip.
   useEffect(() => {
-    if (!progress || shownDay.current === selected) return;
+    if (shownDay.current === selected) return;
     const box = scroller.current;
     const chip = box?.querySelector<HTMLElement>(`[data-day="${selected}"]`);
     if (!box || !chip) return;
@@ -101,7 +102,7 @@ export function DayStrip({
     if (chipRect.right > boxRect.right - room) left += chipRect.right - (boxRect.right - room);
     else if (chipRect.left < boxRect.left + room) left -= boxRect.left + room - chipRect.left;
     if (left !== box.scrollLeft) box.scrollTo({ left, behavior: opening || prefersReducedMotion() ? 'auto' : 'smooth' });
-  }, [progress, selected, days.length, scroller]);
+  }, [selected, days.length, scroller]);
 
   const strip = (
     <div ref={scroller} className={`${edgeClassName} flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>

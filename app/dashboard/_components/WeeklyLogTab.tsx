@@ -8,6 +8,7 @@ import { Checkbox } from '@/app/_components/Checkbox';
 import { Check, ChevronRight, Dumbbell } from 'lucide-react';
 import { pop } from '@/app/_components/motion/gsap';
 import { useToast } from '@/app/_components/ToastProvider';
+import { stripSwipe, useDaySwipe } from '@/app/_components/useDaySwipe';
 import { cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
 import { getDailyLogs, upsertDailyLog } from '@/lib/data/dailyLogs';
@@ -799,6 +800,9 @@ export function WeeklyLogTab(
       before={rest.isCoachView ? <EarlierButton onClick={older.loadEarlier} loading={older.loading} failed={older.failed} /> : undefined}
     />
   );
+  // Swiping sideways across the check-in goes to the day before or after on the strip, as tapping it would.
+  const screen = useRef<HTMLDivElement>(null);
+  useDaySwipe(screen, stripSwipe(stripDates, selected, setPicked));
 
   // Saving no longer reloads the whole dashboard after every change; it does so once, when the member leaves this screen, so the other
   // screens (Home, Insights) catch up.
@@ -847,7 +851,7 @@ export function WeeklyLogTab(
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={screen} className="space-y-4">
       {/* The strip sits in the black header (a portal into its spot); the coach's view has no header, so it gets a dark card here. */}
       {stripSlot === undefined ? <DayStripCard>{dayStrip}</DayStripCard> : stripSlot ? createPortal(dayStrip, stripSlot) : null}
 

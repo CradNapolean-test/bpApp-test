@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { CalendarDays, Clock, MessageSquare, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useOnDemand } from '@/app/_components/useOnDemand';
+import { stripSwipe, useDaySwipe } from '@/app/_components/useDaySwipe';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { bookClass, cancelBooking, getMemberTimetable, getSessionCredits } from '@/lib/data/classes';
@@ -164,6 +165,10 @@ export function ClassesArea({
     ...activeBookings.map((b) => b.class?.cutoff_hours),
   ]);
 
+  // Swiping sideways across Book goes to the day before or after on the strip, as tapping it would (the timetable only).
+  const screen = useRef<HTMLDivElement>(null);
+  useDaySwipe(screen, view === 'book' ? stripSwipe(days, selectedDate, setPickedDate) : null);
+
   // ---- actions --------------------------------------------------------------------------------
 
   async function confirmBook(occ: ScheduleOccurrence) {
@@ -242,7 +247,7 @@ export function ClassesArea({
   const bookedAhead = upcoming.filter((b) => b.status === 'booked').length;
 
   return (
-    <div className="space-y-4">
+    <div ref={screen} className="space-y-4">
       <MemberHeader
         eyebrow={parseDay(todayIso).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}
         title="Book a session"

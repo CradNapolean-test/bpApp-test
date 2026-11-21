@@ -8,6 +8,7 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useBackHandler } from '@/app/_components/useBackHandler';
+import { useDaySwipe } from '@/app/_components/useDaySwipe';
 import { deleteFoodPhoto, getFoodPhotosForDate, uploadFoodPhoto } from '@/lib/data/foodPhotos';
 import { getOrCreateDailyLog } from '@/lib/data/dailyLogs';
 import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
@@ -68,7 +69,11 @@ export function PhotoDiaryTab({
   // Members add to the last two weeks and look back a month (D20); a coach sees any day and changes none.
   const dayLocked = !readOnly && !canEditDay(viewingDate, todayIso);
   const previousDay = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
+  const nextDay = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), 1));
   const atBrowseLimit = !readOnly && !canBrowseDate(previousDay, todayIso);
+  // The arrows either side of the day, and the same two moves when the diary is swiped sideways (useDaySwipe, below).
+  const canGoBack = !dateLoading && !atBrowseLimit;
+  const canGoOn = !dateLoading && !isToday;
 
   // Reviewing a day is something the coach says ("Mark day as reviewed", or leaving feedback on it), not something that happens by looking:
   // paging through days used to clear every one of them from the dashboard's To do (R20).
@@ -169,6 +174,7 @@ export function PhotoDiaryTab({
   const mealGroups = groupByMealSection(photos, sections);
   // Rises in when the screen opens and when another day has loaded; a photo added to the day does not set the whole list moving again.
   useStaggerIn(meals, '[data-meal]', `${viewingDate}|${dateLoading}`);
+  useDaySwipe(meals, { previous: canGoBack ? () => loadDate(previousDay) : null, next: canGoOn ? () => loadDate(nextDay) : null });
 
   return (
     <div ref={meals} className="space-y-4">
@@ -176,7 +182,7 @@ export function PhotoDiaryTab({
         <button
           type="button"
           aria-label="Previous day"
-          disabled={dateLoading || atBrowseLimit}
+          disabled={!canGoBack}
           onClick={() => loadDate(previousDay)}
           className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
         >
@@ -195,8 +201,8 @@ export function PhotoDiaryTab({
           <button
             type="button"
             aria-label="Next day"
-            disabled={dateLoading || isToday}
-            onClick={() => loadDate(toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), 1)))}
+            disabled={!canGoOn}
+            onClick={() => loadDate(nextDay)}
             className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
           >
             <ChevronRight className="h-5 w-5" />

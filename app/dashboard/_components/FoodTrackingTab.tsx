@@ -7,6 +7,7 @@ import { ChefHat, ChevronDown, ChevronUp, Copy, Plus, ScanBarcode, Trash2, Utens
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useBackHandler } from '@/app/_components/useBackHandler';
+import { stripSwipe, useDaySwipe } from '@/app/_components/useDaySwipe';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -672,15 +673,17 @@ export function FoodTrackingTab({
       below: coach ? { text: coach.text, danger: coach.noFood } : null,
     };
   });
+  // A tap on the strip and a swipe across the diary (useDaySwipe, below) both go here.
+  const pickDay = (d: string) => {
+    if (d !== shownDate) loadDate(d);
+  };
   const dayStrip = (
     <DayStrip
       variant="progress"
       months
       days={stripDays}
       selected={shownDate}
-      onSelect={(d) => {
-        if (d !== shownDate) loadDate(d);
-      }}
+      onSelect={pickDay}
       caption={foodStripCaption(shownDate, todayIso, foodDays, dayTarget != null)}
       todayIso={todayIso}
       onToday={() => loadDate(todayIso)}
@@ -1011,6 +1014,8 @@ export function FoodTrackingTab({
   // The ring and the bars fill up when the diary opens.
   const screen = useRef<HTMLDivElement>(null);
   useGrowIn(screen, 0.2);
+  // Swiping sideways across the diary goes to the day before or after on the strip, as tapping it would.
+  useDaySwipe(screen, stripSwipe(stripDates, shownDate, pickDay));
 
   return (
     <div ref={screen} className="space-y-4">

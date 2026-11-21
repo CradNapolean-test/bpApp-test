@@ -6,9 +6,9 @@ import { CALORIE_FLOOR, cycleDayFor, weeklyTarget } from '@ballistic/shared/calc
 import { reviewedByLine } from '@ballistic/shared/utils/checkinReviews';
 import { formatStLb, formatWeight, weightUnitOf } from '@ballistic/shared/utils/weightUnits';
 import { enabledTrackers, isMetricOn } from '@ballistic/shared/utils/checkinMetrics';
-import { canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { BROWSE_DAYS, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { dayCaloriesOf } from '@ballistic/shared/utils/dailyLog';
-import type { Tracker } from '@ballistic/shared/utils/dayStrip';
+import { checkinStripDays, type Tracker } from '@ballistic/shared/utils/dayStrip';
 import { toMemberEngineProfile } from '@ballistic/shared/utils/clientProfile';
 import { dayTargetFor } from '@ballistic/shared/utils/dayTarget';
 import { normalizeGender } from '@ballistic/shared/utils/personalDetails';
@@ -16,6 +16,7 @@ import { blankDailyLog, datesOfWeek, SCALE_FIELDS, validateDayPatch, weekAverage
 
 import { AutoSaveInput, AvgCard, MoodDots, StLbAutoSave, TrackerCard } from '@/components/checkin';
 import { CheckinDayStrip } from '@/components/dayStrip';
+import { stripSwipe } from '@/components/daySwipe';
 import { Icon } from '@/components/icons';
 import { CheckinTabs } from '@/components/pagetabs';
 import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
@@ -137,7 +138,8 @@ function CheckinContent() {
   const sectionLabel = { fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 } as const;
 
   return (
-    <ScrollScreen refreshing={refreshing} onRefresh={refresh}>
+    // Swiping sideways goes to the day before or after on the strip, as tapping it would.
+    <ScrollScreen refreshing={refreshing} onRefresh={refresh} swipe={stripSwipe(checkinStripDays(todayIso, BROWSE_DAYS), focused, pickDay)}>
       <CheckinTabs current="checkin" />
       {/* The day strip replaced the week arrows and the day chips (item 8): 30 days back in whole weeks, up to this Sunday. */}
       <CheckinDayStrip today={todayIso} selected={focused} weekLogs={logs} trackers={trackers} onSelect={pickDay} />

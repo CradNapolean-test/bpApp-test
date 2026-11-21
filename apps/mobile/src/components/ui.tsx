@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
+import { DaySwipeArea, useDaySwipeGuard, type DaySwipe } from '@/components/daySwipe';
 import { Icon, type IconName } from '@/components/icons';
 import { Pressable as DimPressable } from '@/components/press';
 import { radius, spacing, useTheme } from '@/theme';
@@ -150,8 +151,10 @@ export function Badge({ children, tone = 'accent' }: PropsWithChildren<{ tone?: 
 // with the accent, the rest outlined. Scrolls sideways when they do not all fit.
 export function PillTabs<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
   const t = useTheme();
+  // On a day's screen, a sideways drag on the pills scrolls them and never changes the day.
+  const swipeGuard = useDaySwipeGuard();
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled">
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8 }} keyboardShouldPersistTaps="handled" onTouchStart={swipeGuard}>
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -229,25 +232,32 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
 }
 
 // A scrolling screen with pull-to-refresh, in the same phone-width column.
+// `swipe`: on a screen that picks a day, swiping sideways anywhere on it goes to the day before or after (components/daySwipe.tsx).
+// A screen passes it on every render or never (an empty one where it stops for now), so the list is never rebuilt and its scroll
+// kept.
 export function ScrollScreen({
   children,
   refreshing,
   onRefresh,
   scrollRef,
-}: PropsWithChildren<{ refreshing?: boolean; onRefresh?: () => void; scrollRef?: React.Ref<React.ComponentRef<typeof ScrollView>> }>) {
+  swipe,
+}: PropsWithChildren<{ refreshing?: boolean; onRefresh?: () => void; scrollRef?: React.Ref<React.ComponentRef<typeof ScrollView>>; swipe?: DaySwipe }>) {
   const t = useTheme();
   const edges = useScreenEdges();
+  const scroller = (
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={{ width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', padding: spacing.md, gap: spacing.md }}
+      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={t.accent} /> : undefined}
+      // Forms: tapping a button while the keyboard is up still works, and on iOS the list makes room for the keyboard.
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets>
+      {children}
+    </ScrollView>
+  );
   return (
     <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: t.background }}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ width: '100%', maxWidth: MAX_WIDTH, alignSelf: 'center', padding: spacing.md, gap: spacing.md }}
-        refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={t.accent} /> : undefined}
-        // Forms: tapping a button while the keyboard is up still works, and on iOS the list makes room for the keyboard.
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets>
-        {children}
-      </ScrollView>
+      {swipe ? <DaySwipeArea swipe={swipe}>{scroller}</DaySwipeArea> : scroller}
     </SafeAreaView>
   );
 }

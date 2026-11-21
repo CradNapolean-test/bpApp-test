@@ -22,6 +22,7 @@ import {
 } from '@ballistic/shared/utils/dayStrip';
 import { WEEKDAY_SHORT } from '@ballistic/shared/utils/dates';
 
+import { useDaySwipeGuard } from '@/components/daySwipe';
 import { Pressable } from '@/components/press';
 import { useCalorieTargets } from '@/lib/foodTarget';
 import { useRecentLogs } from '@/lib/today';
@@ -68,19 +69,22 @@ export function DayStrip({
   const offset = useRef(0);
   const [width, setWidth] = useState(0);
   const index = days.findIndex((d) => d.iso === selected);
+  // A drag along the strip scrolls it; it never also changes the day (components/daySwipe.tsx).
+  const swipeGuard = useDaySwipeGuard();
 
-  // The day picked is kept in view with a day's room either side: today (at the right-hand end) when the strip opens, and the day
-  // the Today button goes back to.
+  // The day picked is kept in view with a day's room either side: today (at the right-hand end) when the strip opens, the day the
+  // Today button goes back to, and the day a swipe across the screen moves to. Never past either end of the strip.
   useEffect(() => {
     if (!width || index < 0) return;
     const left = PAD + index * (DAY_W + GAP);
     const room = DAY_W + GAP;
+    const end = Math.max(0, 2 * PAD + days.length * DAY_W + (days.length - 1) * GAP - width);
     let x = offset.current;
     if (left + DAY_W + room > x + width) x = left + DAY_W + room - width;
     else if (left - room < x) x = left - room;
-    x = Math.max(0, x);
+    x = Math.min(end, Math.max(0, x));
     if (x !== offset.current) scroller.current?.scrollTo({ x, animated: offset.current !== 0 });
-  }, [width, index]);
+  }, [width, index, days.length]);
 
   return (
     <View style={{ backgroundColor: INK, borderRadius: 20, paddingVertical: PAD, gap: 8 }}>
@@ -92,6 +96,7 @@ export function DayStrip({
         onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
           offset.current = e.nativeEvent.contentOffset.x;
         }}
+        onTouchStart={swipeGuard}
         scrollEventThrottle={32}
         contentContainerStyle={{ gap: GAP, paddingHorizontal: PAD }}>
         {days.map((d) => {

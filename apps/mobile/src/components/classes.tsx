@@ -1,11 +1,13 @@
 import { Link, useRouter } from 'expo-router';
-import { ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { ScrollView, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 
 import type { BookingRow, ClientMembershipRow, ScheduleOccurrence } from '@ballistic/shared/data/types';
 import { bookSummary, cancelSummary, sessionPayment, shortDayLabel, slotState, spots, type SessionCredit } from '@ballistic/shared/utils/booking';
 import { bookSheetNote, cancelDeadline, cancelNote } from '@ballistic/shared/utils/cancelDeadline';
 import { addDays, formatClassTime, toIsoDate, WEEKDAY_SHORT } from '@ballistic/shared/utils/dates';
 
+import { useDaySwipeGuard } from '@/components/daySwipe';
 import { Pressable } from '@/components/press';
 import { CheckInStatus } from '@/components/today';
 import { AppText, Button, Card, SheetFrame } from '@/components/ui';
@@ -47,10 +49,44 @@ export function CreditsHeader({ balance, membership, nextReset }: { balance: num
 }
 
 // ---------- day strip ----------
+const DAY_W = 52;
+const DAY_GAP = 6;
+
 export function DayStrip({ days, selected, sessionDates, bookedDates, onSelect }: { days: string[]; selected: string; sessionDates: Set<string>; bookedDates: Set<string>; onSelect: (d: string) => void }) {
   const t = useTheme();
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  const offset = useRef(0);
+  const [width, setWidth] = useState(0);
+  const index = days.indexOf(selected);
+  // A drag along the strip scrolls it; it never also changes the day (components/daySwipe.tsx).
+  const swipeGuard = useDaySwipeGuard();
+
+  // A swipe across the screen can walk the day picked off the end of what shows, so it is kept in view with a day's room either side
+  // (the food and check-in strips do the same). A day tapped is already in view, and only moves the strip when it is at its very edge.
+  useEffect(() => {
+    if (!width || index < 0) return;
+    const left = index * (DAY_W + DAY_GAP);
+    const room = DAY_W + DAY_GAP;
+    const end = Math.max(0, days.length * DAY_W + (days.length - 1) * DAY_GAP - width);
+    let x = offset.current;
+    if (left + DAY_W + room > x + width) x = left + DAY_W + room - width;
+    else if (left - room < x) x = left - room;
+    x = Math.min(end, Math.max(0, x));
+    if (x !== offset.current) scroller.current?.scrollTo({ x, animated: true });
+  }, [width, index, days.length]);
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
+    <ScrollView
+      ref={scroller}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: DAY_GAP, paddingVertical: 2 }}
+      onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+      onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        offset.current = e.nativeEvent.contentOffset.x;
+      }}
+      scrollEventThrottle={32}
+      onTouchStart={swipeGuard}>
       {days.map((d) => {
         const dt = parseDay(d);
         const active = d === selected;
@@ -62,7 +98,7 @@ export function DayStrip({ days, selected, sessionDates, bookedDates, onSelect }
             accessibilityRole="button"
             accessibilityLabel={longDay(d)}
             accessibilityState={{ selected: active }}
-            style={{ width: 52, alignItems: 'center', gap: 2, paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1, borderColor: active ? t.accent : has ? t.border : 'transparent', backgroundColor: active ? t.accent : has ? t.card : 'transparent' }}>
+            style={{ width: DAY_W, alignItems: 'center', gap: 2, paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1, borderColor: active ? t.accent : has ? t.border : 'transparent', backgroundColor: active ? t.accent : has ? t.card : 'transparent' }}>
             <AppText style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', color: active ? t.accentForeground : has ? t.muted : t.border }}>{WEEKDAY_SHORT[dt.getUTCDay()]}</AppText>
             <AppText style={{ fontSize: 16, fontWeight: '900', color: active ? t.accentForeground : has ? t.foreground : t.muted }}>{dt.getUTCDate()}</AppText>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: bookedDates.has(d) ? (active ? t.accentForeground : t.accent) : 'transparent' }} />

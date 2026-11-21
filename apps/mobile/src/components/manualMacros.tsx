@@ -3,13 +3,15 @@ import { View } from 'react-native';
 
 import type { ClientProfileRow, ManualMacroEntryRow } from '@ballistic/shared/data/types';
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
-import { canEditFoodDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { BROWSE_DAYS, canEditFoodDay, FOOD_AHEAD_DAYS, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { foodStripDays } from '@ballistic/shared/utils/dayStrip';
 import { manualEntryKcal, manualTotals, validateManualEntry } from '@ballistic/shared/utils/manualMacros';
 
 import { Pressable } from '@/components/press';
 import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
 import { FoodDayStrip } from '@/components/dayStrip';
+import { stripSwipe } from '@/components/daySwipe';
 import { CoachFeedbackCard, shortDate, TotalsCard } from '@/components/food';
 import { NutritionTabs } from '@/components/pagetabs';
 import { Icon } from '@/components/icons';
@@ -107,6 +109,8 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
   const date = picked ?? today;
   // As on the web: tomorrow, today and the last two weeks can be changed; an older day on the strip is only looked at.
   const locked = !canEditFoodDay(date, today);
+  // A tap on the strip and a swipe across the screen both go here.
+  const pickDay = (d: string) => setPicked(d === today ? null : d);
   const manualQ = useManualMacros(date);
   const sectionsQ = useMealSections();
   const feedbackQ = useNutritionFeedback(date);
@@ -121,7 +125,7 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
   const other = entries.filter((e) => !e.meal_section_id || !known.has(e.meal_section_id)).sort(byCreated);
 
   return (
-    <ScrollScreen refreshing={manualQ.isRefetching} onRefresh={() => manualQ.refetch()}>
+    <ScrollScreen refreshing={manualQ.isRefetching} onRefresh={() => manualQ.refetch()} swipe={stripSwipe(foodStripDays(today, BROWSE_DAYS, FOOD_AHEAD_DAYS), date, pickDay)}>
       <NutritionTabs current="food" />
       <FoodDayStrip
         profile={profile}
@@ -129,7 +133,7 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
         date={date}
         live={manualQ.isSuccess ? { calories: manualTotals(entries).calories, hasFood: entries.length > 0 } : null}
         liveTarget={target?.calories ?? null}
-        onSelect={(d) => setPicked(d === today ? null : d)}
+        onSelect={pickDay}
       />
       <TotalsCard totals={manualTotals(entries)} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
       <HighDayRow profile={profile} today={today} date={date} />
