@@ -49,6 +49,13 @@ describe('Start this programme (R5)', () => {
       );
       expect(c?.confirmLabel).toBe('Start for 90 members');
     });
+    it('says the dates and length a programme for everyone runs, when it has them', () => {
+      const c = rolloutConfirmation(plan({ audience: 'all', memberCount: 90, startsNow: false, startLabel: 'Mon 30 Nov', runsLabel: 'Mon 30 Nov - Sun 6 Dec, 1 week' }));
+      expect(c?.body).toBe(
+        'On Mon 30 Nov this will replace the current programme for 90 members. Their old programmes and every weight and rep logged stay on file. ' +
+          'It runs Mon 30 Nov - Sun 6 Dec, 1 week: members who join the gym in that time get it too, on the gym’s current week.'
+      );
+    });
     it('says when it happens if scheduled', () => {
       const c = rolloutConfirmation(plan({ audience: 'all', memberCount: 90, startsNow: false }));
       expect(c?.body).toMatch(/^On Mon 2 Nov this will replace the current programme for 90 members\./);

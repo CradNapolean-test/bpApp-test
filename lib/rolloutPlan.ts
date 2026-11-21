@@ -11,6 +11,8 @@ export interface RolloutPlan {
   startsNow: boolean;
   // The start date written out, for example "Mon 2 Nov".
   startLabel: string;
+  // For everyone at the gym: the dates it runs and its length, for example "Mon 30 Nov - Sun 6 Dec, 1 week" (migration 0172).
+  runsLabel?: string | null;
 }
 
 export const DEFAULT_ROLLOUT_AUDIENCE: RolloutAudience = 'selected';
@@ -37,8 +39,10 @@ export function rolloutConfirmation(plan: RolloutPlan): RolloutConfirmation | nu
   if (plan.audience !== 'all') return null;
   const who = plan.memberCount == null ? 'everyone at the gym' : membersLabel(plan.memberCount);
   const keep = 'Their old programmes and every weight and rep logged stay on file.';
-  // Item 7 (migration 0172): a programme for everyone is the gym's programme, so members who join later get it too.
-  const later = 'Members who join the gym later get it too, on the gym’s current week, until it ends.';
+  // Item 7 (migration 0172): a programme for everyone is the gym's programme for its length, so members who join later get it too.
+  const later = plan.runsLabel
+    ? `It runs ${plan.runsLabel}: members who join the gym in that time get it too, on the gym’s current week.`
+    : 'Members who join the gym later get it too, on the gym’s current week, until it ends.';
   return {
     title: 'Start this programme for everyone?',
     body: plan.startsNow

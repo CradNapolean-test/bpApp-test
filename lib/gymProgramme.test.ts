@@ -1,19 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import {
+  builtWeeksNote,
+  changeLengthConfirmation,
+  defaultGymProgrammeWeeks,
   deleteTemplateConfirmation,
   deleteTemplateRefusal,
-  deleteWeekConfirmation,
-  deleteWeekRefusal,
   endGymProgrammeConfirmation,
+  followOnLabel,
+  followOnStart,
   giveWaitingConfirmation,
+  gymProgrammeDates,
   gymProgrammeLabel,
+  gymProgrammeRunsLabel,
+  gymProgrammeSpans,
   gymProgrammeStatus,
+  overlapNote,
   readGymProgramme,
   waitingCountLabel,
   waitingDone,
   waitingHeading,
   waitingReason,
-  weeksAfterDeleting,
+  weeksLabel,
   type GymProgramme,
   type GymProgrammeWaiting,
 } from './gymProgramme';
@@ -121,9 +128,20 @@ describe('reading gym_programmes()', () => {
 });
 
 describe('on the template', () => {
-  it('names the gym (without the brand), week 1 and the members on it', () => {
-    expect(gymProgrammeLabel(gp())).toBe('Gym programme: Salford Quays from 9 Nov · 16 members');
-    expect(gymProgrammeLabel(gp({ members: 1 }))).toBe('Gym programme: Salford Quays from 9 Nov · 1 member');
+  it('names the gym (without the brand), the dates it runs, its length and the members on it', () => {
+    expect(gymProgrammeLabel(gp())).toBe('Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov (3 weeks) · 16 members');
+    expect(gymProgrammeLabel(gp({ members: 1, weekOne: '2026-11-30', lastDay: '2026-12-06', weeks: 1 }))).toBe(
+      'Gym programme: Salford Quays · Mon 30 Nov - Sun 6 Dec (1 week) · 1 member'
+    );
+  });
+
+  it('says plainly when the template has fewer or more weeks built than the gym programme runs', () => {
+    expect(builtWeeksNote(3, 3)).toBeNull();
+    expect(builtWeeksNote(3, 2)).toBe('2 of 3 weeks built');
+    expect(builtWeeksNote(1, 0)).toBe('0 of 1 week built');
+    expect(builtWeeksNote(3, 4)).toBe('only weeks 1-3 run for the gym');
+    expect(builtWeeksNote(1, 2)).toBe('only week 1 runs for the gym');
+    expect(builtWeeksNote(0, 2)).toBeNull();
   });
 
   it('says where everyone is and until when new members get it', () => {
@@ -156,10 +174,12 @@ describe('on the template', () => {
   it('deleting the template: the confirm says the gym programme stops reaching new members and its scheduled starts are cancelled', () => {
     const plain = 'This removes every week, day and exercise in the template. Clients who already started this programme keep their own copy.';
     expect(deleteTemplateConfirmation('Weeks 9-11', undefined, [])).toEqual({ title: 'Delete “Weeks 9-11”?', body: plain });
-    // the gym programme before it ends with it (migration 0172), so nothing older takes over
+    // an older gym programme ended when this one was given out (migration 0172), so nothing older takes over
     expect(deleteTemplateConfirmation('Weeks 9-11', gp(), []).body).toBe(
-      `${plain} It’s the gym programme at Salford Quays, so members who join from now on won’t get it, nor an older gym programme in its place.`
+      `${plain} It’s the gym programme at Salford Quays, so members who join from now on won’t get it.`
     );
+    // ended early: new members don't get it either way
+    expect(deleteTemplateConfirmation('Weeks 9-11', gp({ isOpen: false }), []).body).toBe(plain);
     expect(deleteTemplateConfirmation('Weeks 9-11', undefined, [{ audience: 'all', start_date: '2026-11-30' }]).body).toBe(
       `${plain} Its start on Mon 30 Nov for everyone at the gym is cancelled.`
     );
@@ -172,37 +192,6 @@ describe('on the template', () => {
         { audience: 'all', start_date: '2026-11-30' },
       ]).body
     ).toBe(`${plain} Its 2 scheduled starts are cancelled.`);
-  });
-
-  it('deleting a week: a coach who isn’t a gym admin is told only a gym admin can, while the template is the gym programme', () => {
-    expect(deleteWeekRefusal(gp())).toBe(
-      'This template is the gym programme at Salford Quays until Sun 29 Nov, so only a gym admin can delete one of its weeks.'
-    );
-    // ended, but its last week not over yet: still listed by gym_programmes(), and still refused (as in the database)
-    expect(deleteWeekRefusal(gp({ isOpen: false, endedAt: '2026-11-20T10:15:00+00:00' }))).toMatch(/only a gym admin can delete one of its weeks/);
-    expect(deleteWeekRefusal(undefined)).toBeNull();
-  });
-
-  it('deleting a week moves the weeks after it up one, so the template loses its last week wherever the week is', () => {
-    expect(weeksAfterDeleting([1, 1, 2, 3, 3], 3)).toBe(2);
-    expect(weeksAfterDeleting([1, 2, 2, 3], 1)).toBe(2);
-    expect(weeksAfterDeleting([1, 3], 3)).toBe(1);
-    expect(weeksAfterDeleting([1], 1)).toBe(0);
-  });
-
-  it('deleting a week: the confirm says until when members who join get the gym programme without it, or that it ends now', () => {
-    const plain = 'Removes every workout and exercise in this week of the template. Members already on this programme keep their own copy.';
-    expect(deleteWeekConfirmation(2, undefined, 2)).toEqual({ title: 'Delete week 2?', body: plain });
-    // 20 Nov, week 1 from Mon 9 Nov: two weeks left run to Sun 22 Nov
-    expect(deleteWeekConfirmation(3, gp(), 2).body).toBe(
-      `${plain} It’s the gym programme at Salford Quays: without this week, members who join get it until Sun 22 Nov.`
-    );
-    expect(deleteWeekConfirmation(2, gp({ today: '2026-11-23' }), 1).body).toBe(
-      `${plain} It’s the gym programme at Salford Quays: without this week it ends now, and members who join from now on won’t get it.`
-    );
-    expect(deleteWeekConfirmation(1, gp(), 0).body).toMatch(/without this week it ends now/);
-    // ended: new members don't get it either way
-    expect(deleteWeekConfirmation(3, gp({ isOpen: false }), 2).body).toBe(plain);
   });
 
   it('the end confirm names the programme, the members who keep it and that nothing logged changes', () => {
@@ -286,5 +275,80 @@ describe('members it was not given to', () => {
     expect(waitingDone('given', 'Sam Jones')).toBe('Sam Jones is on it from today');
     expect(waitingDone('has_it', 'Sam Jones')).toBe('Sam Jones already has it');
     expect(waitingDone('kept', 'Sam Jones')).toBe('Sam Jones keeps their own programme');
+  });
+});
+
+describe('its length, fixed when it starts (owner, 21 Nov 2026: 4, 4 and 3-week blocks, then a 1-week peak week)', () => {
+  it('runs from the Monday of the start date’s week to the Sunday of its last week', () => {
+    // November Weeks 9-11, for everyone from Tue 10 Nov
+    expect(gymProgrammeDates('2026-11-10', 3)).toEqual({ weekOne: '2026-11-09', lastDay: '2026-11-29' });
+    // peak week, from Mon 30 Nov
+    expect(gymProgrammeDates('2026-11-30', 1)).toEqual({ weekOne: '2026-11-30', lastDay: '2026-12-06' });
+    // a Sunday start is the last day of its Monday's week
+    expect(gymProgrammeDates('2026-11-29', 1)).toEqual({ weekOne: '2026-11-23', lastDay: '2026-11-29' });
+    expect(gymProgrammeRunsLabel('2026-11-30', 1)).toBe('Mon 30 Nov - Sun 6 Dec, 1 week');
+    expect(gymProgrammeRunsLabel('2026-12-07', 4)).toBe('Mon 7 Dec - Sun 3 Jan, 4 weeks');
+    expect(weeksLabel(1)).toBe('1 week');
+    expect(weeksLabel(12)).toBe('12 weeks');
+  });
+
+  it('Start a programme offers the template’s weeks first, within 1 to 12', () => {
+    expect(defaultGymProgrammeWeeks(4)).toBe(4);
+    expect(defaultGymProgrammeWeeks(3)).toBe(3);
+    expect(defaultGymProgrammeWeeks(1)).toBe(1);
+    expect(defaultGymProgrammeWeeks(0)).toBe(1);
+    expect(defaultGymProgrammeWeeks(16)).toBe(12);
+  });
+
+  const pending = (over: Partial<{ audience: 'all' | 'selected'; program_name: string; start_date: string; weeks: number | null }> = {}) => ({
+    audience: 'all' as const,
+    program_name: 'Peak week',
+    start_date: '2026-11-30',
+    weeks: 1,
+    ...over,
+  });
+
+  it('the next block starts by default the Monday after the last one running or scheduled ends', () => {
+    const now = gymProgrammeSpans(gp(), []);
+    expect(now).toEqual([{ name: 'November Weeks 9-11', startDate: '2026-11-10', lastDay: '2026-11-29' }]);
+    const f = followOnStart(now, '2026-11-21');
+    expect(f?.startDate).toBe('2026-11-30');
+    expect(f && followOnLabel(f)).toBe('Starts Mon 30 Nov, the day after November Weeks 9-11 ends');
+    // peak week already scheduled: the next block follows it
+    const both = gymProgrammeSpans(gp(), [pending(), pending({ audience: 'selected', program_name: 'Sam 1:1', start_date: '2026-12-14', weeks: null })]);
+    expect(both.map((s) => s.name)).toEqual(['November Weeks 9-11', 'Peak week']);
+    expect(followOnLabel(followOnStart(both, '2026-11-21')!)).toBe('Starts Mon 7 Dec, the day after Peak week ends');
+    // nothing running (ended early) or scheduled: no default, the sheet keeps today
+    expect(gymProgrammeSpans(gp({ isOpen: false }), [])).toEqual([]);
+    expect(followOnStart([], '2026-11-21')).toBeNull();
+  });
+
+  it('says the new one takes over on its start date when the dates overlap', () => {
+    const spans = gymProgrammeSpans(gp(), [pending({ program_name: 'Block 2', start_date: '2026-12-14', weeks: 4 })]);
+    // following on: nothing to say
+    expect(overlapNote('2026-11-30', 1, spans)).toBeNull();
+    // starting while November Weeks 9-11 still runs
+    expect(overlapNote('2026-11-23', 1, spans)).toBe('“November Weeks 9-11” runs to Sun 29 Nov: this one takes over from it on Mon 23 Nov.');
+    // running into a scheduled one: that one takes over on its own start date
+    expect(overlapNote('2026-11-30', 3, spans)).toBe('“Block 2” starts Mon 14 Dec and takes over from this one that day.');
+  });
+
+  it('a gym admin changing its length is told the new dates, or that it ends today', () => {
+    const longer = changeLengthConfirmation(gp({ today: '2026-11-21' }), 4);
+    expect(longer).toEqual({
+      title: 'Make “November Weeks 9-11” 4 weeks?',
+      body: 'It runs Mon 9 Nov - Sun 6 Dec, and members who join Salford Quays get it until Sun 6 Dec. Nothing changes for the members on it.',
+      confirmLabel: 'Change length',
+      endsToday: false,
+    });
+    // 1 week would have ended on Sun 15 Nov, before today (as the database does: it ends today)
+    const shorter = changeLengthConfirmation(gp({ today: '2026-11-21' }), 1);
+    expect(shorter.title).toBe('End “November Weeks 9-11” today?');
+    expect(shorter.body).toBe(
+      '1 week would have ended it on Sun 15 Nov, so it ends today: members who join Salford Quays from now on won’t get it. The members on it keep it, and nothing they’ve logged changes.'
+    );
+    expect(shorter.endsToday).toBe(true);
+    // 2 weeks ends this Sunday, still to come
+    expect(changeLengthConfirmation(gp({ today: '2026-11-21' }), 2).body).toMatch(/until Sun 22 Nov\./);
   });
 });

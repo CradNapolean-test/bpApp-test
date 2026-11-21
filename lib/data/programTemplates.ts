@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { after } from 'next/server';
 import { notifyProgrammeAssigned, notifyStartedRollout } from '@/lib/memberNotify';
 import type { RolloutUpdateCounts } from '@/lib/rolloutUpdate';
-import { deleteWeekRefusal, readGymProgramme, type GymProgramme, type WaitingOutcome } from '@/lib/gymProgramme';
+import { readGymProgramme, type GymProgramme, type WaitingOutcome } from '@/lib/gymProgramme';
 import { nextWeekCopy } from '@/lib/utils/programmeDays';
 import type {
   ProgrammeRolloutRow,
@@ -100,27 +100,22 @@ export async function createProgramTemplateAndGetId(name: string, expectedGymId?
 // Removes every day (and its exercises) in one week of a template.
 // Deletes one week of a template and closes the gap: weeks after it move down by one, so deleting week 2 of 4 leaves 1, 2, 3 and not
 // 1, 3, 4 (a gap hands members an empty programme week). The later weeks are renumbered in ascending order in the same call.
-// Either way the template ends a week sooner, and so would the gym programme it is: only a gym admin can do that (migration 0172).
-// Asked first, as the database would refuse only the last renumbering, after this week's workouts had gone. Returned, not thrown, so the
-// coach reads why.
-export async function deleteTemplateWeek(templateId: string, weekNum: number): Promise<ActionResult> {
+// A gym programme's length is its own (migration 0172), so this never shortens or ends one.
+export async function deleteTemplateWeek(templateId: string, weekNum: number): Promise<void> {
   const supabase = await createClient();
-  const refusal = await deleteWeekRefusalFor(supabase, templateId);
-  if (refusal) return fail(null, refusal);
-
   const { error } = await supabase
     .from('program_template_days')
     .delete()
     .eq('template_id', templateId)
     .eq('week_num', weekNum);
-  if (error) return fail(error, 'Could not delete that week');
+  if (error) raise(error);
 
   const { data: later, error: laterError } = await supabase
     .from('program_template_days')
     .select('week_num')
     .eq('template_id', templateId)
     .gt('week_num', weekNum);
-  if (laterError) return fail(laterError, 'Could not move the weeks after it up');
+  if (laterError) raise(laterError);
   const weeks = Array.from(new Set((later ?? []).map((d) => d.week_num as number))).sort((x, y) => x - y);
   for (const week of weeks) {
     const { error: moveError } = await supabase
@@ -128,30 +123,8 @@ export async function deleteTemplateWeek(templateId: string, weekNum: number): P
       .update({ week_num: week - 1 })
       .eq('template_id', templateId)
       .eq('week_num', week);
-    if (moveError) return fail(moveError, 'Could not move the weeks after it up');
+    if (moveError) raise(moveError);
   }
-  return ok();
-}
-
-// Why this coach can't delete a week of the template: it is the gym programme (gym_programmes(), the coach's gym) and they are not a gym
-// admin there, as the database checks (is_admin_of_gym). null when they can, or when it can't be told (before migration 0172).
-async function deleteWeekRefusalFor(supabase: Awaited<ReturnType<typeof createClient>>, templateId: string): Promise<string | null> {
-  const { data, error } = await supabase.rpc('gym_programmes');
-  if (error || !Array.isArray(data)) return null;
-  const gym = data.map(readGymProgramme).find((g) => g?.templateId === templateId);
-  if (!gym) return null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const gymId = await resolveScopingGymId(supabase);
-  const { data: membership } = await supabase
-    .from('coach_gym_memberships')
-    .select('is_gym_admin')
-    .eq('coach_id', user.id)
-    .eq('gym_id', gymId)
-    .maybeSingle();
-  return membership?.is_gym_admin === true ? null : deleteWeekRefusal(gym);
 }
 // Returned, not thrown, so the coach reads why it was refused: only a gym admin can delete the template of the gym programme or of a start
 // for everyone (migration 0172).
@@ -175,13 +148,10 @@ export async function addTemplateDay(
   if (error) raise(error);
 }
 
-// Returned, not thrown, so the coach reads why it was refused: the last workout of the gym programme's last week is a gym admin's to delete
-// (migration 0172).
-export async function deleteTemplateDay(dayId: string): Promise<ActionResult> {
+export async function deleteTemplateDay(dayId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('program_template_days').delete().eq('id', dayId);
-  if (error) return fail(error, 'Could not delete that workout');
-  return ok();
+  if (error) raise(error);
 }
 
 export async function addTemplateExercise(
@@ -401,7 +371,7 @@ export async function getPendingRollouts(): Promise<ProgrammeRolloutRow[]> {
   const gymId = await resolveScopingGymId(supabase);
   const { data, error } = await supabase
     .from('programme_rollouts')
-    .select('id, template_id, program_name, start_date, audience, client_ids, applied_at, program_templates(name)')
+    .select('id, template_id, program_name, start_date, audience, client_ids, applied_at, weeks, program_templates(name)')
     .eq('gym_id', gymId)
     .is('applied_at', null)
     .order('start_date');
@@ -418,6 +388,7 @@ export async function getPendingRollouts(): Promise<ProgrammeRolloutRow[]> {
       audience: r.audience as 'all' | 'selected',
       client_ids: r.client_ids ?? [],
       applied_at: r.applied_at,
+      weeks: typeof r.weeks === 'number' ? r.weeks : null,
     };
   });
 }
@@ -435,6 +406,8 @@ export async function scheduleProgrammeRollout(input: {
   audience: 'all' | 'selected';
   clientIds: string[];
   startsNow: boolean;
+  // A start for everyone: how many weeks it runs (1 to 12), fixed from its start (migration 0172). Empty: the template's weeks.
+  weeks?: number | null;
   // The gym the page was drawn for (R28): "everyone" means this gym's members, so it must still be the active one.
   expectedGymId?: string | null;
 }): Promise<ScheduleRolloutResult> {
@@ -448,6 +421,7 @@ export async function scheduleProgrammeRollout(input: {
     p_audience: input.audience,
     p_client_ids: input.audience === 'selected' ? input.clientIds : [],
     p_starts_now: input.startsNow,
+    p_weeks: input.audience === 'all' ? (input.weeks ?? null) : null,
   });
   if (error) return fail(error, 'Could not start that programme') as ScheduleRolloutResult;
   const count = typeof data === 'number' ? data : 0;
@@ -537,8 +511,9 @@ export async function applyTemplateToRollout(
   return { ok: true, counts: readUpdateCounts(data) };
 }
 
-// Item 7 (migration 0172): the programme the coach's gym is on today ("Gym programme: Salford Quays from 9 Nov · 16 members"), while its
-// last week has not finished, with the members it was not given to. Empty until migration 0172 is applied, rather than breaking the library.
+// Item 7 (migration 0172): the programme the coach's gym is on today ("Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov (3 weeks) ·
+// 16 members"), or the one a gym admin ended early while its weeks run, with the members it was not given to. Empty when the database
+// can't answer, rather than breaking the library.
 export async function getGymProgrammes(): Promise<GymProgramme[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('gym_programmes');
@@ -546,13 +521,24 @@ export async function getGymProgrammes(): Promise<GymProgramme[]> {
   return data.map(readGymProgramme).filter((p): p is GymProgramme => p !== null);
 }
 
-// Stops members who join the gym from now on getting it. The members on it keep it. A gym admin only (checked in the database).
-export async function endGymProgramme(rolloutId: string, expectedGymId?: string | null): Promise<ActionResult> {
+// A gym admin ends the gym programme now (end), or gives a start for everyone a new length (weeks, 1 to 12). A length that would end it
+// before today ends it today. Checked in the database (change_gym_programme, migration 0172): only a gym admin, at their gym.
+export async function changeGymProgramme(input: {
+  rolloutId: string;
+  weeks: number | null;
+  end: boolean;
+  expectedGymId?: string | null;
+}): Promise<{ ok: true; outcome: 'ended' | 'changed' } | { ok: false; error: string }> {
   const supabase = await createClient();
-  const stale = await checkActiveGym(supabase, expectedGymId);
-  if (stale) return stale;
-  const { error } = await supabase.rpc('end_gym_programme', { p_rollout_id: rolloutId });
-  return error ? fail(error, 'Could not end the gym programme') : ok();
+  const stale = await checkActiveGym(supabase, input.expectedGymId);
+  if (stale) return stale as { ok: false; error: string };
+  const { data, error } = await supabase.rpc('change_gym_programme', {
+    p_rollout_id: input.rolloutId,
+    p_weeks: input.end ? null : input.weeks,
+    p_end: input.end,
+  });
+  if (error) return fail(error, 'Could not change the gym programme') as { ok: false; error: string };
+  return { ok: true, outcome: data === 'ended' ? 'ended' : 'changed' };
 }
 
 // "Give it to them" (give) or "Keep theirs" for a member the gym programme was not given to when they joined. Their coach or a gym admin.

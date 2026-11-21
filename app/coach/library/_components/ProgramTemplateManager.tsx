@@ -39,7 +39,7 @@ import {
   applyTemplateToRollout,
   type RolloutUsageRow,
   getGymProgrammes,
-  endGymProgramme,
+  changeGymProgramme,
   resolveGymProgrammeWaiting,
   reorderTemplateExercises,
   updateTemplateDay,
@@ -51,24 +51,35 @@ import { downloadTextFile } from '@/lib/utils/csv';
 import { DEFAULT_ROLLOUT_AUDIENCE, membersLabel, rolloutButtonLabel, rolloutConfirmation, rolloutSuccessMessage, type RolloutPlan } from '@/lib/rolloutPlan';
 import { NOTHING_TO_UPDATE, rolloutUpdateConfirmation, rolloutUpdateDone, templateInUseLabel } from '@/lib/rolloutUpdate';
 import {
+  MAX_GYM_PROGRAMME_WEEKS,
+  MIN_GYM_PROGRAMME_WEEKS,
+  builtWeeksNote,
+  changeLengthConfirmation,
+  defaultGymProgrammeWeeks,
   deleteTemplateConfirmation,
   deleteTemplateRefusal,
-  deleteWeekConfirmation,
-  deleteWeekRefusal,
   endGymProgrammeConfirmation,
+  followOnLabel,
+  followOnStart,
   giveWaitingConfirmation,
   gymProgrammeLabel,
+  gymProgrammeRunsLabel,
+  gymProgrammeSpans,
   gymProgrammeStatus,
+  overlapNote,
   waitingCountLabel,
   waitingDone,
   waitingHeading,
   waitingReason,
-  weeksAfterDeleting,
+  weeksLabel,
   type GymProgramme,
   type GymProgrammeWaiting,
 } from '@/lib/gymProgramme';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, todayIsoInTz } from '@/lib/utils/dates';
 import type { ClientGroupWithMembers, ExerciseLibraryRow, ProgrammeRolloutRow, ProgramTemplateWithDays } from '@/lib/data/types';
+
+// How many weeks a template has built: its last week's number (weeks are kept without gaps, deleteTemplateWeek).
+const builtWeeks = (template: ProgramTemplateWithDays) => Math.max(0, ...template.program_template_days.map((d) => d.week_num));
 
 const longDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -219,6 +230,12 @@ export function ProgramTemplateManager({
   const [assignStart, setAssignStart] = useState('');
   // Choosing members is the default: "everyone" replaces every member's programme, so it is a deliberate choice (R5).
   const [assignAudience, setAssignAudience] = useState<'all' | 'selected'>(DEFAULT_ROLLOUT_AUDIENCE);
+  // Everyone at the gym: how many weeks it runs (fixed from its start, migration 0172), and whether the coach has picked the start date
+  // (until then it follows on from the gym programme running or scheduled).
+  const [assignWeeks, setAssignWeeks] = useState(1);
+  const [assignStartPicked, setAssignStartPicked] = useState(false);
+  // A gym admin changing the gym programme's length on the template.
+  const [lengthDraft, setLengthDraft] = useState<{ rolloutId: string; weeks: number } | null>(null);
   const [gymMemberCount, setGymMemberCount] = useState<number | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [groupId, setGroupId] = useState('');
@@ -227,7 +244,8 @@ export function ProgramTemplateManager({
   // D8: the rollouts members are still on, for "In use by N members" and "Apply to everyone on this rollout". Read again after the page
   // refreshes (a programme started or a template changed) and after applying.
   const [usage, setUsage] = useState<RolloutUsageRow[]>([]);
-  // Item 7: the programme the gym is on ("Gym programme: Salford Quays from 9 Nov · 16 members"), read with the usage.
+  // Item 7: the programme the gym is on ("Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov (3 weeks) · 16 members"), read with the
+  // usage.
   const [gymProgrammes, setGymProgrammes] = useState<GymProgramme[]>([]);
   const [usageVersion, setUsageVersion] = useState(0);
   useEffect(() => {
@@ -250,10 +268,31 @@ export function ProgramTemplateManager({
   // Members who join the gym from now on stop getting it, after a confirm. The members on it keep it.
   async function handleEndGymProgramme(g: GymProgramme) {
     if (!(await confirm({ ...endGymProgrammeConfirmation(g), destructive: true }))) return;
-    await runMutate(() => endGymProgramme(g.rolloutId, gymId), {
+    await runMutate(() => changeGymProgramme({ rolloutId: g.rolloutId, weeks: null, end: true, expectedGymId: gymId }), {
       success: 'Gym programme ended',
       onDone: () => setUsageVersion((v) => v + 1),
     });
+  }
+
+  // A gym admin gives the gym programme a new length, after a confirm with its new dates (or that it ends today).
+  async function handleChangeLength(g: GymProgramme, weeks: number) {
+    const { endsToday, ...confirmation } = changeLengthConfirmation(g, weeks);
+    if (!(await confirm({ ...confirmation, destructive: endsToday }))) return;
+    let outcome: 'ended' | 'changed' = 'changed';
+    await runMutate(
+      async () => {
+        const result = await changeGymProgramme({ rolloutId: g.rolloutId, weeks, end: false, expectedGymId: gymId });
+        if (result.ok) outcome = result.outcome;
+        return result;
+      },
+      {
+        onDone: () => {
+          toast.success(outcome === 'ended' ? 'Gym programme ended' : `Gym programme is now ${weeksLabel(weeks)}`);
+          setLengthDraft(null);
+          setUsageVersion((v) => v + 1);
+        },
+      }
+    );
   }
 
   // A member it wasn't given to when they joined (their own programme runs over the same dates): give it to them, or keep theirs.
@@ -382,17 +421,12 @@ export function ProgramTemplateManager({
     );
   }
 
-  // The weeks after it move up one, so the template (and the gym programme, if it is one) ends a week sooner: a gym admin's to do while it
-  // is the gym programme (refused in the database too).
   async function handleDeleteWeek(template: ProgramTemplateWithDays, week: number) {
-    const gym = gymProgrammes.find((g) => g.templateId === template.id);
-    const refusal = isGymAdmin ? null : deleteWeekRefusal(gym);
-    if (refusal) {
-      toast.error(refusal);
-      return;
-    }
-    const weeksAfter = weeksAfterDeleting(template.program_template_days.map((d) => d.week_num), week);
-    const ok = await confirm({ ...deleteWeekConfirmation(week, gym, weeksAfter), destructive: true });
+    const ok = await confirm({
+      title: `Delete week ${week}?`,
+      body: 'Removes every workout and exercise in this week of the template. Members already on this programme keep their own copy.',
+      destructive: true,
+    });
     if (!ok) return;
     await runMutate(() => deleteTemplateWeek(template.id, week), {
       success: `Week ${week} deleted`,
@@ -454,10 +488,7 @@ export function ProgramTemplateManager({
     await runMutate(
       async () => {
         await duplicateTemplateDay(day.id, next, day.day_label);
-        for (const old of existing) {
-          const removed = await deleteTemplateDay(old.id);
-          if (!removed.ok) return removed;
-        }
+        for (const old of existing) await deleteTemplateDay(old.id);
       },
       {
         success: existing.length > 0 ? `Week ${next}’s workout replaced` : 'Workout copied to next week',
@@ -474,6 +505,8 @@ export function ProgramTemplateManager({
     setAssignName(template.name);
     setAssignStart(todayIsoInTz(DEFAULT_TIMEZONE));
     setAssignAudience(DEFAULT_ROLLOUT_AUDIENCE);
+    setAssignWeeks(defaultGymProgrammeWeeks(builtWeeks(template)));
+    setAssignStartPicked(false);
     setGymMemberCount(null);
     getGymMemberCount()
       .then(setGymMemberCount)
@@ -489,12 +522,28 @@ export function ProgramTemplateManager({
   const targetIds = assignAudience === 'selected' ? Array.from(new Set([...picked, ...groupMemberIds])) : [];
   const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
   const startsNow = !assignStart || assignStart <= todayIso;
+  // Everyone at the gym: the gym programme running and the starts for everyone scheduled, so the next block follows on from the last one
+  // (owner, 21 Nov 2026: 4, 4 and 3-week blocks, then peak week) and an overlap is said.
+  const gymSpans = gymProgrammeSpans(
+    gymProgrammes.find((g) => g.isOpen),
+    rollouts
+  );
+  const followOn = followOnStart(gymSpans, todayIso);
+  const assignRuns = assignAudience === 'all' ? gymProgrammeRunsLabel(assignStart || todayIso, assignWeeks) : null;
+  const assignOverlap = assignAudience === 'all' ? overlapNote(assignStart || todayIso, assignWeeks, gymSpans) : null;
+
+  // Choosing everyone starts it the day after the gym programme running or scheduled ends, until the coach picks a date themselves.
+  function chooseAudience(a: 'all' | 'selected') {
+    setAssignAudience(a);
+    if (!assignStartPicked) setAssignStart(a === 'all' && followOn ? followOn.startDate : todayIso);
+  }
 
   const rolloutPlan: RolloutPlan = {
     audience: assignAudience,
     memberCount: assignAudience === 'all' ? gymMemberCount : targetIds.length,
     startsNow,
     startLabel: assignStart ? longDate(assignStart) : 'today',
+    runsLabel: assignRuns,
   };
 
   async function handleAssign(template: ProgramTemplateWithDays) {
@@ -511,6 +560,7 @@ export function ProgramTemplateManager({
           audience: assignAudience,
           clientIds: targetIds,
           startsNow,
+          weeks: assignAudience === 'all' ? assignWeeks : null,
           expectedGymId: gymId,
         });
         if (result.ok) reached = result.count;
@@ -625,6 +675,11 @@ export function ProgramTemplateManager({
                       {!gymProgramme.isOpen && ' · ended'}
                     </p>
                   )}
+                  {gymProgramme && builtWeeksNote(gymProgramme.weeks, builtWeeks(template)) && (
+                    <p className="mt-1 mr-1 inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning">
+                      {builtWeeksNote(gymProgramme.weeks, builtWeeks(template))}
+                    </p>
+                  )}
                   {gymProgramme && waitingCountLabel(gymProgramme) && (
                     <p className="mt-1 mr-1 inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-bold text-warning">
                       {waitingCountLabel(gymProgramme)}
@@ -698,6 +753,12 @@ export function ProgramTemplateManager({
                   <div key={r.id} className="flex items-center gap-2 rounded-xl bg-accent-soft px-3 py-2 text-sm">
                     <span className="min-w-0 flex-1 font-semibold text-accent">
                       Starts {longDate(r.start_date)} for {r.audience === 'all' ? 'everyone at the gym' : `${r.client_ids.length} member${r.client_ids.length === 1 ? '' : 's'}`}
+                      {r.audience === 'all' && r.weeks ? (
+                        <span className="block text-xs font-medium">
+                          {gymProgrammeRunsLabel(r.start_date, r.weeks)}
+                          {builtWeeksNote(r.weeks, builtWeeks(previewTemplate)) ? ` · ${builtWeeksNote(r.weeks, builtWeeks(previewTemplate))}` : ''}
+                        </span>
+                      ) : null}
                     </span>
                     {(r.audience !== 'all' || isGymAdmin) && (
                       <button
@@ -731,6 +792,11 @@ export function ProgramTemplateManager({
                     {gymProgrammeStatus(previewGymProgramme)}
                     {previewGymProgramme.programName !== previewTemplate.name ? ` Given as “${previewGymProgramme.programName}”.` : ''}
                   </span>
+                  {builtWeeksNote(previewGymProgramme.weeks, builtWeeks(previewTemplate)) && (
+                    <span className="block text-xs font-semibold text-warning">
+                      Template: {builtWeeksNote(previewGymProgramme.weeks, builtWeeks(previewTemplate))}
+                    </span>
+                  )}
                 </span>
                 {/* A gym admin only, as the database checks: anyone else would only be refused. */}
                 {isGymAdmin && previewGymProgramme.members > 0 && (
@@ -763,6 +829,36 @@ export function ProgramTemplateManager({
                   </button>
                 )}
               </div>
+              {/* Its length is fixed from its start: only a gym admin changes it (checked in the database too). */}
+              {isGymAdmin && previewGymProgramme.isOpen && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-black/10 pt-2 dark:border-white/10">
+                  <label htmlFor="gym-programme-length" className="text-xs font-medium text-zinc-500">
+                    Length
+                  </label>
+                  <select
+                    id="gym-programme-length"
+                    className="rounded-xl border border-black/10 bg-transparent px-2.5 py-1.5 text-sm dark:border-white/10"
+                    value={lengthDraft?.rolloutId === previewGymProgramme.rolloutId ? lengthDraft.weeks : previewGymProgramme.weeks}
+                    onChange={(e) => setLengthDraft({ rolloutId: previewGymProgramme.rolloutId, weeks: Number(e.target.value) })}
+                  >
+                    {Array.from({ length: MAX_GYM_PROGRAMME_WEEKS - MIN_GYM_PROGRAMME_WEEKS + 1 }, (_, i) => i + MIN_GYM_PROGRAMME_WEEKS).map((n) => (
+                      <option key={n} value={n}>
+                        {weeksLabel(n)}
+                      </option>
+                    ))}
+                  </select>
+                  {lengthDraft?.rolloutId === previewGymProgramme.rolloutId && lengthDraft.weeks !== previewGymProgramme.weeks && (
+                    <button
+                      type="button"
+                      disabled={mutating}
+                      onClick={() => handleChangeLength(previewGymProgramme, lengthDraft.weeks)}
+                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      Change length
+                    </button>
+                  )}
+                </div>
+              )}
               {previewGymProgramme.isOpen && previewGymProgramme.waiting.length > 0 && (
                 <div className="space-y-1.5 border-t border-black/10 pt-2 dark:border-white/10">
                   <p className="text-xs font-bold text-zinc-600 dark:text-zinc-300">{waitingHeading(previewGymProgramme)}</p>
@@ -964,8 +1060,14 @@ export function ProgramTemplateManager({
                     min={todayIso}
                     className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2.5 text-base dark:border-white/10"
                     value={assignStart}
-                    onChange={(e) => setAssignStart(e.target.value)}
+                    onChange={(e) => {
+                      setAssignStart(e.target.value);
+                      setAssignStartPicked(true);
+                    }}
                   />
+                  {assignAudience === 'all' && followOn && !assignStartPicked && assignStart === followOn.startDate && (
+                    <p className="text-xs text-zinc-500">{followOnLabel(followOn)}.</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-zinc-500">Programme name for them</label>
@@ -982,7 +1084,7 @@ export function ProgramTemplateManager({
                       <button
                         key={a}
                         type="button"
-                        onClick={() => setAssignAudience(a)}
+                        onClick={() => chooseAudience(a)}
                         className={`h-11 rounded-full px-4 text-sm font-bold ${
                           assignAudience === a ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
                         }`}
@@ -993,11 +1095,35 @@ export function ProgramTemplateManager({
                   </div>
                   {assignAudience === 'all' && (
                     <p className="text-xs text-zinc-500">
-                      It becomes the gym programme: members who join the gym later get it too, on the gym’s current week, until it ends.
-                      {gymProgrammes[0]?.isOpen ? ` From the start date new members get this one instead of “${gymProgrammes[0].programName}”.` : ''}
+                      It becomes the gym programme for the weeks below: members who join the gym in that time get it too, on the gym’s
+                      current week.
                     </p>
                   )}
                 </div>
+                {assignAudience === 'all' && (
+                  <div className="space-y-1">
+                    <label htmlFor="assign-weeks" className="text-xs font-medium text-zinc-500">
+                      Length
+                    </label>
+                    <select
+                      id="assign-weeks"
+                      className="w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10"
+                      value={assignWeeks}
+                      onChange={(e) => setAssignWeeks(Number(e.target.value))}
+                    >
+                      {Array.from({ length: MAX_GYM_PROGRAMME_WEEKS - MIN_GYM_PROGRAMME_WEEKS + 1 }, (_, i) => i + MIN_GYM_PROGRAMME_WEEKS).map((n) => (
+                        <option key={n} value={n}>
+                          {weeksLabel(n)}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-500">
+                      {assignRuns}
+                      {builtWeeksNote(assignWeeks, builtWeeks(previewTemplate)) ? ` · template: ${builtWeeksNote(assignWeeks, builtWeeks(previewTemplate))}` : ''}
+                    </p>
+                    {assignOverlap && <p className="text-xs font-semibold text-warning">{assignOverlap}</p>}
+                  </div>
+                )}
                 {assignAudience === 'selected' && (
                   <>
                     {groups.length > 0 && (

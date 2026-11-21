@@ -505,6 +505,8 @@ export interface ProgrammeRolloutRow {
   audience: 'all' | 'selected';
   client_ids: string[];
   applied_at: string | null;
+  // A start for everyone: how many weeks it runs, fixed from its start (migration 0172). null for chosen members.
+  weeks: number | null;
 }
 
 export interface ProgramTemplateWithDays extends ProgramTemplateRow {

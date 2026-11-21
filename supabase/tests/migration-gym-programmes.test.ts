@@ -10,7 +10,7 @@ import { replayPolicies } from './replayPolicies';
 // behaviour in the database needs write tests with test accounts (listed in the migration's header).
 const require = createRequire(import.meta.url);
 const { parseFunctions, access } = require('./security-audit/parse-functions.cjs') as {
-  parseFunctions: () => { name: string; key: string; body: string; file: string; acl: unknown[]; securityDefiner: boolean; searchPath: string | null }[];
+  parseFunctions: () => { name: string; key: string; args: string; body: string; file: string; acl: unknown[]; securityDefiner: boolean; searchPath: string | null }[];
   access: (fn: unknown) => { anon: boolean; authenticated: boolean };
 };
 const fns = parseFunctions();
