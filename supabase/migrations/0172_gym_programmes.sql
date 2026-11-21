@@ -1,108 +1,113 @@
--- Gym programmes (owner's list item 7, 19 Nov 2026): a programme given to everyone at a gym from a start date now reaches the members who
--- join that gym later too. Owner's decision: a late joiner starts on the gym's CURRENT week, so everyone does the same workout on the same
--- day (the gym calendar of D9, migration 0167).
+-- Gym programmes (owner's list item 7, 19 Nov 2026; length fixed when it starts, owner's decision 21 Nov 2026): a programme given to
+-- everyone at a gym is the gym's programme for a set number of weeks, and it reaches the members who join that gym later too, on the gym's
+-- CURRENT week, so everyone does the same workout on the same day (the gym calendar of D9, migration 0167).
+--
+-- The owner's year, in their words: "We run in 12 week training programmes split into 4 week blocks, the 12th week is always peak week
+-- (testing week, runs the same each time), so it goes 4 week block 4 week block 3 week block 1 week peak week." Each block is its own
+-- template started for everyone at the gym: on 21 Nov 2026 Salford Quays is on November Weeks 9-11 (for everyone from Tue 10 Nov, so week 1
+-- is Mon 9 Nov and its 3 weeks end Sun 29 Nov); peak week would follow from Mon 30 Nov to Sun 6 Dec.
 --
 -- Before: "Start a programme" -> "Everyone at the gym" (programme_rollouts.audience 'all', 0094 and 0133) gave each member at the gym their
 -- own copy on the start date, once (apply_programme_rollout sets applied_at). Anyone who joined after that got nothing. Read-only check on
--- 20 Nov 2026: the 3 members who joined Salford Quays after November Weeks 9-11 started (10 Nov) were each given a 3-week programme by hand
--- as their own 1:1 programme, so their weeks count from their own start (9, 10 and 16 Nov) instead of the gym's Monday 9 Nov.
+-- 20 Nov 2026: the 3 members who joined Salford Quays after November Weeks 9-11 started were each given a 3-week programme by hand as their
+-- own 1:1 programme, so their weeks count from their own start (9, 10 and 16 Nov) instead of the gym's Monday 9 Nov.
 --
 -- New:
---   * A whole-gym rollout is the gym's programme ("gym programme"). The one a gym is on today (_gym_programme_today) is its newest whole-gym
---     rollout that has been given out and whose start date has arrived. It is open to new members until its last week ends, or until a
---     coach ends it (programme_rollouts.ended_at, new). Week 1 is the Monday of the start date's week (as week_one, 0167), so its last day
---     is that Monday + 7 x the template's weeks - 1 (a Sunday). A newer gym programme takes over from an older one, and an older one is
---     never opened again: when the newest has ended, nobody is given anything.
+--   * Length. A start for everyone has a length in weeks, 1 to 12 (programme_rollouts.weeks, new), set when it is scheduled: Start a
+--     programme -> Everyone at the gym shows a Length that starts at the template's number of weeks (4, 4, 3 or 1 for the owner's blocks)
+--     and the dates it will run. Week 1 is the Monday of the start date's week (as week_one, 0167), so its last day is that Monday
+--     + 7 x weeks - 1, a Sunday. It never moves when the template is edited, its weeks are added or deleted, or templates are deleted: only
+--     a gym admin can change it (change_gym_programme, below). Existing starts for everyone get their template's weeks now (backfill below).
+--     A start for chosen members has no length (weeks empty), as before.
+--   * The gym's programme today (_gym_programme_today): the newest start for everyone at the gym that has been given out, whose start date
+--     has arrived, that has not ended (programme_rollouts.ended_at, new) and whose last day has not passed. When a newer one is given out,
+--     every older one at the gym that is still open ends (apply_programme_rollout, below), so an older one is never the gym's programme
+--     again, even if the newer one's template is deleted later. Existing ones: each older one is ended as of the next one's start date
+--     (backfill below).
 --   * When a member at that gym finishes setting up their profile (client_profiles.onboarding_completed_at goes from empty to a date, on
---     the web or the phone: trigger client_profiles_gym_programme), they get their own copy of the template, starting today, with
---     week_one = the gym programme's Monday: the app counts their weeks from it (programWeekStart), so they are on the gym's current week and
---     do the same workout as everyone that day. The copy has the rollout's id, so it counts in "In use by" / "Apply to everyone on this
---     rollout" (D8) like everyone else's. The member gets an in-app notice. Nobody is given anything:
+--     the web or the phone: trigger client_profiles_gym_programme), they get their own copy of the template as it is now, starting today,
+--     with week_one = the gym programme's Monday: the app counts their weeks from it (programWeekStart), so they are on the gym's current
+--     week and do the same workout as everyone that day. The copy has the rollout's id, so it counts in "In use by" / "Apply to everyone
+--     on this rollout" (D8) like everyone else's. The member gets an in-app notice. Nobody is given anything:
 --       - who already has a copy from that rollout (never a second copy);
 --       - who has another programme that runs over the same dates (a 1:1 programme their coach gave them, or a group one). Theirs is not
 --         replaced: the member is listed on the template as "Not given" with the programme in their way, and their coach (or a gym admin)
---         picks "Give it to them" (it takes over from today; theirs stays on file, and any of theirs that has not started yet, or starts today, now
---         starts the Monday after the gym programme's last week, so it cannot take over part-way) or "Keep theirs" (gym_programme_waiting,
---         new). A programme with no workouts yet counts as one week long, so a 1:1 programme a coach has only just made still counts;
---       - when the gym programme has ended or the gym has none.
+--         picks "Give it to them" (it takes over from today; theirs stays on file, and any of theirs that has not started yet, or starts
+--         today, now starts the Monday after the gym programme's last week, so it cannot take over part-way) or "Keep theirs"
+--         (gym_programme_waiting, new). A programme with no workouts yet counts as one week long, so a 1:1 programme a coach has only just
+--         made still counts;
+--       - when the gym has no programme today.
 --     Giving it can never stop a member finishing their profile: an error is caught, nothing is half-made, and the member is listed as
 --     "Not given" with reason 'failed' so the coach can give it from the template.
---   * gym_programmes(): for the coach's template list, "Gym programme: Salford Quays from 9 Nov · 16 members": the programme the coach's
---     gym is on today while its last week has not finished, ended or not, with the members still on it (as programme_rollout_usage, 0167),
---     how many joined later, and the members waiting (the coach's own members; every one for a gym admin), each with every programme of
---     theirs "Give it to them" would move, so the confirm names them all. Coaches at that gym only.
---   * end_gym_programme(rollout): stops new members getting it. The members on it keep it to the end and nothing they logged changes.
---     A gym admin only, as starting a programme for everyone is (0133). It cannot be re-opened: starting a new one for everyone takes over.
+--   * gym_programmes(): for the coach's template list, "Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov (3 weeks) · 16 members":
+--     the gym's programme today, or when it has none, the newest one a gym admin ended early whose last day has not passed (shown as
+--     ended), with the members still on it (as programme_rollout_usage, 0167), how many joined later, and the members waiting (the coach's
+--     own members; every one for a gym admin), each with every programme of theirs "Give it to them" would move, so the confirm names
+--     them all. Coaches at that gym only.
+--   * change_gym_programme(rollout, weeks, end): a gym admin only, at their gym. End it now (new members stop getting it; the members on it
+--     keep it and nothing they logged changes; it cannot be opened again), or give it a new length, 1 to 12 weeks. A length that would end
+--     it before today ends it today (its length becomes the weeks up to this one). One that has ended, or whose last day has passed, can't
+--     be changed: start a new one for everyone. A start not given out yet can have its length changed, not be ended (cancel it instead).
 --   * resolve_gym_programme_waiting(rollout, member, give): "Give it to them" / "Keep theirs" for a member listed as Not given. The member's
---     coach or a gym admin, at the member's gym, while the gym programme is open.
+--     coach or a gym admin, at the member's gym, while it is the gym's programme.
 --   * programme_rollouts rules: the one "for all" rule let any coach at the gym change a rollout straight through the API: end a gym
---     programme without being a gym admin, open an ended one again, or turn chosen members into everyone. Now a coach can read their gym's
---     rollouts and cancel one that has not been given out yet (what the app does, cancelProgrammeRollout), one for everyone only as a gym
---     admin; everything else goes through the functions (schedule_programme_rollout, apply_programme_rollout, end_gym_programme), which run
---     as the table owner.
+--     programme or change its length without being a gym admin, open an ended one again, or turn chosen members into everyone. Now a coach
+--     can read their gym's rollouts and cancel one that has not been given out yet (what the app does, cancelProgrammeRollout), one for
+--     everyone only as a gym admin; everything else goes through the functions (schedule_programme_rollout, apply_programme_rollout,
+--     change_gym_programme), which run as the table owner.
 --   * Deleting a template deletes its rollouts too (on delete cascade, 0094), past those rules. A new trigger on program_templates
---     (program_templates_refuse_gym_programme_delete) lets only a gym admin delete a template whose rollout for everyone has not started
---     yet or is the gym's programme (until its last week is over), so a coach can't cancel a start for everyone or end the gym programme
---     that way. The app says so on Delete template. When the gym's programme goes with its template, the gym programme before it would be
---     the gym's programme again: if that one is still within its weeks and not ended, it is ended too (ended_at), so it is not opened
---     again (the rule above). Only a gym admin can delete a template that would do that. A template's rollouts only go at the end of the
---     delete, so the trigger leaves out a rollout whose template has already gone: several templates deleted in one request are decided
---     as if they were deleted one after the other. Deletes at a gym also wait for each other (a lock per gym), so two requests at once
---     are decided one after the other too. Before, deleting the gym programme's template and the one before it together (or in two
---     requests at once) passed for a coach who isn't a gym admin, and opened the gym programme before those two again.
---   * The gym programme's last day comes from its template's weeks, so taking weeks off the template would end it sooner, or straight
---     away. A new trigger on program_template_days (program_template_days_refuse_gym_programme_shorten) lets only a gym admin take the
---     last week off the template of the gym's programme (delete its days, or move them to an earlier week or another template) until
---     its last week is over, ended or not, as on Delete template. Adding weeks, and changing or deleting days within its weeks, are as
---     before. The app says so on Delete week (which moves the weeks after it up one, so it takes a week off wherever the week is).
---     Changes to the days of a template given out for everyone wait for each other before the weeks are counted (a lock per template),
---     so two requests at once that each delete one workout of the last week can't both pass.
+--     (program_templates_refuse_gym_programme_delete) lets only a gym admin delete a template with a start for everyone that has not
+--     started yet, or one whose last day has not passed (ended or not), so a coach can't cancel a start for everyone or end the gym
+--     programme that way. The app says so on Delete template. Nothing else is needed: the length no longer comes from the template, and an
+--     older gym programme has always ended, so deleting a template can't shorten, end or reopen anything else.
 --   * set_programme_week_one (the start-date trigger of 0167) replaced: a late joiner's copy keeps its week 1 (the gym's Monday) when a
 --     coach moves its start date within the copy's weeks, so the member stays on the gym's week instead of going back to week 1. Moved
 --     past its last week, it starts again from week 1 as before (kept, it would be finished on the day it starts). A copy whose rollout
 --     has gone (deleted with its template, so rollout_id is empty) still has its week 1 and is treated the same: before, its week 1 stayed
 --     where it was whatever start date a coach gave it. Every other copy as before.
---
 --   * apply_programme_rollout (0130) replaced: it can be called by any coach and only checked the gym, so a coach who isn't a gym admin
 --     could give out a gym admin's scheduled start for everyone weeks early. After that nobody could cancel it, and members who joined
 --     before its start date never got it. Signed in, it now gives out one for everyone only for a gym admin (as only a gym admin can
 --     start one, 0133), and none before its start date at the gym (the daily job gives a later start out on its day), so Start a
---     programme with a later date can't start it now either. The daily job, and everything else in it, as before.
+--     programme with a later date can't start it now either. Giving out one for everyone ends every older one at the gym that is still
+--     open (above); one that starts before a gym programme that has already started ends straight away, as it can never be the gym's
+--     programme.
+--     The daily job, and everything else in it, as before.
+--   * schedule_programme_rollout (0133) replaced by one that also takes the length (p_weeks, 1 to 12; empty = the template's weeks, so
+--     the app before this deploy still works). Everything else as in 0133.
 --
--- Not changed: apply_due_programme_rollouts, schedule_programme_rollout, instantiate_template_core (called as it is),
--- apply_template_to_rollout, programme_rollout_usage. The migration itself gives nobody a programme and changes no programme: late
--- joiners are given it from the next profile set up. The 3 members above stay on their own programmes.
+-- Not changed: apply_due_programme_rollouts, instantiate_template_core (called as it is), apply_template_to_rollout,
+-- programme_rollout_usage, and members' week numbering (week_one and programWeekStart). The migration itself gives nobody a programme and
+-- changes no member's programme: late joiners are given it from the next profile set up. The 3 members above stay on their own programmes.
 --
--- Apply: before or after the deploy. The app reads gym_programmes() and shows nothing when it is missing; applying it first means the
--- new "members who join later get it too" wording in Start a programme is true from the deploy.
+-- Apply: BEFORE the deploy. The new app starts a programme with a length (schedule_programme_rollout with p_weeks), which the database
+-- does not have until this is applied, and reads the length of scheduled starts (programme_rollouts.weeks). The app now live works with it
+-- applied: its Start a programme gets the template's weeks as the length.
 --
 -- Guard: the migration stops before changing anything when a table, column or function it uses is missing ("... is missing"), or when a
--- function it creates already exists with a different body ("... is not the one from migration 0172"), or set_programme_week_one is
--- neither 0167's nor this file's ("... from migration 0167"), or apply_programme_rollout is neither 0130's nor this file's ("... from
--- migration 0130"). An earlier copy of this file is fine (the one handed out on 20 Nov 2026,
--- or a later one): its bodies are accepted too, so this file can be run over it. Safe to run twice.
+-- function it creates already exists with a different body ("... is not the one from migration 0172"), or a function it replaces is not
+-- the live one it was written against: set_programme_week_one from 0167, apply_programme_rollout from 0130, schedule_programme_rollout
+-- from 0133 ("... is not the one from migration 0167"). A second run finds this file's own bodies and passes. Safe to run twice.
 --
 -- PRE-FLIGHT (read-only):
 --   select to_regclass('public.gym_programme_waiting') is not null as waiting_table,
 --          to_regprocedure('public.gym_programmes()') is not null as list_fn,
 --          exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'programme_rollouts' and column_name = 'ended_at') as ended_col,
+--          exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'programme_rollouts' and column_name = 'weeks') as weeks_col,
 --          to_regprocedure('public._rollout_live_copies(uuid)') is not null as needs_0167,
---          to_regprocedure('public.instantiate_template_core(uuid, uuid, text, date, uuid)') is not null as needs_0152;
--- Expected before: false, false, false, true, true.
+--          to_regprocedure('public.instantiate_template_core(uuid, uuid, text, date, uuid)') is not null as needs_0152,
+--          to_regprocedure('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean)') is not null as schedule_0133;
+-- Expected before: false, false, false, false, true, true, true.
 --
---   -- 1. The gym programme each gym is on today (the rule above), its week 1, weeks, last day and copies:
---   select g.name, r.program_name, r.start_date, r.start_date - (extract(isodow from r.start_date)::integer - 1) as week_one,
---          (select max(d.week_num) from public.program_template_days d where d.template_id = r.template_id) as weeks,
+--   -- 1. Every start for everyone, with its template's weeks now (the length the backfill gives it):
+--   select g.name, r.program_name, r.start_date, r.applied_at is not null as given_out,
+--          r.start_date - (extract(isodow from r.start_date)::integer - 1) as week_one,
+--          (select max(d.week_num) from public.program_template_days d where d.template_id = r.template_id) as template_weeks,
 --          (select count(*) from public.workout_programs wp where wp.rollout_id = r.id) as copies
---   from public.gyms g
---   cross join lateral (
---     select * from public.programme_rollouts r
---     where r.gym_id = g.id and r.audience = 'all' and r.applied_at is not null
---       and r.start_date <= public.local_date(coalesce(nullif(g.timezone, ''), 'UTC'))
---     order by r.start_date desc, r.created_at desc limit 1
---   ) r;
--- Expected on 20 Nov 2026: one row, Salford Quays, November Weeks 9-11, start 10 Nov, week_one 9 Nov, 3 weeks (so open to new members
--- until Sun 29 Nov), 16 copies. Worsley has none.
+--   from public.programme_rollouts r join public.gyms g on g.id = r.gym_id
+--   where r.audience = 'all' order by g.name, r.start_date;
+-- Expected on 21 Nov 2026: two rows, both Salford Quays: October Weeks 5-8, start 10 Oct, given out, week_one 5 Oct, 3 weeks, 3 copies;
+-- November Weeks 9-11, start 10 Nov, given out, week_one 9 Nov, 3 weeks, 16 copies. Worsley has none, and none is scheduled.
 --
 --   -- 2. Members at that gym who have finished setting up and have no copy (the migration gives them nothing; listed for comparison):
 --   select count(*) from public.profiles c join public.client_profiles cp on cp.client_id = c.id
@@ -118,68 +123,80 @@
 --   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'programme_rollouts' order by 1;
 -- Expected before: "gym coaches manage programme_rollouts", ALL.
 --   select count(*) from public.workout_programs where rollout_id is not null;
+-- Expected on 21 Nov 2026: 23.
 --
 --   -- 4. Rollouts already given out ahead of their start date (apply_programme_rollout no longer does that when someone is signed in;
---   --    any listed here stay as they are):
+--   --    any listed here stay as they are, and end nothing until their start date):
 --   select g.name, r.program_name, r.audience, r.start_date, r.applied_at
 --   from public.programme_rollouts r join public.gyms g on g.id = r.gym_id
 --   where r.applied_at is not null and r.start_date > public.local_date(coalesce(nullif(g.timezone, ''), 'UTC'));
 -- Expected on 21 Nov 2026: none (and no rollout is waiting to be given out).
 --
 -- AFTER (read-only):
---   select to_regprocedure('public.gym_programmes()') is not null, to_regprocedure('public.end_gym_programme(uuid)') is not null,
+--   select to_regprocedure('public.gym_programmes()') is not null, to_regprocedure('public.change_gym_programme(uuid, integer, boolean)') is not null,
 --          to_regprocedure('public.resolve_gym_programme_waiting(uuid, uuid, boolean)') is not null,
 --          (select relrowsecurity from pg_class where oid = 'public.gym_programme_waiting'::regclass),
 --          (select count(*) from pg_policies where schemaname = 'public' and tablename = 'gym_programme_waiting'),
 --          exists (select 1 from pg_trigger where tgrelid = 'public.client_profiles'::regclass and tgname = 'client_profiles_gym_programme'),
 --          exists (select 1 from pg_trigger where tgrelid = 'public.program_templates'::regclass and tgname = 'program_templates_refuse_gym_programme_delete'),
---          exists (select 1 from pg_trigger where tgrelid = 'public.program_template_days'::regclass and tgname = 'program_template_days_refuse_gym_programme_shorten');
--- Expected: true, true, true, true, 0, true, true, true (the waiting list has no rules: only the functions read and write it).
+--          to_regprocedure('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer)') is not null,
+--          to_regprocedure('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean)') is null;
+-- Expected: true, true, true, true, 0, true, true, true, true (the waiting list has no rules: only the functions read and write it).
 --   select policyname, cmd from pg_policies where schemaname = 'public' and tablename = 'programme_rollouts' order by 1;
 -- Expected: "gym coaches cancel scheduled programme_rollouts" DELETE, "gym coaches read programme_rollouts" SELECT.
 --   select p.prosrc like '%given out on that day, not before%' from pg_proc p
 --   where p.pronamespace = 'public'::regnamespace and p.proname = 'apply_programme_rollout';
 -- Expected: true.
---   select g.name, t.program_name, t.week_one, t.weeks, t.last_day, t.is_open from public.gyms g cross join lateral public._gym_programme_today(g.id) t;
--- Expected on 20 Nov 2026: Salford Quays, November Weeks 9-11, 9 Nov, 3, 29 Nov, true.
---   -- Nobody was given anything: the rollout-copy count from PRE-FLIGHT 3 is the same, and the waiting list is empty:
+--   -- Every rollout's length, last day and end:
+--   select r.program_name, r.audience, r.start_date, r.weeks,
+--          r.start_date - (extract(isodow from r.start_date)::integer - 1) + 7 * r.weeks - 1 as last_day, r.ended_at
+--   from public.programme_rollouts r order by r.start_date, r.created_at;
+-- Expected on 21 Nov 2026: the four for chosen members (September Weeks 1-4 twice, test 2, October Weeks 5-8 from 19 Oct) have no weeks,
+-- no last day and no end; October Weeks 5-8 (all, 10 Oct): 3 weeks, last day Sun 25 Oct, ended 2026-11-10 00:00:00+00 (midnight in
+-- London as November Weeks 9-11 started); November Weeks 9-11 (all, 10 Nov): 3 weeks, last day Sun 29 Nov, not ended.
+--   select g.name, t.program_name, t.week_one, t.weeks, t.last_day from public.gyms g cross join lateral public._gym_programme_today(g.id) t;
+-- Expected on 21 Nov 2026: Salford Quays, November Weeks 9-11, 9 Nov, 3, 29 Nov (one row; Worsley has none).
+--   -- Nobody was given anything: the rollout-copy count from PRE-FLIGHT 3 is the same (23), and the waiting list is empty:
 --   select count(*) from public.workout_programs where rollout_id is not null;  select count(*) from public.gym_programme_waiting;
--- Then, signed in as a coach in the app: Library -> Programmes shows "Gym programme: Salford Quays from 9 Nov · 16 members" on November
--- Weeks 9-11, and the template shows when new members stop getting it (Sun 29 Nov) and an "End gym programme" button.
+-- Then, signed in as a gym admin in the app: Library -> Programmes shows "Gym programme: Salford Quays · Mon 9 Nov - Sun 29 Nov
+-- (3 weeks) · 16 members" on November Weeks 9-11, and the template shows when new members stop getting it (Sun 29 Nov), a Length and
+-- an "End gym programme" button. Start a programme on the peak week template -> Everyone at the gym shows Starts Mon 30 Nov ("the day
+-- after November Weeks 9-11 ends") and Length 1 week, Mon 30 Nov - Sun 6 Dec (close the sheet without starting it).
 --
--- Write tests to run with test accounts on a sandbox project (not the live one): a new member at a gym with an open gym programme finishes
--- onboarding -> one copy, start today, week_one = the gym programme's Monday, a notice; finishing again (or a second save) -> no second
--- copy; a member with a running 1:1 programme -> no copy, listed for their coach, "Give it to them" -> copy, "Keep theirs" -> off the list;
--- a member whose 1:1 starts next Monday -> listed, "Give it to them" -> copy, and the 1:1 now starts the Monday after the gym programme;
--- a late joiner's copy (3 weeks, week_one 9 Nov) moved to start 23 Nov -> week_one stays 9 Nov, moved to 30 Nov -> week_one 30 Nov, and
--- the same once its template (so its rollout) is deleted;
--- after end_gym_programme, or after the last Sunday -> nothing; a non-admin coach cannot end it (function or direct update), nor cancel a
--- scheduled start for everyone (direct delete), but can cancel one for chosen members; a non-admin coach cannot delete the template of the
--- gym programme or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose gym programme's last week is
--- over, and a gym admin can delete either; a gym admin deleting the gym programme's template while the gym programme before it is still
--- within its weeks -> that one is ended (ended_at set) and a new member is given nothing; the gym programme's template (its last week over)
--- and the template of the gym programme before it (also over) deleted in one request (delete ... in (both)), in either order, or in two
--- requests at once, while the gym programme before those two is still within its weeks -> a non-admin coach is refused and nothing is
--- deleted, and for a gym admin that one is ended; a non-admin coach cannot take the last week off the gym programme's template (delete
--- its days, move them to week 2, or to another template; refused, nothing changed) until its last week is over, but can add a week or
--- delete a day in an earlier week, and a gym admin can do either; two requests at once from a non-admin coach, each deleting one of the
--- two workouts of the gym programme's last week -> one is refused and the template keeps its last week; a non-admin coach calling
--- apply_programme_rollout on a scheduled start for everyone -> refused, still not given out and still cancellable by a gym admin; a gym
--- admin calling it on one that starts next week, or on one for chosen members that starts tomorrow -> refused; Start a programme for
--- today (schedule_programme_rollout, start now) -> given out as before; the daily job on the start date -> given out as before; a member
--- cannot call gym_programmes, end_gym_programme or resolve_gym_programme_waiting.
+-- Write tests to run with test accounts on a sandbox project (not the live one): a gym admin schedules a start for everyone with length 3
+-- -> weeks 3; with no length -> the template's weeks (16 weeks -> 12, none -> 1); length 0 or 13 -> refused; for chosen members -> no
+-- weeks; the template's weeks added, deleted or the template of another rollout deleted -> the gym programme's last day is the same;
+-- a new member at a gym with a gym programme finishes onboarding -> one copy, start today, week_one = the gym programme's Monday, a
+-- notice; finishing again (or a second save) -> no second copy; a member with a running 1:1 programme -> no copy, listed for their coach,
+-- "Give it to them" -> copy, "Keep theirs" -> off the list; a member whose 1:1 starts next Monday -> listed, "Give it to them" -> copy,
+-- and the 1:1 now starts the Monday after the gym programme; a late joiner's copy (3 weeks, week_one 9 Nov) moved to start 23 Nov ->
+-- week_one stays 9 Nov, moved to 30 Nov -> week_one 30 Nov, and the same once its template (so its rollout) is deleted; the daily job
+-- gives out the next block on its start date -> the one before it is ended (ended_at set); then that block's template deleted by a gym
+-- admin -> the gym has no programme and a new member is given nothing (the older one is not opened again); a start for everyone given
+-- out with a start date before the gym programme's -> ended straight away, the gym programme stays; change_gym_programme by a gym admin:
+-- weeks 4 -> last day a week later; a length ending before today -> ended today with weeks = the current week; end -> ended; on an ended
+-- one or one whose last day has passed -> refused; on a scheduled one: length changed, end refused; by a coach who isn't a gym admin, or
+-- a member -> refused, nothing changed; a non-admin coach cannot change ended_at or weeks by a direct update, nor cancel a scheduled start
+-- for everyone (direct delete), but can cancel one for chosen members; a non-admin coach cannot delete the template of the gym programme
+-- or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose last day has passed, and a gym admin can
+-- delete either; a non-admin coach calling apply_programme_rollout on a scheduled start for everyone -> refused, still not given out and
+-- still cancellable by a gym admin; a gym admin calling it on one that starts next week, or on one for chosen members that starts tomorrow
+-- -> refused; Start a programme for today (schedule_programme_rollout, start now) -> given out as before; the daily job on the start
+-- date -> given out as before; a member cannot call gym_programmes, change_gym_programme or resolve_gym_programme_waiting.
 --
 -- ROLLBACK: run set_programme_week_one's definition from migration 0167 again (its trigger stays);
 --           run apply_programme_rollout's definition from migration 0130 again;
+--           drop function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer); then run
+--           schedule_programme_rollout's definition, revoke and grant from migration 0133 again (the app must be the one before this
+--           deploy, which does not send a length);
 --           drop trigger client_profiles_gym_programme on public.client_profiles; drop function public.client_profiles_join_gym_programme();
 --           drop trigger program_templates_refuse_gym_programme_delete on public.program_templates;
 --           drop function public.program_templates_refuse_gym_programme_delete();
---           drop trigger program_template_days_refuse_gym_programme_shorten on public.program_template_days;
---           drop function public.program_template_days_refuse_gym_programme_shorten();
---           drop function public.resolve_gym_programme_waiting(uuid, uuid, boolean); drop function public.end_gym_programme(uuid);
+--           drop function public.resolve_gym_programme_waiting(uuid, uuid, boolean); drop function public.change_gym_programme(uuid, integer, boolean);
 --           drop function public.gym_programmes(); drop function public._give_gym_programme(uuid, uuid, boolean);
 --           drop function public._gym_programme_today(uuid); drop table public.gym_programme_waiting;
---           alter table public.programme_rollouts drop column ended_by, drop column ended_at;
+--           alter table public.programme_rollouts drop constraint programme_rollouts_weeks_check, drop column weeks, drop column ended_by,
+--             drop column ended_at;
 --           drop policy "gym coaches read programme_rollouts" on public.programme_rollouts;
 --           drop policy "gym coaches cancel scheduled programme_rollouts" on public.programme_rollouts;
 --           create policy "gym coaches manage programme_rollouts" on public.programme_rollouts for all
@@ -206,41 +223,42 @@ begin
   if to_regprocedure('public._rollout_live_copies(uuid)') is null then raise exception '_rollout_live_copies is missing (migration 0167)'; end if;
   if to_regprocedure('public.local_date(text, timestamptz)') is null then raise exception 'local_date is missing (migration 0129)'; end if;
   if to_regprocedure('public.client_gym_id(uuid)') is null then raise exception 'client_gym_id is missing (migration 0056)'; end if;
+  if to_regprocedure('public.same_gym_as_client(uuid, uuid)') is null then raise exception 'same_gym_as_client is missing'; end if;
   if to_regprocedure('public.is_coach_of(uuid)') is null then raise exception 'is_coach_of is missing'; end if;
   if to_regprocedure('public.my_gym_id()') is null then raise exception 'my_gym_id is missing (migration 0052)'; end if;
   if to_regprocedure('public.is_admin_of_gym(uuid)') is null then raise exception 'is_admin_of_gym is missing (migration 0056)'; end if;
+  if to_regprocedure('public.set_programme_week_one()') is null then raise exception 'set_programme_week_one is missing (migration 0167)'; end if;
+  if to_regprocedure('public.apply_programme_rollout(uuid)') is null then raise exception 'apply_programme_rollout is missing (migration 0130)'; end if;
+  if to_regprocedure('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean)') is null
+     and to_regprocedure('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer)') is null then
+    raise exception 'schedule_programme_rollout is missing (migration 0133)';
+  end if;
 
-  -- The functions this migration creates: none may exist yet with another body (a second run finds its own). The ones it replaces must be
-  -- the one from 0167 (set_programme_week_one) or 0130 (apply_programme_rollout), or this file's. After this file's own md5, an earlier
-  -- copy of this file's (same arguments and result, so it is
-  -- replaced in place): gym_programmes and set_programme_week_one as in the copy handed out on 20 Nov 2026,
-  -- program_templates_refuse_gym_programme_delete and set_programme_week_one as in a later copy before 21 Nov, and
-  -- program_templates_refuse_gym_programme_delete and program_template_days_refuse_gym_programme_shorten as in the copy of 21 Nov that
-  -- added the template-days trigger.
+  -- Each function by its exact arguments: one this migration creates may not exist yet with another body (a second run finds its own);
+  -- one it replaces must be the live one from the migration named, or this file's (a second run). schedule_programme_rollout with six
+  -- arguments is 0133's, dropped below for the one with the length.
   for v_check in
     select * from (values
-      ('_gym_programme_today', '0172', array['63d299a9c29db8643c15e20d43a70bdb']),
-      ('_give_gym_programme', '0172', array['4e10dc123d27774dee84ee6b08b3726e']),
-      ('client_profiles_join_gym_programme', '0172', array['558f876ecd679247dc956a8f67bb5f0e']),
-      ('gym_programmes', '0172', array['8784850cd1412c5abd4b9bee1fd1a14a', '662073fea310d8827b69bac083e593f6']),
-      ('end_gym_programme', '0172', array['8ff5f37461f44cd1e11e25c9a4cea232']),
-      ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
-      ('program_templates_refuse_gym_programme_delete', '0172', array['d60da1e4ee8413ca79ec75e79e5c8d9e', 'e417964f898305816cc6a55ad7148e23',
-                                                                      '8376186b3cf14c0b6d24d762c0e36f8e']),
-      ('program_template_days_refuse_gym_programme_shorten', '0172', array['ae1c7013f4df25d129a2f4ab0ec4ca36', '4eb2b9bf86c808d575cbe70b02c3a3fe']),
-      -- replaced: the one from 0167, or this file's (a second run), or an earlier copy of this file's
-      ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '9dddcac25cab66b400ec4103de9fda99',
-                                               '8a258730266312d0344c534b09087221', '836a65083143b6a9bf93df50b68a7bec']),
-      -- replaced: the one from 0130, or this file's (a second run)
-      ('apply_programme_rollout', '0130', array['da6b647aab04cf17547cbc66dd7c81d2', '48c382cd8647b68cac461a78882ea940'])
-    ) as t(name, migration, accepted)
+      ('public._gym_programme_today(uuid)', '0172', array['08e2c4c120f99bef5a4dff1db2abdd65']),
+      ('public._give_gym_programme(uuid, uuid, boolean)', '0172', array['8c0223f2c26910f01cb6e9282dd70228']),
+      ('public.client_profiles_join_gym_programme()', '0172', array['19aeeaa8b34ebaacc1e89f916606e059']),
+      ('public.gym_programmes()', '0172', array['ca288df17e58e17a32e96232021e09de']),
+      ('public.change_gym_programme(uuid, integer, boolean)', '0172', array['b1bf35bbe58d97c3f66a5584f8ecadef']),
+      ('public.resolve_gym_programme_waiting(uuid, uuid, boolean)', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
+      ('public.program_templates_refuse_gym_programme_delete()', '0172', array['8a1fb706d6217a66cf4cf7d37906c24c']),
+      ('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer)', '0172', array['b345d01bb68a6f0ff0af21281feffded']),
+      -- replaced: the live one from the migration named, or this file's (a second run)
+      ('public.set_programme_week_one()', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '9dddcac25cab66b400ec4103de9fda99']),
+      ('public.apply_programme_rollout(uuid)', '0130', array['da6b647aab04cf17547cbc66dd7c81d2', '351f35ea6de1519d2d4fca22d7fa3b28']),
+      ('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean)', '0133', array['118628ede882f193a8c7aa544a2244b4'])
+    ) as t(signature, migration, accepted)
   loop
     v_md5 := null;
     select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_md5
     from pg_proc p
-    where p.pronamespace = 'public'::regnamespace and p.proname = v_check.name;
+    where p.oid = to_regprocedure(v_check.signature)::oid;
     if v_md5 is not null and not (v_md5 = any (v_check.accepted)) then
-      raise exception '% is not the one from migration % (body md5 %), so nothing was changed.', v_check.name, v_check.migration, v_md5;
+      raise exception '% is not the one from migration % (body md5 %), so nothing was changed.', v_check.signature, v_check.migration, v_md5;
     end if;
   end loop;
 end
@@ -251,8 +269,39 @@ $guard$;
 
 alter table programme_rollouts add column if not exists ended_at timestamptz;
 alter table programme_rollouts add column if not exists ended_by uuid references profiles(id) on delete set null;
+alter table programme_rollouts add column if not exists weeks integer;
 comment on column programme_rollouts.ended_at is
-  'A gym programme (audience all) that has ended: a gym admin ended it, or deleted the template of the gym programme after it. Members who join the gym after this are not given it. The members on it keep it (migration 0172).';
+  'A gym programme (audience all) that has ended: a gym admin ended it, or a newer one for everyone at the gym was given out. Members who join the gym after this are not given it. The members on it keep it (migration 0172).';
+comment on column programme_rollouts.weeks is
+  'How many weeks a start for everyone (audience all) runs, 1 to 12, set when it is scheduled: its last day is the Monday of the start date''s week + 7 x weeks - 1. Only a gym admin changes it (change_gym_programme); editing the template never does. Empty for chosen members (migration 0172).';
+
+-- Backfill: every start for everyone gets its template's weeks now (1 to 12; a template with no workouts counts as one week).
+update programme_rollouts r
+set weeks = greatest(1, least(12, coalesce((select max(d.week_num) from program_template_days d where d.template_id = r.template_id), 1)))
+where r.audience = 'all' and r.weeks is null;
+
+alter table programme_rollouts drop constraint if exists programme_rollouts_weeks_check;
+alter table programme_rollouts add constraint programme_rollouts_weeks_check
+  check ((audience = 'all' and weeks is not null and weeks between 1 and 12) or (audience <> 'all' and weeks is null));
+
+-- Backfill: every older start for everyone that has been given out and is still open ends as of the next one's start date at its gym (the
+-- next one given out whose start date has arrived), as apply_programme_rollout now does when it gives out a newer one.
+update programme_rollouts r
+set ended_at = nx.ends
+from (
+  select o.id,
+         (select n.start_date::timestamp at time zone coalesce(nullif(g.timezone, ''), 'UTC')
+          from programme_rollouts n
+          join gyms g on g.id = n.gym_id
+          where n.gym_id = o.gym_id and n.audience = 'all' and n.applied_at is not null and n.id <> o.id
+            and (n.start_date > o.start_date or (n.start_date = o.start_date and n.created_at > o.created_at))
+            and n.start_date <= public.local_date(coalesce(nullif(g.timezone, ''), 'UTC'))
+          order by n.start_date, n.created_at
+          limit 1) as ends
+  from programme_rollouts o
+  where o.audience = 'all' and o.applied_at is not null and o.ended_at is null
+) nx
+where r.id = nx.id and nx.ends is not null;
 
 -- Members a gym programme was not given to when they finished setting up, for their coach to decide. No rules: only the functions below
 -- read and write it (Row Level Security on, nothing allowed straight through the API).
@@ -284,7 +333,7 @@ create policy "gym coaches read programme_rollouts"
   on programme_rollouts for select
   using (gym_id = public.my_gym_id());
 
--- One for everyone at the gym only by a gym admin, as only a gym admin can start one (0133) or end one (end_gym_programme).
+-- One for everyone at the gym only by a gym admin, as only a gym admin can start one (0133) or change one (change_gym_programme).
 drop policy if exists "gym coaches cancel scheduled programme_rollouts" on programme_rollouts;
 create policy "gym coaches cancel scheduled programme_rollouts"
   on programme_rollouts for delete
@@ -293,31 +342,29 @@ create policy "gym coaches cancel scheduled programme_rollouts"
 
 -- Functions --------------------------------------------------------------------------------------------------------------------------------
 
--- The gym programme a gym is on today: its newest whole-gym rollout that has been given out and has started (none when it has none). Its
--- week 1 is the Monday of the start date's week (as week_one, 0167); its last day is the Sunday of the template's last week. is_open: new
--- members get it (not ended by a coach, and its last day has not passed).
+-- The gym's programme today: its newest start for everyone that has been given out, whose start date has arrived, that has not ended and
+-- whose last day has not passed (none when it has none). Week 1 is the Monday of the start date's week (as week_one, 0167); its last day
+-- is the Sunday of its last week, from its own length (weeks), never from its template.
 create or replace function public._gym_programme_today(p_gym_id uuid)
 returns table (rollout_id uuid, template_id uuid, program_name text, start_date date, week_one date, weeks integer, last_day date,
-               today date, ended_at timestamptz, is_open boolean)
+               today date)
 language sql
 stable
 security definer
 set search_path = public
 as $fn$
-  select r.id, r.template_id, r.program_name, r.start_date, w.week_one, tw.weeks, w.week_one + 7 * tw.weeks - 1, t.today, r.ended_at,
-         r.ended_at is null and tw.weeks > 0 and t.today <= w.week_one + 7 * tw.weeks - 1
+  select r.id, r.template_id, r.program_name, r.start_date, r.week_one, r.weeks, r.week_one + 7 * r.weeks - 1, t.today
   from gyms g
   cross join lateral (select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) as today) t
   cross join lateral (
-    select x.* from programme_rollouts x
-    where x.gym_id = g.id and x.audience = 'all' and x.applied_at is not null and x.start_date <= t.today
+    select x.*, w.week_one
+    from programme_rollouts x
+    cross join lateral (select x.start_date - (extract(isodow from x.start_date)::integer - 1) as week_one) w
+    where x.gym_id = g.id and x.audience = 'all' and x.applied_at is not null and x.ended_at is null and x.start_date <= t.today
+      and t.today <= w.week_one + 7 * x.weeks - 1
     order by x.start_date desc, x.created_at desc
     limit 1
   ) r
-  cross join lateral (select r.start_date - (extract(isodow from r.start_date)::integer - 1) as week_one) w
-  cross join lateral (
-    select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = r.template_id
-  ) tw
   where g.id = p_gym_id;
 $fn$;
 
@@ -325,18 +372,9 @@ revoke all on function public._gym_programme_today(uuid) from public, anon, auth
 
 -- Deleting a template deletes its rollouts with it (programme_rollouts.template_id is on delete cascade, 0094), and a cascade skips the
 -- rules above: by deleting the template, any coach at the gym could cancel a start for everyone or end the gym programme, which only a gym
--- admin can do. Only a gym admin (or nobody signed in: the SQL editor, the service role) can delete a template with a rollout for everyone
--- that:
---   - has not started yet (scheduled, or given out ahead of its start date);
---   - is the gym's programme today until its last week is over, ended or not (as gym_programmes() shows it on the template);
---   - is the gym's programme today while the gym's programme before it is still open (within its weeks, not ended): without this one, that
---     one would be the gym's programme again. For a gym admin it is ended instead (an older one is never opened again).
--- The rollouts of a template only go at the end of the statement that deletes it (the cascade), so a rollout whose template is already
--- gone (deleted earlier in the same statement) is left out when the gym's programme and the one before it are picked: deleting several
--- templates in one request is decided as if they were deleted one after the other, whatever order the rows come in. And one delete at a
--- time per gym, with a lock taken before anything is read: a delete waits until another one at the gym has finished, then each statement
--- here sees what that one deleted, so two requests at once can't each pass because the other's rollout is still there.
--- Nobody signed in deletes as before, and nothing else is changed.
+-- admin can do. Only a gym admin (or nobody signed in: the SQL editor, the service role) can delete a template with a start for everyone
+-- that has not started yet (scheduled, or given out ahead of its start date), or whose last day has not passed, ended or not. Each start
+-- is decided from its own dates, which deleting other templates or weeks never changes.
 create or replace function public.program_templates_refuse_gym_programme_delete()
 returns trigger
 language plpgsql
@@ -344,70 +382,28 @@ security definer
 set search_path = public
 as $fn$
 declare
-  v_r programme_rollouts;
-  v_admin boolean;
-  v_today date;
-  v_cur_id uuid;
-  v_cur_last date;
-  v_prev_id uuid;
-  v_prev_name text;
-  v_reopens boolean;
+  v_r record;
 begin
   if auth.uid() is null then
     return old;
   end if;
-  -- One delete at a time per gym, before anything is read.
-  perform pg_advisory_xact_lock(hashtext('gym-programme-change:' || old.gym_id::text));
   for v_r in
-    select r.* from programme_rollouts r where r.template_id = old.id and r.audience = 'all' order by r.start_date
+    select r.gym_id, r.program_name, r.start_date, r.applied_at,
+           r.start_date - (extract(isodow from r.start_date)::integer - 1) + 7 * r.weeks - 1 as last_day,
+           public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) as today
+    from programme_rollouts r
+    join gyms g on g.id = r.gym_id
+    where r.template_id = old.id and r.audience = 'all'
+    order by r.start_date
   loop
-    if v_r.gym_id is distinct from old.gym_id then
-      perform pg_advisory_xact_lock(hashtext('gym-programme-change:' || v_r.gym_id::text));
-    end if;
-    v_admin := public.is_admin_of_gym(v_r.gym_id);
-    select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id;
-    if not v_admin and (v_r.applied_at is null or v_r.start_date > v_today) then
+    continue when public.is_admin_of_gym(v_r.gym_id);
+    if v_r.applied_at is null or v_r.start_date > v_r.today then
       raise exception '“%” is set to start for everyone at the gym on %, so only a gym admin can delete this template.',
         v_r.program_name, to_char(v_r.start_date, 'Dy FMDD Mon');
     end if;
-    -- The gym's programme today, as _gym_programme_today picks it, leaving out a rollout whose template is already gone; and its last day.
-    v_cur_id := null;
-    v_cur_last := null;
-    select x.id, x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1
-      into v_cur_id, v_cur_last
-    from programme_rollouts x
-    cross join lateral (
-      select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = x.template_id
-    ) tw
-    where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today
-      and exists (select 1 from program_templates t where t.id = x.template_id)
-    order by x.start_date desc, x.created_at desc
-    limit 1;
-    continue when v_cur_id is distinct from v_r.id;
-    if not v_admin and v_today <= v_cur_last then
-      raise exception '“%” is the gym programme until %, so only a gym admin can delete this template.',
-        v_r.program_name, to_char(v_cur_last, 'Dy FMDD Mon');
-    end if;
-    -- Without it, the gym's programme would be the one before it (not this template's, nor one whose template is already gone).
-    v_prev_id := null;
-    v_prev_name := null;
-    v_reopens := false;
-    select x.id, x.program_name,
-           x.ended_at is null and tw.weeks > 0 and v_today <= x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1
-      into v_prev_id, v_prev_name, v_reopens
-    from programme_rollouts x
-    cross join lateral (
-      select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = x.template_id
-    ) tw
-    where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and x.template_id <> old.id
-      and exists (select 1 from program_templates t where t.id = x.template_id)
-    order by x.start_date desc, x.created_at desc
-    limit 1;
-    if coalesce(v_reopens, false) then
-      if not v_admin then
-        raise exception '“%”, the gym programme before this one, would end with it, so only a gym admin can delete this template.', v_prev_name;
-      end if;
-      update programme_rollouts set ended_at = now(), ended_by = auth.uid() where id = v_prev_id and ended_at is null;
+    if v_r.today <= v_r.last_day then
+      raise exception '“%” runs for everyone at the gym until %, so only a gym admin can delete this template.',
+        v_r.program_name, to_char(v_r.last_day, 'Dy FMDD Mon');
     end if;
   end loop;
   return old;
@@ -420,65 +416,6 @@ drop trigger if exists program_templates_refuse_gym_programme_delete on program_
 create trigger program_templates_refuse_gym_programme_delete
   before delete on program_templates
   for each row execute function public.program_templates_refuse_gym_programme_delete();
-
--- The gym programme's last day comes from its template's weeks (_gym_programme_today), so taking the last week off its template ends it a
--- week sooner, or straight away, and then lets its template be deleted (above). Only a gym admin can, as only a gym admin can end it
--- (end_gym_programme). While a template's rollout for everyone is the gym's programme, until its last week is over (ended or not, as
--- above), a coach who isn't a gym admin can't delete the days of its last week or move them to an earlier week or another template.
--- Anything else is as before (nobody signed in: as before). An AFTER trigger sees the whole statement done: the template has lost its last
--- week when its last week now is before the week a changed day was in. A template being deleted is left to its own trigger above.
--- Changes to the days of a template given out for everyone wait for each other (a lock per template) before the weeks are counted: two
--- requests at once, each taking one workout of the last week off, each counted the other's workout still there, so both passed. Now the
--- second waits for the first to finish and counts without it. The lock is the template's, not the gym's as above, so deleting a week can't
--- deadlock with deleting the template (which holds the gym's lock while it deletes the template's days).
-create or replace function public.program_template_days_refuse_gym_programme_shorten()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $fn$
-declare
-  v_weeks integer;
-  v_r programme_rollouts;
-  v_g record;
-begin
-  if auth.uid() is null or (tg_op = 'UPDATE' and new.template_id = old.template_id and new.week_num >= old.week_num) then
-    return null;
-  end if;
-  if not exists (select 1 from program_templates t where t.id = old.template_id) then
-    return null;
-  end if;
-  if not exists (
-    select 1 from programme_rollouts r where r.template_id = old.template_id and r.audience = 'all' and r.applied_at is not null
-  ) then
-    return null;
-  end if;
-  perform pg_advisory_xact_lock(hashtext('gym-programme-template-days:' || old.template_id::text));
-  select coalesce(max(d.week_num), 0)::integer into v_weeks from program_template_days d where d.template_id = old.template_id;
-  if v_weeks >= old.week_num then
-    return null;
-  end if;
-  for v_r in
-    select r.* from programme_rollouts r where r.template_id = old.template_id and r.audience = 'all' and r.applied_at is not null
-  loop
-    continue when public.is_admin_of_gym(v_r.gym_id);
-    select * into v_g from public._gym_programme_today(v_r.gym_id);
-    continue when v_g.rollout_id is distinct from v_r.id;
-    -- Before this change its last day was at least the Sunday of this day's week.
-    if v_g.today <= v_g.week_one + 7 * old.week_num - 1 then
-      raise exception 'This template is the gym programme “%”, so only a gym admin can take weeks off it.', v_r.program_name;
-    end if;
-  end loop;
-  return null;
-end;
-$fn$;
-
-revoke all on function public.program_template_days_refuse_gym_programme_shorten() from public, anon, authenticated;
-
-drop trigger if exists program_template_days_refuse_gym_programme_shorten on program_template_days;
-create trigger program_template_days_refuse_gym_programme_shorten
-  after update of week_num, template_id or delete on program_template_days
-  for each row execute function public.program_template_days_refuse_gym_programme_shorten();
 
 -- A rollout copy follows the gym's week: week 1 is the Monday-to-Sunday week it starts in (0167). A late joiner's copy of a gym programme
 -- (_give_gym_programme below) has its week 1 on the gym's Monday, before the week it started in: when a coach moves its start date, it keeps
@@ -509,11 +446,11 @@ begin
 end;
 $fn$;
 
--- Gives a member the gym programme their gym is on today, as their own copy starting today on the gym's current week. No permission check
--- of its own: the trigger below (the member's own profile) and resolve_gym_programme_waiting (after its checks) call it.
--- p_force: give it even when another programme of theirs runs over the same dates (the coach chose "Give it to them").
+-- Gives a member the gym programme their gym is on today, as their own copy of its template as it is now, starting today on the gym's
+-- current week. No permission check of its own: the trigger below (the member's own profile) and resolve_gym_programme_waiting (after its
+-- checks) call it. p_force: give it even when another programme of theirs runs over the same dates (the coach chose "Give it to them").
 -- Answers: 'given'; 'has_it' (a copy from this rollout already); 'own_programme' (listed as waiting instead); 'closed' (not the gym's
--- programme today, or ended, or the member is not at that gym).
+-- programme today, or the member is not at that gym).
 create or replace function public._give_gym_programme(p_rollout_id uuid, p_client_id uuid, p_force boolean)
 returns text
 language plpgsql
@@ -530,7 +467,7 @@ begin
     return 'closed';
   end if;
   select * into v_g from public._gym_programme_today(v_gym);
-  if v_g.rollout_id is null or v_g.rollout_id is distinct from p_rollout_id or not coalesce(v_g.is_open, false) then
+  if v_g.rollout_id is null or v_g.rollout_id is distinct from p_rollout_id then
     return 'closed';
   end if;
 
@@ -617,7 +554,7 @@ begin
       return null;
     end if;
     select * into v_g from public._gym_programme_today(v_gym);
-    if v_g.rollout_id is null or not coalesce(v_g.is_open, false) then
+    if v_g.rollout_id is null then
       return null;
     end if;
 
@@ -648,7 +585,8 @@ create trigger client_profiles_gym_programme
   after insert or update of onboarding_completed_at on client_profiles
   for each row execute function public.client_profiles_join_gym_programme();
 
--- For the coach's template list: the programme the coach's gym is on today, while its last week has not finished (ended or not).
+-- For the coach's template list: the gym's programme today (as _gym_programme_today picks it), or when it has none, the newest one that
+-- ended early and whose last day has not passed (is_open false), so the template still says it ended and who is on it.
 create or replace function public.gym_programmes()
 returns table (rollout_id uuid, template_id uuid, program_name text, gym_name text, start_date date, week_one date, weeks integer,
                last_day date, today date, current_week integer, is_open boolean, ended_at timestamptz, members integer,
@@ -668,14 +606,24 @@ begin
   end if;
   v_admin := exists (select 1 from profiles p where p.id = auth.uid() and p.is_gym_admin);
   return query
-    select t.rollout_id, t.template_id, t.program_name, g.name, t.start_date, t.week_one, t.weeks, t.last_day, t.today,
-           ((t.today - t.week_one) / 7 + 1)::integer, t.is_open, t.ended_at, u.n, u.later, coalesce(w.list, '[]'::jsonb)
-    from public._gym_programme_today(v_gym) t
-    join gyms g on g.id = v_gym
+    select r.id, r.template_id, r.program_name, g.name, r.start_date, r.week_one, r.weeks, r.last_day, r.today,
+           ((r.today - r.week_one) / 7 + 1)::integer, r.ended_at is null, r.ended_at, u.n, u.later, coalesce(w.list, '[]'::jsonb)
+    from gyms g
+    cross join lateral (select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) as today) t
+    cross join lateral (
+      select x.id, x.template_id, x.program_name, x.start_date, x.weeks, x.ended_at, t.today, xw.week_one,
+             xw.week_one + 7 * x.weeks - 1 as last_day
+      from programme_rollouts x
+      cross join lateral (select x.start_date - (extract(isodow from x.start_date)::integer - 1) as week_one) xw
+      where x.gym_id = g.id and x.audience = 'all' and x.applied_at is not null and x.start_date <= t.today
+        and t.today <= xw.week_one + 7 * x.weeks - 1
+      order by (x.ended_at is null) desc, x.start_date desc, x.created_at desc
+      limit 1
+    ) r
     cross join lateral (
       select count(distinct c.client_id)::integer as n,
-             count(distinct c.client_id) filter (where wp.start_date > t.start_date)::integer as later
-      from public._rollout_live_copies(t.rollout_id) c
+             count(distinct c.client_id) filter (where wp.start_date > r.start_date)::integer as later
+      from public._rollout_live_copies(r.id) c
       join workout_programs wp on wp.id = c.program_id
     ) u
     cross join lateral (
@@ -697,31 +645,33 @@ begin
                  from workout_programs x
                  where x.client_id = q.client_id
                    and x.start_date is not null
-                   and x.rollout_id is distinct from t.rollout_id
-                   and x.start_date >= t.today
-                   and x.start_date <= t.last_day)
+                   and x.rollout_id is distinct from r.id
+                   and x.start_date >= r.today
+                   and x.start_date <= r.last_day)
              ) order by q.created_at) as list
       from gym_programme_waiting q
       join profiles p on p.id = q.client_id
       left join client_profiles cp on cp.client_id = q.client_id
       left join workout_programs op on op.id = q.other_program_id
-      where q.rollout_id = t.rollout_id
+      where q.rollout_id = r.id
         and q.resolved_at is null
-        and t.is_open
+        and r.ended_at is null
         and public.client_gym_id(q.client_id) is not distinct from v_gym
-        and not exists (select 1 from workout_programs x where x.client_id = q.client_id and x.rollout_id = t.rollout_id)
+        and not exists (select 1 from workout_programs x where x.client_id = q.client_id and x.rollout_id = r.id)
         and (v_admin or coalesce(public.is_coach_of(q.client_id), false))
     ) w
-    where t.today <= t.last_day;
+    where g.id = v_gym;
 end;
 $fn$;
 
 revoke all on function public.gym_programmes() from public, anon;
 grant execute on function public.gym_programmes() to authenticated;
 
--- Stops new members getting a gym programme. The members on it keep it.
-create or replace function public.end_gym_programme(p_rollout_id uuid)
-returns void
+-- A gym admin ends a gym programme now (p_end), or gives a start for everyone a new length (p_weeks, 1 to 12). Ending stops new members
+-- getting it; the members on it keep it and nothing they logged changes, and it can't be opened again. A length that would end it before
+-- today ends it today, its length the weeks up to this one. Answers 'ended' or 'changed'.
+create or replace function public.change_gym_programme(p_rollout_id uuid, p_weeks integer, p_end boolean)
+returns text
 language plpgsql
 security definer
 set search_path = public
@@ -729,26 +679,54 @@ as $fn$
 declare
   v_gym uuid := public.my_gym_id();
   v_r programme_rollouts;
+  v_today date;
+  v_week_one date;
+  v_started boolean;
 begin
   if auth.uid() is null or v_gym is null then
-    raise exception 'Only a coach can end a gym programme';
+    raise exception 'Only a coach can change a gym programme';
   end if;
-  select * into v_r from programme_rollouts where id = p_rollout_id;
+  -- One change at a time: a second waits for the first and sees what it did.
+  select * into v_r from programme_rollouts where id = p_rollout_id for update;
   if v_r.id is null or v_r.gym_id is distinct from v_gym or v_r.audience <> 'all' then
     raise exception 'Gym programme not found';
   end if;
-  if not exists (select 1 from profiles p where p.id = auth.uid() and p.is_gym_admin) then
-    raise exception 'Only a gym admin can end a gym programme.';
+  if not public.is_admin_of_gym(v_r.gym_id) then
+    raise exception 'Only a gym admin can end a gym programme or change its length.';
   end if;
-  if v_r.applied_at is null then
-    raise exception 'It hasn''t started yet: cancel the scheduled start instead.';
+  if v_r.ended_at is not null then
+    raise exception 'It has ended, so it can''t be changed. To give the gym a programme again, start one for everyone.';
   end if;
-  update programme_rollouts set ended_at = now(), ended_by = auth.uid() where id = v_r.id and ended_at is null;
+  select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id;
+  v_week_one := v_r.start_date - (extract(isodow from v_r.start_date)::integer - 1);
+  v_started := v_r.applied_at is not null and v_r.start_date <= v_today;
+  if v_started and v_today > v_week_one + 7 * v_r.weeks - 1 then
+    raise exception 'It finished on %, so it can''t be changed. To give the gym a programme again, start one for everyone.',
+      to_char(v_week_one + 7 * v_r.weeks - 1, 'Dy FMDD Mon');
+  end if;
+
+  if coalesce(p_end, false) then
+    if not v_started then
+      raise exception 'It hasn''t started yet: cancel the scheduled start instead.';
+    end if;
+    update programme_rollouts set ended_at = now(), ended_by = auth.uid() where id = v_r.id;
+    return 'ended';
+  end if;
+
+  if p_weeks is null or p_weeks < 1 or p_weeks > 12 then
+    raise exception 'Choose a length of 1 to 12 weeks.';
+  end if;
+  if v_started and v_week_one + 7 * p_weeks - 1 < v_today then
+    update programme_rollouts set weeks = (v_today - v_week_one) / 7 + 1, ended_at = now(), ended_by = auth.uid() where id = v_r.id;
+    return 'ended';
+  end if;
+  update programme_rollouts set weeks = p_weeks where id = v_r.id;
+  return 'changed';
 end;
 $fn$;
 
-revoke all on function public.end_gym_programme(uuid) from public, anon;
-grant execute on function public.end_gym_programme(uuid) to authenticated;
+revoke all on function public.change_gym_programme(uuid, integer, boolean) from public, anon;
+grant execute on function public.change_gym_programme(uuid, integer, boolean) to authenticated;
 
 -- Gives a rollout out: everyone it covers gets their own copy from its start date (0094, 0130). The daily job calls it on the start date
 -- (nobody signed in), and Start a programme for a start today or earlier (schedule_programme_rollout, signed in as the coach). It is
@@ -757,6 +735,8 @@ grant execute on function public.end_gym_programme(uuid) to authenticated;
 -- before its start date never got it (a gym programme only reaches a new member once its start date has arrived). Now, signed in: one for
 -- everyone only by a gym admin, as only a gym admin can start one (0133), and none before its start date at the gym, for everyone or for
 -- chosen members (the daily job gives a later start out on its day). So Start a programme with a later date can't start it now either.
+-- Giving out one for everyone ends every older one at the gym that is still open: a newer gym programme takes over, and an older one is
+-- never the gym's programme again. One older than a gym programme already given out ends too, as it can never be the gym's programme.
 -- The daily job, and everything else, as in 0130.
 create or replace function public.apply_programme_rollout(p_rollout_id uuid)
 returns integer
@@ -781,12 +761,12 @@ begin
   if v_r.applied_at is not null then
     return 0;
   end if;
+  select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id;
   -- Signed in: one for everyone only by a gym admin, and none before its start date at the gym.
   if auth.uid() is not null then
     if v_r.audience = 'all' and not exists (select 1 from profiles p where p.id = auth.uid() and p.is_gym_admin) then
       raise exception 'Only a gym admin can start a programme for everyone.';
     end if;
-    select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id;
     if v_today is null or v_r.start_date > v_today then
       raise exception '“%” starts on %, so it is given out on that day, not before.',
         v_r.program_name, to_char(v_r.start_date, 'Dy FMDD Mon');
@@ -806,12 +786,128 @@ begin
   end loop;
 
   update programme_rollouts set applied_at = now() where id = v_r.id;
+
+  -- A newer gym programme takes over: every older one at the gym that is still open ends now. And this one ends straight away when a
+  -- newer one has already started (given out, its start date arrived): it would never be the gym's programme.
+  if v_r.audience = 'all' then
+    update programme_rollouts x set ended_at = now(), ended_by = auth.uid()
+    where x.gym_id = v_r.gym_id and x.audience = 'all' and x.id <> v_r.id and x.applied_at is not null and x.ended_at is null
+      and (x.start_date < v_r.start_date or (x.start_date = v_r.start_date and x.created_at < v_r.created_at));
+    if exists (
+      select 1 from programme_rollouts x
+      where x.gym_id = v_r.gym_id and x.audience = 'all' and x.id <> v_r.id and x.applied_at is not null and x.start_date <= v_today
+        and (x.start_date > v_r.start_date or (x.start_date = v_r.start_date and x.created_at > v_r.created_at))
+    ) then
+      update programme_rollouts set ended_at = now(), ended_by = auth.uid() where id = v_r.id;
+    end if;
+  end if;
   return v_count;
 end;
 $fn$;
 
 revoke all on function public.apply_programme_rollout(uuid) from public, anon;
 grant execute on function public.apply_programme_rollout(uuid) to authenticated;
+
+-- Start a programme (R5, 0133): the rollout is saved and, if it starts now, given out in the same transaction. As in 0133, with the
+-- length of a start for everyone: p_weeks, 1 to 12, or empty for the template's weeks (1 to 12; a template with no workouts counts as one
+-- week), so the app before this deploy, which sends no length, still works. A start for chosen members has no length.
+drop function if exists public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean);
+
+create or replace function public.schedule_programme_rollout(
+  p_template_id uuid,
+  p_program_name text,
+  p_start date,
+  p_audience text,
+  p_client_ids uuid[],
+  p_starts_now boolean,
+  p_weeks integer default null
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+declare
+  v_gym uuid := public.my_gym_id();
+  v_admin boolean;
+  v_template program_templates;
+  v_name text;
+  v_tz text;
+  v_today date;
+  v_ids uuid[] := '{}';
+  v_id uuid;
+  v_count integer;
+  v_weeks integer;
+begin
+  if auth.uid() is null or v_gym is null then
+    raise exception 'Only a coach can start a programme';
+  end if;
+  v_admin := exists (select 1 from profiles where id = auth.uid() and is_gym_admin);
+
+  if p_audience is null or p_audience not in ('all', 'selected') then
+    raise exception 'Choose who the programme is for';
+  end if;
+  if p_audience = 'all' and not v_admin then
+    raise exception 'Only a gym admin can start a programme for everyone.';
+  end if;
+
+  select * into v_template from program_templates where id = p_template_id;
+  if v_template is null or v_template.gym_id is distinct from v_gym then
+    raise exception 'Programme template not found';
+  end if;
+
+  v_name := left(coalesce(nullif(btrim(coalesce(p_program_name, '')), ''), v_template.name), 100);
+
+  select coalesce(nullif(timezone, ''), 'UTC') into v_tz from gyms where id = v_gym;
+  v_today := public.local_date(v_tz);
+  if p_start is null or p_start < v_today - 30 or p_start > v_today + 365 then
+    raise exception 'Choose a start date within the next year.';
+  end if;
+
+  if p_audience = 'all' then
+    if p_weeks is null then
+      select greatest(1, least(12, coalesce(max(d.week_num), 1))) into v_weeks from program_template_days d where d.template_id = p_template_id;
+    elsif p_weeks < 1 or p_weeks > 12 then
+      raise exception 'Choose a length of 1 to 12 weeks.';
+    else
+      v_weeks := p_weeks;
+    end if;
+  end if;
+
+  if p_audience = 'selected' then
+    select coalesce(array_agg(distinct x), '{}'::uuid[]) into v_ids from unnest(coalesce(p_client_ids, '{}'::uuid[])) x;
+    if cardinality(v_ids) < 1 then
+      raise exception 'Choose at least one member.';
+    end if;
+    if cardinality(v_ids) > 500 then
+      raise exception 'Choose up to 500 members at a time.';
+    end if;
+    if exists (select 1 from unnest(v_ids) i where not public.same_gym_as_client(v_gym, i)) then
+      raise exception 'That belongs to a different gym.';
+    end if;
+    if not v_admin and exists (select 1 from unnest(v_ids) i where not coalesce(public.is_coach_of(i), false)) then
+      raise exception 'You can only start a programme for your own members.';
+    end if;
+  end if;
+
+  insert into programme_rollouts (gym_id, template_id, program_name, start_date, audience, client_ids, created_by, weeks)
+  values (v_gym, p_template_id, v_name, p_start, p_audience, v_ids, auth.uid(), v_weeks)
+  returning id into v_id;
+
+  if coalesce(p_starts_now, false) then
+    v_count := public.apply_programme_rollout(v_id);
+  elsif p_audience = 'all' then
+    select count(*) into v_count from profiles c where c.role = 'client' and public.client_gym_id(c.id) is not distinct from v_gym;
+  else
+    v_count := cardinality(v_ids);
+  end if;
+
+  return v_count;
+end;
+$fn$;
+
+revoke execute on function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer) from public, anon;
+grant execute on function public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer) to authenticated;
 
 -- "Give it to them" (p_give) or "Keep theirs" for a member the gym programme was not given to. Answers 'given', 'has_it' or 'kept'.
 create or replace function public.resolve_gym_programme_waiting(p_rollout_id uuid, p_client_id uuid, p_give boolean)
@@ -860,3 +956,5 @@ $fn$;
 
 revoke all on function public.resolve_gym_programme_waiting(uuid, uuid, boolean) from public, anon;
 grant execute on function public.resolve_gym_programme_waiting(uuid, uuid, boolean) to authenticated;
+
+notify pgrst, 'reload schema';
