@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -182,6 +183,35 @@ describe('shared barcode foods: one per barcode, and who added one stays with th
     expect(record?.searchPath).toBeTruthy();
     expect(record && access(record)).toEqual({ anon: false, authenticated: false });
     expect(sql).toMatch(/after insert on public\.foods\s+for each row\s+when \(new\.source = 'scan'\)/);
+  });
+
+  // The owner's decision, 20 Nov 2026: "Only typed-in products". A product a scan fills in from Open Food Facts is recorded (typed false)
+  // but never counted towards the 30 a day, and never refused by it.
+  it('the 30-a-day limit counts and refuses only products typed in from the pack; both kinds are still recorded', () => {
+    const record = body('record_barcode_food_addition').replace(/\s+/g, ' ');
+    expect(record).toMatch(/v_typed boolean := coalesce\(current_setting\('ballistic\.typed_barcode_food', true\), ''\) = 'on';/);
+    expect(record).toMatch(
+      /if v_typed and public\.my_gym_id\(\) is null and \(select count\(\*\) from public\.food_additions a where a\.added_by = v_me and a\.typed and a\.added_at > now\(\) - interval '24 hours'\) >= 30 then raise exception/
+    );
+    // the only refusal in the trigger is that one
+    expect(record.match(/raise exception/g)).toHaveLength(1);
+    expect(record).toMatch(/insert into public\.food_additions \(food_id, added_by, typed\) select new\.id, v_me, v_typed where/);
+    // only add_barcode_food marks an insert as typed in
+    const marks = [...sql.matchAll(/set_config\('ballistic\.typed_barcode_food', 'on', true\)/g)];
+    expect(marks).toHaveLength(1);
+    expect(sql.indexOf(marks[0][0])).toBeGreaterThan(sql.indexOf('create or replace function public.add_barcode_food('));
+    expect(sql.indexOf(marks[0][0])).toBeLessThan(sql.indexOf('create or replace function public.refuse_duplicate_barcode_food('));
+  });
+
+  it("the guard accepts this file's own function bodies first, computed as it computes them", () => {
+    const raw = fs.readFileSync(path.join(migrationsDir, '0173_shared_barcode_foods.sql'), 'utf8').replace(/\r\n/g, '\n');
+    const md5 = (text: string) => crypto.createHash('md5').update(text.replace(/\s+/g, ' ').trim()).digest('hex');
+    const rows = [...raw.matchAll(/\('(\w+)', array\[([^\]]*)\]\)/g)].map((m) => ({ name: m[1], accepted: [...m[2].matchAll(/'([0-9a-f]{32})'/g)].map((a) => a[1]) }));
+    expect(rows.map((r) => r.name)).toEqual(['add_barcode_food', 'record_barcode_food_addition', 'refuse_duplicate_barcode_food']);
+    for (const { name, accepted } of rows) {
+      const from = raw.indexOf('as $fn$', raw.indexOf(`create or replace function public.${name}(`)) + 'as $fn$'.length;
+      expect(md5(raw.slice(from, raw.indexOf('$fn$;', from))), name).toBe(accepted[0]);
+    }
   });
 
   it('a scanned product inserted straight into foods under another spelling of a number already there is refused as a duplicate', () => {

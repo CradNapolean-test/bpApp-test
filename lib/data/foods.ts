@@ -72,8 +72,8 @@ export async function findFoodByBarcode(barcode: string): Promise<{ food: FoodRo
 export type AddBarcodeFoodResult = { ok: true; food: FoodRow; existing: boolean } | { ok: false; error: string };
 
 // "Add this product" (owner's list item 6, migration 0173): a product nobody has added, typed in from the pack, into the shared food list.
-// One food per barcode: if someone added it first, theirs comes back with existing true. A refusal (figures, a hidden product, too many in
-// a day) comes back as its message rather than being thrown, which production would hide.
+// One food per barcode: if someone added it first, theirs comes back with existing true. A refusal (figures, a hidden product, more than 30
+// typed in from the pack in a day) comes back as its message rather than being thrown, which production would hide.
 export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields): Promise<AddBarcodeFoodResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('add_barcode_food', {
@@ -98,8 +98,9 @@ export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields)
 // existing row for that barcode (ON CONFLICT DO NOTHING) — if a lookup lands on a barcode
 // someone already cached (or that was in the original seed data), we just hand back what's
 // already there rather than risk clobbering curated macros with a lower-quality OFF entry.
-// A refusal the member must read (a hidden product, too many new products in a day, migration 0173) comes back as its message rather than
-// being thrown, which production would hide.
+// A refusal the member must read (a hidden product, or any refusal the database words for them) comes back as its message rather than
+// being thrown, which production would hide. The daily limit on new products (0173) never refuses this: only products typed in from the
+// pack (addBarcodeFood) count towards it, not ones filled in from Open Food Facts (the owner's decision, 20 Nov 2026).
 export async function upsertFoodFromBarcode(
   barcode: string,
   fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null; serving_options?: ServingOption[] | null }

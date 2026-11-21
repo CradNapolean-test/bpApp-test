@@ -79,10 +79,12 @@ describe('hidden foods stay out of what a member sees (M12)', () => {
     expect(saved).toMatchObject({ ok: true, food: { id: 'a' } });
   });
 
-  it('a refused cache (too many new products today) comes back as its message, which a thrown error would lose in production', async () => {
-    const limit = 'You have added a lot of new products today. Try again tomorrow, or use Quick Add for now.';
-    fakeClient([{ error: { code: 'P0001', message: limit } }]);
-    expect(await upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 })).toEqual({ ok: false, error: limit });
+  // The daily limit on new products (0173) is not one of these: it counts only products typed in from the pack (the owner's decision,
+  // 20 Nov 2026), so a product cached from Open Food Facts is never refused by it.
+  it('a refused cache the database words for the member comes back as its message, which a thrown error would lose in production', async () => {
+    const refusal = 'This product cannot be saved.';
+    fakeClient([{ error: { code: 'P0001', message: refusal } }]);
+    expect(await upsertFoodFromBarcode('5000', { name: 'Bar', portion: '1 gram', protein: 0.1, carbs: 0.1, fat: 0.1 })).toEqual({ ok: false, error: refusal });
   });
 
   it('favourites leave out hidden foods', async () => {
@@ -188,6 +190,12 @@ describe('shared barcode foods (owner list item 6, migration 0173)', () => {
     expect(await addBarcodeFood('5000', fields)).toEqual({ ok: false, error: 'A coach has taken this product off the food list. Use Quick Add for it, or ask your coach.' });
     fakeClient([], { data: { nothing: true }, error: null });
     expect(await addBarcodeFood('5000', fields)).toEqual({ ok: false, error: 'Could not add that product. Try again.' });
+  });
+
+  it('the daily limit (the 31st product typed in from the pack in a day) comes back as its message', async () => {
+    const limit = 'You have added a lot of new products from the pack today. Try again tomorrow, or use Quick Add for now.';
+    fakeClient([], { data: null, error: { code: 'P0001', message: limit } });
+    expect(await addBarcodeFood('5000', fields)).toEqual({ ok: false, error: limit });
   });
 
   it("the coach's scanned list says who added each product, where the coach can see it", async () => {

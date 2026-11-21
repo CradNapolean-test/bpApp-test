@@ -1,5 +1,6 @@
 // Shared barcode foods (owner's list item 6, migration 0173): adding a product nobody has added yet, one shared food per barcode, who can
-// see who added it, and the limits. These are the write checks listed in 0173's header, run against a real database.
+// see who added it, and the limits (the daily one counts only products typed in from the pack). These are the write checks listed in
+// 0173's header, run against a real database.
 // SANDBOX ONLY: it creates and deletes its own test gyms, accounts (zz-barcodefoods-*@example.com) and products (barcodes 99173000000xx);
 // the sandbox members are not touched.
 //   node supabase/tests/security-audit/barcode-foods-check.cjs --ref=<your sandbox project ref>
@@ -110,14 +111,29 @@ const randomPassword = () => 'Zz1!' + crypto.randomBytes(9).toString('base64url'
     const direct = await B.c.from('foods').insert({ barcode: '00' + upc, source: 'scan', portion: '1 gram', name: TAG + ' direct', protein: 0.1, carbs: 0.1, fat: 0.1 });
     check('inserting it straight into foods under another spelling is refused as a duplicate', direct.error?.code === '23505', direct.error?.message);
 
-    console.log('At most 30 new products a day for a member');
+    // Only typed-in products count (the owner's decision, 20 Nov 2026: "Only typed-in products"); ones a scan fills in from Open Food Facts
+    // are recorded but neither counted nor refused.
+    console.log('At most 30 products typed in from the pack a day for a member; products from Open Food Facts do not count');
+    const code = (i) => PREFIX.slice(0, -1) + String(i).padStart(3, '0');
+    // straight into foods, as the app caches a product Open Food Facts has
+    const cache = (who, barcode) => who.c.from('foods').insert({ barcode, source: 'scan', portion: '1 gram', name: TAG + ' scanned', protein: 0.1, carbs: 0.1, fat: 0.1 }).select('id').single();
+    const scanned = [];
+    for (let i = 50; i < 55; i++) {
+      const r = await cache(A, code(i));
+      if (r.data?.id) scanned.push(r.data.id);
+    }
+    check('A caches 5 scanned products from Open Food Facts', scanned.length === 5);
+    const scannedRows = must(await admin.from('food_additions').select('added_by, typed').in('food_id', scanned), 'the scanned additions');
+    check('they are recorded as added by A, not typed in', scannedRows.length === 5 && scannedRows.every((a) => a.added_by === A.id && a.typed === false), JSON.stringify(scannedRows));
     let refused = null;
     for (let i = 10; i < 45 && !refused; i++) {
-      const r = await add(A, bar(PREFIX.slice(0, -1) + String(i).padStart(3, '0')));
+      const r = await add(A, bar(code(i)));
       if (r.error) refused = { i, message: r.error.message };
     }
-    // A has already added 1 above, so the 30th more is the 31st of the day
-    check('the 31st product of the day is refused', refused?.i === 39 && /a lot of new products/.test(refused.message), JSON.stringify(refused));
+    // A has typed in 1 above, so the 30th more is the 31st of the day; the 5 from Open Food Facts do not count (with them it would be i 34)
+    check('the 31st product typed in from the pack in a day is refused', refused?.i === 39 && /a lot of new products/.test(refused.message), JSON.stringify(refused));
+    const afterLimit = await cache(A, code(60));
+    check('a scanned product from Open Food Facts is still saved after the limit', !!afterLimit.data?.id, afterLimit.error?.message);
   } finally {
     must(await admin.from('foods').delete().like('barcode', PREFIX.slice(0, -1) + '%'), 'clean-up products');
     must(await admin.from('foods').delete().in('barcode', ['0' + PREFIX + '1', '00' + PREFIX + '1']), 'clean-up other spellings');

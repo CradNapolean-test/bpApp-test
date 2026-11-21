@@ -485,7 +485,8 @@ export async function findFoodByBarcode(barcode: string): Promise<{ food: FoodRo
 }
 
 // "Add this product" (owner's list item 6, migration 0173): a product nobody has added, typed in from the pack, into the shared food list.
-// One food per barcode: if someone added it first, theirs comes back with existing true. A refusal comes back as its message.
+// One food per barcode: if someone added it first, theirs comes back with existing true. A refusal (figures, a hidden product, more than 30
+// typed in from the pack in a day) comes back as its message.
 export async function addBarcodeFood(barcode: string, fields: BarcodeFoodFields): Promise<{ food: FoodRow; existing: boolean } | { error: string }> {
   const { data, error } = await supabase.rpc('add_barcode_food', {
     p_barcode: barcode,
@@ -505,7 +506,8 @@ const SCAN_SAVE_FAILED = 'Could not save that product. Try again.';
 // Caches a scanned product in the shared foods table. Never overwrites an existing row for that barcode
 // (the unique barcode column makes a duplicate insert a harmless 23505), so curated macros are not clobbered.
 // Every failure is thrown as an Error, which the scan shows: Supabase's own error is a plain object, so the scan would show a generic text
-// instead. A refusal the database words for the member (P0001: too many new products today, migration 0173) keeps its message, as on the web.
+// instead. A refusal the database words for the member (P0001) keeps its message, as on the web. The daily limit on new products (0173)
+// never refuses this: only products typed in from the pack (addBarcodeFood) count towards it, not ones filled in from Open Food Facts.
 export async function upsertFoodFromBarcode(
   barcode: string,
   fields: { name: string; portion: string; protein: number; carbs: number; fat: number; fibre?: number | null; serving_options?: ServingOption[] | null },

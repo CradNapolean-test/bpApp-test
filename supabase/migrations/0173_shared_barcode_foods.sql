@@ -20,15 +20,21 @@
 --
 -- What it adds:
 --   1. food_additions: who added each scanned product, when, and whether they typed it in from the pack (true) or it came from Open Food
---      Facts (false). One row per product. Read rule: the member who added it, their own coach and the other coaches at their gym (the
---      same reach as their diary, 0053 and 0169). Other members, coaches at another gym and the gym owner cannot see who added a product
---      (they still see the product itself, as everyone does). No write rule: only the trigger in 2. writes it. Deleting a member keeps the
---      products they added (shared now) and empties added_by; deleting a product deletes its row.
+--      Facts (false); both kinds are recorded, and only the typed-in ones count towards the daily limit in 2. One row per product. Read
+--      rule: the member who added it, their own coach and the other coaches at their gym (the same reach as their diary, 0053 and 0169).
+--      Other members, coaches at another gym and the gym owner cannot see who added a product (they still see the product itself, as
+--      everyone does). No write rule: only the trigger in 2. writes it. Deleting a member keeps the products they added (shared now) and
+--      empties added_by; deleting a product deletes its row.
 --      Products scanned before this file have no row: who scanned them was never stored.
 --   2. A trigger on foods (after a scanned product is inserted by a signed-in user, by any route: Open Food Facts or typed in) that writes
---      the food_additions row. A member (not a coach) can add at most 30 new products in 24 hours; the 31st is refused with
---      "You have added a lot of new products today ...". That stops a runaway or mischievous member filling the shared list; a real
---      member scanning their cupboard is nowhere near it.
+--      the food_additions row. A member (not a coach) can type in at most 30 new products from the pack in 24 hours (add_barcode_food,
+--      3.); the 31st is refused with "You have added a lot of new products from the pack today ...". That stops a runaway or mischievous
+--      member filling the shared list with made-up products; a real member adding their cupboard is nowhere near it.
+--      Only typed-in products count (the owner's decision, 20 Nov 2026: "Only typed-in products"). A product the app fills in from Open
+--      Food Facts when a member scans (also when the member fills in a figure Open Food Facts is missing) is recorded as from Open Food
+--      Facts, and is neither counted nor refused, however many a member scans. The owner chose this knowing it leaves no daily limit on a
+--      member who sends scanned products straight to the database (the 0106 insert rule) instead of using the app; coaches can still
+--      correct, hide or delete any of them in Library > Foods, and food_additions says who added each one.
 --   3. add_barcode_food(barcode, name, brand, protein, carbs, fat, serving_options): adds a product typed in from the pack. Figures are per
 --      gram (the app converts from per 100 g or per serving). It runs as the caller, so the scanned-food insert rule (0106) still decides
 --      what may be inserted, and checks the same limits first with readable messages (name 1-100 characters, brand up to 60, protein,
@@ -37,6 +43,7 @@
 --      0, and so on), that food is returned with "existing" true and nothing is added; two members adding the same product at the same
 --      moment wait for each other (a lock per product number), so the second gets the first one's food. A product a coach hid is refused
 --      ("A coach has taken this product off the food list ..."), not added again. Returns {"food": <the foods row>, "existing": bool}.
+--      It is the one route the daily limit in 2. applies to (a product already there, returned with "existing" true, does not count).
 --   4. A trigger on foods (before a scanned product is inserted by a signed-in user, by any route) that keeps one food per product number
 --      there too: the unique barcode column only stops the exact same spelling, so before this a member could insert a second food under
 --      another spelling straight into foods (the 0106 rule allows it), even of a product a coach hid, which undid the hide for every scan.
@@ -77,8 +84,11 @@
 -- owns_client(added_by) OR is_same_gym_as_client(added_by)).
 --   (the PRE-FLIGHT's pg_proc query again)
 -- Expected after: also add_barcode_food 0063203e9cd178b3a682166f5e04c927 false, record_barcode_food_addition
--- 07ad68a8531d183c2f63b21066fce3f6 true and refuse_duplicate_barcode_food 31a2edf7372acea7e7502b7f15ddaa24 true (this file's bodies; the
--- same values as in the guard below).
+-- 67a6a297ffd68319176a6f66e3d53888 true and refuse_duplicate_barcode_food 31a2edf7372acea7e7502b7f15ddaa24 true (this file's bodies; the
+-- first values in the guard below).
+--   select position('a.typed and a.added_at' in p.prosrc) > 0 as counts_typed_only
+--   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'record_barcode_food_addition';
+-- Expected: true (the daily limit counts only products typed in from the pack).
 --   select has_function_privilege('authenticated', 'public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb)', 'execute') as members,
 --          has_function_privilege('anon', 'public.add_barcode_food(text, text, text, numeric, numeric, numeric, jsonb)', 'execute') as anyone;
 -- Expected: true, false.
@@ -92,7 +102,9 @@
 -- product as member A, finds it as member B by the same and another spelling of its number, checks B adding it again gets A's food
 -- ("existing"), that nobody can write food_additions, that A, A's coach and another coach at A's gym can see who added it and that member
 -- B and a coach at another gym cannot, that the figures are checked, that a hidden product is refused, that a member cannot insert it
--- straight into foods under another spelling of its number, and that the 31st product in a day is refused.
+-- straight into foods under another spelling of its number, that the 31st product typed in from the pack in a day is refused, and that
+-- products cached from a scan (straight into foods, as the app does with Open Food Facts) are recorded as not typed, do not count towards
+-- the 30 and are still saved after the limit is reached.
 -- Then, in the app (test member): scan, or type into "Can't scan it?", a barcode that is in neither list (Open Food Facts has nothing for
 -- it), fill in "Add this product" and add it: it goes on to "how much" and into the diary. As another test member, scan the same barcode:
 -- it is found straight away, on the web and the phone. As a coach, Library > Foods > "Added by members" lists it with who added it; correct
@@ -114,9 +126,10 @@ declare
 begin
   for v_check in
     select * from (values
-      -- (the second value is this file's first version, so a sandbox that ran it can run this one)
+      -- (a second value is an earlier version of this file's body, so a sandbox that ran it can run this one: add_barcode_food's first
+      -- version, and record_barcode_food_addition from before only typed-in products counted towards the daily limit)
       ('add_barcode_food', array['0063203e9cd178b3a682166f5e04c927', 'a802ee322f31f0f3115753e96c36e64b']),
-      ('record_barcode_food_addition', array['07ad68a8531d183c2f63b21066fce3f6']),
+      ('record_barcode_food_addition', array['67a6a297ffd68319176a6f66e3d53888', '07ad68a8531d183c2f63b21066fce3f6']),
       ('refuse_duplicate_barcode_food', array['31a2edf7372acea7e7502b7f15ddaa24'])
     ) as t(name, accepted)
   loop
@@ -168,7 +181,7 @@ create policy "the adder and their gym's coaches read food_additions"
   using (added_by = auth.uid() or public.owns_client(added_by) or public.is_same_gym_as_client(added_by));
 
 -- =====================================================================================================================================
--- 2. Record who added it, and at most 30 new products a day for a member
+-- 2. Record who added it, and at most 30 products typed in from the pack a day for a member
 -- =====================================================================================================================================
 create or replace function public.record_barcode_food_addition()
 returns trigger
@@ -178,17 +191,23 @@ set search_path = public
 as $fn$
 declare
   v_me uuid := auth.uid();
+  -- typed in from the pack (add_barcode_food, 3.), not filled in from Open Food Facts by a scan
+  v_typed boolean := coalesce(current_setting('ballistic.typed_barcode_food', true), '') = 'on';
 begin
   -- a load or fix run by the developer (service role) is nobody's addition
   if v_me is null then
     return null;
   end if;
-  if public.my_gym_id() is null
-     and (select count(*) from public.food_additions a where a.added_by = v_me and a.added_at > now() - interval '24 hours') >= 30 then
-    raise exception 'You have added a lot of new products today. Try again tomorrow, or use Quick Add for now.';
+  -- Only typed-in products count, and only they are refused (the owner's decision, 20 Nov 2026): a product a scan fills in from Open
+  -- Food Facts is recorded below but never counted or refused.
+  if v_typed
+     and public.my_gym_id() is null
+     and (select count(*) from public.food_additions a
+          where a.added_by = v_me and a.typed and a.added_at > now() - interval '24 hours') >= 30 then
+    raise exception 'You have added a lot of new products from the pack today. Try again tomorrow, or use Quick Add for now.';
   end if;
   insert into public.food_additions (food_id, added_by, typed)
-  select new.id, v_me, coalesce(current_setting('ballistic.typed_barcode_food', true), '') = 'on'
+  select new.id, v_me, v_typed
   where exists (select 1 from public.profiles p where p.id = v_me)
   on conflict (food_id) do nothing;
   return null;
