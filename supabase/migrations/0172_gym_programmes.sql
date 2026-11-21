@@ -55,6 +55,8 @@
 --     last week off the template of the gym's programme (delete its days, or move them to an earlier week or another template) until
 --     its last week is over, ended or not, as on Delete template. Adding weeks, and changing or deleting days within its weeks, are as
 --     before. The app says so on Delete week (which moves the weeks after it up one, so it takes a week off wherever the week is).
+--     Changes to the days of a template given out for everyone wait for each other before the weeks are counted (a lock per template),
+--     so two requests at once that each delete one workout of the last week can't both pass.
 --   * set_programme_week_one (the start-date trigger of 0167) replaced: a late joiner's copy keeps its week 1 (the gym's Monday) when a
 --     coach moves its start date within the copy's weeks, so the member stays on the gym's week instead of going back to week 1. Moved
 --     past its last week, it starts again from week 1 as before (kept, it would be finished on the day it starts). A copy whose rollout
@@ -143,7 +145,9 @@
 -- requests at once, while the gym programme before those two is still within its weeks -> a non-admin coach is refused and nothing is
 -- deleted, and for a gym admin that one is ended; a non-admin coach cannot take the last week off
 -- the gym programme's template (delete its days, move them to week 2, or to another template; refused, nothing changed) until its last
--- week is over, but can add a week or delete a day in an earlier week, and a gym admin can do either; a member cannot call gym_programmes,
+-- week is over, but can add a week or delete a day in an earlier week, and a gym admin can do either; two requests at once from a
+-- non-admin coach, each deleting one of the two workouts of the gym programme's last week -> one is refused and the template keeps its
+-- last week; a member cannot call gym_programmes,
 -- end_gym_programme or resolve_gym_programme_waiting.
 --
 -- ROLLBACK: run set_programme_week_one's definition from migration 0167 again (its trigger stays);
@@ -190,7 +194,8 @@ begin
   -- the one from 0167 or this file's. After this file's own md5, an earlier copy of this file's (same arguments and result, so it is
   -- replaced in place): gym_programmes and set_programme_week_one as in the copy handed out on 20 Nov 2026,
   -- program_templates_refuse_gym_programme_delete and set_programme_week_one as in a later copy before 21 Nov, and
-  -- program_templates_refuse_gym_programme_delete as in the copy of 21 Nov that added the template-days trigger.
+  -- program_templates_refuse_gym_programme_delete and program_template_days_refuse_gym_programme_shorten as in the copy of 21 Nov that
+  -- added the template-days trigger.
   for v_check in
     select * from (values
       ('_gym_programme_today', '0172', array['63d299a9c29db8643c15e20d43a70bdb']),
@@ -201,7 +206,7 @@ begin
       ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
       ('program_templates_refuse_gym_programme_delete', '0172', array['d60da1e4ee8413ca79ec75e79e5c8d9e', 'e417964f898305816cc6a55ad7148e23',
                                                                       '8376186b3cf14c0b6d24d762c0e36f8e']),
-      ('program_template_days_refuse_gym_programme_shorten', '0172', array['4eb2b9bf86c808d575cbe70b02c3a3fe']),
+      ('program_template_days_refuse_gym_programme_shorten', '0172', array['ae1c7013f4df25d129a2f4ab0ec4ca36', '4eb2b9bf86c808d575cbe70b02c3a3fe']),
       -- replaced: the one from 0167, or this file's (a second run), or an earlier copy of this file's
       ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '9dddcac25cab66b400ec4103de9fda99',
                                                '8a258730266312d0344c534b09087221', '836a65083143b6a9bf93df50b68a7bec'])
@@ -399,6 +404,10 @@ create trigger program_templates_refuse_gym_programme_delete
 -- above), a coach who isn't a gym admin can't delete the days of its last week or move them to an earlier week or another template.
 -- Anything else is as before (nobody signed in: as before). An AFTER trigger sees the whole statement done: the template has lost its last
 -- week when its last week now is before the week a changed day was in. A template being deleted is left to its own trigger above.
+-- Changes to the days of a template given out for everyone wait for each other (a lock per template) before the weeks are counted: two
+-- requests at once, each taking one workout of the last week off, each counted the other's workout still there, so both passed. Now the
+-- second waits for the first to finish and counts without it. The lock is the template's, not the gym's as above, so deleting a week can't
+-- deadlock with deleting the template (which holds the gym's lock while it deletes the template's days).
 create or replace function public.program_template_days_refuse_gym_programme_shorten()
 returns trigger
 language plpgsql
@@ -416,6 +425,12 @@ begin
   if not exists (select 1 from program_templates t where t.id = old.template_id) then
     return null;
   end if;
+  if not exists (
+    select 1 from programme_rollouts r where r.template_id = old.template_id and r.audience = 'all' and r.applied_at is not null
+  ) then
+    return null;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('gym-programme-template-days:' || old.template_id::text));
   select coalesce(max(d.week_num), 0)::integer into v_weeks from program_template_days d where d.template_id = old.template_id;
   if v_weeks >= old.week_num then
     return null;

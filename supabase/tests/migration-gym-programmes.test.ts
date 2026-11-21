@@ -63,6 +63,7 @@ const file0167 = fs.readFileSync(path.resolve(__dirname, '../migrations', '0167_
 const earlierCopies: Record<string, string[]> = {
   gym_programmes: ['662073fea310d8827b69bac083e593f6'],
   program_templates_refuse_gym_programme_delete: ['e417964f898305816cc6a55ad7148e23', '8376186b3cf14c0b6d24d762c0e36f8e'],
+  program_template_days_refuse_gym_programme_shorten: ['4eb2b9bf86c808d575cbe70b02c3a3fe'],
   set_programme_week_one: ['8a258730266312d0344c534b09087221', '836a65083143b6a9bf93df50b68a7bec'],
 };
 
@@ -262,6 +263,13 @@ describe('who can do what (Row Level Security and function access)', () => {
     expect(shorten).toContain(
       'select coalesce(max(d.week_num), 0)::integer into v_weeks from program_template_days d where d.template_id = old.template_id; if v_weeks >= old.week_num then return null; end if;'
     );
+    // counted only after changes to the days of a template given out for everyone wait for each other, so two requests at once that each
+    // take one workout of the last week off can't both pass; locked per template (not the gym's lock the template-delete trigger holds while
+    // its delete takes the days with it), so deleting a week and deleting the template at once can't deadlock
+    expect(shorten).toContain(
+      "if not exists ( select 1 from programme_rollouts r where r.template_id = old.template_id and r.audience = 'all' and r.applied_at is not null ) then return null; end if; perform pg_advisory_xact_lock(hashtext('gym-programme-template-days:' || old.template_id::text)); select coalesce(max(d.week_num), 0)::integer into v_weeks"
+    );
+    expect(shorten.indexOf('pg_advisory_xact_lock')).toBeLessThan(shorten.indexOf('max(d.week_num)'));
     expect(squeeze(code('_gym_programme_today'))).toContain('select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = r.template_id');
     // refused, unless a gym admin, while it is the gym's programme and its last week (before this change) is not over, ended or not
     expect(shorten).toContain(
