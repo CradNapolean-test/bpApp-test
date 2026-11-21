@@ -1,23 +1,23 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Checkbox } from '@/app/_components/Checkbox';
-import { Check, ChevronLeft, ChevronRight, Dumbbell } from 'lucide-react';
+import { Check, ChevronRight, Dumbbell } from 'lucide-react';
 import { pop } from '@/app/_components/motion/gsap';
 import { useToast } from '@/app/_components/ToastProvider';
 import { cycleDayFor, weeklyTarget, CALORIE_FLOOR } from '@/lib/calculations';
 import type { DayTarget } from '@/lib/calculations';
 import { getDailyLogs, upsertDailyLog } from '@/lib/data/dailyLogs';
-import { LOCKED_DAY_MESSAGE, canBrowseWeek, canEditDay, changedFields } from '@/lib/dayPatch';
+import { BROWSE_DAYS, LOCKED_DAY_MESSAGE, canEditDay, changedFields } from '@/lib/dayPatch';
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
 import { BODYWEIGHT_KG, bodyweightMessage, isValidBodyweight } from '@/lib/limits';
 import { formatStLb, formatWeight, formatWeightForCoach, parseStLb, sameWeightReading, stLbFields, weightUnitOf } from '@/lib/utils/weightUnits';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
 import { averageDayTarget, dayTargetFor } from '@/lib/utils/dayTarget';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
-import { dayTrafficLight } from '@/lib/utils/accountability';
 import { AccountabilityTracker } from './AccountabilityTracker';
 import { enabledTrackers, toDisabledMetricSet, weekStats } from '@/lib/checkinMetrics';
 import type { CheckinMetric } from '@/lib/checkinMetrics';
@@ -28,7 +28,22 @@ import { getMemberMessagesBetween, sendMessage } from '@/lib/data/chat';
 import { checkinChatLine, checkinChatWindow, checkinReplyHeading, checkinReplyMax, checkinReplyText } from '@/lib/checkinReply';
 import { formatInZone } from '@/lib/broadcastSend';
 import { isQueuedCheckin, nextUnreviewedCheckin, type QueuedCheckin } from '@/lib/checkinQueue';
-import { addDays, toIsoDate } from '@/lib/utils/dates';
+import { addDays, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import {
+  checkinDayLabel,
+  checkinRing,
+  checkinStripCaption,
+  checkinStripDays,
+  coachCalories,
+  daysInRange,
+  monthOver,
+  weekStartOfDay,
+  type CheckinDay,
+  type FoodDay,
+  type Tracker,
+} from '@/lib/utils/dayStrip';
+import { CARD_EDGE, DayStrip, DayStripCard, EarlierButton, type DayStripDay } from './DayStrip';
+import { useOlderDayMarks } from './useDayMarks';
 
 type DayForm = Omit<DailyLogRow, 'id' | 'client_id' | 'log_date'>;
 
@@ -75,8 +90,6 @@ const SCALE_FIELDS: { key: 'hunger' | 'energy' | 'motivation' | 'stress'; label:
   { key: 'motivation', label: 'Motivation' },
   { key: 'stress', label: 'Stress' },
 ];
-
-const LIGHT_DOT = { green: 'bg-success', amber: 'bg-warning', red: 'bg-danger' } as const;
 
 const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
 
@@ -136,6 +149,8 @@ function WeekLog({
   attendedSessions,
   disabledMetrics = [],
   onSaved,
+  focusedDate,
+  onDaysChange,
 }: {
   clientId: string;
   weekDates: string[];
@@ -154,6 +169,10 @@ function WeekLog({
   disabledMetrics?: string[];
   // Called after a day was saved, so the dashboard can refresh once when the member leaves this screen instead of after every save.
   onSaved?: () => void;
+  // The day picked on the day strip (item 8), always a day of this week.
+  focusedDate: string;
+  // The week's days as they stand on this screen, so the strip's rings follow each change at once.
+  onDaysChange?: (days: Record<string, DayForm>) => void;
 }) {
   const toast = useToast();
   const [initialDays] = useState(() => buildDays(weekDates, initialLogs));
@@ -177,10 +196,12 @@ function WeekLog({
   const showWeight = (kg: number) => (isCoachView ? formatWeightForCoach(kg, unit) : formatWeight(kg, unit));
   // What is in the stones and pounds boxes for the day being typed in, until the next save reads it back.
   const [stLbDraft, setStLbDraft] = useState<{ date: string; st: string; lb: string; error: string | null } | null>(null);
-  // A single focused day at a time (7-day chip strip selects it), replacing the previous
-  // stack of seven independently-collapsible day cards -- one form on screen instead of
-  // seven, matching the mobile redesign brief.
-  const [focusedDate, setFocusedDate] = useState(() => (weekDates.includes(todayIso) ? todayIso : weekDates[0]));
+  // A single focused day at a time, picked on the day strip in the header (item 8: it replaced the week arrows and the day chips).
+  useEffect(() => {
+    onDaysChange?.(days);
+    // Only when the days change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
 
   const weekTarget = useMemo(() => {
     // No target is shown to a member whose plan is waiting for their coach (M8).
@@ -395,52 +416,6 @@ function WeekLog({
           </div>
         </div>
       )}
-
-      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {weekDates.map((date) => {
-          const dayData = days[date];
-          const logged = hasFoodLogged(dayData);
-          const light = dayTrafficLight(dayData);
-          const dateObj = new Date(date + 'T00:00:00Z');
-          const isFocused = date === focusedDate;
-          return (
-            <button
-              key={date}
-              type="button"
-              aria-pressed={isFocused}
-              onClick={() => setFocusedDate(date)}
-              // `relative` keeps the sr-only label (absolutely positioned) inside the chip: with no positioned parent it escaped the
-              // scrolling strip and made the whole page 460px wide on a 375px phone (CW15).
-              className={`relative flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 transition-colors ${
-                isFocused
-                  ? 'border-transparent bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
-                  : 'border-black/[.08] bg-card text-zinc-600 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5'
-              }`}
-            >
-              <span className="text-xs font-medium uppercase opacity-80">
-                {dateObj.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}
-              </span>
-              <span className="text-sm font-bold">{dateObj.toLocaleDateString('en-GB', { day: 'numeric', timeZone: 'UTC' })}</span>
-              {/* The dot is colour only, so the same thing is said in words for a screen reader (L7). */}
-              <span className="sr-only">{light ? `${light} day` : logged ? 'logged' : 'nothing logged'}</span>
-              <span
-                aria-hidden
-                className={`h-1.5 w-1.5 rounded-full ${
-                  light
-                    ? isFocused ? 'bg-white dark:bg-[#1d1d1b]' : LIGHT_DOT[light]
-                    : logged ? (isFocused ? 'bg-white dark:bg-[#1d1d1b]' : 'bg-zinc-400') : 'bg-transparent'
-                }`}
-              />
-              {/* The dot is sleep, steps and water only, so a coach could see a green week with no food in it (CR3). Calories go under it. */}
-              {isCoachView && !isPhoto && date <= todayIso && (
-                <span className={`text-[10px] font-bold leading-none ${isFocused ? '' : logged ? 'text-zinc-500' : 'text-danger'}`}>
-                  {logged ? Math.round(dayCaloriesOf(dayData)).toLocaleString() : 'no food'}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
 
       <div className={cardCls}>
         <div className="flex items-center justify-between gap-2">
@@ -714,7 +689,7 @@ function WeekLog({
 }
 
 
-type WeekLogProps = Omit<Parameters<typeof WeekLog>[0], 'onSaved'>;
+type WeekLogProps = Omit<Parameters<typeof WeekLog>[0], 'onSaved' | 'focusedDate' | 'onDaysChange'>;
 
 const weekLabel = (iso: string) =>
   new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -729,26 +704,34 @@ export function WeeklyLogTab(
     canReview?: boolean;
     // A specific week (its Monday) to open on, e.g. from the dashboard.
     startWeek?: string | null;
+    // Where the day strip goes: the black header's spot for it (a portal), null while that spot is being made, or undefined when
+    // there is no header (the coach's view), when it gets a dark card of its own here.
+    stripSlot?: HTMLElement | null;
   }
 ) {
-  // historyLogs is no longer read: an older week is fetched when the member opens it (R14). It used to be built from the 84 days the
-  // page happened to have loaded, so anything older opened as a blank form, and saving it replaced the real day with blanks.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { historyLogs: _unused, canReview = false, startWeek = null, ...rest } = props;
+  // historyLogs only gives the day strip its rings (item 8). The form never reads it: an older week is fetched when it is opened
+  // (R14), since a form built from the 84 days the page happened to load opened older days blank and saved the blanks over them.
+  const { historyLogs, canReview = false, startWeek = null, stripSlot, ...rest } = props;
   const router = useRouter();
   const currentStart = rest.weekDates[0];
-  const [offset, setOffset] = useState(() =>
-    startWeek ? Math.round((new Date(startWeek).getTime() - new Date(currentStart).getTime()) / (7 * 86400000)) : 0
-  );
+  const todayIso = todayIsoInTz(rest.profile?.timezone ?? DEFAULT_TIMEZONE);
   const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  const weekStart = toIsoDate(addDays(new Date(currentStart + 'T00:00:00Z'), offset * 7));
+  // ---- the day strip (item 8, signed off 21 Nov 2026): it replaced the week arrows and the day chips ----
+  // A member: whole weeks from the Monday of the week 30 days ago (the oldest week canBrowseWeek opens) to this Sunday. A coach has
+  // no limit: the page's 84 days, earlier weeks on asking, and a week opened from the dashboard however old.
+  const older = useOlderDayMarks(rest.clientId, todayIso, rest.isCoachView, startWeek);
+  const coachFrom = weekStartOfDay(older.from) < older.from ? toIsoDate(addDays(new Date(weekStartOfDay(older.from) + 'T00:00:00Z'), 7)) : older.from;
+  const stripDates = rest.isCoachView
+    ? daysInRange(startWeek && startWeek < coachFrom ? weekStartOfDay(startWeek) : coachFrom, checkinStripDays(todayIso, 0).at(-1)!)
+    : checkinStripDays(todayIso, BROWSE_DAYS);
+  // Opens on today, or on the week asked for (its Monday, or today when it is this week).
+  const [picked, setPicked] = useState<string | null>(() => (startWeek && weekStartOfDay(startWeek) !== weekStartOfDay(todayIso) ? weekStartOfDay(startWeek) : null));
+  const selected = picked && stripDates.includes(picked) ? picked : todayIso;
+  const weekStart = weekStartOfDay(selected);
+  const offset = Math.round((Date.parse(weekStart + 'T00:00:00Z') - Date.parse(currentStart + 'T00:00:00Z')) / (7 * 86_400_000));
   const dates = Array.from({ length: 7 }, (_, i) => toIsoDate(addDays(new Date(weekStart + 'T00:00:00Z'), i)));
-  const todayIso = todayIsoInTz(rest.profile?.timezone ?? DEFAULT_TIMEZONE);
-  const previousWeekStart = toIsoDate(addDays(new Date(weekStart + 'T00:00:00Z'), -7));
-  // A member can look back 30 days; a coach is not limited. Older weeks are still in the coach's records.
-  const canGoBack = rest.isCoachView || canBrowseWeek(previousWeekStart, todayIso);
 
   // This week arrives with the page; any other week is read from the database when it is opened.
   const [fetched, setFetched] = useState<{ weekStart: string; logs: DailyLogRow[] | null } | null>(null);
@@ -769,6 +752,51 @@ export function WeeklyLogTab(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset, weekStart, rest.clientId, tryAgain]);
   const logs: DailyLogRow[] | null | 'loading' = offset === 0 ? rest.initialLogs : fetched?.weekStart === weekStart ? fetched.logs : 'loading';
+
+  // Each day's rings: the days the page loaded (and the coach's earlier weeks), then any week opened here, then the form as it
+  // stands, so a change on screen shows on the strip at once and stays there when another day is picked.
+  const [liveDays, setLiveDays] = useState<Record<string, CheckinDay & Partial<Pick<DailyLogRow, 'calories' | 'protein' | 'carbs' | 'fat'>>>>({});
+  const marks = new Map<string, CheckinDay & Partial<Pick<DailyLogRow, 'calories' | 'protein' | 'carbs' | 'fat'>>>();
+  for (const row of [...older.older, ...historyLogs, ...(Array.isArray(logs) ? logs : [])]) marks.set(row.log_date, row);
+  for (const [date, day] of Object.entries(liveDays)) marks.set(date, day);
+  const trackers = enabledTrackers(toDisabledMetricSet(rest.disabledMetrics ?? [])) as Tracker[];
+  const coachFood = rest.isCoachView && rest.profile?.nutrition_tracking_mode !== 'photo_diary';
+  const foodOf = (date: string): FoodDay | null => {
+    const m = marks.get(date);
+    return m && hasFoodLogged({ calories: m.calories ?? null, protein: m.protein ?? null, carbs: m.carbs ?? null, fat: m.fat ?? null })
+      ? { calories: dayCaloriesOf({ calories: m.calories ?? null, protein: m.protein ?? null, carbs: m.carbs ?? null, fat: m.fat ?? null }), hasFood: true }
+      : null;
+  };
+  const stripDays: DayStripDay[] = stripDates.map((iso) => {
+    const dt = new Date(iso + 'T00:00:00Z');
+    const log = marks.get(iso);
+    const food = coachFood && iso <= todayIso ? foodOf(iso) : undefined;
+    const coach = food !== undefined ? coachCalories(food) : null;
+    return {
+      iso,
+      weekday: WEEKDAY_SHORT[dt.getUTCDay()],
+      dayNum: dt.getUTCDate(),
+      label: checkinDayLabel(iso, todayIso, log, trackers, food),
+      ring: checkinRing(iso, todayIso, log, trackers),
+      isToday: iso === todayIso,
+      month: monthOver(iso),
+      below: coach ? { text: coach.text, danger: coach.noFood } : null,
+    };
+  });
+  const dayStrip = (
+    <DayStrip
+      variant="progress"
+      months
+      days={stripDays}
+      selected={selected}
+      onSelect={setPicked}
+      caption={checkinStripCaption(selected, todayIso, marks, trackers)}
+      todayIso={todayIso}
+      onToday={() => setPicked(null)}
+      edgeClassName={stripSlot === undefined ? CARD_EDGE : undefined}
+      before={rest.isCoachView ? <EarlierButton onClick={older.loadEarlier} loading={older.loading} failed={older.failed} /> : undefined}
+    />
+  );
 
   // Saving no longer reloads the whole dashboard after every change; it does so once, when the member leaves this screen, so the other
   // screens (Home, Insights) catch up.
@@ -818,34 +846,8 @@ export function WeeklyLogTab(
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          aria-label="Previous week"
-          disabled={!canGoBack}
-          onClick={() => setOffset(offset - 1)}
-          className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div className="text-center">
-          <p className="text-sm font-semibold text-black dark:text-zinc-50">
-            {offset === 0 ? 'This week' : offset === -1 ? 'Last week' : `Week of ${weekLabel(weekStart)}`}
-          </p>
-          <p className="text-xs text-zinc-500">
-            {weekLabel(dates[0])} to {weekLabel(dates[6])}
-          </p>
-        </div>
-        <button
-          type="button"
-          aria-label="Next week"
-          disabled={offset >= 0}
-          onClick={() => setOffset(offset + 1)}
-          className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/10"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
-      </div>
+      {/* The strip sits in the black header (a portal into its spot); the coach's view has no header, so it gets a dark card here. */}
+      {stripSlot === undefined ? <DayStripCard>{dayStrip}</DayStripCard> : stripSlot ? createPortal(dayStrip, stripSlot) : null}
 
       {/* Whether this week has been looked at, up top. Reviewing it happens at the bottom, after the coach has read the week. */}
       {rest.isCoachView && canReview && reviewed.has(weekStart) && (
@@ -863,6 +865,16 @@ export function WeeklyLogTab(
         <p className="rounded-full bg-success/15 px-4 py-2 text-center text-sm font-bold text-success">{reviewedByLine(memberReview)}</p>
       )}
 
+      {/* The week of the day picked: its numbers come next. */}
+      <div className="flex items-baseline justify-between gap-2 px-1">
+        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">
+          {offset === 0 ? 'This week' : offset === -1 ? 'Last week' : `Week of ${weekLabel(weekStart)}`}
+        </h2>
+        <p className="text-xs text-zinc-500">
+          {weekLabel(dates[0])} to {weekLabel(dates[6])}
+        </p>
+      </div>
+
       {logs === 'loading' ? (
         <p className="py-8 text-center text-sm text-zinc-500">Loading this week…</p>
       ) : logs === null ? (
@@ -879,6 +891,8 @@ export function WeeklyLogTab(
             {...rest}
             weekDates={dates}
             initialLogs={logs}
+            focusedDate={selected}
+            onDaysChange={(days) => setLiveDays((prev) => ({ ...prev, ...days }))}
             onSaved={() => {
               savedSomething.current = true;
             }}

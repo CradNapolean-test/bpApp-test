@@ -270,6 +270,8 @@ export function DashboardShell({
   const [liveUnread, setLiveUnread] = useState(unreadMessageCount);
   // Set by "Scan a barcode" on the Coach tab: the food diary then opens with the scanner up, once.
   const [scanOnOpen, setScanOnOpen] = useState(false);
+  // The food diary and the daily check-in put their day strip in the black header (item 8): the header holds an empty spot for it.
+  const [stripSlot, setStripSlot] = useState<HTMLDivElement | null>(null);
   const [seenServerUnread, setSeenServerUnread] = useState(unreadMessageCount);
   if (seenServerUnread !== unreadMessageCount) {
     setSeenServerUnread(unreadMessageCount);
@@ -685,6 +687,10 @@ export function DashboardShell({
     onOpenMessages: category === 'Messages' ? undefined : memberHeader.onOpenMessages,
     onOpenNotifications: category === 'Notifications' ? undefined : memberHeader.onOpenNotifications,
   };
+  // The day strip's spot in the header, on the two screens that have a strip. A tab is given `undefined` when there is no header for
+  // it (the coach's view), and draws its strip in a dark card of its own instead.
+  const stripInHeader = !isCoachView && showCoaching && isSubScreen && (effectiveScreen === 'Food Tracking' || effectiveScreen === 'Weekly Log');
+  const stripTarget = stripInHeader ? stripSlot : undefined;
   const subScreenHeader =
     !isCoachView && showCoaching && isSubScreen ? (
       <div className="mb-4">
@@ -732,6 +738,7 @@ export function DashboardShell({
               ))}
             </div>
           )}
+          {stripInHeader && <div ref={setStripSlot} />}
         </MemberHeader>
       </div>
     ) : null;
@@ -1050,6 +1057,7 @@ export function DashboardShell({
               profile={profile}
               programWeek={programWeek}
               onOpenFoodDiary={() => handleNavigate('Nutrition', 'Food Tracking')}
+              stripSlot={stripTarget}
               attendedSessions={bookings
                 .filter((b) => b.attended)
                 .map((b) => ({ date: b.booking_date, label: `${b.class?.name ?? 'Class'}${b.class?.start_time ? ` ${formatClassTime(b.class.start_time)}` : ''}` }))}
@@ -1087,6 +1095,8 @@ export function DashboardShell({
               canGiveFeedback={isCoachView && isOwnClient}
               feedback={nutritionFeedback}
               recentDays={isCoachView ? recentFoodDays : undefined}
+              historyLogs={historyLogs}
+              stripSlot={stripTarget}
               scanOnOpen={scanOnOpen}
               onScanOpened={() => setScanOnOpen(false)}
             />

@@ -39,6 +39,26 @@ export async function setHighDay(clientId: string, logDate: string, high: boolea
   return high ? [...others, logDate].sort() : others;
 }
 
+// What the day strips (item 8) need for a span of days the page did not carry: only the columns the rings and the coach's calories
+// read, in one range query. Used when a coach slides a member's strip back past the 84 days the page holds. RLS limits it to the
+// member's own rows and their coach.
+export type DayMarkRow = Pick<
+  DailyLogRow,
+  'log_date' | 'calories' | 'protein' | 'carbs' | 'fat' | 'sleep' | 'steps' | 'water' | 'bodyweight' | 'day_type'
+>;
+export async function getDayMarks(clientId: string, fromDate: string, toDate: string): Promise<DayMarkRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .select('log_date, calories, protein, carbs, fat, sleep, steps, water, bodyweight, day_type')
+    .eq('client_id', clientId)
+    .gte('log_date', fromDate)
+    .lte('log_date', toDate)
+    .order('log_date', { ascending: true });
+  if (error) raise(error);
+  return (data ?? []) as DayMarkRow[];
+}
+
 export async function getDailyLogs(
   clientId: string,
   fromDate: string,

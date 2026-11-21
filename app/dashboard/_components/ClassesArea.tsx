@@ -12,6 +12,7 @@ import { bookSheetNote, cancelDeadline, cancelNote, nowLocalMs } from '@/lib/uti
 import { cancelSummary, nextResetDate, sessionPayment, shortDayLabel, startMs } from '@/lib/utils/booking';
 import { cancellationPolicyText } from '@/lib/bookingRules';
 import { CheckInButton } from './CheckInButton';
+import { DayStrip } from './DayStrip';
 import { MemberHeader } from './MemberHeader';
 import type { HeaderActions } from './MemberHeader';
 import AnimatedContent from '@/app/_components/motion/AnimatedContent';
@@ -263,42 +264,25 @@ export function ClassesArea({
 
         {view === 'book' && (
           <div className="space-y-2">
-            <div ref={dayStrip} className="-mx-5 flex gap-1.5 overflow-x-auto px-5 pb-0.5 [scrollbar-width:none] sm:-mx-6 sm:px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
-              {days.map((d) => {
+            {/* The shared strip (DayStrip.tsx), in Book's own look: a booked day is the full teal ring, a day with no sessions faded. */}
+            <DayStrip
+              stripRef={dayStrip}
+              selected={selectedDate}
+              onSelect={setPickedDate}
+              days={days.map((d) => {
                 const dt = parseDay(d);
-                const active = d === selectedDate;
                 const hasSessions = sessionDates.has(d);
                 const isBooked = bookedDates.has(d);
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setPickedDate(d)}
-                    aria-pressed={active}
-                    aria-label={`${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}${isBooked ? ', booked' : ''}${hasSessions ? '' : ', no sessions'}`}
-                    className="flex w-11 shrink-0 flex-col items-center gap-1.5"
-                  >
-                    <span className={`text-[11px] ${active ? 'font-bold text-zinc-100' : hasSessions ? 'font-semibold text-zinc-400' : 'font-semibold text-zinc-600'}`}>
-                      {WEEKDAY_SHORT[dt.getUTCDay()]}
-                    </span>
-                    <span
-                      data-chip
-                      className={`flex h-9 w-9 items-center justify-center rounded-full text-sm ${
-                        active
-                          ? 'bg-zinc-100 font-extrabold text-[#1d1d1b]'
-                          : isBooked
-                            ? 'border-2 border-accent font-bold text-[#5fd6d6]'
-                            : hasSessions
-                              ? 'bg-white/[.07] font-semibold text-zinc-200'
-                              : 'font-semibold text-zinc-600'
-                      }`}
-                    >
-                      {dt.getUTCDate()}
-                    </span>
-                  </button>
-                );
+                return {
+                  iso: d,
+                  weekday: WEEKDAY_SHORT[dt.getUTCDay()],
+                  dayNum: dt.getUTCDate(),
+                  label: `${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}${isBooked ? ', booked' : ''}${hasSessions ? '' : ', no sessions'}`,
+                  ring: isBooked ? 1 : 0,
+                  faded: !hasSessions,
+                };
               })}
-            </div>
+            />
             <p className="text-xs text-zinc-400">
               {bookedAhead === 0 ? 'Nothing booked yet.' : `${bookedAhead} session${bookedAhead === 1 ? '' : 's'} booked. The ringed days are yours.`}
             </p>

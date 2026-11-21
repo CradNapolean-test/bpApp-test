@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { ChefHat, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react';
+import { ChefHat, ChevronDown, ChevronUp, Copy, Plus, ScanBarcode, Trash2, Utensils } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useBackHandler } from '@/app/_components/useBackHandler';
@@ -35,7 +36,7 @@ import {
 } from '@/lib/data/mealSections';
 import { logRecipeToDiary } from '@/lib/data/recipes';
 import { ok } from '@/lib/data/result';
-import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditFoodDay } from '@/lib/dayPatch';
+import { BROWSE_DAYS, FOOD_AHEAD_DAYS, LOCKED_DAY_MESSAGE, canEditFoodDay } from '@/lib/dayPatch';
 import { FOOD_LIMITS, checkFoodNumber, firstFoodProblem } from '@/lib/foodLimits';
 import { dayCalories, weeklyTarget } from '@/lib/calculations';
 import { toMemberEngineProfile } from '@/lib/utils/clientProfile';
@@ -43,7 +44,11 @@ import { averageDayTarget, dayTargetFor, highDaysLeft, isCyclingTarget } from '@
 import { targetsHeldBack } from '@/lib/onboarding';
 import { CustomTargetsSheet } from './CustomTargetsSheet';
 import { HighDayControl } from './HighDayControl';
-import { addDays, DEFAULT_TIMEZONE, startOfWeek, toIsoDate } from '@/lib/utils/dates';
+import { addDays, DEFAULT_TIMEZONE, startOfWeek, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
+import { coachCalories, daysInRange, foodDayLabel, foodRing, foodStripCaption, foodStripDays, monthOver, type FoodDay } from '@/lib/utils/dayStrip';
+import { CARD_EDGE, DayStrip, DayStripCard, EarlierButton, type DayStripDay } from './DayStrip';
+import { useOlderDayMarks } from './useDayMarks';
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
 import { suggestPairs, type PairSuggestion } from '@/lib/foodPairs';
 import { dayFieldsFromManual, entryMacros, totalMacros } from '@/lib/utils/foodTotals';
@@ -62,6 +67,7 @@ import { useTodayIso } from './useTodayIso';
 import type { NutritionTrackingMode } from './categories';
 import type {
   ClientProfileRow,
+  DailyLogRow,
   FoodDiaryEntryRow,
   FoodRow,
   ManualMacroEntryRow,
@@ -457,6 +463,8 @@ export function FoodTrackingTab({
   recentDays,
   scanOnOpen = false,
   onScanOpened,
+  historyLogs = [],
+  stripSlot,
 }: {
   clientId: string;
   dailyLogId: string | null;
@@ -476,6 +484,11 @@ export function FoodTrackingTab({
   // Opens with the barcode scanner already up (the "Scan a barcode" button on the member's Coach tab); onScanOpened says it was taken.
   scanOnOpen?: boolean;
   onScanOpened?: () => void;
+  // The member's last 84 days as the page loaded them: the day strip's rings (item 8), with no query of its own.
+  historyLogs?: DailyLogRow[];
+  // Where the day strip goes: the black header's spot for it (a portal), null while that spot is being made, or undefined when
+  // there is no header (the coach's view), when it gets a dark card of its own here.
+  stripSlot?: HTMLElement | null;
 }) {
   // The coach sets up a member's meal sections (rename, reorder, delete, add); that stays folded away until asked for.
   const [editingSections, setEditingSections] = useState(false);
@@ -514,7 +527,8 @@ export function FoodTrackingTab({
   const [currentDailyLogId, setCurrentDailyLogId] = useState(dailyLogId);
   const [entries, setEntries] = useState(initialEntries);
   const [manualEntries, setManualEntries] = useState(initialManualMacroEntries);
-  const [dateLoading, setDateLoading] = useState(false);
+  // The day being read after a tap on the strip: it shows as picked straight away.
+  const [loadingDate, setLoadingDate] = useState<string | null>(null);
   const isToday = viewingDate === todayIso;
   // When the server sends fresh data for today (after that refresh), show it if the member is looking at today. Without this a quick
   // return to this screen could show the entries from before their last change.
@@ -536,8 +550,6 @@ export function FoodTrackingTab({
   const tomorrowIso = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), 1));
   const isTomorrow = viewingDate === tomorrowIso;
   const entryReadOnly = readOnly || dayLocked;
-  const previousDay = toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), -1));
-  const atBrowseLimit = !readOnly && !canBrowseDate(previousDay, todayIso);
 
   // When the date rolls over while the member is looking at "today", move to the new today.
   const lastToday = useRef(todayIso);
@@ -599,11 +611,73 @@ export function FoodTrackingTab({
   const dayTarget = dayTargetFor(weekTarget, isHighDay ? 'high' : 'flat');
   const { run: runHighDay, busy: savingHighDay } = useAction();
 
+  // ---- the day strip (item 8, signed off 21 Nov 2026) ----
+  // A member: 30 days back to tomorrow (canBrowseDate, FOOD_AHEAD_DAYS). A coach: the page's 84 days, and earlier weeks on asking.
+  const older = useOlderDayMarks(clientId, todayIso, readOnly);
+  const stripDates = readOnly ? daysInRange(older.from, todayIso) : foodStripDays(todayIso, BROWSE_DAYS, FOOD_AHEAD_DAYS);
+  // Each day's food as the page loaded it (no query of its own), then what changed on this screen since: the day on screen is
+  // always its live total, and a day changed and left keeps its new total until the page reloads.
+  const loggedDays = useMemo(() => {
+    const m = new Map<string, FoodDay>();
+    for (const row of [...older.older, ...historyLogs]) if (hasFoodLogged(row)) m.set(row.log_date, { calories: dayCaloriesOf(row), hasFood: true });
+    return m;
+  }, [historyLogs, older.older]);
+  const loadedHighDays = useMemo(
+    () => new Set([...older.older, ...historyLogs].filter((r) => r.day_type === 'high').map((r) => r.log_date)),
+    [historyLogs, older.older]
+  );
+  const liveDay: FoodDay = { calories: totals.calories, hasFood: isManual ? manualEntries.length > 0 : entries.length > 0 };
+  const [changedDays, setChangedDays] = useState<Record<string, FoodDay>>({});
+  const seenLive = changedDays[viewingDate];
+  if (!seenLive || seenLive.calories !== liveDay.calories || seenLive.hasFood !== liveDay.hasFood) {
+    setChangedDays((prev) => ({ ...prev, [viewingDate]: liveDay }));
+  }
+  const foodDays = new Map(loggedDays);
+  for (const [date, day] of Object.entries(changedDays)) foodDays.set(date, day);
+  // Each day's ring is read against that day's own target: a calorie-cycling member's high day has the high one. The week on screen
+  // uses the high days read for it; other weeks the day types the page loaded.
+  const highOn = (d: string) =>
+    weekHighDays && toIsoDate(startOfWeek(new Date(d + 'T00:00:00Z'))) === viewingWeek ? weekHighDays.includes(d) : loadedHighDays.has(d);
+  const calorieTargetOn = (d: string) => dayTargetFor(weekTarget, highOn(d) ? 'high' : 'flat')?.calories ?? null;
+  const shownDate = loadingDate ?? viewingDate;
+  const stripDays: DayStripDay[] = stripDates.map((iso) => {
+    const dt = new Date(iso + 'T00:00:00Z');
+    const day = foodDays.get(iso);
+    const target = calorieTargetOn(iso);
+    const coach = readOnly ? coachCalories(day) : null;
+    return {
+      iso,
+      weekday: WEEKDAY_SHORT[dt.getUTCDay()],
+      dayNum: dt.getUTCDate(),
+      label: foodDayLabel(iso, todayIso, day, target),
+      ring: foodRing(iso, todayIso, day, target),
+      isToday: iso === todayIso,
+      month: monthOver(iso),
+      below: coach ? { text: coach.text, danger: coach.noFood } : null,
+    };
+  });
+  const dayStrip = (
+    <DayStrip
+      variant="progress"
+      months
+      days={stripDays}
+      selected={shownDate}
+      onSelect={(d) => {
+        if (d !== shownDate) loadDate(d);
+      }}
+      caption={foodStripCaption(shownDate, todayIso, foodDays, dayTarget != null)}
+      todayIso={todayIso}
+      onToday={() => loadDate(todayIso)}
+      edgeClassName={stripSlot === undefined ? CARD_EDGE : undefined}
+      before={readOnly ? <EarlierButton onClick={older.loadEarlier} loading={older.loading} failed={older.failed} /> : undefined}
+    />
+  );
+
   // Reads a day (never creates it: browsing back used to leave a blank row for every day looked at). A slow answer for a day the member
   // has already moved off is dropped.
   async function loadDate(date: string) {
     const ticket = ++loadTicket.current;
-    setDateLoading(true);
+    setLoadingDate(date);
     try {
       if (isManual) {
         const result = await getManualMacrosForDate(clientId, date);
@@ -623,7 +697,7 @@ export function FoodTrackingTab({
     } catch (err) {
       if (ticket === loadTicket.current) toast.error(err instanceof Error && err.message ? err.message : 'Could not load that day. Please try again.');
     } finally {
-      if (ticket === loadTicket.current) setDateLoading(false);
+      if (ticket === loadTicket.current) setLoadingDate(null);
     }
   }
 
@@ -919,27 +993,9 @@ export function FoodTrackingTab({
 
   return (
     <div ref={screen} className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="icon" aria-label="Previous day" onClick={() => loadDate(previousDay)} disabled={dateLoading || atBrowseLimit}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <div className="text-[15px] font-extrabold text-black dark:text-zinc-50">{isToday ? 'Today' : isTomorrow ? 'Tomorrow' : dateLabel}</div>
-        <div className="flex items-center gap-1">
-          {!isToday && (
-            <Button variant="ghost" size="sm" onClick={() => loadDate(todayIso)} disabled={dateLoading}>
-              Today
-            </Button>
-          )}
-          <Button
-            variant="icon"
-            aria-label="Next day"
-            onClick={() => loadDate(toIsoDate(addDays(new Date(viewingDate + 'T00:00:00Z'), 1)))}
-            disabled={dateLoading || viewingDate >= (readOnly ? todayIso : tomorrowIso)}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      {/* The strip sits in the black header (a portal into its spot); the coach's view has no header, so it gets a dark card here. */}
+      {stripSlot === undefined ? <DayStripCard>{dayStrip}</DayStripCard> : stripSlot ? createPortal(dayStrip, stripSlot) : null}
+      <div className="px-1 text-[15px] font-extrabold text-black dark:text-zinc-50">{isToday ? 'Today' : isTomorrow ? 'Tomorrow' : dateLabel}</div>
 
       {isTomorrow && !readOnly && (
         <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
