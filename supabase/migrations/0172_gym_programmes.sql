@@ -57,9 +57,10 @@
 --     change_gym_programme), which run as the table owner.
 --   * Deleting a template deletes its rollouts too (on delete cascade, 0094), past those rules. A new trigger on program_templates
 --     (program_templates_refuse_gym_programme_delete) lets only a gym admin delete a template with a start for everyone that has not
---     started yet, or one whose last day has not passed (ended or not), so a coach can't cancel a start for everyone or end the gym
---     programme that way. The app says so on Delete template. Nothing else is needed: the length no longer comes from the template, and an
---     older gym programme has always ended, so deleting a template can't shorten, end or reopen anything else.
+--     started yet, or one whose last day has not passed and that has not ended, so a coach can't cancel a start for everyone or end the
+--     gym programme that way (one that has ended can't be opened again, so deleting its template changes nothing). The app says so on
+--     Delete template. Nothing else is needed: the length no longer comes from the template, and an older gym programme has always
+--     ended, so deleting a template can't shorten, end or reopen anything else.
 --   * set_programme_week_one (the start-date trigger of 0167) replaced: a late joiner's copy keeps its week 1 (the gym's Monday) when a
 --     coach moves its start date within the copy's weeks, so the member stays on the gym's week instead of going back to week 1. Moved
 --     past its last week, it starts again from week 1 as before (kept, it would be finished on the day it starts). A copy whose rollout
@@ -181,7 +182,8 @@
 -- one or one whose last day has passed -> refused; on a scheduled one: length changed, end refused; by a coach who isn't a gym admin, or
 -- a member -> refused, nothing changed; a non-admin coach cannot change ended_at or weeks by a direct update, nor cancel a scheduled start
 -- for everyone (direct delete), but can cancel one for chosen members; a non-admin coach cannot delete the template of the gym programme
--- or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose last day has passed, and a gym admin can
+-- or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose last day has passed or that has ended
+-- before its last day (End gym programme, or a newer one given out), and a gym admin can
 -- delete either; a non-admin coach calling apply_programme_rollout on a scheduled start for everyone -> refused, still not given out and
 -- still cancellable by a gym admin; a gym admin calling it on one that starts next week, or on one for chosen members that starts tomorrow
 -- -> refused; Start a programme for today (schedule_programme_rollout, start now) -> given out as before; the daily job on the start
@@ -248,7 +250,7 @@ begin
       ('public.gym_programmes()', '0172', array['ca288df17e58e17a32e96232021e09de']),
       ('public.change_gym_programme(uuid, integer, boolean)', '0172', array['b1bf35bbe58d97c3f66a5584f8ecadef']),
       ('public.resolve_gym_programme_waiting(uuid, uuid, boolean)', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
-      ('public.program_templates_refuse_gym_programme_delete()', '0172', array['8a1fb706d6217a66cf4cf7d37906c24c']),
+      ('public.program_templates_refuse_gym_programme_delete()', '0172', array['a340d90d42dde1df1975ad4a93644df0']),
       ('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer)', '0172', array['b345d01bb68a6f0ff0af21281feffded']),
       -- replaced: the live one from the migration named, or this file's (a second run)
       ('public.set_programme_week_one()', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '9dddcac25cab66b400ec4103de9fda99']),
@@ -376,8 +378,9 @@ revoke all on function public._gym_programme_today(uuid) from public, anon, auth
 -- Deleting a template deletes its rollouts with it (programme_rollouts.template_id is on delete cascade, 0094), and a cascade skips the
 -- rules above: by deleting the template, any coach at the gym could cancel a start for everyone or end the gym programme, which only a gym
 -- admin can do. Only a gym admin (or nobody signed in: the SQL editor, the service role) can delete a template with a start for everyone
--- that has not started yet (scheduled, or given out ahead of its start date), or whose last day has not passed, ended or not. Each start
--- is decided from its own dates, which deleting other templates or weeks never changes.
+-- that has not started yet (scheduled, or given out ahead of its start date), or whose last day has not passed. One that has ended is
+-- skipped: it can't be opened again and members keep their own copies, so deleting its template changes nothing for anyone. Each start
+-- is decided from its own dates and end, which deleting other templates or weeks never changes.
 create or replace function public.program_templates_refuse_gym_programme_delete()
 returns trigger
 language plpgsql
@@ -396,7 +399,7 @@ begin
            public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) as today
     from programme_rollouts r
     join gyms g on g.id = r.gym_id
-    where r.template_id = old.id and r.audience = 'all'
+    where r.template_id = old.id and r.audience = 'all' and r.ended_at is null
     order by r.start_date
   loop
     continue when public.is_admin_of_gym(v_r.gym_id);

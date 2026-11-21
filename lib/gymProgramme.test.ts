@@ -159,6 +159,11 @@ describe('on the template', () => {
 
   it('deleting the template: a coach who isn’t a gym admin is told only a gym admin can, while it is the gym programme or starts for everyone', () => {
     expect(deleteTemplateRefusal(gp(), [])).toBe('This template is the gym programme at Salford Quays until Sun 29 Nov, so only a gym admin can delete it.');
+    // one that has ended before its last day can't be opened again: they can delete it (as the database lets them)
+    expect(deleteTemplateRefusal(gp({ isOpen: false }), [])).toBeNull();
+    expect(deleteTemplateRefusal(gp({ isOpen: false }), [{ audience: 'all', start_date: '2026-11-30' }])).toBe(
+      'This template is set to start for everyone at the gym on Mon 30 Nov, so only a gym admin can delete it.'
+    );
     expect(
       deleteTemplateRefusal(undefined, [
         { audience: 'selected', start_date: '2026-11-23' },

@@ -311,8 +311,11 @@ describe('who can do what (Row Level Security and function access)', () => {
     const guard = squeeze(code('program_templates_refuse_gym_programme_delete'));
     // nobody signed in (the SQL editor, the service role) deletes as before; a gym admin of the rollout's gym is never refused
     expect(guard).toContain('if auth.uid() is null then return old; end if;');
-    expect(guard).toContain("where r.template_id = old.id and r.audience = 'all' order by r.start_date loop continue when public.is_admin_of_gym(v_r.gym_id);");
-    // two refusals: not started yet (scheduled, or given out ahead of its start date), or its last day not passed, ended or not
+    // one that has ended is skipped: it can't be opened again, so deleting its template changes nothing for anyone
+    expect(guard).toContain(
+      "where r.template_id = old.id and r.audience = 'all' and r.ended_at is null order by r.start_date loop continue when public.is_admin_of_gym(v_r.gym_id);"
+    );
+    // two refusals: not started yet (scheduled, or given out ahead of its start date), or its last day not passed
     expect(guard.match(/raise exception/g)).toHaveLength(2);
     expect(guard).toContain('if v_r.applied_at is null or v_r.start_date > v_r.today then raise exception');
     expect(guard).toContain('if v_r.today <= v_r.last_day then raise exception');

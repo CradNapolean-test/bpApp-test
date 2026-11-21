@@ -310,13 +310,17 @@ export function giveWaitingConfirmation(p: GymProgramme, w: GymProgrammeWaiting)
 }
 
 // Deleting a template deletes its rollouts too: the gym programme it is, and the starts it has scheduled. So while it is the gym programme
-// (until its last day) or a start for everyone is scheduled, only a gym admin can delete it (refused in the database too, migration 0172).
+// (until its last day, unless it has ended) or a start for everyone is scheduled, only a gym admin can delete it (refused in the database
+// too, migration 0172). One that has ended can't be opened again, so deleting its template changes nothing for anyone.
 // `scheduled` is the template's rollouts not given out yet.
 type ScheduledStart = { audience: 'all' | 'selected'; start_date: string };
 
 // For a coach who isn't a gym admin: why they can't delete it. null when they can.
-export function deleteTemplateRefusal(gym: Pick<GymProgramme, 'gymName' | 'lastDay'> | undefined, scheduled: ScheduledStart[]): string | null {
-  if (gym) return `This template is the gym programme at ${gymOf(gym)} until ${day(gym.lastDay)}, so only a gym admin can delete it.`;
+export function deleteTemplateRefusal(
+  gym: Pick<GymProgramme, 'gymName' | 'lastDay' | 'isOpen'> | undefined,
+  scheduled: ScheduledStart[]
+): string | null {
+  if (gym?.isOpen) return `This template is the gym programme at ${gymOf(gym)} until ${day(gym.lastDay)}, so only a gym admin can delete it.`;
   const forAll = scheduled.filter((r) => r.audience === 'all').sort((a, b) => a.start_date.localeCompare(b.start_date));
   if (forAll.length > 0) return `This template is set to start for everyone at the gym on ${day(forAll[0].start_date)}, so only a gym admin can delete it.`;
   return null;
