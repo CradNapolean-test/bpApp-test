@@ -221,13 +221,14 @@ describe('the length is fixed when it starts', () => {
     );
   });
 
-  it('nothing is left of the machinery the template-led length needed: no template-days trigger, no locks, no reopening', () => {
+  it('nothing is left of the machinery the template-led length needed: no template-days trigger, no locks of its own, no reopening', () => {
     expect(migration).not.toMatch(/program_template_days_refuse_gym_programme_shorten/);
     expect(migrationCode).not.toMatch(/on program_template_days/);
     expect(migrationCode).not.toMatch(/gym-programme-change|gym-programme-template-days/);
-    // the only lock left is giving a member a copy, one at a time per member
-    expect(migrationCode.match(/pg_advisory_xact_lock/g)).toHaveLength(1);
+    // the only locks: giving a member a copy, one at a time per member, and giving out a rollout, one at a time per gym
+    expect(migrationCode.match(/pg_advisory_xact_lock/g)).toHaveLength(2);
     expect(code('_give_gym_programme')).toContain("pg_advisory_xact_lock(hashtext('gym-programme:' || p_client_id::text))");
+    expect(code('apply_programme_rollout')).toContain("pg_advisory_xact_lock(hashtext('gym-programme-apply:' || v_r.gym_id::text))");
     expect(code('program_templates_refuse_gym_programme_delete')).not.toMatch(/\bupdate\b/);
     expect(migration).not.toMatch(/end_gym_programme/);
   });
@@ -366,6 +367,26 @@ describe('which programme a gym is on', () => {
     expect(takeOver).toContain(
       "if exists ( select 1 from programme_rollouts x where x.gym_id = v_r.gym_id and x.audience = 'all' and x.id <> v_r.id and x.applied_at is not null and x.start_date <= v_today and (x.start_date > v_r.start_date or (x.start_date = v_r.start_date and x.created_at > v_r.created_at)) ) then update programme_rollouts set ended_at = now(), ended_by = auth.uid() where id = v_r.id; end if; end if; return v_count;"
     );
+  });
+
+  it('two given out at once at one gym see each other: one at a time per gym, read again under the lock, before anything is given or ended', () => {
+    const apply = squeeze(code('apply_programme_rollout'));
+    const at = (s: string) => {
+      expect(apply).toContain(s);
+      return apply.indexOf(s);
+    };
+    const lock = at("perform pg_advisory_xact_lock(hashtext('gym-programme-apply:' || v_r.gym_id::text));");
+    const reread = at('select * into v_r from programme_rollouts where id = p_rollout_id for update;');
+    const recheck = at('if v_r.id is null or v_r.applied_at is not null then return 0; end if;');
+    // after the refusals (nobody refused waits for the lock) and before the copies, given out and the end of older ones
+    expect(at("raise exception '“%” starts on %, so it is given out on that day, not before.'")).toBeLessThan(lock);
+    expect(lock).toBeLessThan(reread);
+    expect(reread).toBeLessThan(recheck);
+    expect(recheck).toBeLessThan(at('for v_client in'));
+    expect(recheck).toBeLessThan(at('update programme_rollouts set applied_at = now() where id = v_r.id;'));
+    expect(recheck).toBeLessThan(at('update programme_rollouts x set ended_at = now()'));
+    expect(apply.match(/for v_client in/g)).toHaveLength(1);
+    expect(apply.match(/update programme_rollouts x set ended_at/g)).toHaveLength(1);
   });
 
   it('existing ones: each older one given out is ended as of the next one’s start date (midnight at its gym)', () => {

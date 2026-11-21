@@ -71,7 +71,8 @@
 --     start one, 0133), and none before its start date at the gym (the daily job gives a later start out on its day), so Start a
 --     programme with a later date can't start it now either. Giving out one for everyone ends every older one at the gym that is still
 --     open (above); one that starts before a gym programme that has already started ends straight away, as it can never be the gym's
---     programme.
+--     programme. Rollouts are given out one at a time per gym (a lock), so two given out at once (two gym admins, or one and the daily
+--     job) can't both stay open, and one can't be given out twice.
 --     The daily job, and everything else in it, as before.
 --   * schedule_programme_rollout (0133) replaced by one that also takes the length (p_weeks, 1 to 12; empty = the template's weeks, so
 --     the app before this deploy still works). Everything else as in 0133.
@@ -173,7 +174,9 @@
 -- week_one stays 9 Nov, moved to 30 Nov -> week_one 30 Nov, and the same once its template (so its rollout) is deleted; the daily job
 -- gives out the next block on its start date -> the one before it is ended (ended_at set); then that block's template deleted by a gym
 -- admin -> the gym has no programme and a new member is given nothing (the older one is not opened again); a start for everyone given
--- out with a start date before the gym programme's -> ended straight away, the gym programme stays; change_gym_programme by a gym admin:
+-- out with a start date before the gym programme's -> ended straight away, the gym programme stays; two starts for everyone given out at
+-- once at one gym (two sessions, the first left uncommitted) -> the second waits for it and only the newer one stays open, and the same
+-- rollout given out in both -> one set of copies; change_gym_programme by a gym admin:
 -- weeks 4 -> last day a week later; a length ending before today -> ended today with weeks = the current week; end -> ended; on an ended
 -- one or one whose last day has passed -> refused; on a scheduled one: length changed, end refused; by a coach who isn't a gym admin, or
 -- a member -> refused, nothing changed; a non-admin coach cannot change ended_at or weeks by a direct update, nor cancel a scheduled start
@@ -249,7 +252,7 @@ begin
       ('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean, integer)', '0172', array['b345d01bb68a6f0ff0af21281feffded']),
       -- replaced: the live one from the migration named, or this file's (a second run)
       ('public.set_programme_week_one()', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '9dddcac25cab66b400ec4103de9fda99']),
-      ('public.apply_programme_rollout(uuid)', '0130', array['da6b647aab04cf17547cbc66dd7c81d2', '351f35ea6de1519d2d4fca22d7fa3b28']),
+      ('public.apply_programme_rollout(uuid)', '0130', array['da6b647aab04cf17547cbc66dd7c81d2', '621d401c82367fa7706020118574d33a']),
       ('public.schedule_programme_rollout(uuid, text, date, text, uuid[], boolean)', '0133', array['118628ede882f193a8c7aa544a2244b4'])
     ) as t(signature, migration, accepted)
   loop
@@ -737,7 +740,7 @@ grant execute on function public.change_gym_programme(uuid, integer, boolean) to
 -- chosen members (the daily job gives a later start out on its day). So Start a programme with a later date can't start it now either.
 -- Giving out one for everyone ends every older one at the gym that is still open: a newer gym programme takes over, and an older one is
 -- never the gym's programme again. One older than a gym programme already given out ends too, as it can never be the gym's programme.
--- The daily job, and everything else, as in 0130.
+-- Given out one at a time per gym, so two at once see each other. The daily job, and everything else, as in 0130.
 create or replace function public.apply_programme_rollout(p_rollout_id uuid)
 returns integer
 language plpgsql
@@ -771,6 +774,14 @@ begin
       raise exception '“%” starts on %, so it is given out on that day, not before.',
         v_r.program_name, to_char(v_r.start_date, 'Dy FMDD Mon');
     end if;
+  end if;
+  -- One at a time per gym. Two given out at once (two gym admins, a gym admin and the daily job, a doubled call) would each miss the
+  -- other's applied_at, not committed yet, so neither would end the other and both would stay open; and the same one could be given out
+  -- twice. Read again under the lock: one given out (or cancelled) in the meantime is left as it is.
+  perform pg_advisory_xact_lock(hashtext('gym-programme-apply:' || v_r.gym_id::text));
+  select * into v_r from programme_rollouts where id = p_rollout_id for update;
+  if v_r.id is null or v_r.applied_at is not null then
+    return 0;
   end if;
 
   for v_client in
