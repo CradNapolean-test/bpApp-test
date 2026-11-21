@@ -55,6 +55,7 @@ import {
   foodStripCaption,
   foodStripDays,
   monthOver,
+  stackDayMarks,
   type FoodDay,
 } from '@/lib/utils/dayStrip';
 import { CARD_EDGE, DayStrip, DayStripCard, EarlierButton, type DayStripDay } from './DayStrip';
@@ -647,8 +648,7 @@ export function FoodTrackingTab({
   if (!seenLive || seenLive.calories !== liveDay.calories || seenLive.hasFood !== liveDay.hasFood) {
     setChangedDays((prev) => ({ ...prev, [viewingDate]: liveDay }));
   }
-  const foodDays = new Map(loggedDays);
-  for (const [date, day] of Object.entries(changedDays)) foodDays.set(date, day);
+  const foodDays = stackDayMarks(loggedDays, changedDays);
   // Each day's ring is read against that day's own target: a calorie-cycling member's high day has the high one. A week whose high
   // days were read or changed here uses those; any other the day types the page loaded.
   const ringTargets = {

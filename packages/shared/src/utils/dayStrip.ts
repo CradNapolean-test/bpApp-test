@@ -67,6 +67,15 @@ export function coachWeekStripStart(firstDay: string, openedWeek: string | null 
   return opened && opened < start ? opened : start;
 }
 
+// One mark per day for a strip. A later row wins over an earlier one for the same day (pass the page's days and the coach's earlier
+// weeks, then a week read on this screen), and what changed on this screen since wins over all of them, so a day just saved never
+// shows its old ring.
+export function stackDayMarks<T>(rows: Iterable<readonly [string, T]>, changed: Readonly<Record<string, T>>): Map<string, T> {
+  const marks = new Map<string, T>(rows);
+  for (const [date, mark] of Object.entries(changed)) marks.set(date, mark);
+  return marks;
+}
+
 // ---- the rings ----
 
 export type RingState = 'plain' | 'part' | 'done';

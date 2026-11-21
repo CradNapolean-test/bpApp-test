@@ -16,6 +16,7 @@ import {
   olderSpan,
   reachBackDays,
   ringState,
+  stackDayMarks,
   stripDayName,
   weekPhrase,
   weekStartOfDay,
@@ -84,6 +85,13 @@ describe("a coach's strips", () => {
     expect(coachWeekStripStart(PAGE_FROM, '2026-09-14')).toBe('2026-08-31');
     // Four more weeks (Earlier) still keep the week opened on the strip.
     expect(coachWeekStripStart('2026-06-08', '2026-07-08')).toBe('2026-06-08');
+  });
+
+  it("stacks each day's marks: a week read here over the page's days, and a change made here over both", () => {
+    const page: [string, string][] = [['2026-11-16', 'page'], ['2026-11-17', 'page'], ['2026-11-18', 'page']];
+    const week: [string, string][] = [['2026-11-17', 'week'], ['2026-11-18', 'week']];
+    const marks = stackDayMarks([...page, ...week], { '2026-11-18': 'changed', '2026-11-19': 'changed' });
+    expect(Object.fromEntries(marks)).toEqual({ '2026-11-16': 'page', '2026-11-17': 'week', '2026-11-18': 'changed', '2026-11-19': 'changed' });
   });
 
   it("does not grow at the front when the week opened has its rows in (so it is not pushed out of view)", () => {

@@ -38,6 +38,7 @@ import {
   coachWeekStripStart,
   daysInRange,
   monthOver,
+  stackDayMarks,
   weekStartOfDay,
   type CheckinDay,
   type FoodDay,
@@ -756,9 +757,10 @@ export function WeeklyLogTab(
   // Each day's rings: the days the page loaded (and the coach's earlier weeks), then any week opened here, then the form as it
   // stands, so a change on screen shows on the strip at once and stays there when another day is picked.
   const [liveDays, setLiveDays] = useState<Record<string, CheckinDay & Partial<Pick<DailyLogRow, 'calories' | 'protein' | 'carbs' | 'fat'>>>>({});
-  const marks = new Map<string, CheckinDay & Partial<Pick<DailyLogRow, 'calories' | 'protein' | 'carbs' | 'fat'>>>();
-  for (const row of [...older.older, ...historyLogs, ...(Array.isArray(logs) ? logs : [])]) marks.set(row.log_date, row);
-  for (const [date, day] of Object.entries(liveDays)) marks.set(date, day);
+  const marks = stackDayMarks<CheckinDay & Partial<Pick<DailyLogRow, 'calories' | 'protein' | 'carbs' | 'fat'>>>(
+    [...older.older, ...historyLogs, ...(Array.isArray(logs) ? logs : [])].map((row) => [row.log_date, row] as const),
+    liveDays
+  );
   const trackers = enabledTrackers(toDisabledMetricSet(rest.disabledMetrics ?? [])) as Tracker[];
   const coachFood = rest.isCoachView && rest.profile?.nutrition_tracking_mode !== 'photo_diary';
   const foodOf = (date: string): FoodDay | null => {
