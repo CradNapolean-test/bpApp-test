@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DayStrip, type DayStripDay } from './DayStrip';
+import { DayStrip, EarlierButton, type DayStripDay } from './DayStrip';
 
 // The shared strip must keep Book exactly as it was before it was taken out of ClassesArea (item 8), and draw the signed-off looks on
 // the food diary and the check-in.
@@ -87,5 +87,23 @@ describe('food and check-in look', () => {
     expect(html).toContain('Food logged on 3 days this week.');
     expect(html).toContain('Today</button>');
     expect(html).toContain('text-red-400');
+  });
+});
+
+describe("the coach's Earlier button", () => {
+  const html = (loading: boolean, failed: boolean) => renderToStaticMarkup(<EarlierButton onClick={() => {}} loading={loading} failed={failed} />);
+
+  it('says to a screen reader what it shows: ready, loading or failed', () => {
+    expect(html(false, false)).toContain('aria-label="Show four earlier weeks"');
+    expect(html(false, false)).not.toContain('aria-busy');
+    expect(html(true, false)).toContain('aria-label="Loading four earlier weeks"');
+    expect(html(true, false)).toContain('aria-busy="true"');
+    expect(html(false, true)).toContain('aria-label="Could not load earlier weeks. Try again"');
+    expect(html(false, true)).toContain('Try again</button>');
+  });
+
+  it('keeps its focus while loading (aria-disabled, not disabled)', () => {
+    expect(html(true, false)).toContain('aria-disabled="true"');
+    expect(html(true, false)).not.toMatch(/ disabled=""/);
   });
 });

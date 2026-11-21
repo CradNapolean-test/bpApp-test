@@ -191,15 +191,18 @@ export function DayStripCard({ children }: { children: React.ReactNode }) {
 
 export const CARD_EDGE = '-mx-4 px-4';
 
-// The coach's strip has no 30-day limit: this, at its left end, adds four more weeks (useOlderDayMarks).
+// The coach's strip has no 30-day limit: this, at its left end, adds four more weeks (useOlderDayMarks). A screen reader hears the
+// same state as the button shows (loading, or the load failed). While loading it is aria-disabled rather than disabled, so a
+// keyboard press does not lose its focus (a press then does nothing).
 export function EarlierButton({ onClick, loading, failed }: { onClick: () => void; loading: boolean; failed: boolean }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={loading}
-      aria-label="Show four earlier weeks"
-      className="flex w-14 shrink-0 flex-col items-center justify-center gap-1 self-stretch rounded-2xl bg-white/[.07] text-[11px] font-bold text-zinc-300 hover:bg-white/10 disabled:opacity-60"
+      onClick={loading ? undefined : onClick}
+      aria-disabled={loading || undefined}
+      aria-busy={loading || undefined}
+      aria-label={loading ? 'Loading four earlier weeks' : failed ? 'Could not load earlier weeks. Try again' : 'Show four earlier weeks'}
+      className="flex w-14 shrink-0 flex-col items-center justify-center gap-1 self-stretch rounded-2xl bg-white/[.07] text-[11px] font-bold text-zinc-300 hover:bg-white/10 aria-disabled:opacity-60"
     >
       <ChevronLeft aria-hidden className="h-4 w-4" />
       {loading ? 'Loading' : failed ? 'Try again' : 'Earlier'}
