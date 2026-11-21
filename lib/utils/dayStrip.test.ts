@@ -6,6 +6,7 @@ import {
   checkinStripDays,
   coachCalories,
   coachWeekStripStart,
+  dayRingTarget,
   daysInRange,
   foodDayLabel,
   foodRing,
@@ -111,6 +112,20 @@ describe('food ring', () => {
 
   it('keeps tomorrow plain even with food planned', () => {
     expect(foodRing('2026-11-20', TODAY, day(1500), 2050)).toBe(0);
+  });
+
+  it("reads each day against that day's own target: a high day's is the high one", () => {
+    const targets = { flat: 1900, high: 2600 };
+    const loadedHigh = new Set(['2026-11-11']);
+    expect(dayRingTarget('2026-11-11', targets, {}, loadedHigh)).toBe(2600);
+    expect(dayRingTarget('2026-11-12', targets, {}, loadedHigh)).toBe(1900);
+    // Wed 18 Nov made a high day on this screen, then a day in last week opened: it keeps the high target.
+    const weeks = { '2026-11-16': ['2026-11-18'] };
+    expect(dayRingTarget('2026-11-18', targets, weeks, loadedHigh)).toBe(2600);
+    expect(dayRingTarget('2026-11-11', targets, weeks, loadedHigh)).toBe(2600);
+    // Set back to a normal day here: the high day the page loaded no longer counts.
+    expect(dayRingTarget('2026-11-11', targets, { '2026-11-09': [] }, loadedHigh)).toBe(1900);
+    expect(dayRingTarget('2026-11-18', { flat: null, high: null }, weeks, loadedHigh)).toBeNull();
   });
 
   it('names the three looks', () => {

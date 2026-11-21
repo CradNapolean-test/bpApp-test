@@ -90,6 +90,19 @@ export function foodRing(date: string, todayIso: string, day: FoodDay | null | u
   return Math.min(1, Math.max(0, day.calories / target));
 }
 
+// The calorie target a day's food ring is read against: the high-day target on a calorie-cycling member's high day, the normal one on
+// any other; null with no targets yet. Which days are high: those this screen has read or changed for that day's week (`weeks`, by
+// its Monday) win over the day types the page loaded (`loadedHigh`), which go out of date once a day is made a high day here.
+export function dayRingTarget(
+  date: string,
+  targets: { flat: number | null; high: number | null },
+  weeks: Readonly<Record<string, readonly string[]>>,
+  loadedHigh: ReadonlySet<string>
+): number | null {
+  const week = weeks[weekStartOfDay(date)];
+  return (week ? week.includes(date) : loadedHigh.has(date)) ? targets.high : targets.flat;
+}
+
 export type Tracker = 'sleep' | 'steps' | 'water';
 export type CheckinDay = Partial<Record<Tracker | 'bodyweight', number | null>>;
 

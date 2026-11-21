@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { weeklyTarget } from '@ballistic/shared/calculations';
 import type { ClientProfileRow } from '@ballistic/shared/data/types';
@@ -62,11 +62,14 @@ export function useFoodTarget(profile: ClientProfileRow | null, today: string, d
   return useMemo(() => dayTargetFor(weekTarget, isHigh ? 'high' : 'flat'), [weekTarget, isHigh]);
 }
 
-// The calorie target of any day from its day type, for the food diary's day strip (item 8): the same rule as useFoodTarget, for the
-// days that are not on screen (their high days come from the recent days already read). Null with no targets yet.
-export function useCalorieTargetFor(profile: ClientProfileRow | null, today: string) {
+// The normal and high-day calorie targets, for the food diary's day strip (item 8): the same rule as useFoodTarget, for the days
+// that are not on screen (dayRingTarget picks one by the high days in the recent days already read). Null with no targets yet.
+export function useCalorieTargets(profile: ClientProfileRow | null, today: string) {
   const weekTarget = useWeekTarget(profile, today);
-  return useCallback((dayType: 'high' | 'flat') => dayTargetFor(weekTarget, dayType)?.calories ?? null, [weekTarget]);
+  return useMemo(
+    () => ({ flat: dayTargetFor(weekTarget, 'flat')?.calories ?? null, high: dayTargetFor(weekTarget, 'high')?.calories ?? null }),
+    [weekTarget]
+  );
 }
 
 // The member's targets as an average day (the week over seven; the flat target when not calorie cycling): what "Set my own targets"

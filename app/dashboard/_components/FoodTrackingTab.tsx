@@ -46,7 +46,17 @@ import { CustomTargetsSheet } from './CustomTargetsSheet';
 import { HighDayControl } from './HighDayControl';
 import { addDays, DEFAULT_TIMEZONE, startOfWeek, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { dayCaloriesOf, hasFoodLogged } from '@/lib/utils/dailyLog';
-import { coachCalories, daysInRange, foodDayLabel, foodRing, foodStripCaption, foodStripDays, monthOver, type FoodDay } from '@/lib/utils/dayStrip';
+import {
+  coachCalories,
+  dayRingTarget,
+  daysInRange,
+  foodDayLabel,
+  foodRing,
+  foodStripCaption,
+  foodStripDays,
+  monthOver,
+  type FoodDay,
+} from '@/lib/utils/dayStrip';
 import { CARD_EDGE, DayStrip, DayStripCard, EarlierButton, type DayStripDay } from './DayStrip';
 import { useOlderDayMarks } from './useDayMarks';
 import { copyMessage, dayLabel, type DiaryCopyRequest } from '@/lib/diaryCopy';
@@ -584,6 +594,9 @@ export function FoodTrackingTab({
   const cycling = isCyclingTarget(weekTarget);
   const viewingWeek = toIsoDate(startOfWeek(new Date(viewingDate + 'T00:00:00Z')));
   const [highDays, setHighDays] = useState<{ week: string; dates: string[] } | null>(null);
+  // Every week's high days read or changed on this screen (by Monday), so a day made a high day here keeps its high target on the
+  // day strip once another week is opened (the day types the page loaded are older).
+  const [highWeeks, setHighWeeks] = useState<Record<string, string[]>>({});
   const [highDaysFailedWeek, setHighDaysFailedWeek] = useState<string | null>(null);
   const [highDaysAttempt, setHighDaysAttempt] = useState(0);
   useEffect(() => {
@@ -591,7 +604,9 @@ export function FoodTrackingTab({
     let live = true;
     getHighDaysInWeek(clientId, viewingWeek)
       .then((dates) => {
-        if (live) setHighDays({ week: viewingWeek, dates });
+        if (!live) return;
+        setHighDays({ week: viewingWeek, dates });
+        setHighWeeks((prev) => ({ ...prev, [viewingWeek]: dates }));
       })
       .catch(() => {
         if (live) setHighDaysFailedWeek(viewingWeek);
@@ -634,16 +649,17 @@ export function FoodTrackingTab({
   }
   const foodDays = new Map(loggedDays);
   for (const [date, day] of Object.entries(changedDays)) foodDays.set(date, day);
-  // Each day's ring is read against that day's own target: a calorie-cycling member's high day has the high one. The week on screen
-  // uses the high days read for it; other weeks the day types the page loaded.
-  const highOn = (d: string) =>
-    weekHighDays && toIsoDate(startOfWeek(new Date(d + 'T00:00:00Z'))) === viewingWeek ? weekHighDays.includes(d) : loadedHighDays.has(d);
-  const calorieTargetOn = (d: string) => dayTargetFor(weekTarget, highOn(d) ? 'high' : 'flat')?.calories ?? null;
+  // Each day's ring is read against that day's own target: a calorie-cycling member's high day has the high one. A week whose high
+  // days were read or changed here uses those; any other the day types the page loaded.
+  const ringTargets = {
+    flat: dayTargetFor(weekTarget, 'flat')?.calories ?? null,
+    high: dayTargetFor(weekTarget, 'high')?.calories ?? null,
+  };
   const shownDate = loadingDate ?? viewingDate;
   const stripDays: DayStripDay[] = stripDates.map((iso) => {
     const dt = new Date(iso + 'T00:00:00Z');
     const day = foodDays.get(iso);
-    const target = calorieTargetOn(iso);
+    const target = dayRingTarget(iso, ringTargets, highWeeks, loadedHighDays);
     const coach = readOnly ? coachCalories(day) : null;
     return {
       iso,
@@ -728,6 +744,7 @@ export function FoodTrackingTab({
       async () => {
         const dates = await setHighDay(clientId, date, makeHigh);
         setHighDays({ week, dates });
+        setHighWeeks((prev) => ({ ...prev, [week]: dates }));
       },
       { success: makeHigh ? 'Made this a high day' : 'Back to a normal day', ...quiet }
     );

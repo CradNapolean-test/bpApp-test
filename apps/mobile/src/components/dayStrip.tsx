@@ -10,6 +10,7 @@ import {
   checkinRing,
   checkinStripCaption,
   checkinStripDays,
+  dayRingTarget,
   foodDayLabel,
   foodRing,
   foodStripCaption,
@@ -22,7 +23,7 @@ import {
 import { WEEKDAY_SHORT } from '@ballistic/shared/utils/dates';
 
 import { Pressable } from '@/components/press';
-import { useCalorieTargetFor } from '@/lib/foodTarget';
+import { useCalorieTargets } from '@/lib/foodTarget';
 import { useRecentLogs } from '@/lib/today';
 
 // The day strip on the food diary and the daily check-in (item 8, signed off 21 Nov 2026), the phone's copy of the web's
@@ -42,6 +43,7 @@ const PAD = 14;
 const RING_R = 17;
 const RING_C = 2 * Math.PI * RING_R;
 const parse = (iso: string) => new Date(`${iso}T00:00:00Z`);
+const NO_WEEKS: Record<string, string[]> = {};
 
 export interface StripDay {
   iso: string;
@@ -173,19 +175,21 @@ export function FoodDayStrip({
   onSelect: (iso: string) => void;
 }) {
   const logsQ = useRecentLogs(today, !!profile);
-  const targetFor = useCalorieTargetFor(profile, today);
+  const targets = useCalorieTargets(profile, today);
   const loaded = useMemo(() => {
-    const m = new Map<string, { day: FoodDay; high: boolean }>();
+    const days = new Map<string, FoodDay>();
+    const high = new Set<string>();
     for (const row of logsQ.data ?? []) {
-      m.set(row.log_date, { day: { calories: dayCaloriesOf(row), hasFood: hasFoodLogged(row) }, high: row.day_type === 'high' });
+      days.set(row.log_date, { calories: dayCaloriesOf(row), hasFood: hasFoodLogged(row) });
+      if (row.day_type === 'high') high.add(row.log_date);
     }
-    return m;
+    return { days, high };
   }, [logsQ.data]);
-  const foodDays = new Map<string, FoodDay>();
-  for (const [iso, v] of loaded) foodDays.set(iso, v.day);
+  const foodDays = new Map(loaded.days);
   if (live) foodDays.set(date, live);
   const days = foodStripDays(today, BROWSE_DAYS, FOOD_AHEAD_DAYS).map((iso) => {
-    const target = iso === date ? liveTarget : targetFor(loaded.get(iso)?.high ? 'high' : 'flat');
+    // The day on screen has its live target; the recent days are refetched after a high-day change, so no week is kept here.
+    const target = iso === date ? liveTarget : dayRingTarget(iso, targets, NO_WEEKS, loaded.high);
     const day = foodDays.get(iso);
     return { iso, label: foodDayLabel(iso, today, day, target), ring: foodRing(iso, today, day, target) };
   });
