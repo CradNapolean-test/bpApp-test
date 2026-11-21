@@ -54,8 +54,11 @@ const created = [
   'program_template_days_refuse_gym_programme_shorten',
 ];
 // Replaced from an earlier migration (the one named in its guard row).
-const replaced = ['set_programme_week_one'];
+const replaced = ['set_programme_week_one', 'apply_programme_rollout'];
 const file0167 = fs.readFileSync(path.resolve(__dirname, '../migrations', '0167_programme_rollout_updates.sql'), 'utf8').replace(/\r\n/g, '\n');
+const file0130 = fs
+  .readFileSync(path.resolve(__dirname, '../migrations', '0130_gym_scoping_and_permission_checks.sql'), 'utf8')
+  .replace(/\r\n/g, '\n');
 // Bodies from earlier copies of this file, which may already be in the database: the copy handed out on 20 Nov 2026 (gym_programmes,
 // set_programme_week_one), a later one (the template-delete trigger, set_programme_week_one) and the one of 21 Nov that added the
 // template-days trigger (the template-delete trigger). Each has the same arguments and result as today's, so this file replaces it in
@@ -97,7 +100,7 @@ describe('migration 0172 is safe to paste into the SQL editor', () => {
     }
   });
 
-  it('the function it replaces must be 0167’s or this file’s', () => {
+  it('the functions it replaces must be the earlier migration’s or this file’s', () => {
     const row = guardRows.find((r) => r.name === 'set_programme_week_one');
     expect(row?.from).toBe('0167');
     expect(row?.accepted).toEqual([
@@ -106,12 +109,25 @@ describe('migration 0172 is safe to paste into the SQL editor', () => {
       ...earlierCopies.set_programme_week_one,
     ]);
     expect(latest('set_programme_week_one').file).toBe(file);
+
+    const apply = guardRows.find((r) => r.name === 'apply_programme_rollout');
+    expect(apply?.from).toBe('0130');
+    expect(apply?.accepted).toEqual([bodyMd5(bodyInFile('apply_programme_rollout', file0130)), bodyMd5(bodyInFile('apply_programme_rollout'))]);
+    // 0130's is the latest before this file's
+    const dir = path.resolve(__dirname, '../migrations');
+    const defining = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .filter((f) => /create\s+(or\s+replace\s+)?function\s+(public\.)?apply_programme_rollout\s*\(/i.test(fs.readFileSync(path.join(dir, f), 'utf8')));
+    expect(defining).toEqual(['0094_programme_rollouts.sql', '0130_gym_scoping_and_permission_checks.sql', file]);
+    expect(latest('apply_programme_rollout').file).toBe(file);
   });
 
   it('replaces no other function from an earlier migration', () => {
     const earlier = new Set(fns.filter((f) => f.file !== file).map((f) => f.name));
     for (const name of created) expect(earlier.has(name)).toBe(false);
-    for (const untouched of ['apply_programme_rollout', 'schedule_programme_rollout', 'instantiate_template_core', 'apply_template_to_rollout', 'programme_rollout_usage']) {
+    for (const untouched of ['apply_due_programme_rollouts', 'schedule_programme_rollout', 'instantiate_template_core', 'apply_template_to_rollout', 'programme_rollout_usage']) {
       expect(latest(untouched).file).not.toBe(file);
     }
   });
@@ -278,6 +294,34 @@ describe('who can do what (Row Level Security and function access)', () => {
     expect(shorten).toContain(
       'continue when public.is_admin_of_gym(v_r.gym_id); select * into v_g from public._gym_programme_today(v_r.gym_id); continue when v_g.rollout_id is distinct from v_r.id; if v_g.today <= v_g.week_one + 7 * old.week_num - 1 then raise exception'
     );
+  });
+
+  it('a start for everyone is given out early by nobody: apply_programme_rollout, signed in, is a gym admin’s for everyone and never before the start date', () => {
+    const apply = squeeze(code('apply_programme_rollout'));
+    const before = squeeze(bodyInFile('apply_programme_rollout', file0130).replace(/--.*$/gm, ''));
+    // as 0130 up to "already given out", then the new checks, then as 0130 to the end
+    const head = before.slice(0, before.indexOf('for v_client in'));
+    const tail = before.slice(before.indexOf('for v_client in'));
+    expect(apply.replace(' v_today date;', '')).toContain(head.trim());
+    expect(apply).toContain(tail.trim());
+    expect(apply).toContain(
+      "if v_r.applied_at is not null then return 0; end if; if auth.uid() is not null then if v_r.audience = 'all' and not exists (select 1 from profiles p where p.id = auth.uid() and p.is_gym_admin) then raise exception 'Only a gym admin can start a programme for everyone.'; end if;"
+    );
+    // the gym's today, as schedule_programme_rollout counts it; a missing gym is refused too
+    expect(apply).toContain(
+      "select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id; if v_today is null or v_r.start_date > v_today then raise exception"
+    );
+    // all of it only when signed in: the daily job (nobody signed in) gives a later start out on its day, as before
+    expect(apply.indexOf('if auth.uid() is not null then')).toBeLessThan(apply.indexOf("v_r.audience = 'all' and not exists"));
+    expect(code('apply_due_programme_rollouts')).toMatch(/if auth\.uid\(\) is not null then\s+raise exception 'Not authorized'/);
+    // the same admin check and the same today as Start a programme, which calls it to start now: nothing new is refused for a start today
+    expect(code('schedule_programme_rollout')).toMatch(/v_admin := exists \(select 1 from profiles where id = auth\.uid\(\) and is_gym_admin\)/);
+    expect(code('schedule_programme_rollout')).toMatch(/v_today := public\.local_date\(v_tz\)/);
+    expect(squeeze(code('schedule_programme_rollout'))).toContain('if coalesce(p_starts_now, false) then v_count := public.apply_programme_rollout(v_id);');
+    // still callable by coaches (Start a programme calls it as the coach), never by anon
+    expect(access(latest('apply_programme_rollout'))).toEqual({ anon: false, authenticated: true });
+    expect(latest('apply_programme_rollout').securityDefiner).toBe(true);
+    expect(latest('apply_programme_rollout').searchPath).toBe('public');
   });
 
   it('the coach list shows waiting members only to their coach or a gym admin, and only while the programme is open', () => {
