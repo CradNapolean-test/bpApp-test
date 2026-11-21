@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, TextInput, View, type StyleProp, type TextInputProps, type TextStyle } from 'react-native';
 
-import type { DailyLogRow } from '@ballistic/shared/data/types';
-import { dayTrafficLight, trafficLight, type TrackerMetric, type TrafficLight } from '@ballistic/shared/utils/accountability';
-import { dayHasFood, editableTrackerValue, formatTrackerValue, nudgeValue, parseTrackerInput, TRACKER_CONFIG, type WaterUnit } from '@ballistic/shared/utils/weeklyLog';
+import { trafficLight, type TrackerMetric, type TrafficLight } from '@ballistic/shared/utils/accountability';
+import { editableTrackerValue, formatTrackerValue, nudgeValue, parseTrackerInput, TRACKER_CONFIG, type WaterUnit } from '@ballistic/shared/utils/weeklyLog';
 import { parseStLb, sameWeightReading, stLbFields } from '@ballistic/shared/utils/weightUnits';
 
 import { Pressable } from '@/components/press';
@@ -329,55 +328,6 @@ export function MoodDots({ label, value, onChange }: { label: string; value: num
           <Pressable key={n} onPress={() => onChange(n)} accessibilityRole="button" accessibilityLabel={`${label} ${n} of 5`} accessibilityState={{ selected: value === n }} style={{ flex: 1, height: 30, borderRadius: 15, backgroundColor: value != null && n <= value ? t.accent : t.cardMuted }} />
         ))}
       </View>
-    </View>
-  );
-}
-
-// The seven days of the week on show: weekday, date and a dot (green / amber / red when sleep, steps or water are in).
-export function DayStrip({ dates, focused, logs, onSelect }: { dates: string[]; focused: string; logs: DailyLogRow[]; onSelect: (d: string) => void }) {
-  const t = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', gap: 4 }}>
-      {dates.map((date) => {
-        const row = logs.find((l) => l.log_date === date);
-        const light = row ? dayTrafficLight(row) : null;
-        const logged = !!row && dayHasFood(row);
-        const isFocused = date === focused;
-        const d = new Date(date + 'T00:00:00Z');
-        const dot = light ? (isFocused ? t.accentForeground : lightColor(t, light)) : logged ? (isFocused ? t.accentForeground : t.muted) : 'transparent';
-        return (
-          <Pressable
-            key={date}
-            onPress={() => onSelect(date)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isFocused }}
-            accessibilityLabel={d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}
-            style={{ flex: 1, alignItems: 'center', gap: 4, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: isFocused ? t.accent : t.border, backgroundColor: isFocused ? t.accent : 'transparent' }}>
-            <AppText style={{ fontSize: 11, fontWeight: '600', textTransform: 'uppercase', color: isFocused ? t.accentForeground : t.muted }}>{d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</AppText>
-            <AppText style={{ fontWeight: '800', color: isFocused ? t.accentForeground : t.foreground }}>{d.getUTCDate()}</AppText>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dot }} />
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-// Previous week / this week label / next week.
-export function WeekHeader({ title, range, canGoBack = true, canGoForward, onBack, onForward }: { title: string; range: string; canGoBack?: boolean; canGoForward: boolean; onBack: () => void; onForward: () => void }) {
-  const t = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Pressable onPress={onBack} disabled={!canGoBack} accessibilityRole="button" accessibilityLabel="Previous week" accessibilityState={{ disabled: !canGoBack }} hitSlop={8} style={{ padding: 8, opacity: canGoBack ? 1 : 0.3 }}>
-        <Icon name="chevronLeft" size={22} color={t.muted} />
-      </Pressable>
-      <View style={{ alignItems: 'center' }}>
-        <AppText style={{ fontWeight: '700' }}>{title}</AppText>
-        <AppText variant="small" color="muted">{range}</AppText>
-      </View>
-      <Pressable onPress={onForward} disabled={!canGoForward} accessibilityRole="button" accessibilityLabel="Next week" accessibilityState={{ disabled: !canGoForward }} hitSlop={8} style={{ padding: 8, opacity: canGoForward ? 1 : 0.3 }}>
-        <Icon name="chevronRight" size={22} color={t.muted} />
-      </Pressable>
     </View>
   );
 }

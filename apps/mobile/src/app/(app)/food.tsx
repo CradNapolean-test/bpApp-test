@@ -5,11 +5,13 @@ import type { ClientProfileRow, FoodDiaryEntryRow } from '@ballistic/shared/data
 import { targetsHeldBack } from '@ballistic/shared/onboarding';
 import { addDays, isoDateInTz, toIsoDate } from '@ballistic/shared/utils/dates';
 import { recipeRowCount, type RecipeLine } from '@ballistic/shared/utils/diaryLines';
+import { totalMacros } from '@ballistic/shared/utils/foodTotals';
 
 import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
 import { AddProductSheet } from '@/components/barcodeFood';
-import { AddFoodSheet, CoachFeedbackCard, CompleteScanSheet, DateNav, DiarySection, EditEntrySheet, ScanAmountSheet, ScannerSheet, shortDate, TotalsCard } from '@/components/food';
+import { FoodDayStrip } from '@/components/dayStrip';
+import { AddFoodSheet, CoachFeedbackCard, CompleteScanSheet, DiarySection, EditEntrySheet, ScanAmountSheet, ScannerSheet, shortDate, TotalsCard } from '@/components/food';
 import { ManualDiaryScreen } from '@/components/manualMacros';
 import { NutritionTabs } from '@/components/pagetabs';
 import { PhotoDiaryScreen } from '@/components/photoDiary';
@@ -116,7 +118,14 @@ function FullDiary({ profile, today }: { profile: ClientProfileRow | null; today
     <>
       <ScrollScreen refreshing={diaryQ.isRefetching} onRefresh={() => diaryQ.refetch()}>
         <NutritionTabs current="food" />
-        <DateNav date={date} today={today} ahead={1} onChange={(d) => { setNote(null); scan.clearStatus(); setPicked(d === today ? null : d); }} />
+        <FoodDayStrip
+          profile={profile}
+          today={today}
+          date={date}
+          live={diaryQ.isSuccess ? { calories: totalMacros(entries).calories, hasFood: entries.length > 0 } : null}
+          liveTarget={target?.calories ?? null}
+          onSelect={(d) => { setNote(null); scan.clearStatus(); setPicked(d === today ? null : d); }}
+        />
         <TotalsCard entries={entries} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
         <HighDayRow profile={profile} today={today} date={date} />
         <MyTargetsRow profile={profile} today={today} />

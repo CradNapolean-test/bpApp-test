@@ -5,15 +5,17 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { CALORIE_FLOOR, cycleDayFor, weeklyTarget } from '@ballistic/shared/calculations';
 import { reviewedByLine } from '@ballistic/shared/utils/checkinReviews';
 import { formatStLb, formatWeight, weightUnitOf } from '@ballistic/shared/utils/weightUnits';
-import { isMetricOn } from '@ballistic/shared/utils/checkinMetrics';
-import { canBrowseWeek, canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
+import { enabledTrackers, isMetricOn } from '@ballistic/shared/utils/checkinMetrics';
+import { canEditDay, LOCKED_DAY_MESSAGE } from '@ballistic/shared/utils/dayPatch';
 import { dayCaloriesOf } from '@ballistic/shared/utils/dailyLog';
+import type { Tracker } from '@ballistic/shared/utils/dayStrip';
 import { toMemberEngineProfile } from '@ballistic/shared/utils/clientProfile';
 import { dayTargetFor } from '@ballistic/shared/utils/dayTarget';
 import { normalizeGender } from '@ballistic/shared/utils/personalDetails';
-import { blankDailyLog, datesOfWeek, SCALE_FIELDS, shiftWeek, validateDayPatch, weekAverages, weekOffset, weekStartOf, LOG_LIMITS, type DayPatch } from '@ballistic/shared/utils/weeklyLog';
+import { blankDailyLog, datesOfWeek, SCALE_FIELDS, validateDayPatch, weekAverages, weekOffset, weekStartOf, LOG_LIMITS, type DayPatch } from '@ballistic/shared/utils/weeklyLog';
 
-import { AutoSaveInput, AvgCard, DayStrip, MoodDots, StLbAutoSave, TrackerCard, WeekHeader } from '@/components/checkin';
+import { AutoSaveInput, AvgCard, MoodDots, StLbAutoSave, TrackerCard } from '@/components/checkin';
+import { CheckinDayStrip } from '@/components/dayStrip';
 import { Icon } from '@/components/icons';
 import { CheckinTabs } from '@/components/pagetabs';
 import { AppText, Button, Card, Screen, ScrollScreen } from '@/components/ui';
@@ -63,6 +65,12 @@ function CheckinContent() {
   const dates = datesOfWeek(weekStart);
   const [pickedDay, setPickedDay] = useState<string | null>(null);
   const focused = pickedDay && dates.includes(pickedDay) ? pickedDay : dates.includes(todayIso) ? todayIso : dates[0];
+  // The day strip (item 8) picks the day, and with it the week; Today goes back to this week.
+  function pickDay(d: string) {
+    setPickedWeek(d === todayIso ? null : weekStartOf(d));
+    setPickedDay(d === todayIso ? null : d);
+  }
+  const trackers = enabledTrackers(disabledMetrics) as Tracker[];
   // Members can change the last 14 days and open the last 30; older days are the coach's to change (D20, web dayPatch).
   const editable = canEditDay(focused, todayIso);
 
@@ -131,19 +139,17 @@ function CheckinContent() {
   return (
     <ScrollScreen refreshing={refreshing} onRefresh={refresh}>
       <CheckinTabs current="checkin" />
-      <WeekHeader
-        title={weekTitle}
-        range={`${dayMonth(dates[0])} to ${dayMonth(dates[6])}`}
-        canGoBack={canBrowseWeek(shiftWeek(weekStart, -1), todayIso)}
-        canGoForward={offset < 0}
-        onBack={() => setPickedWeek(shiftWeek(weekStart, -1))}
-        onForward={() => setPickedWeek(shiftWeek(weekStart, 1))}
-      />
+      {/* The day strip replaced the week arrows and the day chips (item 8): 30 days back in whole weeks, up to this Sunday. */}
+      <CheckinDayStrip today={todayIso} selected={focused} weekLogs={logs} trackers={trackers} onSelect={pickDay} />
       {weekReview ? (
         <View style={{ alignSelf: 'stretch', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(16,185,129,0.15)' }}>
           <AppText variant="small" color="success" style={{ fontWeight: '700', textAlign: 'center' }}>{reviewedByLine(weekReview)}</AppText>
         </View>
       ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <AppText style={{ fontWeight: '800' }}>{weekTitle}</AppText>
+        <AppText variant="small" color="muted">{`${dayMonth(dates[0])} to ${dayMonth(dates[6])}`}</AppText>
+      </View>
 
       <Card style={{ flexDirection: 'row', gap: spacing.md }}>
         {isPhoto ? (
@@ -168,8 +174,6 @@ function CheckinContent() {
           {avgs.foodDays} day{avgs.foodDays === 1 ? '' : 's'} of food logged this week · avg carbs {fmt(avgs.carbs)}{avgs.carbs != null ? 'g' : ''} · avg fat {fmt(avgs.fat)}{avgs.fat != null ? 'g' : ''} · avg bodyweight {avgs.bodyweight != null ? formatWeight(avgs.bodyweight, weightUnit) : '—'}
         </AppText>
       ) : null}
-
-      <DayStrip dates={dates} focused={focused} logs={logs} onSelect={setPickedDay} />
 
       {weekQ.isPending ? <ActivityIndicator color={t.accent} /> : null}
       {weekQ.isError ? <AppText color="danger">Could not load this week: {weekQ.error.message}</AppText> : null}

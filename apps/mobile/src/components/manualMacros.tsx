@@ -8,7 +8,8 @@ import { manualEntryKcal, manualTotals, validateManualEntry } from '@ballistic/s
 import { Pressable } from '@/components/press';
 import { MyTargetsRow } from '@/components/customTargets';
 import { HighDayRow } from '@/components/highDay';
-import { CoachFeedbackCard, DateNav, shortDate, TotalsCard } from '@/components/food';
+import { FoodDayStrip } from '@/components/dayStrip';
+import { CoachFeedbackCard, shortDate, TotalsCard } from '@/components/food';
 import { NutritionTabs } from '@/components/pagetabs';
 import { Icon } from '@/components/icons';
 import { AppText, Button, Card, ScrollScreen, SmallButton, TextField } from '@/components/ui';
@@ -116,7 +117,14 @@ export function ManualDiaryScreen({ profile, today }: { profile: ClientProfileRo
   return (
     <ScrollScreen refreshing={manualQ.isRefetching} onRefresh={() => manualQ.refetch()}>
       <NutritionTabs current="food" />
-      <DateNav date={date} today={today} ahead={1} onChange={(d) => setPicked(d === today ? null : d)} />
+      <FoodDayStrip
+        profile={profile}
+        today={today}
+        date={date}
+        live={manualQ.isSuccess ? { calories: manualTotals(entries).calories, hasFood: entries.length > 0 } : null}
+        liveTarget={target?.calories ?? null}
+        onSelect={(d) => setPicked(d === today ? null : d)}
+      />
       <TotalsCard totals={manualTotals(entries)} target={target} held={targetsHeldBack(profile, false)} title={date === today ? "Today's targets" : 'Targets'} note={shortDate(date)} />
       <HighDayRow profile={profile} today={today} date={date} />
       <MyTargetsRow profile={profile} today={today} />
