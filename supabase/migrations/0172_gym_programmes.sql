@@ -45,7 +45,11 @@
 --     yet or is the gym's programme (until its last week is over), so a coach can't cancel a start for everyone or end the gym programme
 --     that way. The app says so on Delete template. When the gym's programme goes with its template, the gym programme before it would be
 --     the gym's programme again: if that one is still within its weeks and not ended, it is ended too (ended_at), so it is not opened
---     again (the rule above). Only a gym admin can delete a template that would do that.
+--     again (the rule above). Only a gym admin can delete a template that would do that. A template's rollouts only go at the end of the
+--     delete, so the trigger leaves out a rollout whose template has already gone: several templates deleted in one request are decided
+--     as if they were deleted one after the other. Deletes at a gym also wait for each other (a lock per gym), so two requests at once
+--     are decided one after the other too. Before, deleting the gym programme's template and the one before it together (or in two
+--     requests at once) passed for a coach who isn't a gym admin, and opened the gym programme before those two again.
 --   * The gym programme's last day comes from its template's weeks, so taking weeks off the template would end it sooner, or straight
 --     away. A new trigger on program_template_days (program_template_days_refuse_gym_programme_shorten) lets only a gym admin take the
 --     last week off the template of the gym's programme (delete its days, or move them to an earlier week or another template) until
@@ -134,7 +138,10 @@
 -- scheduled start for everyone (direct delete), but can cancel one for chosen members; a non-admin coach cannot delete the template of the
 -- gym programme or of a scheduled start for everyone (refused, nothing deleted), but can delete one whose gym programme's last week is
 -- over, and a gym admin can delete either; a gym admin deleting the gym programme's template while the gym programme before it is still
--- within its weeks -> that one is ended (ended_at set) and a new member is given nothing; a non-admin coach cannot take the last week off
+-- within its weeks -> that one is ended (ended_at set) and a new member is given nothing; the gym programme's template (its last week over)
+-- and the template of the gym programme before it (also over) deleted in one request (delete ... in (both)), in either order, or in two
+-- requests at once, while the gym programme before those two is still within its weeks -> a non-admin coach is refused and nothing is
+-- deleted, and for a gym admin that one is ended; a non-admin coach cannot take the last week off
 -- the gym programme's template (delete its days, move them to week 2, or to another template; refused, nothing changed) until its last
 -- week is over, but can add a week or delete a day in an earlier week, and a gym admin can do either; a member cannot call gym_programmes,
 -- end_gym_programme or resolve_gym_programme_waiting.
@@ -181,8 +188,9 @@ begin
 
   -- The functions this migration creates: none may exist yet with another body (a second run finds its own). The one it replaces must be
   -- the one from 0167 or this file's. After this file's own md5, an earlier copy of this file's (same arguments and result, so it is
-  -- replaced in place): gym_programmes and set_programme_week_one as in the copy handed out on 20 Nov 2026, and
-  -- program_templates_refuse_gym_programme_delete and set_programme_week_one as in a later copy before 21 Nov.
+  -- replaced in place): gym_programmes and set_programme_week_one as in the copy handed out on 20 Nov 2026,
+  -- program_templates_refuse_gym_programme_delete and set_programme_week_one as in a later copy before 21 Nov, and
+  -- program_templates_refuse_gym_programme_delete as in the copy of 21 Nov that added the template-days trigger.
   for v_check in
     select * from (values
       ('_gym_programme_today', '0172', array['63d299a9c29db8643c15e20d43a70bdb']),
@@ -191,7 +199,8 @@ begin
       ('gym_programmes', '0172', array['8784850cd1412c5abd4b9bee1fd1a14a', '662073fea310d8827b69bac083e593f6']),
       ('end_gym_programme', '0172', array['8ff5f37461f44cd1e11e25c9a4cea232']),
       ('resolve_gym_programme_waiting', '0172', array['74c0f34c0813d2b78153984e38ae8950']),
-      ('program_templates_refuse_gym_programme_delete', '0172', array['8376186b3cf14c0b6d24d762c0e36f8e', 'e417964f898305816cc6a55ad7148e23']),
+      ('program_templates_refuse_gym_programme_delete', '0172', array['d60da1e4ee8413ca79ec75e79e5c8d9e', 'e417964f898305816cc6a55ad7148e23',
+                                                                      '8376186b3cf14c0b6d24d762c0e36f8e']),
       ('program_template_days_refuse_gym_programme_shorten', '0172', array['4eb2b9bf86c808d575cbe70b02c3a3fe']),
       -- replaced: the one from 0167, or this file's (a second run), or an earlier copy of this file's
       ('set_programme_week_one', '0167', array['e9b3fd49f3e6b99de8c7b1cd5f0708b3', '9dddcac25cab66b400ec4103de9fda99',
@@ -294,6 +303,11 @@ revoke all on function public._gym_programme_today(uuid) from public, anon, auth
 --   - is the gym's programme today until its last week is over, ended or not (as gym_programmes() shows it on the template);
 --   - is the gym's programme today while the gym's programme before it is still open (within its weeks, not ended): without this one, that
 --     one would be the gym's programme again. For a gym admin it is ended instead (an older one is never opened again).
+-- The rollouts of a template only go at the end of the statement that deletes it (the cascade), so a rollout whose template is already
+-- gone (deleted earlier in the same statement) is left out when the gym's programme and the one before it are picked: deleting several
+-- templates in one request is decided as if they were deleted one after the other, whatever order the rows come in. And one delete at a
+-- time per gym, with a lock taken before anything is read: a delete waits until another one at the gym has finished, then each statement
+-- here sees what that one deleted, so two requests at once can't each pass because the other's rollout is still there.
 -- Nobody signed in deletes as before, and nothing else is changed.
 create or replace function public.program_templates_refuse_gym_programme_delete()
 returns trigger
@@ -305,7 +319,8 @@ declare
   v_r programme_rollouts;
   v_admin boolean;
   v_today date;
-  v_g record;
+  v_cur_id uuid;
+  v_cur_last date;
   v_prev_id uuid;
   v_prev_name text;
   v_reopens boolean;
@@ -313,22 +328,39 @@ begin
   if auth.uid() is null then
     return old;
   end if;
+  -- One delete at a time per gym, before anything is read.
+  perform pg_advisory_xact_lock(hashtext('gym-programme-change:' || old.gym_id::text));
   for v_r in
     select r.* from programme_rollouts r where r.template_id = old.id and r.audience = 'all' order by r.start_date
   loop
+    if v_r.gym_id is distinct from old.gym_id then
+      perform pg_advisory_xact_lock(hashtext('gym-programme-change:' || v_r.gym_id::text));
+    end if;
     v_admin := public.is_admin_of_gym(v_r.gym_id);
     select public.local_date(coalesce(nullif(g.timezone, ''), 'UTC')) into v_today from gyms g where g.id = v_r.gym_id;
     if not v_admin and (v_r.applied_at is null or v_r.start_date > v_today) then
       raise exception '“%” is set to start for everyone at the gym on %, so only a gym admin can delete this template.',
         v_r.program_name, to_char(v_r.start_date, 'Dy FMDD Mon');
     end if;
-    select * into v_g from public._gym_programme_today(v_r.gym_id);
-    continue when v_g.rollout_id is distinct from v_r.id;
-    if not v_admin and v_g.today <= v_g.last_day then
+    -- The gym's programme today, as _gym_programme_today picks it, leaving out a rollout whose template is already gone; and its last day.
+    v_cur_id := null;
+    v_cur_last := null;
+    select x.id, x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1
+      into v_cur_id, v_cur_last
+    from programme_rollouts x
+    cross join lateral (
+      select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = x.template_id
+    ) tw
+    where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today
+      and exists (select 1 from program_templates t where t.id = x.template_id)
+    order by x.start_date desc, x.created_at desc
+    limit 1;
+    continue when v_cur_id is distinct from v_r.id;
+    if not v_admin and v_today <= v_cur_last then
       raise exception '“%” is the gym programme until %, so only a gym admin can delete this template.',
-        v_r.program_name, to_char(v_g.last_day, 'Dy FMDD Mon');
+        v_r.program_name, to_char(v_cur_last, 'Dy FMDD Mon');
     end if;
-    -- Without it, the gym's programme would be the one before it (not this template's), as _gym_programme_today picks.
+    -- Without it, the gym's programme would be the one before it (not this template's, nor one whose template is already gone).
     v_prev_id := null;
     v_prev_name := null;
     v_reopens := false;
@@ -340,6 +372,7 @@ begin
       select coalesce(max(d.week_num), 0)::integer as weeks from program_template_days d where d.template_id = x.template_id
     ) tw
     where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and x.template_id <> old.id
+      and exists (select 1 from program_templates t where t.id = x.template_id)
     order by x.start_date desc, x.created_at desc
     limit 1;
     if coalesce(v_reopens, false) then

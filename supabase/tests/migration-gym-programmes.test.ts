@@ -57,11 +57,12 @@ const created = [
 const replaced = ['set_programme_week_one'];
 const file0167 = fs.readFileSync(path.resolve(__dirname, '../migrations', '0167_programme_rollout_updates.sql'), 'utf8').replace(/\r\n/g, '\n');
 // Bodies from earlier copies of this file, which may already be in the database: the copy handed out on 20 Nov 2026 (gym_programmes,
-// set_programme_week_one) and a later one (the template-delete trigger, set_programme_week_one). Each has the same arguments and result as
-// today's, so this file replaces it in place. Worked out from those copies' text as bodyMd5 does.
+// set_programme_week_one), a later one (the template-delete trigger, set_programme_week_one) and the one of 21 Nov that added the
+// template-days trigger (the template-delete trigger). Each has the same arguments and result as today's, so this file replaces it in
+// place. Worked out from those copies' text as bodyMd5 does.
 const earlierCopies: Record<string, string[]> = {
   gym_programmes: ['662073fea310d8827b69bac083e593f6'],
-  program_templates_refuse_gym_programme_delete: ['e417964f898305816cc6a55ad7148e23'],
+  program_templates_refuse_gym_programme_delete: ['e417964f898305816cc6a55ad7148e23', '8376186b3cf14c0b6d24d762c0e36f8e'],
   set_programme_week_one: ['8a258730266312d0344c534b09087221', '836a65083143b6a9bf93df50b68a7bec'],
 };
 
@@ -208,14 +209,35 @@ describe('who can do what (Row Level Security and function access)', () => {
     expect(guard.match(/if not v_admin\b/g)).toHaveLength(3);
     // not started yet: scheduled, or given out ahead of its start date
     expect(guard).toMatch(/if not v_admin and \(v_r\.applied_at is null or v_r\.start_date > v_today\) then raise exception/);
-    // the gym's programme until its last week is over, ended or not (as gym_programmes() shows it)
-    expect(guard).toContain('select * into v_g from public._gym_programme_today(v_r.gym_id); continue when v_g.rollout_id is distinct from v_r.id;');
-    expect(guard).toMatch(/if not v_admin and v_g\.today <= v_g\.last_day then raise exception/);
+    // the gym's programme until its last week is over, ended or not (as gym_programmes() shows it): picked as _gym_programme_today picks it,
+    // with its last day counted the same way
+    expect(guard).toContain(
+      "v_cur_id := null; v_cur_last := null; select x.id, x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1 into v_cur_id, v_cur_last from programme_rollouts x"
+    );
+    expect(guard).toContain(
+      "where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and exists (select 1 from program_templates t where t.id = x.template_id) order by x.start_date desc, x.created_at desc limit 1; continue when v_cur_id is distinct from v_r.id;"
+    );
+    expect(squeeze(code('_gym_programme_today'))).toContain(
+      "x.audience = 'all' and x.applied_at is not null and x.start_date <= t.today order by x.start_date desc, x.created_at desc limit 1"
+    );
+    expect(squeeze(code('_gym_programme_today'))).toContain('w.week_one + 7 * tw.weeks - 1');
+    expect(guard).toMatch(/if not v_admin and v_today <= v_cur_last then raise exception/);
     // without it, the gym's programme before it would be picked again (as _gym_programme_today picks), worked out afresh for each rollout
     expect(guard).toContain('v_prev_id := null; v_prev_name := null; v_reopens := false; select x.id, x.program_name,');
     expect(guard).toContain(
-      "where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and x.template_id <> old.id order by x.start_date desc, x.created_at desc limit 1"
+      "where x.gym_id = v_r.gym_id and x.audience = 'all' and x.applied_at is not null and x.start_date <= v_today and x.template_id <> old.id and exists (select 1 from program_templates t where t.id = x.template_id) order by x.start_date desc, x.created_at desc limit 1"
     );
+    // a template's rollouts only go at the end of the delete (the cascade), so both picks leave out a rollout whose template is already
+    // gone: several templates deleted in one request are decided as if one after the other, in any order
+    expect(guard.match(/and exists \(select 1 from program_templates t where t\.id = x\.template_id\)/g)).toHaveLength(2);
+    // and one delete at a time per gym, locked before anything is read, so two requests at once are decided one after the other
+    expect(guard).toContain(
+      "if auth.uid() is null then return old; end if; perform pg_advisory_xact_lock(hashtext('gym-programme-change:' || old.gym_id::text)); for v_r in select r.* from programme_rollouts r"
+    );
+    expect(guard).toContain(
+      "if v_r.gym_id is distinct from old.gym_id then perform pg_advisory_xact_lock(hashtext('gym-programme-change:' || v_r.gym_id::text)); end if; v_admin :="
+    );
+    expect(guard).not.toContain('_gym_programme_today');
     expect(guard).toContain('x.ended_at is null and tw.weeks > 0 and v_today <= x.start_date - (extract(isodow from x.start_date)::integer - 1) + 7 * tw.weeks - 1');
     // while that one is open: refused, or for a gym admin it ends with this one, so an older gym programme is never opened again
     expect(guard).toContain('if coalesce(v_reopens, false) then if not v_admin then raise exception');
