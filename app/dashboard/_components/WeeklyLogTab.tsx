@@ -35,6 +35,7 @@ import {
   checkinStripCaption,
   checkinStripDays,
   coachCalories,
+  coachWeekStripStart,
   daysInRange,
   monthOver,
   weekStartOfDay,
@@ -722,9 +723,8 @@ export function WeeklyLogTab(
   // A member: whole weeks from the Monday of the week 30 days ago (the oldest week canBrowseWeek opens) to this Sunday. A coach has
   // no limit: the page's 84 days, earlier weeks on asking, and a week opened from the dashboard however old.
   const older = useOlderDayMarks(rest.clientId, todayIso, rest.isCoachView, startWeek);
-  const coachFrom = weekStartOfDay(older.from) < older.from ? toIsoDate(addDays(new Date(weekStartOfDay(older.from) + 'T00:00:00Z'), 7)) : older.from;
   const stripDates = rest.isCoachView
-    ? daysInRange(startWeek && startWeek < coachFrom ? weekStartOfDay(startWeek) : coachFrom, checkinStripDays(todayIso, 0).at(-1)!)
+    ? daysInRange(coachWeekStripStart(older.from, startWeek), checkinStripDays(todayIso, 0).at(-1)!)
     : checkinStripDays(todayIso, BROWSE_DAYS);
   // Opens on today, or on the week asked for (its Monday, or today when it is this week).
   const [picked, setPicked] = useState<string | null>(() => (startWeek && weekStartOfDay(startWeek) !== weekStartOfDay(todayIso) ? weekStartOfDay(startWeek) : null));

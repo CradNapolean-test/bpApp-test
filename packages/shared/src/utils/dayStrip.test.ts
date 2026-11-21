@@ -5,12 +5,15 @@ import {
   checkinStripCaption,
   checkinStripDays,
   coachCalories,
+  coachWeekStripStart,
   daysInRange,
   foodDayLabel,
   foodRing,
   foodStripCaption,
   foodStripDays,
   monthOver,
+  olderSpan,
+  reachBackDays,
   ringState,
   stripDayName,
   weekPhrase,
@@ -50,6 +53,43 @@ describe('days on the strip', () => {
 
   it('crosses the October clock change as plain days', () => {
     expect(daysInRange('2026-10-24', '2026-10-26')).toEqual(['2026-10-24', '2026-10-25', '2026-10-26']);
+  });
+});
+
+describe("a coach's strips", () => {
+  // The page carries the last 84 days: from Thursday 27 August.
+  const PAGE_FROM = '2026-08-27';
+
+  it("reads the older days right up to the page's first, with no gap and none read twice", () => {
+    expect(olderSpan(PAGE_FROM, 28)).toEqual({ from: '2026-07-30', to: '2026-08-26' });
+    expect(olderSpan(PAGE_FROM, 56)).toEqual({ from: '2026-07-02', to: '2026-08-26' });
+    expect(olderSpan(PAGE_FROM, 0).from).toBe(PAGE_FROM);
+  });
+
+  it('reaches back exactly to the Monday of a week opened from the dashboard that is older than the page', () => {
+    expect(reachBackDays(PAGE_FROM, '2026-07-06')).toBe(52);
+    expect(reachBackDays(PAGE_FROM, '2026-07-08')).toBe(52);
+    expect(olderSpan(PAGE_FROM, reachBackDays(PAGE_FROM, '2026-07-08')).from).toBe('2026-07-06');
+    // The week the page's first day is in.
+    expect(reachBackDays(PAGE_FROM, '2026-08-24')).toBe(3);
+    expect(reachBackDays(PAGE_FROM, '2026-09-07')).toBe(0);
+    expect(reachBackDays(PAGE_FROM, null)).toBe(0);
+  });
+
+  it('starts the check-in strip on a whole week, and always on the week opened', () => {
+    expect(coachWeekStripStart(PAGE_FROM, null)).toBe('2026-08-31');
+    expect(coachWeekStripStart('2026-08-31', null)).toBe('2026-08-31');
+    expect(coachWeekStripStart(PAGE_FROM, '2026-07-08')).toBe('2026-07-06');
+    expect(coachWeekStripStart(PAGE_FROM, '2026-09-14')).toBe('2026-08-31');
+    // Four more weeks (Earlier) still keep the week opened on the strip.
+    expect(coachWeekStripStart('2026-06-08', '2026-07-08')).toBe('2026-06-08');
+  });
+
+  it("does not grow at the front when the week opened has its rows in (so it is not pushed out of view)", () => {
+    for (const opened of ['2026-07-08', '2026-08-24', '2026-03-02']) {
+      const loaded = olderSpan(PAGE_FROM, reachBackDays(PAGE_FROM, opened)).from;
+      expect(coachWeekStripStart(loaded, opened)).toBe(coachWeekStripStart(PAGE_FROM, opened));
+    }
   });
 });
 

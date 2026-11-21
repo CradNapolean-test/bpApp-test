@@ -80,23 +80,27 @@ export function DayStrip({
   const ownRef = useRef<HTMLDivElement | null>(null);
   // Book passes its own ref, which its pop-in animation is scoped to.
   const scroller = stripRef ?? ownRef;
-  const firstScroll = useRef(true);
+  // The day last brought into view (null until the strip opens).
+  const shownDay = useRef<string | null>(null);
 
   // The day picked is kept in view, with a day's room either side, inside the strip only (the page itself never scrolls). It runs
-  // when the strip opens (today, at the right-hand end) and whenever the day changes some other way (the Today button).
+  // when the strip opens (today, at the right-hand end) and whenever the day changes some other way (the Today button), and only
+  // then: days added at the front (the coach's Earlier) leave the strip where it is, so the weeks just loaded show beside the button
+  // instead of the strip sliding back to the day picked. (days.length only lets a day not on the strip yet be found once it is.)
   useEffect(() => {
-    if (!progress) return;
+    if (!progress || shownDay.current === selected) return;
     const box = scroller.current;
     const chip = box?.querySelector<HTMLElement>(`[data-day="${selected}"]`);
     if (!box || !chip) return;
+    const opening = shownDay.current === null;
+    shownDay.current = selected;
     const room = 50;
     const boxRect = box.getBoundingClientRect();
     const chipRect = chip.getBoundingClientRect();
     let left = box.scrollLeft;
     if (chipRect.right > boxRect.right - room) left += chipRect.right - (boxRect.right - room);
     else if (chipRect.left < boxRect.left + room) left -= boxRect.left + room - chipRect.left;
-    if (left !== box.scrollLeft) box.scrollTo({ left, behavior: firstScroll.current || prefersReducedMotion() ? 'auto' : 'smooth' });
-    firstScroll.current = false;
+    if (left !== box.scrollLeft) box.scrollTo({ left, behavior: opening || prefersReducedMotion() ? 'auto' : 'smooth' });
   }, [progress, selected, days.length, scroller]);
 
   const strip = (

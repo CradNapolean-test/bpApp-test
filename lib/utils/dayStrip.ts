@@ -38,6 +38,35 @@ export function checkinStripDays(todayIso: string, browseDays: number): string[]
   return daysInRange(weekStartOfDay(shift(todayIso, -browseDays)), shift(weekStartOfDay(todayIso), 6));
 }
 
+// ---- a coach's strips (no 30-day limit) ----
+// The page carries the member's last 84 days, from `pageFrom`; days older than those are read in one range query, `extra` days at a
+// time (the web's app/dashboard/_components/useDayMarks.ts).
+
+const dayGap = (later: string, earlier: string) => Math.round((parse(later).getTime() - parse(earlier).getTime()) / 86_400_000);
+
+// The days read on top of the page's: `extra` days, up to the day before the page's first, so none is missed and none read twice.
+export function olderSpan(pageFrom: string, extra: number): { from: string; to: string } {
+  return { from: shift(pageFrom, -extra), to: shift(pageFrom, -1) };
+}
+
+// How far before the page's days a coach's strip reaches from the start: to the Monday of a week opened straight from the coach's
+// dashboard when that week is older than the page's days, and exactly there, so the strip does not grow at the front (pushing the
+// week opened out of view) once its rows arrive. Otherwise none.
+export function reachBackDays(pageFrom: string, openedWeek: string | null | undefined): number {
+  if (!openedWeek) return 0;
+  const monday = weekStartOfDay(openedWeek);
+  return monday < pageFrom ? dayGap(pageFrom, monday) : 0;
+}
+
+// The first day of a coach's check-in strip, which shows whole weeks: the first Monday on or after `firstDay` (the oldest day whose
+// rings are in), or the Monday of the week opened when that is older still, so the week opened is always on the strip.
+export function coachWeekStripStart(firstDay: string, openedWeek: string | null | undefined): string {
+  const monday = weekStartOfDay(firstDay);
+  const start = monday < firstDay ? shift(monday, 7) : firstDay;
+  const opened = openedWeek ? weekStartOfDay(openedWeek) : null;
+  return opened && opened < start ? opened : start;
+}
+
 // ---- the rings ----
 
 export type RingState = 'plain' | 'part' | 'done';
