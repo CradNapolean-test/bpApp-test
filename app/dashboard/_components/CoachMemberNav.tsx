@@ -10,7 +10,7 @@ import type { Category, NutritionTrackingMode, Screen } from './categories';
 // How a coach moves around one member's workspace: six sections, and inside a section a row of tabs.
 //   Overview   Overview (Chat is opened from the Message button)
 //   Nutrition  Food tracking / meal planner / recipes (whichever the member's mode uses)
-//   Training   Workout, Activity
+//   Training   Workout, Step swaps
 //   Check-in   Daily check-in, Forms
 //   Progress   Summary, Insights, Photos, Body scans, Big Dog
 //   Profile    Details, Credits & plan, Notes, Courses
@@ -38,7 +38,9 @@ const SCREEN_LABEL: Partial<Record<Screen, string>> = {
   'Meal Planner': 'Meal plan',
   'Photo Diary': 'Photo diary',
   Workout: 'Workout',
-  Activity: 'Activity',
+  // The "Can't get your steps in?" calculator: other activities that make up for steps not walked. "Activity" read like a log of what
+  // the member did (TR13).
+  Activity: 'Step swaps',
   'Weekly Log': 'Daily check-in',
   Forms: 'Forms',
 };
@@ -179,30 +181,32 @@ export function CoachMemberGroupTabs({ groups, active, onSelect }: { groups: Coa
   );
 }
 
-// Phone bottom bar: the first five sections (Profile is reached from the Overview's Manage list).
+// Phone bottom bar: all six sections, Profile included (CL7). Details, Credits & plan and Notes used to be reachable only through the
+// Overview's Manage list, a long scroll down. Six fit at 320px wide: each button is at least 53px, and "Nutrition" at 11px is about 50.
 export function CoachMemberBottomNav({ groups, active, onSelect }: { groups: CoachGroup[]; active: string | undefined; onSelect: Select }) {
   return (
-    <nav aria-label="Member sections" className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10">
-      {groups
-        .filter((g) => g.key !== 'profile')
-        .map((g) => {
-          const isActive = g.key === active;
-          const Icon = g.icon;
-          return (
-            <button
-              key={g.key}
-              type="button"
-              onClick={() => onSelect(g.tabs[0])}
-              aria-current={isActive ? 'page' : undefined}
-              className={`flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors ${isActive ? 'text-accent' : 'text-zinc-500'}`}
-            >
-              <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${isActive ? 'bg-accent-soft' : ''}`}>
-                <Icon className="h-5 w-5" />
-              </span>
-              {g.label}
-            </button>
-          );
-        })}
+    <nav
+      aria-label="Member sections"
+      className="fixed inset-x-0 bottom-0 z-40 flex border-t border-black/10 bg-[var(--background)] md:hidden dark:border-white/10"
+    >
+      {groups.map((g) => {
+        const isActive = g.key === active;
+        const Icon = g.icon;
+        return (
+          <button
+            key={g.key}
+            type="button"
+            onClick={() => onSelect(g.tabs[0])}
+            aria-current={isActive ? 'page' : undefined}
+            className={`flex min-w-0 flex-1 flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors ${isActive ? 'text-accent' : 'text-zinc-500'}`}
+          >
+            <span className={`flex h-7 w-11 items-center justify-center rounded-full transition-colors ${isActive ? 'bg-accent-soft' : ''}`}>
+              <Icon className="h-5 w-5" aria-hidden />
+            </span>
+            <span className="max-w-full truncate">{g.label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

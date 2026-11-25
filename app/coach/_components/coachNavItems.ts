@@ -18,6 +18,14 @@ export const COACH_NAV = [
 
 export const MOBILE_PRIMARY_COUNT = 4;
 
+// The row of pages along the top on a tablet (CoachNav), where the header's Messages button sits beside it: Messages is left out of the
+// row there, so the coach has one way in, the button, which keeps its unread count and whose drawer links to the full Messages page
+// (DB10). On the Messages page itself (which has no button) the row keeps it, so the page being looked at still shows as picked.
+// The phone's bar leaves Messages out for the same reason (CoachBottomTabBar); a laptop's side bar has it, and no header button.
+export function tabletNavItems(pathname: string | null) {
+  return COACH_NAV.filter((n) => n.href !== '/coach/messages' || isCoachNavActive(pathname, n.href));
+}
+
 export function isCoachNavActive(pathname: string | null, href: string): boolean {
   if (!pathname) return false;
   if (href === '/coach') return pathname === '/coach';

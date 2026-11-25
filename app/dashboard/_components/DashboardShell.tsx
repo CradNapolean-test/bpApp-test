@@ -10,6 +10,7 @@ import { ClientOnly } from '@/app/_components/ClientOnly';
 import { PageSkeleton } from '@/app/_components/PageSkeleton';
 import { Avatar } from '@/app/_components/Avatar';
 import { createClient } from '@/lib/supabase/client';
+import { isIsoDate } from '@/lib/photoReview';
 import { getClientUnreadCount } from '@/lib/data/chat';
 import { PushPrompt } from './PushPrompt';
 import { ReviewBanner } from './ReviewBanner';
@@ -17,12 +18,14 @@ import { InstallBanner } from './InstallBanner';
 import { DetailsConfirmBanner } from './DetailsConfirmBanner';
 import { BodyScansTab } from './BodyScansTab';
 import { CoachMemberOverview } from './CoachMemberOverview';
+import { CoachNutritionPlan } from './CoachNutritionPlan';
 import { OfflineSnapshot } from './OfflineSnapshot';
 import { closeTopOverlay } from '@/app/_components/useBackHandler';
 import { Logo } from '@/app/_components/Logo';
 import { StatusBadge } from '@/app/_components/StatusBadge';
 import { CoachNav } from '@/app/coach/_components/CoachNav';
 import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
+import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
 import { useReadSinceDrawn } from '@/app/coach/_components/CoachUnreadContext';
 import { CoachMemberBottomNav, CoachMemberGroupTabs, CoachMemberTabs, activeCoachGroup, coachGroups } from './CoachMemberNav';
@@ -262,6 +265,10 @@ export function DashboardShell({
   const [backStack, setBackStack] = useState<{ area: Area; category: Category; screen: Screen; scroll: number }[]>([]);
   // Set by a coach deep link (?week=): which week of check-ins to open the Weekly Log on.
   const [startWeek, setStartWeek] = useState<string | null>(null);
+  // Set by a coach deep link (?open=nutrition&date=): the day of meal photos to open the photo diary on (DB19).
+  const [nutritionDate, setNutritionDate] = useState<string | null>(null);
+  // Used once: leaving Nutrition forgets it, so coming back later opens on the day the diary itself picks.
+  if (nutritionDate && category !== 'Nutrition') setNutritionDate(null);
   const [focusDay, setFocusDay] = useState<{ dayId: string; nonce: number } | null>(null);
 
   // Live unread-message count for the member, so the header badge appears the moment the coach
@@ -508,7 +515,11 @@ export function DashboardShell({
         if (open === 'checkin') {
           if (week) setStartWeek(week);
           handleCategoryClick('Accountability');
-        } else if (open === 'nutrition') handleCategoryClick('Nutrition');
+        } else if (open === 'nutrition') {
+          const date = url.searchParams.get('date');
+          if (isIsoDate(date)) setNutritionDate(date);
+          handleCategoryClick('Nutrition');
+        }
         else if (open === 'forms') handleNavigate('Accountability', 'Forms');
         else if (open === 'bigdog') handleCategoryClick('Achievements');
         else if (open === 'training') handleCategoryClick('Training');
@@ -522,6 +533,7 @@ export function DashboardShell({
       else if (open === 'training') handleCategoryClick('Training');
       url.searchParams.delete('open');
       url.searchParams.delete('week');
+      url.searchParams.delete('date');
       window.history.replaceState(null, '', url.pathname + url.search + url.hash);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -575,18 +587,6 @@ export function DashboardShell({
     />
   );
 
-  // Compact per-screen header shown on mobile only (AppShell hides it at md+ and keeps the
-  // logo+title bar there instead) -- avatar chip + date + greeting on Home, matching the
-  // mobile redesign's Today screen; a plain category title on every other screen, since the
-  // prototype's Nutrition/Training/Accountability/Progress screens never repeat the greeting.
-  const firstName = profile?.name?.trim().split(/\s+/)[0] ?? 'there';
-  // Anchored to the client's own account timezone (not the viewer's browser) -- matches
-  // WeeklyLogTab's day selection and every other tz-aware "today" in this codebase; a coach
-  // viewing this client's dashboard from a different timezone must see the same "today" the
-  // client themselves would, or the header and the day the log defaults to disagree.
-  const todayLabel = formatLongDate(new Date(), { timeZone: profile?.timezone ?? DEFAULT_TIMEZONE }).toUpperCase();
-  const greetingHour = new Date().getHours();
-  const timeGreeting = greetingHour < 12 ? 'Morning' : greetingHour < 18 ? 'Afternoon' : 'Evening';
   // Who the client is chatting with: the coach sees the client's name, the member their coach's name (MS25), or "Your coach" until it
   // is known or when the coach has not set one.
   const otherPartyName = isCoachView ? clientLabel : (coachName ?? 'Your coach');
@@ -649,27 +649,9 @@ export function DashboardShell({
         </p>
       )}
     </div>
-  ) : (
-    <button
-      type="button"
-      onClick={() => handleCategoryClick('Account Settings')}
-      className="flex min-w-0 items-center gap-2.5 text-left"
-    >
-      <Avatar name={profile?.name ?? clientLabel} size="md" variant={!isCoachView ? 'self' : 'person'} />
-      <div className="min-w-0">
-        {!isCoachView && area === 'Coaching' && category === 'Home' ? (
-          <>
-            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-zinc-500">{todayLabel}</p>
-            <p className="truncate text-lg font-bold text-black dark:text-zinc-50">{timeGreeting}, {firstName}</p>
-          </>
-        ) : (
-          <p className="truncate text-lg font-bold text-black dark:text-zinc-50">
-            {isCoachView ? clientLabel : area === 'Classes' ? 'Book a session' : mobileHeaderTitle}
-          </p>
-        )}
-      </div>
-    </button>
-  );
+  ) : // The coach's view has no header row on a phone (CV11): the member's name, the Message button and their sections are all in the
+  // card and the bar below it, where the name and a "Chat with this member" icon used to be repeated.
+  undefined;
 
   // Every member screen draws its own black header on a phone (MemberHeader), so the page's own header row is left out there. The four
   // tabs draw theirs inside the screen; every other screen gets the one below, with a back button. Both keep the message bubble and the
@@ -743,12 +725,15 @@ export function DashboardShell({
       </div>
     ) : null;
 
+  // The coach's own name for the page they are on ("Overview", "Step swaps"), for the screen reader's page title.
+  const coachTabLabel = activeGroup?.tabs.find((t) => t.category === category && t.screen === effectiveScreen)?.label;
+
   const coachSummary = isCoachView && (
     <>
     {profile?.needs_coach_review && !(category === 'Home' && effectiveScreen === 'Today') && (
       <ReviewBanner clientId={clientId} reasons={profile.review_reasons ?? []} canAct={isOwnClient} />
     )}
-    <div className="mt-2 space-y-4 lg:mt-0">
+    <div className="mb-6 mt-2 space-y-4 md:mb-0 lg:mt-0">
       <Link href="/coach/clients" className="inline-flex min-h-11 items-center gap-1.5 text-sm font-bold text-accent hover:underline">
         <ArrowLeft className="h-4 w-4" /> All clients
       </Link>
@@ -839,31 +824,26 @@ export function DashboardShell({
   return (
     <ClientOnly fallback={<PageSkeleton />}>
     <AppShell
-      title={clientLabel}
+      // The coach's view names the member once, in the card (CV11); the header row (tablet only) carries the brand, as on every coach page.
+      title={isCoachView ? <CoachBrand /> : clientLabel}
       // The one <h1> of the screen, for screen readers: the brand in the header is not a heading (SH4).
-      pageTitle={isCoachView ? `${clientLabel}: ${effectiveScreen}` : effectiveScreen}
+      pageTitle={
+        isCoachView
+          ? `${clientLabel}: ${coachTabLabel ?? effectiveScreen}`
+          : area === 'Classes'
+            ? 'Book a session'
+            : effectiveScreen
+      }
       isCoachView={isCoachView}
       topBar={topBar}
       mobileHeader={mobileHeader}
-      hideMobileHeader={ownHeader}
+      hideMobileHeader={ownHeader || isCoachView}
       memberUi={!isCoachView}
       coachSidebar={isCoachView ? <CoachSidebar /> : undefined}
       coachSummary={coachSummary}
       sidebar={sidebar}
       headerAction={
         <>
-          {isCoachView && (
-          <button
-            onClick={() => (chatOpen ? setChatOpen(false) : openChat())}
-            aria-label="Chat with this member"
-            className="relative rounded-xl bg-black/5 p-2 text-zinc-600 hover:bg-black/10 md:hidden dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
-          >
-            <MessageSquare className="h-5 w-5" />
-            {(isCoachView ? perClientUnread : unreadMessageCount) > 0 && (
-              <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-[var(--background)] bg-danger" />
-            )}
-          </button>
-          )}
           {!isCoachView && (
           <button
             onClick={() => handleNavigate('Messages')}
@@ -896,11 +876,8 @@ export function DashboardShell({
             )}
           </button>
           )}
-          {isCoachView && (
-            <span className="hidden md:inline-flex">
-              <CoachMessagesButton unreadCount={coachUnread} />
-            </span>
-          )}
+          {/* The coach's inbox (every member), on a tablet: the header row is not shown on a phone, and a laptop has the side bar. */}
+          {isCoachView && <CoachMessagesButton unreadCount={coachUnread} />}
           {!isCoachView && area === 'Coaching' && category === 'Home' && (
             <button
               onClick={() => handleNavigate('Account Settings')}
@@ -923,6 +900,14 @@ export function DashboardShell({
       {subScreenHeader}
       {showCoaching && isCoachView && activeGroup && activeGroup.tabs.length > 1 && (
         <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
+      )}
+      {/* The member's nutrition plan and targets, at the top of the coach's view of their Nutrition (CL8). Drawn here, once for the whole
+          section, not inside the screen below it: picking a new tracking method swaps that screen (Food for Photo diary), which used to
+          rebuild the card and lose edits not yet saved. Outside the screen, a swipe across it never changes the day either. */}
+      {showCoaching && isCoachView && category === 'Nutrition' && (
+        <div className="mb-4">
+          <CoachNutritionPlan clientId={clientId} profile={profile} programWeek={programWeek} canEdit={isOwnClient} />
+        </div>
       )}
       {showCoaching && (
         <CoachSectionSlide on={isCoachView} slide={coachSlide} screenKey={`${category}|${effectiveScreen}`}>
@@ -947,6 +932,10 @@ export function DashboardShell({
               isOwnClient={isOwnClient}
               latestWeighIn={latestWeighIn}
               ownerCoachName={ownerCoachName}
+              currentUserId={currentUserId}
+              disabledMetrics={disabledMetrics}
+              unreadMessages={perClientUnread}
+              classTimezone={gymTimezone ?? profile?.timezone ?? DEFAULT_TIMEZONE}
               onNavigate={handleNavigate}
               onOpenCheckin={(week) => {
                 setStartWeek(week);
@@ -1111,6 +1100,7 @@ export function DashboardShell({
               canGiveFeedback={isCoachView && isOwnClient}
               feedback={nutritionFeedback}
               profile={profile}
+              initialDate={isCoachView ? nutritionDate : null}
             />
           )}
           {effectiveScreen === 'Meal Planner' && (

@@ -20,7 +20,7 @@ export function ReviewBanner({ clientId, reasons, canAct }: { clientId: string; 
         </ul>
       )}
       <p className="mt-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-        Check their targets under Personal details &amp; goals, then set up their membership.
+        Check their targets at the top of their Nutrition, then set up their membership.
       </p>
       {canAct && (
         <button

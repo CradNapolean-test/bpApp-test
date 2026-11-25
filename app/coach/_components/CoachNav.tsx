@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { COACH_NAV, isCoachNavActive } from './coachNavItems';
+import { isCoachNavActive, tabletNavItems } from './coachNavItems';
 
 // Desktop top nav. The destinations come from coachNavItems.ts, shared with the phone bottom bar
-// (CoachBottomTabBar) so the two always list the same pages.
+// (CoachBottomTabBar) so the two always list the same pages. Messages is the header's button here (tabletNavItems, DB10).
 export function CoachNav() {
   const pathname = usePathname();
 
@@ -18,7 +18,7 @@ export function CoachNav() {
 
   return (
     <nav aria-label="Coach" className="hidden w-max gap-1 rounded-2xl bg-black/[.02] p-1.5 md:flex dark:bg-white/[.03]">
-      {COACH_NAV.map(({ href, label, Icon }) => {
+      {tabletNavItems(pathname).map(({ href, label, Icon }) => {
         const active = isCoachNavActive(pathname, href);
         return (
           <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={linkCls(Boolean(active))}>

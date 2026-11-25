@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import type { ReactNode } from 'react';
 import {
+  ArrowUpRight,
   BellOff,
   CalendarCheck,
   Check,
@@ -89,6 +90,8 @@ interface TodoGroup {
   count?: number;
   // Single row, no expansion (e.g. one deletion request).
   direct?: boolean;
+  // A direct row that opens another page, named so the coach knows the tap leaves the dashboard (DB7).
+  leaves?: string;
   // A second, quieter list under the main one (weeks with only a day or two logged), with one button to mark them all reviewed.
   extra?: { label: string; items: TodoItem[]; markAll?: () => Promise<{ ok: boolean }> };
   // Runs as one of the group's rows is opened (the check-ins save their order for the week page's "next" link).
@@ -128,7 +131,7 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
   const renderItem = (item: TodoItem) => (
     <li key={item.key} className="flex items-center gap-2 rounded-xl bg-black/[.03] px-3 py-2 dark:bg-white/[.04]">
       <Link href={item.href} onClick={group.onOpen} className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{item.title}</span>
+        <span className="line-clamp-2 break-words text-sm font-semibold text-black dark:text-zinc-50">{item.title}</span>
         {/* Two lines, not one cut short: on a phone "Week of 26 Oct · 7 days logged · no food" lost the "no food" (DB22, CW18). */}
         <span className="line-clamp-2 text-xs text-zinc-500">{item.hint}</span>
       </Link>
@@ -156,18 +159,30 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
         <CountUp to={group.count ?? group.items.length} duration={0.6} />
       </span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="flex items-center gap-1.5 text-[15px] font-bold text-black dark:text-zinc-50">
-          <Icon className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
-          <span className="truncate">{group.title}</span>
+        {/* Up to two lines on a phone, not one cut short: "Weekly check-ins to revi…" (CV19). */}
+        <span className="flex items-start gap-1.5 text-[15px] font-bold text-black dark:text-zinc-50">
+          <Icon className="mt-[3px] h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+          <span className="line-clamp-2 break-words">{group.title}</span>
         </span>
         {/* Two lines, not one cut short (DB22). */}
         <span className="line-clamp-2 text-[13px] text-zinc-500 dark:text-zinc-400">{group.summary}</span>
+        {single && group.leaves && (
+          <span className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-zinc-500">
+            <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden /> {group.leaves}
+          </span>
+        )}
       </span>
-      <span aria-hidden className={`${coachBtnSoft} hidden shrink-0 sm:inline-flex`}>
-        {single ? 'Open' : open ? 'Close' : 'Review'}
+      {/* From a tablet up only. The pill sits inside its own wrapper: on the pill itself, coachBtnSoft's inline-flex won over hidden,
+          so it showed on a phone too and squeezed the title down to a few letters (CV19). */}
+      <span aria-hidden className="hidden shrink-0 sm:block">
+        <span className={coachBtnSoft}>{single ? (group.leaves ? 'Go' : 'Open') : open ? 'Close' : 'Review'}</span>
       </span>
       {single ? (
-        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 sm:hidden" />
+        group.leaves ? (
+          <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-400 sm:hidden" aria-hidden />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400 sm:hidden" />
+        )
       ) : (
         <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform sm:hidden ${open ? 'rotate-180' : ''}`} />
       )}
@@ -285,6 +300,8 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
       title: 'Red flag follow-ups',
       summary: `${data.redFlags.toContact} of ${data.redFlags.flagged} flagged member${data.redFlags.flagged === 1 ? '' : 's'} not contacted yet (week of ${weekShort(data.redFlags.weekStart)})`,
       direct: true,
+      // The one row that takes the coach off the dashboard; the others open in place (DB7).
+      leaves: 'Opens the red flag report in Classes',
       count: data.redFlags.toContact,
       items: [
         {
@@ -330,7 +347,8 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
         clientId: n.clientId,
         title: n.name,
         hint: n.reasons.filter((r) => r !== 'New member: check the starting plan').join(' · ') || 'Starting plan ready to check',
-        href: `/coach/clients/${n.clientId}?open=profile`,
+        // The starting plan and targets are at the top of their Nutrition now (CL8).
+        href: `/coach/clients/${n.clientId}?open=nutrition`,
       })),
     });
   }
@@ -402,7 +420,8 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
     groups.push({
       key: 'checkins',
       icon: Check,
-      tone: 'green',
+      // Waiting for the coach, so the waiting colour, as the other lists of work are; green read as "all done" (DB7).
+      tone: 'amber',
       title: 'Weekly check-ins to review',
       summary:
         full.length > 0
@@ -430,13 +449,14 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
       tone: 'violet',
       title: 'Meal photos to review',
       summary: `${data.photoReviews.length} photo diar${data.photoReviews.length === 1 ? 'y' : 'ies'} with no feedback yet`,
+      // Each opens the diary on the oldest of its days (DB19), with the days still to review marked there. There is no Reviewed button
+      // here: it cleared every day, seen or not (NU28). A day is reviewed in the diary, by marking it or leaving feedback on it.
       items: data.photoReviews.map((p) => ({
         key: p.clientId,
         clientId: p.clientId,
         title: p.name,
         hint: `${p.photos} photo${p.photos === 1 ? '' : 's'} · ${p.dates.map(dayShort).join(', ')}`,
-        href: `/coach/clients/${p.clientId}?open=nutrition`,
-        review: own(p.mine) ? () => markAllReviewed('diary_day', p.dates.map((d) => ({ clientId: p.clientId, ref: d }))) : undefined,
+        href: `/coach/clients/${p.clientId}?open=nutrition${p.dates[0] ? `&date=${p.dates[0]}` : ''}`,
       })),
     });
   }

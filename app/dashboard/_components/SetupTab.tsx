@@ -1,31 +1,25 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { pop } from '@/app/_components/motion/gsap';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useToast } from '@/app/_components/ToastProvider';
-import { calcEngine, weeklyTarget, CALORIE_FLOOR, RATE_PCT } from '@/lib/calculations';
-import { updateNutritionTrackingMode, upsertClientProfile, type ProfileEditableFields } from '@/lib/data/clientProfile';
-import { COACH_SETUP_FIELDS, MEMBER_SETUP_FIELDS, mergeIncoming, profilePatch } from '@/lib/profilePatch';
+import { upsertClientProfile, type ProfileEditableFields } from '@/lib/data/clientProfile';
+import { MEMBER_SETUP_FIELDS, mergeIncoming, profilePatch } from '@/lib/profilePatch';
+import { COACH_DETAILS_FIELDS } from '@/lib/nutritionPlanFields';
 import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { MemberMetricToggles, MemberScreenToggles } from './MemberScreenToggles';
-import { CustomTargetsSheet } from './CustomTargetsSheet';
 import { MemberResetLink } from '@/app/coach/_components/MemberResetLink';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientProfileRow } from '@/lib/data/types';
 import { weightUnitOf } from '@/lib/utils/weightUnits';
 import { StLbInput } from '@/app/_components/StLbInput';
 
-const NUTRITION_MODES: { value: ClientProfileRow['nutrition_tracking_mode']; label: string; hint: string }[] = [
-  { value: 'full_tracking', label: 'Full tracking', hint: 'Per-food diary, barcode scan, recipes.' },
-  { value: 'manual_import', label: 'Manual import', hint: 'Client types macros per meal section, no food search.' },
-  { value: 'photo_diary', label: 'Photo diary', hint: 'Client photographs meals with a description.' },
-];
-
 // The form's shape (excludes the coach-only reminder settings, edited from CreditsTab, and everything with its own screen). Only the
-// fields in lib/profilePatch.ts are ever SAVED from it, and only the ones that changed.
+// fields in lib/profilePatch.ts are ever SAVED from it, and only the ones that changed. The coach's nutrition plan and daily targets
+// override are no longer here: they sit at the top of the coach's view of the member's Nutrition (CoachNutritionPlan, CL8).
 type SetupFields = ProfileEditableFields;
 
 const BLANK: SetupFields = {
@@ -85,10 +79,6 @@ function SectionCard({ title, collapsible, defaultOpen = true, children }: { tit
   );
 }
 
-function numOrNull(v: string): number | null {
-  return v === '' ? null : Number(v);
-}
-
 export function SetupTab({
   clientId,
   initialProfile,
@@ -99,13 +89,16 @@ export function SetupTab({
   clientId: string;
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
-  // Coach-only controls (nutrition tracking method, calculation detail) show for a coach.
+  // Coach-only controls (the member's screens and check-in measures, asking them to confirm their details) show for a coach.
   isCoachView?: boolean;
   screenToggles?: { disabledScreens: string[]; disabledMetrics: string[]; planIncludedScreens: string[] | null; planName: string | null };
 }) {
   const { run, busy: saving } = useAction();
-  const { run: runMode, busy: savingMode } = useAction();
+  const { run: runAsk, busy: asking } = useAction();
   const toast = useToast();
+  // Each box's label names it for a screen reader (MX21): the labels used to sit beside the boxes without pointing at them.
+  const fid = useId();
+  const idOf = (field: string) => `${fid}-${field}`;
   const [form, setForm] = useState<SetupFields>(
     initialProfile ?? BLANK
   );
@@ -113,7 +106,7 @@ export function SetupTab({
   // from it, so a change the coach made while this screen was open is never put back (R15).
   const [baseline, setBaseline] = useState<SetupFields | null>(initialProfile);
   const [seenProfile, setSeenProfile] = useState(initialProfile);
-  const allowedFields = isCoachView ? COACH_SETUP_FIELDS : MEMBER_SETUP_FIELDS;
+  const allowedFields = isCoachView ? COACH_DETAILS_FIELDS : MEMBER_SETUP_FIELDS;
   // When fresh data arrives (after a save, or because the coach changed something) take it for every field the person has not touched.
   if (seenProfile !== initialProfile) {
     setSeenProfile(initialProfile);
@@ -127,51 +120,7 @@ export function SetupTab({
   // after that (SU2).
   const startWeightLocked = !isCoachView && baseline != null && baseline.start_weight > 0;
   const [error, setError] = useState<string | null>(null);
-  const [nutritionMode, setNutritionMode] = useState(initialProfile?.nutrition_tracking_mode ?? 'full_tracking');
-  const [targetsOpen, setTargetsOpen] = useState(false);
   const saveButton = useRef<HTMLButtonElement>(null);
-
-  async function handleModeChange(mode: ClientProfileRow['nutrition_tracking_mode']) {
-    await runMode(() => updateNutritionTrackingMode(clientId, mode), {
-      success: 'Tracking mode updated',
-      onDone: () => setNutritionMode(mode),
-    });
-  }
-
-  const engine = useMemo(() => {
-    if (!form.age || !form.start_weight || !form.goal_weight || !form.body_fat_pct) return null;
-    return calcEngine({
-      age: form.age,
-      gender: form.gender === 'Male' ? 'Male' : 'Female',
-      startWeight: form.start_weight,
-      goalWeight: form.goal_weight,
-      bodyFatPct: form.body_fat_pct,
-      activityLevel: form.activity_level,
-      dietApproach: form.diet_approach,
-      goal: form.nutrition_goal,
-      setting: form.nutrition_setting,
-      cycling: form.cycling,
-    });
-  }, [form]);
-
-  const week1Target = useMemo(() => {
-    if (!engine || !form.age || !form.start_weight || !form.goal_weight || !form.body_fat_pct) return null;
-    return weeklyTarget(
-      {
-        age: form.age,
-        gender: form.gender === 'Male' ? 'Male' : 'Female',
-        startWeight: form.start_weight,
-        goalWeight: form.goal_weight,
-        bodyFatPct: form.body_fat_pct,
-        activityLevel: form.activity_level,
-        dietApproach: form.diet_approach,
-        goal: form.nutrition_goal,
-        setting: form.nutrition_setting,
-        cycling: form.cycling,
-      },
-      1
-    );
-  }, [engine, form]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -212,8 +161,9 @@ export function SetupTab({
         <SectionCard title={isCoachView ? 'Personal details' : 'About you'} collapsible={isCoachView} defaultOpen={!isCoachView}>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className={labelCls}>Name</label>
+              <label htmlFor={idOf('name')} className={labelCls}>Name</label>
               <input
+                id={idOf('name')}
                 required
                 className={inputCls}
                 maxLength={100}
@@ -222,8 +172,9 @@ export function SetupTab({
               />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Sex (used for calorie calculations)</label>
+              <label htmlFor={idOf('gender')} className={labelCls}>Sex (used for calorie calculations)</label>
               <select
+                id={idOf('gender')}
                 className={inputCls}
                 value={form.gender ?? 'Female'}
                 onChange={(e) => setForm({ ...form, gender: e.target.value })}
@@ -233,8 +184,9 @@ export function SetupTab({
               </select>
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Phone</label>
+              <label htmlFor={idOf('phone')} className={labelCls}>Phone</label>
               <input
+                id={idOf('phone')}
                 type="tel"
                 className={inputCls}
                 maxLength={30}
@@ -243,8 +195,9 @@ export function SetupTab({
               />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Date of birth</label>
+              <label htmlFor={idOf('dob')} className={labelCls}>Date of birth</label>
               <input
+                id={idOf('dob')}
                 type="date"
                 className={inputCls}
                 value={form.date_of_birth ?? ''}
@@ -252,8 +205,9 @@ export function SetupTab({
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <label className={labelCls}>Address</label>
+              <label htmlFor={idOf('address')} className={labelCls}>Address</label>
               <input
+                id={idOf('address')}
                 className={inputCls}
                 maxLength={300}
                 value={form.address ?? ''}
@@ -261,8 +215,9 @@ export function SetupTab({
               />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Emergency contact name</label>
+              <label htmlFor={idOf('ec-name')} className={labelCls}>Emergency contact name</label>
               <input
+                id={idOf('ec-name')}
                 className={inputCls}
                 maxLength={100}
                 value={form.emergency_contact_name ?? ''}
@@ -270,8 +225,9 @@ export function SetupTab({
               />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Emergency contact phone</label>
+              <label htmlFor={idOf('ec-phone')} className={labelCls}>Emergency contact phone</label>
               <input
+                id={idOf('ec-phone')}
                 type="tel"
                 className={inputCls}
                 maxLength={30}
@@ -285,20 +241,23 @@ export function SetupTab({
         <SectionCard title={isCoachView ? 'Goal' : 'Your goal'} collapsible={isCoachView}>
           <div className="mt-3 space-y-4">
             <div className="space-y-1">
-              <label className={labelCls}>{isCoachView ? 'What they want to achieve' : 'What do you want to achieve?'}</label>
+              <label htmlFor={idOf('goal')} className={labelCls}>{isCoachView ? 'What they want to achieve' : 'What do you want to achieve?'}</label>
               <textarea
+                id={idOf('goal')}
                 rows={7}
+                aria-describedby={isCoachView ? undefined : idOf('goal-hint')}
                 className={`${areaCls} resize-y leading-relaxed`}
                 placeholder="Be as detailed as you can. What do you want to achieve and why does it matter to you? Is there a date or event you're working towards? What has worked or not worked before? Any injuries, health conditions or things we should know about?"
                 maxLength={5000}
                 value={form.goal_description ?? ''}
                 onChange={(e) => setForm({ ...form, goal_description: e.target.value })}
               />
-              {!isCoachView && <p className="text-xs text-zinc-500">The more your coach knows, the better they can tailor your plan.</p>}
+              {!isCoachView && <p id={idOf('goal-hint')} className="text-xs text-zinc-500">The more your coach knows, the better they can tailor your plan.</p>}
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Training experience</label>
+              <label htmlFor={idOf('experience')} className={labelCls}>Training experience</label>
               <textarea
+                id={idOf('experience')}
                 rows={3}
                 className={`${areaCls} resize-y leading-relaxed`}
                 placeholder="e.g. Trained on and off for 2 years, new to lifting weights, ex-athlete..."
@@ -309,7 +268,8 @@ export function SetupTab({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className={labelCls}>Start weight ({stLb ? 'st & lb' : 'kg'})</label>
+                {/* In stones and pounds the two boxes name themselves ("Start weight, stones"), so the label points at neither. */}
+                <label htmlFor={stLb ? undefined : idOf('start-weight')} className={labelCls}>Start weight ({stLb ? 'st & lb' : 'kg'})</label>
                 {stLb ? (
                   <StLbInput
                     label="Start weight"
@@ -321,19 +281,21 @@ export function SetupTab({
                   />
                 ) : (
                 <input
+                  id={idOf('start-weight')}
                   type="number"
                   step="0.1"
                   required
+                  aria-describedby={startWeightLocked ? idOf('start-weight-hint') : undefined}
                   className={inputCls}
                   value={form.start_weight || ''}
                   disabled={startWeightLocked}
                   onChange={(e) => setForm({ ...form, start_weight: Number(e.target.value) })}
                 />
                 )}
-                {startWeightLocked && <p className="text-xs text-zinc-500">Set when you joined. Ask your coach to change it.</p>}
+                {startWeightLocked && <p id={idOf('start-weight-hint')} className="text-xs text-zinc-500">Set when you joined. Ask your coach to change it.</p>}
               </div>
               <div className="space-y-1">
-                <label className={labelCls}>
+                <label htmlFor={stLb ? undefined : idOf('goal-weight')} className={labelCls}>
                   Goal weight ({stLb ? 'st & lb' : 'kg'}) <span className="text-red-500">*</span>
                 </label>
                 {stLb ? (
@@ -346,6 +308,7 @@ export function SetupTab({
                   />
                 ) : (
                 <input
+                  id={idOf('goal-weight')}
                   type="number"
                   step="0.1"
                   required
@@ -359,47 +322,7 @@ export function SetupTab({
           </div>
         </SectionCard>
 
-        {isCoachView && !readOnly && screenToggles && <MemberScreenToggles clientId={clientId} {...screenToggles} />}
-        {isCoachView && !readOnly && screenToggles && <MemberMetricToggles clientId={clientId} disabledMetrics={screenToggles.disabledMetrics} />}
-
-        {isCoachView && !readOnly && (
-          <div className="flex items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
-            <p className="text-xs text-zinc-500">Ask this member to confirm their details. They see a banner on Home they can finish now or put off; the app keeps working either way.</p>
-            <button
-              type="button"
-              disabled={savingMode}
-              onClick={() => runMode(() => requestDetailsUpdate(clientId), { success: 'Asked them to confirm their details' })}
-              className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-50"
-            >
-              Ask them
-            </button>
-          </div>
-        )}
-
-        {isCoachView && !readOnly && (
-          <div className="flex items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-black dark:text-zinc-50">Daily targets override</p>
-              <p className="text-xs text-zinc-500">
-                {initialProfile?.custom_calories != null
-                  ? `Set: ${Math.round(initialProfile.custom_calories)} kcal · P ${initialProfile.custom_protein}g · C ${initialProfile.custom_carbs}g · F ${initialProfile.custom_fat}g.`
-                  : 'Using the calculated targets.'}
-                {initialProfile?.custom_targets_locked ? ' Member cannot change them.' : ' Member can set their own.'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setTargetsOpen(true)}
-              className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50"
-            >
-              Edit
-            </button>
-          </div>
-        )}
-        {targetsOpen && <CustomTargetsSheet clientId={clientId} profile={initialProfile} isCoach onClose={() => setTargetsOpen(false)} />}
-
-        {isCoachView && !readOnly && <MemberResetLink clientId={clientId} />}
-
+        {/* The member's height and their own health notes, straight after the goal (CL8). */}
         {isCoachView && (initialProfile?.health_notes || initialProfile?.height_cm) && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-50 p-4 text-sm dark:bg-amber-500/10">
             {initialProfile?.health_notes && (
@@ -409,141 +332,33 @@ export function SetupTab({
               </>
             )}
             {initialProfile?.height_cm && (
-              <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+              <p className={`${initialProfile.health_notes ? 'mt-2 ' : ''}text-xs text-zinc-600 dark:text-zinc-400`}>
                 Height {initialProfile.height_cm} cm
-                {initialProfile.body_fat_estimated ? ' · body fat % below is an estimate, worth confirming with a scan' : ''}
+                {initialProfile.body_fat_estimated ? ' · body fat % is an estimate (Nutrition plan), worth confirming with a scan' : ''}
               </p>
             )}
           </div>
         )}
 
-        {/* Calorie-engine inputs. Coach-only for now: members see their resulting targets in
-            Nutrition. A fuller rework (and a proper home for this) is still to be designed. */}
-        {isCoachView && (
-          <SectionCard title="Nutrition plan (coach only)" collapsible>
-          <div className="mt-3 space-y-4">
-            {engine && week1Target && (
-              <div className="rounded-xl bg-black/[.03] p-3 text-sm dark:bg-white/[.04]">
-                <p className="font-bold text-black dark:text-zinc-50">
-                  {Math.round(week1Target.calories / 7)} kcal · {Math.round(week1Target.protein / 7)}g protein ·{' '}
-                  {Math.round(week1Target.carbs / 7)}g carbs · {Math.round(week1Target.fat / 7)}g fat
-                  <span className="font-normal text-zinc-500"> (starting week)</span>
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  BMR {Math.round(engine.bmr)} · TDEE {Math.round(engine.tdee)} · protein {Math.round(engine.protein)}g · fat{' '}
-                  {Math.round(engine.fatPct * 100)}% of calories
-                </p>
-                {week1Target.floorApplied && (
-                  <p className="mt-2 text-amber-600 dark:text-amber-400">
-                    Calories were raised so fat and carbs stay above their minimums — this is a slower change than the setting asks for.
-                  </p>
-                )}
-                {week1Target.calories / 7 < CALORIE_FLOOR && (
-                  <p className="mt-2 text-amber-600 dark:text-amber-400">Daily target is below {CALORIE_FLOOR} kcal — worth a review.</p>
-                )}
-              </div>
-            )}
-            {!readOnly && (
-              <div className="space-y-2">
-                <label className={labelCls}>Nutrition tracking method</label>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  {NUTRITION_MODES.map((m) => (
-                    <button
-                      key={m.value}
-                      type="button"
-                      disabled={savingMode}
-                      onClick={() => handleModeChange(m.value)}
-                      className={`rounded-md border p-2.5 text-left text-sm transition-colors disabled:opacity-50 ${
-                        nutritionMode === m.value
-                          ? 'border-accent bg-accent-soft'
-                          : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-                      }`}
-                    >
-                      <p className="font-medium text-black dark:text-zinc-50">{m.label}</p>
-                      <p className="text-xs text-zinc-500">{m.hint}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className={labelCls}>Age</label>
-                <input
-                  type="number"
-                  className={inputCls}
-                  value={form.age ?? ''}
-                  onChange={(e) => setForm({ ...form, age: numOrNull(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Body fat %</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className={inputCls}
-                  value={form.body_fat_pct ?? ''}
-                  onChange={(e) => setForm({ ...form, body_fat_pct: numOrNull(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Activity level multiplier</label>
-                <input
-                  type="number"
-                  step="0.05"
-                  className={inputCls}
-                  value={form.activity_level}
-                  onChange={(e) => setForm({ ...form, activity_level: Number(e.target.value) })}
-                />
-                <p className="text-xs text-zinc-500">1.2 mostly desk-based · 1.5 moderately active · 1.75 very active.</p>
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Diet approach</label>
-                <select
-                  className={inputCls}
-                  value={form.diet_approach}
-                  onChange={(e) => setForm({ ...form, diet_approach: e.target.value as ClientProfileRow['diet_approach'] })}
-                >
-                  <option>High Carb Low Fat</option>
-                  <option>Higher Fat</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Goal</label>
-                <select
-                  className={inputCls}
-                  value={form.nutrition_goal}
-                  onChange={(e) => setForm({ ...form, nutrition_goal: e.target.value as ClientProfileRow['nutrition_goal'] })}
-                >
-                  <option value="fat_loss">Fat loss</option>
-                  <option value="muscle_gain">Muscle gain</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className={labelCls}>Setting</label>
-                <select
-                  className={inputCls}
-                  value={form.nutrition_setting}
-                  onChange={(e) => setForm({ ...form, nutrition_setting: e.target.value as ClientProfileRow['nutrition_setting'] })}
-                >
-                  <option value="steady">Steady</option>
-                  <option value="moderate">Moderate</option>
-                  <option value="aggressive">Aggressive</option>
-                </select>
-                <p className="text-xs text-zinc-500">
-                  {form.nutrition_goal === 'fat_loss'
-                    ? `Aims to lose about ${RATE_PCT.fat_loss[form.nutrition_setting] * 100}% of bodyweight a week.`
-                    : `Aims to gain about ${RATE_PCT.muscle_gain[form.nutrition_setting] * 100}% of bodyweight a month.`}
-                </p>
-              </div>
-              <label className="flex items-center gap-2 pt-6 text-sm">
-                <input type="checkbox" checked={form.cycling} onChange={(e) => setForm({ ...form, cycling: e.target.checked })} />
-                Calorie cycling
-              </label>
-            </div>
+        {isCoachView && !readOnly && (
+          <div className="flex items-center justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
+            <p className="text-xs text-zinc-500">Ask this member to confirm their details. They see a banner on Home they can finish now or put off; the app keeps working either way.</p>
+            <button
+              type="button"
+              disabled={asking}
+              onClick={() => runAsk(() => requestDetailsUpdate(clientId), { success: 'Asked them to confirm their details' })}
+              className="shrink-0 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-[13px] font-bold text-black dark:border-white/25 dark:text-zinc-50 disabled:opacity-50"
+            >
+              Ask them
+            </button>
           </div>
-          </SectionCard>
         )}
+
+        {isCoachView && !readOnly && <MemberResetLink clientId={clientId} />}
+
+        {/* The tick boxes come last (CL8). Each one saves as it is ticked; Save changes is for the boxes above. */}
+        {isCoachView && !readOnly && screenToggles && <MemberScreenToggles clientId={clientId} {...screenToggles} />}
+        {isCoachView && !readOnly && screenToggles && <MemberMetricToggles clientId={clientId} disabledMetrics={screenToggles.disabledMetrics} />}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 

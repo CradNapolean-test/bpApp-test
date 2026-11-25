@@ -179,7 +179,8 @@ export function AccountTab({
       <div>
         <SectionLabel>My account</SectionLabel>
         <ListGroup>
-          <ListRow icon={UserCog} title="Personal details & goals" subtitle="Contact details, measurements, targets" onClick={() => onNavigate('Account Settings', 'Setup')} />
+          {/* What it opens (MX21): it promised measurements and targets, which are not on it. */}
+          <ListRow icon={UserCog} title="Personal details & goals" subtitle="Contact details, your goal and weights" onClick={() => onNavigate('Account Settings', 'Setup')} />
           <ListRow icon={Wallet} title="Credits & membership" subtitle="Balance, history and your plan" onClick={() => onNavigate('Account Settings', 'Credits')} />
           <ListRow icon={Gift} title="Rewards & clubs" subtitle="Milestones and loyalty gifts" onClick={() => onNavigate('Community', 'Rewards')} />
           <ListRow icon={Lock} title="Change password" onClick={() => setOpenRow(openRow === 'password' ? null : 'password')} />

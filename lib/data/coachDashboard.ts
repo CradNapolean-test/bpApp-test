@@ -9,6 +9,7 @@ import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoDateInTz, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { minuteOfDayIn } from '@/lib/todaySessions';
 import { photoCount, reviewRows, startedBy } from '@/lib/coachDashboardRules';
+import { photoReviewSince, unreviewedPhotoDays } from '@/lib/photoReview';
 import { coachProgrammeEndLine, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
 import { getCoachChatOverview } from './chat';
 import { getRecentActivity } from './activity';
@@ -397,19 +398,18 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       if (daysIn(thisWeek) > 0) checkinsIn += 1;
     }
 
-    // Meal photos with no feedback or review yet (photo diary members, last 7 days).
+    // Meal photos with no feedback or review yet (photo diary members, last 7 days): the photo diary's own rule (lib/photoReview.ts),
+    // so the days listed here are the days the coach's diary marks as still to review (NU28).
     if (cp?.nutrition_tracking_mode === 'photo_diary') {
-      const fed = new Set((m.nutrition_feedback ?? []).map((f) => f.log_date));
-      const dates: string[] = [];
-      let photos = 0;
-      for (const l of m.daily_logs ?? []) {
-        const n = photoCount(l.food_photo_entries);
-        if (n === 0 || l.log_date < since7) continue;
-        if (reviewed.has(`diary_day|${l.log_date}`) || fed.has(l.log_date)) continue;
-        dates.push(l.log_date);
-        photos += n;
+      const days = unreviewedPhotoDays(
+        (m.daily_logs ?? []).map((l) => ({ date: l.log_date, photos: photoCount(l.food_photo_entries) })),
+        (m.coach_reviews ?? []).filter((r) => r.kind === 'diary_day').map((r) => r.ref),
+        (m.nutrition_feedback ?? []).map((f) => f.log_date),
+        photoReviewSince(todayIso)
+      );
+      if (days.length > 0) {
+        photoReviews.push({ clientId: m.id, name, dates: days.map((d) => d.date), photos: days.reduce((n, d) => n + d.photos, 0), mine: mine(m) });
       }
-      if (dates.length > 0) photoReviews.push({ clientId: m.id, name, dates: dates.sort(), photos, mine: mine(m) });
     }
 
     // Completed forms waiting for a look (last 30 days).
@@ -513,10 +513,12 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
   };
 }
 
-// "Mark all reviewed" (the thin check-in weeks) and a photo diary's Reviewed button: every marker in one insert, where it used to be
-// one call per week or day. The coach's own members only: the insert policy refuses the lot if any row is someone else's member.
-// Idempotent, like markReviewed.
+// "Mark all reviewed" (the thin check-in weeks): every marker in one insert, where it used to be one call per week. The coach's own
+// members only: the insert policy refuses the lot if any row is someone else's member. Idempotent, like markReviewed.
+// Not for days of meal photos: the dashboard's Reviewed button cleared a member's whole week of them, days the coach never opened
+// (NU28). Each day is reviewed in the photo diary, by marking it or leaving feedback on it.
 export async function markAllReviewed(kind: ReviewKind, items: { clientId: string; ref: string }[]): Promise<ActionResult> {
+  if (kind === 'diary_day') return fail(null, 'Review meal photos a day at a time, in their photo diary');
   const rows = reviewRows(kind, items);
   if (!rows) return fail(null, 'Too many to mark at once');
   if (rows.length === 0) return ok();

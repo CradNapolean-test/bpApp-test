@@ -12,6 +12,7 @@ import {
   FileText,
   Footprints,
   GraduationCap,
+  MessageSquare,
   NotebookPen,
   UserCog,
   Wallet,
@@ -34,6 +35,12 @@ import { lastActiveLabel } from '@/lib/healthStatus';
 import { weightGoalProgress } from '@/lib/weightGoal';
 import { calorieTone, proteinTone, splitFoodDays } from '@/lib/weekFood';
 import { olderUnreviewed, olderUnreviewedLine } from '@/lib/memberReview';
+import { checkinScaleTrends, CHECKIN_SCALES, trendTone, TREND_WEEKS } from '@/lib/checkinTrends';
+import type { ScaleTrend } from '@/lib/checkinTrends';
+import { nextBookedClass } from '@/lib/nextClass';
+import { overviewNotes } from '@/lib/overviewNotes';
+import { toDisabledMetricSet } from '@/lib/checkinMetrics';
+import { minuteOfDayIn } from '@/lib/todaySessions';
 import { addDays, formatClassTime, isoWeekKey, toIsoDate, todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { TrendChart } from './OverviewTab';
 import { BigDogCard } from './BigDogTab';
@@ -106,6 +113,51 @@ function Tile({
   );
 }
 
+const TREND_TONE_CLS = { good: 'text-success', bad: 'text-danger', neutral: 'text-zinc-500', flat: 'text-zinc-500' } as const;
+
+// One check-in scale over the last four weeks (DB11): the newest week's average out of 5, a bar for each week (oldest first, an empty
+// slot for a week with no score), and how far it has moved since the first scored week, coloured by which way is better.
+function ScaleTrendCell({ trend }: { trend: ScaleTrend }) {
+  const info = CHECKIN_SCALES.find((s) => s.key === trend.key);
+  const tone = trendTone(trend.key, trend.change);
+  const label = info?.label ?? trend.key;
+  const summary =
+    trend.latest == null
+      ? `${label}: not scored in the last ${TREND_WEEKS} weeks`
+      : `${label}: ${trend.latest.toFixed(1)} out of 5 in the latest week scored; weekly averages, oldest first, ${trend.weeks
+          .map((w) => (w.avg == null ? 'none' : w.avg.toFixed(1)))
+          .join(', ')}`;
+  return (
+    <div className="min-w-0 p-3.5" role="group" aria-label={summary}>
+      <p className="text-xs font-bold uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="mt-0.5 text-lg font-extrabold text-black dark:text-zinc-50">
+        {trend.latest != null ? trend.latest.toFixed(1) : '—'}
+        {trend.latest != null && <span className="text-xs font-bold text-zinc-500"> / 5</span>}
+      </p>
+      <div aria-hidden className="mt-1.5 flex h-8 items-end gap-1">
+        {trend.weeks.map((w) => (
+          <span key={w.weekStart} className="flex h-full flex-1 items-end">
+            {w.avg != null ? (
+              <span className="block w-full rounded-sm bg-accent" style={{ height: `${Math.max(12, (w.avg / 5) * 100)}%` }} />
+            ) : (
+              <span className="block h-1 w-full rounded-sm bg-black/10 dark:bg-white/15" />
+            )}
+          </span>
+        ))}
+      </div>
+      <p className={`mt-1 text-[11px] font-semibold ${tone ? TREND_TONE_CLS[tone] : 'text-zinc-500'}`}>
+        {trend.latest == null
+          ? 'Not scored yet'
+          : trend.change == null
+            ? `${trend.days} day${trend.days === 1 ? '' : 's'} scored`
+            : Math.abs(trend.change) < 0.1
+              ? 'Steady'
+              : `${trend.change > 0 ? '▲' : '▼'} ${Math.abs(trend.change).toFixed(1)} in ${TREND_WEEKS} weeks`}
+      </p>
+    </div>
+  );
+}
+
 // The coach's snapshot of one member: who they are, what needs doing, how this week has gone, and
 // the trends that matter (weight, body composition, training). Replaces the old overview, which
 // only showed today's food and a couple of counts.
@@ -128,6 +180,10 @@ export function CoachMemberOverview({
   isOwnClient,
   latestWeighIn = null,
   ownerCoachName = null,
+  currentUserId = null,
+  disabledMetrics = [],
+  unreadMessages = 0,
+  classTimezone,
   onNavigate,
   onOpenCheckin,
 }: {
@@ -150,6 +206,12 @@ export function CoachMemberOverview({
   // Their most recent weigh-in however old (the logs here only go back 84 days), and the name of the coach they belong to.
   latestWeighIn?: { date: string; weight: number } | null;
   ownerCoachName?: string | null;
+  // The coach looking (their own notes come first, CL15); the check-in measures switched off for this member; their unread messages to
+  // this coach (DB11); and the gym's timezone, for whether a class today has started yet (CV8).
+  currentUserId?: string | null;
+  disabledMetrics?: string[];
+  unreadMessages?: number;
+  classTimezone?: string;
   onNavigate: (category: Category, screen?: Screen) => void;
   onOpenCheckin: (weekStart: string) => void;
 }) {
@@ -211,9 +273,10 @@ export function CoachMemberOverview({
   const perWeek = membership?.package?.credits_per_week ?? null;
   const loggedWorkoutDays = new Set(workoutLogs.filter((w) => w.logged_at.slice(0, 10) >= thisWeek).map((w) => w.logged_at.slice(0, 10))).size;
   const lastWorkout = workoutLogs.map((w) => w.logged_at.slice(0, 10)).sort().at(-1) ?? null;
-  const nextClass = bookings
-    .filter((b) => b.status === 'booked' && b.booking_date >= todayIso)
-    .sort((a, b) => (a.booking_date + (a.class?.start_time ?? '')).localeCompare(b.booking_date + (b.class?.start_time ?? '')))[0];
+  // The next class still to come: one earlier today no longer counts once it has started (CV8). By the gym's clock and calendar, the
+  // times classes are set in.
+  const classTz = classTimezone ?? profile?.timezone ?? DEFAULT_TIMEZONE;
+  const nextClass = nextBookedClass(bookings, todayIsoInTz(classTz), minuteOfDayIn(classTz, new Date()));
 
   // ---- weight ----
   const weights = logged.filter((l) => l.bodyweight != null).sort((a, b) => (a.log_date < b.log_date ? -1 : 1));
@@ -239,7 +302,8 @@ export function CoachMemberOverview({
 
   // ---- needs doing ----
   const todo: { key: string; icon: typeof Check; title: string; hint: string; action: () => void; reviewed?: () => Promise<unknown> }[] = [];
-  // A new member's automatic starting plan waits for the coach to check it (it used to be a separate banner).
+  // A new member's automatic starting plan waits for the coach to check it (it used to be a separate banner). The plan and the targets
+  // are at the top of their Nutrition now (CL8), so that is where this goes.
   if (profile?.needs_coach_review) {
     todo.push({
       key: 'new-member',
@@ -247,8 +311,8 @@ export function CoachMemberOverview({
       title: 'New member: check their starting plan',
       hint:
         (profile.review_reasons ?? []).filter((r) => !r.toLowerCase().startsWith('new member')).join(' · ') ||
-        'Check their targets, then set up their membership',
-      action: () => onNavigate('Account Settings', 'Setup'),
+        'Check their targets under Nutrition, then set up their membership',
+      action: () => onNavigate('Nutrition'),
       reviewed: isOwnClient ? () => clearReviewFlag(clientId) : undefined,
     });
   }
@@ -335,7 +399,13 @@ export function CoachMemberOverview({
   // Coach-added injuries (Notes → Injuries & Limitations) always show, beside the member's own health notes. They used to show only
   // when they were among the two newest notes of any kind (CL9).
   const injuries = journalEntries.filter((n) => n.kind === 'injury');
-  const notes = journalEntries.filter((n) => n.kind !== 'injury').slice(0, 2);
+  // The coach's own notes first, and a colleague's said to be theirs (CL15).
+  const { notes, allMine: notesAllMine } = overviewNotes(journalEntries, currentUserId);
+
+  // Energy, stress and hunger from the daily check-in, a week at a time over the last four (DB11). A measure the coach has stopped
+  // asking this member for is left out.
+  const offMetrics = toDisabledMetricSet(disabledMetrics);
+  const scaleTrends = checkinScaleTrends(historyLogs, todayIso).filter((t) => !offMetrics.has(t.key));
 
   const weightChange = nowWeight != null && start != null ? nowWeight - start : null;
   // The member's weights in their own units, with kilograms alongside (D16).
@@ -413,14 +483,23 @@ export function CoachMemberOverview({
             </ul>
           </div>
         )}
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate('Accountability', 'Forms')}
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
-          >
-            <FileText className="h-4 w-4" /> Forms
-          </button>
+        {/* The jobs a coach does most often here, one tap each (CL12): this week's check-in, their programme, a note. Forms are in
+            Check-in, and any waiting to be read are listed under Needs you. */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[
+            { key: 'checkin', icon: Check, label: "This week's check-in", onClick: () => onOpenCheckin(thisWeek) },
+            { key: 'programme', icon: Dumbbell, label: 'Programme', onClick: () => onNavigate('Training', 'Workout') },
+            ...(isOwnClient ? [{ key: 'note', icon: NotebookPen, label: 'Add a note', onClick: () => onNavigate('Account Settings', 'Info') }] : []),
+          ].map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={a.onClick}
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-black/20 px-3.5 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
+            >
+              <a.icon className="h-4 w-4" aria-hidden /> {a.label}
+            </button>
+          ))}
         </div>
       </Card>
 
@@ -436,9 +515,10 @@ export function CoachMemberOverview({
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
                       <t.icon className="h-4 w-4" />
                     </span>
+                    {/* Wrapped, not cut short: "Check-in to review: week of 26 …" lost its date on a phone (CV21). */}
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{t.title}</span>
-                      <span className="block truncate text-xs text-zinc-500">{t.hint}</span>
+                      <span className="block break-words text-sm font-bold text-black dark:text-zinc-50">{t.title}</span>
+                      <span className="block break-words text-xs text-zinc-500">{t.hint}</span>
                     </span>
                     {!t.reviewed && <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />}
                   </button>
@@ -525,6 +605,17 @@ export function CoachMemberOverview({
               hint={foodHint(dayTarget ? `${Math.round(dayTarget.protein)}g` : null)}
             />
           )}
+          {/* Only for the coach's own member: a colleague's member's chat is private to their coach (D3). */}
+          {isOwnClient && (
+            <Tile
+              icon={MessageSquare}
+              label="Unread messages"
+              value={String(unreadMessages)}
+              tone={unreadMessages > 0 ? 'amber' : null}
+              hint={unreadMessages > 0 ? 'Waiting for your reply · tap to open the chat' : 'Nothing waiting from them'}
+              onClick={() => onNavigate('Messages')}
+            />
+          )}
           <Tile
             icon={Activity}
             label="Workouts logged"
@@ -533,6 +624,18 @@ export function CoachMemberOverview({
           />
         </div>
       </div>
+
+      {/* ---- energy, stress, hunger: the last four weeks (DB11) ---- */}
+      {scaleTrends.length > 0 && (
+        <div>
+          <SectionLabel>Check-in scores · last {TREND_WEEKS} weeks</SectionLabel>
+          <Card flush className={`grid divide-x divide-black/5 dark:divide-white/10 ${scaleTrends.length === 3 ? 'grid-cols-3' : scaleTrends.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {scaleTrends.map((t) => (
+              <ScaleTrendCell key={t.key} trend={t} />
+            ))}
+          </Card>
+        </div>
+      )}
 
       </div>
       <div className="space-y-4 lg:col-span-2">
@@ -624,12 +727,13 @@ export function CoachMemberOverview({
       {/* ---- notes ---- */}
       {notes.length > 0 && (
         <div>
-          <SectionLabel>Your notes</SectionLabel>
+          <SectionLabel>{notesAllMine ? 'Your notes' : 'Notes'}</SectionLabel>
           <Card className="space-y-2.5">
             {notes.map((n) => (
               <div key={n.id}>
                 <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">
                   {n.kind} · {shortDate(n.created_at.slice(0, 10))}
+                  {!n.mine && <span className="normal-case tracking-normal"> · by another coach</span>}
                 </p>
                 <p className="line-clamp-3 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{n.body}</p>
               </div>
@@ -645,7 +749,8 @@ export function CoachMemberOverview({
       <div>
         <SectionLabel>Manage</SectionLabel>
         <ListGroup>
-          <ListRow icon={UserCog} title="Details, goals & targets" subtitle="Contact details, goal, calorie and macro targets" onClick={() => onNavigate('Account Settings', 'Setup')} />
+          {/* The targets are at the top of Nutrition now (CL8). */}
+          <ListRow icon={UserCog} title="Details & goal" subtitle="Contact details, goal, their screens and check-in measures" onClick={() => onNavigate('Account Settings', 'Setup')} />
           <ListRow icon={Wallet} title="Credits & plan" subtitle="Membership, credits and check-in reminders" onClick={() => onNavigate('Account Settings', 'Credits')} />
           <ListRow icon={NotebookPen} title="Notes" subtitle="Your private notes on this member" onClick={() => onNavigate('Account Settings', 'Info')} />
           <ListRow icon={GraduationCap} title="Courses" subtitle="Resources assigned to them" onClick={() => onNavigate('Learn')} />

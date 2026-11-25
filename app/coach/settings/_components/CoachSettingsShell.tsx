@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatLongDate } from '@/lib/utils/dates';
 import { ArrowLeft } from 'lucide-react';
 import { AppShell } from '@/app/_components/AppShell';
@@ -67,6 +68,7 @@ export function CoachSettingsShell({
   // Changing the email or the password opens its form inside the profile card.
   const [changing, setChanging] = useState<'email' | 'password' | null>(null);
   const logoUrl = useCoachLogoUrl();
+  const router = useRouter();
   const todayLabel = formatLongDate(new Date());
   // No self-avatar here on purpose -- unlike every other coach hub page, this page's own
   // first section already is that avatar (the big profile card below), and a header link
@@ -77,11 +79,22 @@ export function CoachSettingsShell({
       <CoachMessagesButton unreadCount={unreadCount} />
     </div>
   );
+  // The back arrow is a real button now (CV7): it used to be a picture of one. Back to wherever the coach came from, or to the
+  // dashboard when Settings was opened on its own (a link, a new tab).
+  function goBack() {
+    if (window.history.length > 1) router.back();
+    else router.push('/coach');
+  }
   const mobileHeader = (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
-        <ArrowLeft className="h-4 w-4" />
-      </span>
+      <button
+        type="button"
+        onClick={goBack}
+        aria-label="Back"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/5 text-zinc-600 hover:bg-black/10 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+      </button>
       <p className="truncate text-lg font-bold text-black dark:text-zinc-50">Account</p>
     </div>
   );

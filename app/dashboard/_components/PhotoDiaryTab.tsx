@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useStaggerIn } from '@/app/_components/motion/useStaggerIn';
-import { Camera, ChevronLeft, ChevronRight, PencilLine, Trash2 } from 'lucide-react';
+import { ArrowRight, Camera, Check, ChevronLeft, ChevronRight, PencilLine, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { useAction } from '@/app/_components/useAction';
@@ -13,6 +14,9 @@ import { deleteFoodPhoto, getFoodPhotosForDate, uploadFoodPhoto } from '@/lib/da
 import { getOrCreateDailyLog } from '@/lib/data/dailyLogs';
 import { LOCKED_DAY_MESSAGE, canBrowseDate, canEditDay } from '@/lib/dayPatch';
 import { markReviewed } from '@/lib/data/coachReviews';
+import { getPhotoDiaryReviewDays } from '@/lib/data/photoDiaryReview';
+import { isIsoDate, nextUnreviewedDay, openingPhotoDay, photoReviewSince, unreviewedPhotoDays } from '@/lib/photoReview';
+import type { PhotoDay } from '@/lib/photoReview';
 import { shrinkImageFile } from '@/lib/utils/shrinkImage';
 import { groupByMealSection, suggestMealSection, validateMealEntry } from '@/lib/utils/photoDiary';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
@@ -22,6 +26,11 @@ import { useTodayIso } from './useTodayIso';
 import type { ClientProfileRow, FoodPhotoEntry, MealSectionRow, NutritionFeedbackRow } from '@/lib/data/types';
 
 const inputCls = 'w-full rounded-xl border border-black/10 bg-transparent px-3 py-2.5 text-base dark:border-white/10';
+
+const dayChip = (iso: string) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
+const dayLong = (iso: string) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
@@ -37,6 +46,7 @@ export function PhotoDiaryTab({
   canGiveFeedback,
   feedback,
   profile,
+  initialDate = null,
 }: {
   clientId: string;
   dailyLogId: string | null;
@@ -47,6 +57,8 @@ export function PhotoDiaryTab({
   canGiveFeedback: boolean;
   feedback: NutritionFeedbackRow[];
   profile: ClientProfileRow | null;
+  // The coach's view only: the day a dashboard link asks for (DB19).
+  initialDate?: string | null;
 }) {
   const confirm = useConfirm();
   const { run: runUpload, busy: uploading } = useAction();
@@ -54,6 +66,8 @@ export function PhotoDiaryTab({
   const { run: runReview, busy: reviewing } = useAction();
   // Days this coach has marked reviewed during this visit (marking twice is harmless, so the button needs no other memory).
   const [reviewedDays, setReviewedDays] = useState<Set<string>>(() => new Set());
+  // The coach's view (the diary is read-only for every coach): which recent days with meals are still to review (NU28).
+  const coachView = readOnly;
 
   // Today at the member's own timezone (not UTC), kept current past midnight (FT2).
   const todayIso = useTodayIso(profile?.timezone ?? DEFAULT_TIMEZONE);
@@ -74,6 +88,46 @@ export function PhotoDiaryTab({
   // The arrows either side of the day, and the same two moves when the diary is swiped sideways (useDaySwipe, below).
   const canGoBack = !dateLoading && !atBrowseLimit;
   const canGoOn = !dateLoading && !isToday;
+
+  // ---- the coach's review (NU28): the days of the last week with meals that the coach has neither marked reviewed nor left feedback
+  // on, by the dashboard's own rule (lib/photoReview.ts). Read once; what is marked or answered here takes days off at once.
+  const weekSince = photoReviewSince(todayIso);
+  // A day a dashboard link asks for is read too, even when it falls just outside this week by the member's clock (the dashboard counts
+  // the week by the gym's).
+  const reviewSince = isIsoDate(initialDate) && initialDate < weekSince ? initialDate : weekSince;
+  const [review, setReview] = useState<{ ok: boolean; since: string; days: PhotoDay[]; reviewed: string[] } | null>(null);
+  useEffect(() => {
+    if (!coachView) return;
+    let live = true;
+    getPhotoDiaryReviewDays(clientId, reviewSince)
+      .then((r) => {
+        if (live) setReview({ since: reviewSince, ...r });
+      })
+      .catch(() => {
+        if (live) setReview({ ok: false, since: reviewSince, days: [], reviewed: [] });
+      });
+    return () => {
+      live = false;
+    };
+  }, [coachView, clientId, reviewSince]);
+  const fedDays = useMemo(() => feedback.map((f) => f.log_date), [feedback]);
+  const [seenFeedback, setSeenFeedback] = useState(feedback);
+  if (seenFeedback !== feedback) {
+    setSeenFeedback(feedback);
+    const before = new Set(seenFeedback.map((f) => f.id));
+    const added = feedback.filter((f) => !before.has(f.id)).map((f) => f.log_date);
+    if (canGiveFeedback && added.length > 0) setReviewedDays((prev) => new Set([...prev, ...added]));
+  }
+  const toReview = useMemo(
+    () => (review ? unreviewedPhotoDays(review.days, [...review.reviewed, ...reviewedDays], fedDays, review.since, todayIso) : []),
+    [review, reviewedDays, fedDays, todayIso]
+  );
+  const toReviewDates = toReview.map((d) => d.date);
+  const viewingReviewed =
+    reviewedDays.has(viewingDate) || !!review?.reviewed.includes(viewingDate) || fedDays.includes(viewingDate);
+  // Whether this screen knows if the day on screen was reviewed: older days, and every day after a failed read, are not marked.
+  const reviewKnown = !!review?.ok && viewingDate >= review.since && viewingDate <= todayIso;
+  const nextToReview = nextUnreviewedDay(toReviewDates, viewingDate);
 
   // Reviewing a day is something the coach says ("Mark day as reviewed", or leaving feedback on it), not something that happens by looking:
   // paging through days used to clear every one of them from the dashboard's To do (R20).
@@ -117,6 +171,27 @@ export function PhotoDiaryTab({
     } finally {
       setDateLoading(false);
     }
+  }
+
+  // The coach's diary opens on the day a dashboard link names, else the oldest day still to review (NU28, DB19), unless the coach has
+  // already moved to another day by then. The member's diary opens on today, as before.
+  const moved = useRef(false);
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!coachView || opened.current) return;
+    // A day the link asks for opens at once; otherwise the oldest day to review, once that is known.
+    const asked = isIsoDate(initialDate) && initialDate <= todayIso ? initialDate : null;
+    const target = asked ?? (review ? openingPhotoDay(toReviewDates, todayIso) : null);
+    if (target == null) return;
+    opened.current = true;
+    if (!moved.current && target !== viewingDate) void loadDate(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachView, initialDate, review, todayIso]);
+
+  // A day the coach (or member) picks themselves: the opening day above no longer moves them.
+  function goTo(date: string) {
+    moved.current = true;
+    void loadDate(date);
   }
 
   function pickFile(f: File | null) {
@@ -174,7 +249,7 @@ export function PhotoDiaryTab({
   const mealGroups = groupByMealSection(photos, sections);
   // Rises in when the screen opens and when another day has loaded; a photo added to the day does not set the whole list moving again.
   useStaggerIn(meals, '[data-meal]', `${viewingDate}|${dateLoading}`);
-  useDaySwipe(meals, { previous: canGoBack ? () => loadDate(previousDay) : null, next: canGoOn ? () => loadDate(nextDay) : null });
+  useDaySwipe(meals, { previous: canGoBack ? () => goTo(previousDay) : null, next: canGoOn ? () => goTo(nextDay) : null });
 
   return (
     <div ref={meals} className="space-y-4">
@@ -183,7 +258,7 @@ export function PhotoDiaryTab({
           type="button"
           aria-label="Previous day"
           disabled={!canGoBack}
-          onClick={() => loadDate(previousDay)}
+          onClick={() => goTo(previousDay)}
           className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -191,10 +266,21 @@ export function PhotoDiaryTab({
         <div className="text-center">
           <p className="text-[15px] font-extrabold text-black dark:text-zinc-50">{isToday ? 'Today' : dateLabel}</p>
           {isToday && <p className="text-xs text-zinc-500">{dateLabel}</p>}
+          {coachView && reviewKnown && photos.length > 0 && (
+            <p className={`mt-0.5 inline-flex items-center gap-1 text-xs font-bold ${viewingReviewed ? 'text-zinc-500' : 'text-warning'}`}>
+              {viewingReviewed ? (
+                <>
+                  <Check className="h-3.5 w-3.5" aria-hidden /> Reviewed
+                </>
+              ) : (
+                'Not reviewed yet'
+              )}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {!isToday && (
-            <button type="button" disabled={dateLoading} onClick={() => loadDate(todayIso)} className="rounded-full px-3 py-1 text-xs font-bold text-accent">
+            <button type="button" disabled={dateLoading} onClick={() => goTo(todayIso)} className="rounded-full px-3 py-1 text-xs font-bold text-accent">
               Today
             </button>
           )}
@@ -202,7 +288,7 @@ export function PhotoDiaryTab({
             type="button"
             aria-label="Next day"
             disabled={!canGoOn}
-            onClick={() => loadDate(nextDay)}
+            onClick={() => goTo(nextDay)}
             className="rounded-full p-2 text-zinc-500 hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/10"
           >
             <ChevronRight className="h-5 w-5" />
@@ -211,6 +297,57 @@ export function PhotoDiaryTab({
       </div>
 
       {dayLocked && <p className="rounded-xl bg-card-muted px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">{LOCKED_DAY_MESSAGE}</p>}
+
+      {/* The coach: the days still to review, oldest first, each a tap away, and a jump to the next one (NU28). */}
+      {coachView && review?.ok && (toReview.length > 0 || review.days.length > 0) && (
+        <div className="rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
+          {toReview.length > 0 ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-bold text-black dark:text-zinc-50">
+                  {toReview.length} day{toReview.length === 1 ? '' : 's'} to review
+                  <span className="font-normal text-zinc-500"> · the last week</span>
+                </p>
+                {nextToReview && (
+                  <button
+                    type="button"
+                    disabled={dateLoading}
+                    onClick={() => goTo(nextToReview)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-accent-soft px-3 text-[13px] font-bold text-accent disabled:opacity-50"
+                  >
+                    Next to review: {dayChip(nextToReview)} <ArrowRight className="h-4 w-4" aria-hidden />
+                  </button>
+                )}
+              </div>
+              <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Days to review">
+                {toReview.map((d) => {
+                  const here = d.date === viewingDate;
+                  return (
+                    <li key={d.date}>
+                      <button
+                        type="button"
+                        disabled={dateLoading}
+                        aria-current={here ? 'date' : undefined}
+                        aria-label={`${dayLong(d.date)}, ${d.photos} meal${d.photos === 1 ? '' : 's'}, not reviewed`}
+                        onClick={() => goTo(d.date)}
+                        className={`h-9 rounded-full border px-3 text-xs font-bold transition-colors disabled:opacity-60 ${
+                          here ? 'border-warning bg-warning/15 text-black dark:text-zinc-50' : 'border-warning/40 text-zinc-700 hover:bg-warning/10 dark:text-zinc-300'
+                        }`}
+                      >
+                        {dayChip(d.date)} · {d.photos}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : (
+            <p className="flex items-center gap-1.5 text-sm text-zinc-500">
+              <Check className="h-4 w-4 text-success" aria-hidden /> Every day of meals in the last week has been reviewed.
+            </p>
+          )}
+        </div>
+      )}
 
       {!readOnly && !dayLocked && (
         <div className="space-y-3 rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10">
@@ -239,11 +376,11 @@ export function PhotoDiaryTab({
       {canGiveFeedback && photos.length > 0 && (
         <button
           type="button"
-          disabled={reviewing || reviewedDays.has(viewingDate)}
+          disabled={reviewing || viewingReviewed}
           onClick={() => void markDayReviewed()}
           className="h-11 w-full rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black hover:bg-black/[.03] disabled:opacity-60 dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
         >
-          {reviewedDays.has(viewingDate) ? '✓ Reviewed' : 'Mark day as reviewed'}
+          {viewingReviewed ? '✓ Reviewed' : 'Mark day as reviewed'}
         </button>
       )}
 
@@ -269,6 +406,7 @@ export function PhotoDiaryTab({
               {(mealGroups.length > 1 || group.section) && (
                 <h2 className="px-1 pt-1 text-base font-extrabold text-black dark:text-zinc-50">{group.section?.label ?? 'Other'}</h2>
               )}
+              <MealGrid on={coachView}>
           {group.entries.map((entry) => (
             <div key={entry.id} data-meal className="space-y-2.5 rounded-[20px] border border-black/[.08] bg-card p-3 dark:border-white/10">
                 <div className="flex items-start gap-3">
@@ -302,6 +440,7 @@ export function PhotoDiaryTab({
                 />
             </div>
           ))}
+              </MealGrid>
             </div>
           ))}
         </div>
@@ -384,4 +523,10 @@ export function PhotoDiaryTab({
       )}
     </div>
   );
+}
+
+// A meal type's meals: two to a row on a laptop in the coach's view, one under another everywhere else (as the member's diary has them).
+function MealGrid({ on, children }: { on: boolean; children: ReactNode }) {
+  if (!on) return <>{children}</>;
+  return <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start">{children}</div>;
 }
