@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getClientHealthStatuses, getMyClients, searchGymClients } from '@/lib/data/coach';
+import { getClientHealthStatuses, getMemberListActivity, getMyClients, searchGymClients } from '@/lib/data/coach';
 import { getFollowUps } from '@/lib/data/followUps';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { getCoachChatOverview } from '@/lib/data/chat';
@@ -17,8 +17,8 @@ import { CoachMobileBrand } from '../_components/CoachMobileBrand';
 import { CoachBrand } from '../_components/CoachBrand';
 import { CoachHeaderExtras } from '../_components/CoachHeaderExtras';
 import { AddClientButton } from '../_components/AddClientButton';
-import { ImportClientsButton } from '../_components/ImportClientsButton';
 import { ClientsPageMenu } from '../_components/ClientsPageMenu';
+import { MembersPageActionsProvider } from '../_components/MembersPageActions';
 import { ClientTable, type QuickFilter } from '../_components/ClientTable';
 import { ReviewQueue } from '../_components/ReviewQueue';
 import { getClientsNeedingReview } from '@/lib/data/onboarding';
@@ -45,7 +45,7 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
 
   // The gym's today, as on the dashboard, so both build the same follow-up list.
   const todayIso = todayIsoInTz(gym?.timezone || DEFAULT_TIMEZONE);
-  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue, holdIds, followUps] = await Promise.all([
+  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue, holdIds, followUps, activity] = await Promise.all([
     getMyClients(supabase, user.id),
     searchGymClients(supabase, profile.gym_id, user.id),
     getClientHealthStatuses(supabase, { coachId: user.id, gymId: profile.gym_id }),
@@ -54,6 +54,11 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
     getClientsNeedingReview(profile.gym_id),
     getActiveHoldClientIds().catch(() => [] as string[]),
     getFollowUps(supabase, { coachId: user.id, gymId: profile.gym_id }, todayIso),
+    // The Check-in and Last class columns (CL6). If they cannot be read the list still shows, with "—" in them.
+    getMemberListActivity(supabase, { coachId: user.id, gymId: profile.gym_id }, todayIso).catch((err) => {
+      console.error('Members list: check-ins and last classes could not be read', err);
+      return {};
+    }),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);
   const unreadByClient: Record<string, number> = {};
@@ -69,18 +74,21 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
       headerAction={<CoachHeaderExtras unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
       coachSidebar={<CoachSidebar unreadCount={unreadCount} email={user.email ?? 'Coach'} />}
     >
+      <MembersPageActionsProvider>
       <CoachPageHeader
-        eyebrow={`${clients.length} member${clients.length === 1 ? '' : 's'} with you${gymClients ? `, ${gymClients.length} in the gym` : ''}`}
+        // On a phone this line is left out so Add member and the menu fit beside the title; the counts are on My members / Whole gym (CL3).
+        eyebrow={
+          <span className="max-sm:hidden">{`${clients.length} member${clients.length === 1 ? '' : 's'} with you${gymClients ? `, ${gymClients.length} in the gym` : ''}`}</span>
+        }
         title="Clients"
         actions={
           <>
-            <ImportClientsButton />
             <AddClientButton />
             <ClientsPageMenu />
           </>
         }
       />
-      <div className="mt-6 space-y-4">
+      <div className="mt-4 space-y-4 sm:mt-6">
         <ReviewQueue items={reviewQueue} gymName={gym?.name ?? 'the gym'} />
         <ClientTable
           clients={clients}
@@ -95,8 +103,11 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
           unreadByClient={unreadByClient}
           followUps={followUps.byClient}
           notSetUpIds={followUps.notSetUp}
+          activity={activity}
+          todayIso={todayIso}
         />
       </div>
+      </MembersPageActionsProvider>
     </AppShell>
     </ClientOnly>
   );

@@ -4,6 +4,7 @@ import { addDays, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/
 import { computeHealth, type ClientHealthBucket } from '@/lib/healthStatus';
 import { fetchAllPages } from '@/lib/paging';
 import { LOGGED_DATA_FILTER } from '@/lib/utils/dailyLog';
+import { checkInOf, checkInWeeks, type CheckIn, type LastClass } from '@/lib/memberList';
 
 // The "coach-global" tables (classes, membership_packages, form_templates) are scoped to a
 // specific coach, but the caller could be that coach themself or one of their clients --
@@ -49,19 +50,28 @@ export interface CoachClientRow {
   needsReview: boolean;
   // Name of their current membership plan, null when none is set up.
   planName: string | null;
+  // That plan's planned last day (client_memberships.scheduled_end), null when it has none or there is no plan.
+  planEndsOn: string | null;
 }
 
 // What a plan is called when the member HAS one but its row cannot be read (it belongs to another gym than the coach's active one and no
 // rule lets the coach see it). Showing "No plan" for them was wrong: 63 members with a plan all read "No plan" (R38).
 export const PLAN_NAME_UNREADABLE = 'Plan';
 
+type MembershipRel = { ended_at: string | null; scheduled_end?: string | null; membership_packages: { name: string } | { name: string }[] | null };
+const openMembership = (memberships: unknown) => ((Array.isArray(memberships) ? memberships : []) as MembershipRel[]).find((m) => m.ended_at === null);
+
 // The name of the plan on a member's open (not ended) membership; null only when they have none.
 export function planNameOf(memberships: unknown): string | null {
-  const rows = (Array.isArray(memberships) ? memberships : []) as { ended_at: string | null; membership_packages: { name: string } | { name: string }[] | null }[];
-  const open = rows.find((m) => m.ended_at === null);
+  const open = openMembership(memberships);
   if (!open) return null;
   const pkg = Array.isArray(open.membership_packages) ? open.membership_packages[0] : open.membership_packages;
   return pkg?.name ?? PLAN_NAME_UNREADABLE;
+}
+
+// The planned last day of that open membership, if it has one (CL6's Plan end column).
+export function planEndsOnOf(memberships: unknown): string | null {
+  return openMembership(memberships)?.scheduled_end ?? null;
 }
 
 export interface GymClientRow extends CoachClientRow {
@@ -72,7 +82,7 @@ export interface GymClientRow extends CoachClientRow {
 
 // Every row of the client list queries below, in pages: the database stops at 1,000 rows without saying so (CM6).
 const CLIENT_ROW_SELECT =
-  'id, email, client_profiles(name, start_weight, goal_weight, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, membership_packages(name))';
+  'id, email, client_profiles(name, start_weight, goal_weight, needs_coach_review), credits_balance(balance), client_memberships!client_id(ended_at, scheduled_end, membership_packages(name))';
 
 // Every client at the gym, regardless of which coach they're assigned to -- read-only
 // cross-coach search (see is_same_gym_as_client RLS, 0052/0053). Filters on the client's own
@@ -110,6 +120,7 @@ export async function searchGymClients(
       balance: balanceRow?.balance ?? 0,
       needsReview: profile?.needs_coach_review ?? false,
       planName: planNameOf(row.client_memberships),
+      planEndsOn: planEndsOnOf(row.client_memberships),
       coachId: coach?.id ?? '',
       coachName: coach?.display_name ?? coach?.email ?? 'Unknown coach',
       isOwnClient: coach?.id === myCoachId,
@@ -146,6 +157,7 @@ export async function getMyClients(
       balance: balanceRow?.balance ?? 0,
       needsReview: profile?.needs_coach_review ?? false,
       planName: planNameOf(row.client_memberships),
+      planEndsOn: planEndsOnOf(row.client_memberships),
     };
   });
 }
@@ -240,6 +252,66 @@ export async function getClientHealthStatuses(
   const lastActiveMap = new Map((lastActiveRows as { client_id: string; last_active: string }[]).map((r) => [r.client_id, r.last_active]));
 
   return (clients as unknown as HealthRow[]).map((row) => statusOfRow(row, lastActiveMap.get(row.id) ?? null));
+}
+
+// ---- the Members list's Check-in and Last class columns (CL6) ----
+
+export interface MemberListActivity {
+  checkIn: CheckIn;
+  lastClass: LastClass | null;
+}
+
+type ActivityRow = {
+  id: string;
+  daily_logs: { log_date: string }[] | null;
+  coach_reviews: { ref: string }[] | null;
+  bookings: { booking_date: string; class: { name: string | null } | { name: string | null }[] | null }[] | null;
+};
+
+// Both of the list's scopes (the coach's own members and everyone at the gym) in one query, read page by page: for each member, the days
+// with something logged in the last two completed weeks, which of those weeks have a "Reviewed" mark (coach_reviews, kind 'week', the
+// dashboard's rule), and their latest attended class (one booking each). Nothing is read per member, and nothing is written. What the
+// coach's sign-in cannot read (RLS) comes back empty, so it shows as "—" rather than as someone else's data.
+export async function getMemberListActivity(
+  supabase: SupabaseClient,
+  scope: { coachId: string; gymId: string | null },
+  todayIso: string
+): Promise<Record<string, MemberListActivity>> {
+  const filters = [UUID.test(scope.coachId) ? `coach_id.eq.${scope.coachId}` : null, scope.gymId && UUID.test(scope.gymId) ? `gym_id.eq.${scope.gymId}` : null].filter(Boolean);
+  if (filters.length === 0) return {};
+  const { thisWeek, lastWeek, weekBefore } = checkInWeeks(todayIso);
+  const { rows, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from('profiles')
+      .select('id, daily_logs(log_date), coach_reviews!client_id(ref), bookings!client_id(booking_date, class:classes(name))')
+      .eq('role', 'client')
+      .or(filters.join(','))
+      // The two completed weeks only, and only days with something on them (the blank row the Food screen makes does not count).
+      .gte('daily_logs.log_date', weekBefore)
+      .lt('daily_logs.log_date', thisWeek)
+      .or(LOGGED_DATA_FILTER, { referencedTable: 'daily_logs' })
+      .eq('coach_reviews.kind', 'week')
+      .in('coach_reviews.ref', [weekBefore, lastWeek])
+      // Classes they came to (marked attended, still booked), up to today: the latest one.
+      .eq('bookings.status', 'booked')
+      .eq('bookings.attended', true)
+      .lte('bookings.booking_date', todayIso)
+      .order('booking_date', { referencedTable: 'bookings', ascending: false })
+      .limit(1, { referencedTable: 'bookings' })
+      .order('id')
+      .range(from, to)
+  );
+  if (error) raise(error);
+  const out: Record<string, MemberListActivity> = {};
+  for (const row of rows as unknown as ActivityRow[]) {
+    const booking = row.bookings?.[0];
+    const cls = booking ? (Array.isArray(booking.class) ? booking.class[0] : booking.class) : null;
+    out[row.id] = {
+      checkIn: checkInOf((row.daily_logs ?? []).map((l) => l.log_date), (row.coach_reviews ?? []).map((r) => r.ref), todayIso),
+      lastClass: booking ? { date: booking.booking_date, className: cls?.name ?? null } : null,
+    };
+  }
+  return out;
 }
 
 // The last day a member logged anything (the same rule as get_client_last_active), for their own page: one narrow query for one member
