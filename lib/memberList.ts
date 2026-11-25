@@ -57,7 +57,9 @@ export type CheckIn =
   // Last week was reviewed and nothing is waiting.
   | { kind: 'reviewed'; week: string }
   // Nothing logged last week and nothing waiting.
-  | { kind: 'none' };
+  | { kind: 'none' }
+  // The check-ins could not be read: say so rather than "nothing logged".
+  | { kind: 'unknown' };
 
 // `loggedDates`: days with something logged on them (hasLoggedData / LOGGED_DATA_FILTER). `reviewedWeeks`: the refs (Mondays) of the
 // member's coach_reviews rows of kind 'week'.
@@ -82,6 +84,7 @@ export function checkInText(c: CheckIn): { text: string; short: string | null; d
     };
   }
   if (c.kind === 'reviewed') return { text: 'Reviewed', short: 'Reviewed', detail: `Week of ${formatShortDate(c.week)} reviewed` };
+  if (c.kind === 'unknown') return { text: '—', short: null, detail: 'Not available' };
   return { text: '—', short: null, detail: 'Nothing logged last week' };
 }
 
@@ -157,6 +160,13 @@ export const BULK_SEND_BATCH = 20;
 export const GROUP_NAME_MAX = 100;
 export function sameGroupName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+// The confirm step's button sits where "Next" was, so a quick double tap on Next would land on Send (or Add) before the coach had seen
+// who it is for. It does nothing until the confirm step has been on screen this long.
+export const CONFIRM_ARM_MS = 600;
+export function confirmArmed(shownAt: number, now: number, wait = CONFIRM_ARM_MS): boolean {
+  return shownAt > 0 && now - shownAt >= wait;
 }
 
 export function splitBatches<T>(items: readonly T[], size: number): T[][] {

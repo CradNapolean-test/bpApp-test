@@ -54,10 +54,10 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
     getClientsNeedingReview(profile.gym_id),
     getActiveHoldClientIds().catch(() => [] as string[]),
     getFollowUps(supabase, { coachId: user.id, gymId: profile.gym_id }, todayIso),
-    // The Check-in and Last class columns (CL6). If they cannot be read the list still shows, with "—" in them.
+    // The Check-in and Last class columns (CL6). If they cannot be read the list still shows, says so, and has "—" in them (null).
     getMemberListActivity(supabase, { coachId: user.id, gymId: profile.gym_id }, todayIso).catch((err) => {
       console.error('Members list: check-ins and last classes could not be read', err);
-      return {};
+      return null;
     }),
   ]);
   const unreadCount = chatOverview.reduce((sum, c) => sum + c.unread_count, 0);

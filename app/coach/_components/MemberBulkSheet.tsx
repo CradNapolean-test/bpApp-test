@@ -1,13 +1,15 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { useActiveGymId } from './CoachGymsContext';
 import { addMembersToGroup, addMembersToNewGroup, messageEach } from '@/lib/data/memberBulk';
 import {
   BULK_MESSAGE_MAX,
+  CONFIRM_ARM_MS,
   GROUP_NAME_MAX,
+  confirmArmed,
   groupOutcome,
   memberCount,
   messageOutcome,
@@ -57,6 +59,15 @@ export function MemberBulkSheet({
   const [problem, setProblem] = useState<string | null>(null);
   // Set the moment the confirm button is pressed, so a second press can never start a second run.
   const started = useRef(false);
+  // When the confirm step appeared. Its button is in the same place as Next, so it stays off for a moment: a double tap on Next must not
+  // send before the coach has seen who it is for (review finding).
+  const confirmShownAt = useRef(0);
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (step !== 'confirm') return;
+    const t = window.setTimeout(() => setArmed(true), CONFIRM_ARM_MS);
+    return () => window.clearTimeout(t);
+  }, [step]);
 
   const nameOf = new Map(members.map((m) => [m.id, m.name]));
   const count = memberCount(members.length);
@@ -82,11 +93,13 @@ export function MemberBulkSheet({
       if (!newName.trim()) return setProblem('Give the new group a name.');
       if (newName.trim().length > GROUP_NAME_MAX) return setProblem(`Group names can be ${GROUP_NAME_MAX} characters at most.`);
     }
+    confirmShownAt.current = Date.now();
+    setArmed(false);
     setStep('confirm');
   }
 
   async function sendAll() {
-    if (started.current) return;
+    if (started.current || !confirmArmed(confirmShownAt.current, Date.now())) return;
     started.current = true;
     setStep('working');
     setProgress(0);
@@ -100,7 +113,7 @@ export function MemberBulkSheet({
   }
 
   async function addAll() {
-    if (started.current) return;
+    if (started.current || !confirmArmed(confirmShownAt.current, Date.now())) return;
     started.current = true;
     setStep('working');
     const ids = members.map((m) => m.id);
@@ -219,7 +232,7 @@ export function MemberBulkSheet({
           )}
           <MemberNames members={members} />
           <div className="flex gap-2">
-            <button type="button" onClick={() => void (mode === 'message' ? sendAll() : addAll())} className={primaryBtn}>
+            <button type="button" disabled={!armed} onClick={() => void (mode === 'message' ? sendAll() : addAll())} className={primaryBtn}>
               {mode === 'message' ? `Send to ${count}` : `Add ${count}`}
             </button>
             <button type="button" onClick={() => setStep('compose')} className={secondaryBtn}>

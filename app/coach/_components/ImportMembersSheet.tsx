@@ -95,7 +95,7 @@ export function ImportMembersSheet({ onClose }: { onClose: () => void }) {
     if (all.length > 0) {
       setResults(all);
       const added = all.filter((r) => r.link).length;
-      toast.success(`${added} of ${parsed.valid.length} client${parsed.valid.length === 1 ? '' : 's'} added`);
+      toast.success(`${added} of ${parsed.valid.length} member${parsed.valid.length === 1 ? '' : 's'} added`);
       router.refresh();
     }
   }
@@ -122,7 +122,7 @@ export function ImportMembersSheet({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={() => {
-              downloadTextFile('imported-clients.csv', importResultsCsv(results), 'text/csv;charset=utf-8');
+              downloadTextFile('imported-members.csv', importResultsCsv(results), 'text/csv;charset=utf-8');
               setSaved(true);
             }}
             className="w-full rounded-full border border-black/10 py-2 text-sm font-bold dark:border-white/15"
@@ -175,7 +175,7 @@ export function ImportMembersSheet({ onClose }: { onClose: () => void }) {
           </button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
           <p className="text-xs text-zinc-500">
-            Up to {IMPORT_MAX} at a time. A CSV with an &quot;email&quot; column works too; names aren&apos;t imported, each client sets theirs when they
+            Up to {IMPORT_MAX} at a time. A CSV with an &quot;email&quot; column works too; names aren&apos;t imported, each member sets theirs when they
             complete Setup. You get a file of one-time links to send, not passwords.
           </p>
           {problem && (

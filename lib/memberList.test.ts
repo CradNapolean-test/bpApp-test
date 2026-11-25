@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CONFIRM_ARM_MS,
   ENDING_SOON_DAYS,
+  confirmArmed,
   NO_ANSWER,
   checkInOf,
   checkInText,
@@ -109,6 +111,8 @@ describe('check-in (CL6): the dashboard rule, coach_reviews kind "week"', () => 
     });
     expect(checkInText({ kind: 'reviewed', week: '2026-11-16' })).toEqual({ text: 'Reviewed', short: 'Reviewed', detail: 'Week of 16 Nov reviewed' });
     expect(checkInText({ kind: 'none' })).toEqual({ text: '—', short: null, detail: 'Nothing logged last week' });
+    // A read that failed is not "nothing logged".
+    expect(checkInText({ kind: 'unknown' })).toEqual({ text: '—', short: null, detail: 'Not available' });
   });
 });
 
@@ -176,6 +180,21 @@ describe('select mode (CL18)', () => {
   it('splits into batches', () => {
     expect(splitBatches([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
     expect(splitBatches([], 2)).toEqual([]);
+  });
+});
+
+describe('confirm step (CL18, review finding)', () => {
+  it('does nothing for a moment after it appears, so a double tap on Next cannot send', () => {
+    expect(CONFIRM_ARM_MS).toBeGreaterThanOrEqual(500);
+    const shown = 10_000;
+    expect(confirmArmed(shown, shown)).toBe(false);
+    expect(confirmArmed(shown, shown + 250)).toBe(false);
+    expect(confirmArmed(shown, shown + CONFIRM_ARM_MS - 1)).toBe(false);
+    expect(confirmArmed(shown, shown + CONFIRM_ARM_MS)).toBe(true);
+  });
+
+  it('is never ready if the confirm step was never shown', () => {
+    expect(confirmArmed(0, 10_000_000)).toBe(false);
   });
 });
 

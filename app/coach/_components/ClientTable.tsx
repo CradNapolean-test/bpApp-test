@@ -34,7 +34,7 @@ import type { ClientGroupWithMembers } from '@/lib/data/types';
 
 const NO_UNREAD: Record<string, number> = {};
 const NO_ACTIVITY: Record<string, MemberListActivity> = {};
-const NO_CHECK_IN: CheckIn = { kind: 'none' };
+const UNKNOWN_CHECK_IN: CheckIn = { kind: 'unknown' };
 
 type SortKey = 'name' | 'lastActive' | 'status' | 'credits' | 'planEnd';
 type Scope = 'mine' | 'gym';
@@ -105,8 +105,8 @@ export function ClientTable({
   followUps?: Record<string, FollowUp>;
   // Members who have not finished setting up the app.
   notSetUpIds?: string[];
-  // This week's check-in and the last class attended, by member (getMemberListActivity, CL6).
-  activity?: Record<string, MemberListActivity>;
+  // This week's check-in and the last class attended, by member (getMemberListActivity, CL6). null: they could not be read.
+  activity?: Record<string, MemberListActivity> | null;
   // The gym's today: plan ends, check-in weeks and "3d ago" are counted from it.
   todayIso: string;
 }) {
@@ -259,7 +259,9 @@ export function ClientTable({
         ))}
       </span>
     ) : null;
-  const checkInOfMember = (id: string) => activity[id]?.checkIn ?? NO_CHECK_IN;
+  // A member the read did not cover (or a read that failed) is "not available", never "nothing logged".
+  const checkInOfMember = (id: string) => activity?.[id]?.checkIn ?? UNKNOWN_CHECK_IN;
+  const lastClassOf = (id: string) => activity?.[id]?.lastClass ?? null;
   const nameOf = (c: CoachClientRow) => c.name ?? c.email;
 
   function toggleSort(key: SortKey) {
@@ -279,7 +281,8 @@ export function ClientTable({
       ['Name', 'Email', 'Logging', 'Last active', 'Days since active', 'Credits', 'Check in on', 'Plan', 'Plan ends', 'Check-in', 'Last class'],
       rows.map(({ client, health }) => {
         const pe = planEndFor(client);
-        const last = activity[client.id]?.lastClass;
+        const last = lastClassOf(client.id);
+        const ci = checkInOfMember(client.id);
         return [
           client.name ?? '',
           client.email,
@@ -290,7 +293,7 @@ export function ClientTable({
           followUps[client.id]?.reasons.map((r) => r.label).join('; ') ?? '',
           client.planName ?? '',
           pe.kind === 'ends' || pe.kind === 'ended' ? pe.endsOn : pe.kind === 'ongoing' ? 'Ongoing' : '',
-          checkInText(checkInOfMember(client.id)).detail,
+          ci.kind === 'unknown' ? '' : checkInText(ci).detail,
           last ? `${last.date}${last.className ? ` ${last.className}` : ''}` : '',
         ];
       })
@@ -312,6 +315,7 @@ const scopeBtnCls = (active: boolean) =>
         <Users className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600" />
         <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">No clients yet</p>
         <p className="mt-1 text-sm text-zinc-500">Add your first client above to get started.</p>
+        {managingGroups && <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />}
       </div>
     );
   }
@@ -479,13 +483,15 @@ const scopeBtnCls = (active: boolean) =>
           {selecting ? 'Done' : 'Select'}
         </button>
       </div>
-      {managingGroups && (
-        <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />
+      {activity === null && (
+        <p role="status" className="px-1 text-xs text-zinc-500">
+          Check-ins and last classes could not be loaded. Reload the page to try again.
+        </p>
       )}
       {selecting && (
         <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 md:hidden">
           <label className="flex min-h-11 items-center gap-3 text-sm font-bold text-black dark:text-zinc-50">
-            <SelectBox state={allState} disabled={selectableShown.length === 0} onChange={toggleShown} label={`Select all ${memberCount(selectableShown.length)} shown`} />
+            <SelectBox state={allState} disabled={selectableShown.length === 0} onChange={toggleShown} label={`Select all ${memberCount(selectableShown.length)} in this list`} />
             Select all {selectableShown.length}
           </label>
           {othersShown > 0 && <span className="text-xs text-zinc-500">Only your own members can be ticked.</span>}
@@ -506,7 +512,7 @@ const scopeBtnCls = (active: boolean) =>
           const pe = planEndText(planEndFor(client), todayIso);
           const ci = checkInOfMember(client.id);
           const ciText = checkInText(ci);
-          const lc = lastClassText(activity[client.id]?.lastClass, todayIso);
+          const lc = lastClassText(lastClassOf(client.id), todayIso);
           const selectable = own.has(client.id);
           const isSelected = selectable && selected.has(client.id);
           // CL6 on a phone: plan end, check-in and last class as one short line under the name, each with its icon (the Colour key says
@@ -597,7 +603,7 @@ const scopeBtnCls = (active: boolean) =>
           <tr className="text-xs uppercase tracking-[0.08em] text-zinc-500 dark:text-zinc-400">
             {selecting && (
               <th className="w-12 py-3 pl-6 pr-0 text-left">
-                <SelectBox state={allState} disabled={selectableShown.length === 0} onChange={toggleShown} label={`Select all ${memberCount(selectableShown.length)} shown`} />
+                <SelectBox state={allState} disabled={selectableShown.length === 0} onChange={toggleShown} label={`Select all ${memberCount(selectableShown.length)} in this list`} />
               </th>
             )}
             <th className={headerCls}>
@@ -637,7 +643,7 @@ const scopeBtnCls = (active: boolean) =>
             const pe = planEndText(planEnd, todayIso);
             const ci = checkInOfMember(client.id);
             const ciText = checkInText(ci);
-            const lastClass = activity[client.id]?.lastClass ?? null;
+            const lastClass = lastClassOf(client.id);
             const lc = lastClassText(lastClass, todayIso);
             const selectable = own.has(client.id);
             const isSelected = selectable && selected.has(client.id);
@@ -809,6 +815,8 @@ const scopeBtnCls = (active: boolean) =>
       )}
       </>
       )}
+      {/* Outside the list's own branch: the page menu's Manage groups opens it even when the list is empty. */}
+      {managingGroups && <GroupsManager groups={groups} clients={clients} onClose={() => setManagingGroups(false)} />}
       {bulk && (
         <MemberBulkSheet
           mode={bulk}
