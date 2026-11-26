@@ -398,8 +398,9 @@ export function DashboardShell({
   }, [viewingMessages]);
 
   // A tab / top-level switch: starts a fresh trail.
-  // The coach's chat with this member slides over from the right, like the Messages drawer in the header.
-  // It stays mounted once opened, so a half-typed message is still there when it is closed and reopened or
+  // The coach's chat with this member slides over from the right, like the Messages drawer in the header. On a laptop (1280px and wider)
+  // it sits beside the page instead, with no dark overlay, and the page narrows to make room, so their weight, goal and check-ins stay in
+  // sight while the coach writes (MS11). On a phone or tablet it covers the page as before. It stays mounted once opened, so a half-typed message is still there when it is closed and reopened or
   // the coach moves between sections.
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMounted, setChatMounted] = useState(false);
@@ -823,6 +824,8 @@ export function DashboardShell({
 
   return (
     <ClientOnly fallback={<PageSkeleton />}>
+    {/* Room for the chat beside the page on a laptop (MS11). */}
+    <div className={isCoachView && chatMounted && chatOpen ? 'xl:pr-96' : undefined}>
     <AppShell
       // The coach's view names the member once, in the card (CV11); the header row (tablet only) carries the brand, as on every coach page.
       title={isCoachView ? <CoachBrand /> : clientLabel}
@@ -1242,9 +1245,12 @@ export function DashboardShell({
       {!isCoachView && <PushPrompt clientId={clientId} />}
       {!isCoachView && <OfflineSnapshot name={clientLabel} profile={profile} programWeek={programWeek} programs={programs} weekLogs={weekLogs} />}
       {isCoachView && chatMounted && (
-        <div className={chatOpen ? 'fixed inset-0 z-50' : 'hidden'}>
-          <div className="absolute inset-0 bg-black/40" onClick={() => setChatOpen(false)} />
-          <aside className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black/10 bg-[var(--background)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] shadow-xl dark:border-white/10">
+        <div className={chatOpen ? 'fixed inset-0 z-50 xl:left-auto xl:z-40 xl:w-96' : 'hidden'}>
+          <div className="absolute inset-0 bg-black/40 xl:hidden" onClick={() => setChatOpen(false)} />
+          <aside
+            aria-label={`Chat with ${otherPartyName}`}
+            className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-black/10 bg-[var(--background)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] shadow-xl xl:max-w-none xl:shadow-none dark:border-white/10"
+          >
             {isOwnClient ? (
               <ChatTab
                 fill
@@ -1265,6 +1271,7 @@ export function DashboardShell({
         </div>
       )}
     </AppShell>
+    </div>
     </ClientOnly>
   );
 }
