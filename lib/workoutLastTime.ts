@@ -8,19 +8,20 @@ export function lastTimeLine(opts: {
   label: string;
   // "12 Nov".
   date: string;
-  // What the member did for this set number in their previous session of the exercise (or that session's last set).
+  // What the member did for this set number in their previous session of the exercise (null when that session had no such set).
   set: LogValues | null;
   tracking: TrackingType;
 }): string | null {
   const { label, date, set, tracking } = opts;
   // A tick-only exercise has no numbers to beat.
   if (!set || tracking === 'tick' || !hasRecordedValue(tracking, set)) return null;
-  return `${label}, ${date}: ${setText(tracking, set)}`;
+  const text = setText(tracking, set);
+  return text == null ? null : `${label}, ${date}: ${text}`;
 }
 
-function setText(tracking: TrackingType, set: LogValues): string {
+function setText(tracking: TrackingType, set: LogValues): string | null {
   if (tracking !== 'weight_reps') return setSummary(tracking, set);
-  // No weight (or 0 kg): just the reps.
-  if (!set.actual_load) return set.actual_reps == null ? setSummary(tracking, set) : `${set.actual_reps} reps`;
+  // No weight (or 0 kg): just the reps. A 0 kg set with no reps has nothing to say (lastTimeLine leaves it out).
+  if (!set.actual_load) return set.actual_reps == null ? null : `${set.actual_reps} reps`;
   return `${set.actual_reps ?? '—'} × ${set.actual_load}kg`;
 }

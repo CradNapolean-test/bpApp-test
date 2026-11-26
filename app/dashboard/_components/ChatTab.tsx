@@ -732,7 +732,11 @@ export function ChatTab({
         {memberHref && (
           <Link
             href={memberHref}
-            onClick={onOpenMember}
+            // A plain click only: a Cmd/Ctrl/Shift-click opens the page in a new tab or window, and the drawer stays where it was.
+            onClick={(e) => {
+              if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              onOpenMember?.();
+            }}
             title="View member"
             className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-2.5 text-xs font-bold text-accent hover:bg-accent/10 dark:border-white/15 ${narrow ? '' : 'lg:px-3'}`}
           >

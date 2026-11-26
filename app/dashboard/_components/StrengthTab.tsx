@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useReveal } from '@/app/_components/motion/useReveal';
 import { Dumbbell, Trophy } from 'lucide-react';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -74,8 +75,12 @@ const selectCls = 'max-w-[60%] rounded-xl border border-black/10 bg-card px-2 py
 
 // Recording a tested max lives here (TR11): it sat under every week of the workout list. The exercise list is read only when the form
 // is opened.
+// A member's own Strength only: a coach (this screen under /coach) records a max from the programme's menu in Workout, and only for
+// their own members.
 function TestedMaxCard({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
+  const coachView = usePathname()?.startsWith('/coach') ?? false;
+  if (coachView) return null;
   return (
     <div className={cardCls}>
       <div className="flex items-center justify-between gap-3">
@@ -250,7 +255,7 @@ export function StrengthTab({
           <p className="text-xs text-zinc-500">
             {volume.isThisWeek ? 'this week' : `week of ${shortDate(volume.week.weekStart)}`}, {volume.week.sets} set{volume.week.sets === 1 ? '' : 's'}
             {volume.previous ? ` · ${volume.isThisWeek ? 'last week' : 'the week before'} ${formatKg(volume.previous.volume)}` : ''}
-            {volume.isThisWeek ? '' : ' · nothing logged this week yet'}
+            {volume.isThisWeek ? '' : ' · no weighted sets this week yet'}
           </p>
           <div className="mt-4 flex h-24 items-end gap-1" role="img" aria-label="Weekly load volume for the last 12 weeks">
             {weeks.map((w) => (

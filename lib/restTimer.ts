@@ -23,10 +23,20 @@ export function restRemaining(state: RestTimerState, now: number): number {
   return Math.max(0, Math.ceil((state.endsAt - now) / 1000));
 }
 
-// +30s adds to what is left. Once the rest is over (or skipped) there is nothing to add to.
+// +30s adds to what is left. Tapped in the moment after the time ran out (before the screen caught up), it gives 30 seconds from now
+// rather than ending the rest. A skipped rest stays skipped.
 export function addRest(state: RestTimerState, now: number, seconds = REST_EXTRA_SECONDS): RestTimerState {
-  if (state.done || restRemaining(state, now) === 0) return { ...state, done: true };
+  if (state.done) return state;
+  if (restRemaining(state, now) === 0) return { endsAt: now + seconds * 1000, totalSeconds: seconds, done: false };
   return { endsAt: state.endsAt + seconds * 1000, totalSeconds: state.totalSeconds + seconds, done: false };
+}
+
+// Whether to buzz and beep as the rest ends: not when the page only noticed long after (a phone locked through the rest and unlocked
+// minutes later would buzz at the wrong moment).
+export const REST_ALERT_GRACE_MS = 5000;
+
+export function alertAtEnd(state: RestTimerState, now: number): boolean {
+  return !state.done && now - state.endsAt < REST_ALERT_GRACE_MS;
 }
 
 export function skipRest(state: RestTimerState): RestTimerState {

@@ -36,5 +36,7 @@ describe('lastTimeLine (TR17: one small "last time" line)', () => {
     expect(lastTimeLine({ label: 'Last week', date: '12 Nov', set: set({}), tracking: 'weight_reps' })).toBeNull();
     expect(lastTimeLine({ label: 'Last week', date: '12 Nov', set: set({}), tracking: 'tick' })).toBeNull();
     expect(lastTimeLine({ label: 'Last week', date: '12 Nov', set: set({ actual_seconds: 30 }), tracking: 'distance' })).toBeNull();
+    // 0 kg and no reps: not "— × 0".
+    expect(lastTimeLine({ label: 'Last week', date: '12 Nov', set: set({ actual_load: 0 }), tracking: 'weight_reps' })).toBeNull();
   });
 });

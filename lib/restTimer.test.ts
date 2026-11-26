@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   REST_SOUND_KEY,
   addRest,
+  alertAtEnd,
   formatRest,
   readRestSound,
   restFraction,
@@ -36,11 +37,20 @@ describe('rest timer (TR16)', () => {
     expect(addRest(more, T0 + 50_000).totalSeconds).toBe(120);
   });
 
-  it('+30s does nothing once the rest is over or skipped', () => {
+  it('+30s tapped just after the time ran out gives 30 seconds from then; a skipped rest stays skipped', () => {
     const s = startRest(T0, 60);
-    expect(addRest(s, T0 + 61_000)).toMatchObject({ done: true });
-    expect(restRemaining(addRest(s, T0 + 61_000), T0 + 61_000)).toBe(0);
+    const late = addRest(s, T0 + 60_100);
+    expect(late).toMatchObject({ done: false, totalSeconds: 30 });
+    expect(restRemaining(late, T0 + 60_100)).toBe(30);
     expect(addRest(skipRest(s), T0)).toMatchObject({ done: true });
+  });
+
+  it('buzzes and beeps only when the end is noticed in time, not minutes later after the phone was locked', () => {
+    const s = startRest(T0, 90);
+    expect(alertAtEnd(s, T0 + 90_250)).toBe(true);
+    expect(alertAtEnd(s, T0 + 94_000)).toBe(true);
+    expect(alertAtEnd(s, T0 + 90_000 + 5 * 60_000)).toBe(false);
+    expect(alertAtEnd(skipRest(s), T0 + 90_250)).toBe(false);
   });
 
   it('Skip ends the rest at once', () => {

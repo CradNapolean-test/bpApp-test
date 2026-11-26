@@ -1490,7 +1490,6 @@ export function WorkoutTab({
               const priorBest = loads.length > 0 && Math.max(...loads) > 0 ? Math.max(...loads) : null;
               // Use the exercise's own video link, else the one on its library entry.
               const videoUrl = ex.video_url || libraryVideo(ex.exercise_library_id);
-              const lastFor = (setNumber: number) => last?.sets[setNumber - 1] ?? last?.sets[last.sets.length - 1] ?? null;
               const seed = logs.length > 0 ? logs[logs.length - 1] : (last?.sets[0] ?? null);
               const isWarmup = ex.section === 'warmup' && ex.block_type === 'exercise';
               const tracking = trackingOf(ex.tracking_type);
@@ -1546,7 +1545,8 @@ export function WorkoutTab({
                         setsDone={logs.length}
                         restSeconds={ex.rest_seconds}
                         seed={seed}
-                        lastTime={last ? lastTimeLine({ label: last.label, date: last.date, set: lastFor(nextSetNumber(logs)), tracking }) : null}
+                        // Only for a set that was done last time: set 4 after a 3-set session gets no line, rather than set 3's numbers.
+                        lastTime={last ? lastTimeLine({ label: last.label, date: last.date, set: last.sets[nextSetNumber(logs) - 1] ?? null, tracking }) : null}
                         priorBest={priorBest}
                         weightless={weightless}
                         onChange={changeSets}

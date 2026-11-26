@@ -45,7 +45,7 @@ export function RecordMaxForm({ clientId, bare = false, forExercise }: { clientI
       {!forExercise && (
       <div className="space-y-1">
         {!bare && <label className="text-xs font-medium text-zinc-500">Record a tested max</label>}
-        <select required className={inputBase} value={libraryId} disabled={options.data == null} onChange={(e) => setLibraryId(e.target.value)}>
+        <select required aria-label="Exercise" className={inputBase} value={libraryId} disabled={options.data == null} onChange={(e) => setLibraryId(e.target.value)}>
           <option value="" disabled>
             {options.data == null ? (options.error ? 'Could not load exercises' : 'Loading exercises…') : 'Exercise…'}
           </option>

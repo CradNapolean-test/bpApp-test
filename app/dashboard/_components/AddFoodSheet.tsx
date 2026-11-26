@@ -66,8 +66,8 @@ export function AddFoodSheet({
         aria-label={`Add food · ${sectionLabel}`}
         onClick={(e) => e.stopPropagation()}
         // One height whichever tab is open (NU9): sized to its content, it grew and shrank between Foods and Quick Add, so the tabs moved
-        // under the finger. dvh: the height that is actually visible, with a phone browser's toolbars showing.
-        className="h-[75dvh] w-full overflow-y-auto rounded-t-2xl bg-[var(--background)] p-4 pb-6"
+        // under the finger. dvh: the height that is actually visible, with a phone browser's toolbars showing; vh where dvh is unknown.
+        className="h-[75vh] supports-[height:100dvh]:h-[75dvh] w-full overflow-y-auto rounded-t-2xl bg-[var(--background)] p-4 pb-6"
       >
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-black dark:text-zinc-50">Add food &middot; {sectionLabel}</h2>
