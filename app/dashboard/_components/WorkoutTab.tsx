@@ -7,8 +7,7 @@ import { flashWeek, showWeekRow } from '@/app/_components/motion/programWeeks';
 import { Dumbbell } from 'lucide-react';
 import { AddWorkoutSheet, RenameWorkoutSheet } from '@/app/_components/workouts/AddWorkoutSheet';
 import { useAction } from '@/app/_components/useAction';
-import { useOnDemand } from '@/app/_components/useOnDemand';
-import { getExerciseLibrary, getExerciseOptions } from '@/lib/data/exerciseLibrary';
+import { getExerciseLibrary } from '@/lib/data/exerciseLibrary';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
@@ -20,7 +19,7 @@ import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workou
 import { VideoDemo } from '@/app/_components/workouts/VideoDemo';
 import ClickSpark from '@/app/_components/motion/ClickSpark';
 import type { ClickSparkHandle } from '@/app/_components/motion/ClickSpark';
-import { gsap, pop, prefersReducedMotion, useGSAP } from '@/app/_components/motion/gsap';
+import { pop } from '@/app/_components/motion/gsap';
 import {
   addExercise,
   addProgramDay,
@@ -39,7 +38,6 @@ import {
   updateProgram,
   updateProgramDay, updateSet, deleteSet } from '@/lib/data/workouts';
 import { instantiateProgramTemplate } from '@/lib/data/programTemplates';
-import { recordExerciseMax } from '@/lib/data/clientExerciseMaxes';
 import { chooseBlock } from '@/lib/data/blockChoices';
 import { submitDayFeedback } from '@/lib/data/workoutDayFeedback';
 import { programWeekOn, resolveActiveProgram } from '@/lib/utils/checkin';
@@ -51,7 +49,10 @@ import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLo
 import { blockFormatOf, chosenBlockKeys, dayHighlights, dayLogProgress, describeChoices, exerciseBlockKey } from '@/lib/workoutSections';
 import { blockConfigOf, resultForConfig, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
+import { lastTimeLine } from '@/lib/workoutLastTime';
 import { SetInputsGrid } from './SetInputsGrid';
+import { RecordMaxForm } from './RecordMaxForm';
+import { RestTimer, primeRestSound } from './RestTimer';
 import { BlockResultForm } from './BlockResultForm';
 import { DEFAULT_TIMEZONE, PROGRAM_WEEKDAYS, WEEKDAY_SHORT, addDays, daysBetween, isoDateInTz, toIsoDate, todayIsoInTz } from '@/lib/utils/dates';
 import type {
@@ -163,132 +164,6 @@ function StartProgrammeSheet({
   );
 }
 
-// Either party can record a tested/estimated max (RLS: owns_client) -- this is what makes
-// %1RM prescriptions resolve to an actual target load for a given client.
-// `forExercise` fixes the exercise (the prompt under a %1RM lift with no tested max, TR14): no list to load or pick from.
-function RecordMaxForm({ clientId, bare = false, forExercise }: { clientId: string; bare?: boolean; forExercise?: { libraryId: string; name: string } }) {
-  // The exercise list is read when the form opens (R13/M1): the whole library rode on every member page just for this one list.
-  const options = useOnDemand(() => (forExercise ? Promise.resolve([]) : getExerciseOptions()), forExercise ? `max-for:${forExercise.libraryId}` : 'exercise-options');
-  const library = options.data ?? [];
-  const { run, busy } = useAction();
-  const [libraryId, setLibraryId] = useState(forExercise?.libraryId ?? '');
-  const [max, setMax] = useState<number | ''>('');
-  const [reps, setReps] = useState<number | ''>(1);
-  const [estimated, setEstimated] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!libraryId || max === '') return;
-    await run(() => recordExerciseMax(clientId, libraryId, max, estimated, reps === '' ? 1 : reps), {
-      success: 'Tested max recorded',
-      onDone: () => {
-        setLibraryId(forExercise?.libraryId ?? '');
-        setMax('');
-        setReps(1);
-        setEstimated(false);
-      },
-    });
-  }
-
-  if (!forExercise && options.data != null && library.length === 0) return null;
-
-  const inputBase = 'h-11 w-full min-w-0 rounded-xl border border-black/10 bg-transparent px-3 text-base dark:border-white/10';
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className={`space-y-3 ${bare ? '' : 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10'}`}
-    >
-      {!forExercise && (
-      <div className="space-y-1">
-        {!bare && <label className="text-xs font-medium text-zinc-500">Record a tested max</label>}
-        <select required className={inputBase} value={libraryId} disabled={options.data == null} onChange={(e) => setLibraryId(e.target.value)}>
-          <option value="" disabled>
-            {options.data == null ? (options.error ? 'Could not load exercises' : 'Loading exercises…') : 'Exercise…'}
-          </option>
-          {library.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <label className="space-y-1">
-          <span className="block text-xs font-medium text-zinc-500">Weight</span>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="any"
-            required
-            className={inputBase}
-            value={max}
-            onChange={(e) => setMax(e.target.value === '' ? '' : Number(e.target.value))}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="block text-xs font-medium text-zinc-500">Reps</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            required
-            title="1 = a true 1RM. More than 1 (e.g. a 3-rep or 5-rep max) gets converted to an estimated 1RM automatically."
-            className={inputBase}
-            value={reps}
-            onChange={(e) => setReps(e.target.value === '' ? '' : Number(e.target.value))}
-          />
-        </label>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-zinc-500">
-          <input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} />
-          Estimated
-        </label>
-        <button type="submit" disabled={busy} className="h-11 rounded-xl bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b] px-6 text-sm font-bold disabled:opacity-50">
-          {busy ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function RestTimer({ seconds }: { seconds: number }) {
-  // Mounted fresh each time via key={timerKey} in LogSetForm, so the initial state here is
-  // always the correct starting point -- no need to also reset it inside the effect.
-  const [remaining, setRemaining] = useState(seconds);
-  // The bar empties over the rest, so how long is left reads at a glance between sets. Less motion: no bar, the numbers say it.
-  const bar = useRef<HTMLSpanElement>(null);
-  useGSAP(() => {
-    if (!bar.current) return;
-    if (prefersReducedMotion()) {
-      gsap.set(bar.current.parentElement, { display: 'none' });
-      return;
-    }
-    gsap.fromTo(bar.current, { scaleX: 1 }, { scaleX: 0, duration: seconds, ease: 'none', transformOrigin: '0% 50%' });
-  });
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRemaining((r) => (r <= 1 ? 0 : r - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  if (remaining <= 0) return null;
-  const mm = Math.floor(remaining / 60);
-  const ss = (remaining % 60).toString().padStart(2, '0');
-  return (
-    <div className="mt-2">
-      <p className="text-xs font-medium text-accent">Rest: {mm}:{ss}</p>
-      <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-        <span ref={bar} className="block h-full rounded-full bg-accent" />
-      </span>
-    </div>
-  );
-}
-
 // The warm-up is done or not done as a whole, so it gets one tick box instead of sets, reps and weight for each exercise. Ticking saves
 // one set (set 1, no numbers, marked as a warm-up so it never counts towards training volume or bests) for every warm-up exercise that
 // has none yet; unticking takes them back out.
@@ -351,7 +226,7 @@ function LogSetForm({
   setsDone,
   restSeconds,
   seed,
-  lastSet,
+  lastTime,
   priorBest,
   weightless,
   onChange,
@@ -367,8 +242,8 @@ function LogSetForm({
   restSeconds: number | null;
   // The set the boxes start from: the last one logged today, else the first of last time.
   seed: LogValues | null;
-  // What the member did for this same set number last time.
-  lastSet: LogValues | null;
+  // What the member did for this same set number last time, as one small line ("Last week, 12 Nov: 8 × 60kg", TR17).
+  lastTime: string | null;
   // Heaviest load from earlier sessions of this exercise; a heavier set is a new best.
   priorBest: number | null;
   // An exercise with no weight (see isWeightless): reps and RPE only, and a set can be logged as simply done.
@@ -403,6 +278,8 @@ function LogSetForm({
       toast.error(blankSetMessage(weightless ? 'reps' : tracking));
       return;
     }
+    // The tap on Log set lets the page make the end-of-rest sound later, if the member has it on (browsers need a tap first).
+    if (restSeconds != null) primeRestSound();
     await run(
       async () => {
         const saved = await logSet(clientId, exerciseId, {
@@ -443,13 +320,10 @@ function LogSetForm({
   return (
     <ClickSpark ref={sparks} clickToSpark={false} sparkColor={['#19adb1', '#5fd6d6', '#f59e0b']} sparkCount={14} sparkRadius={52} sparkSize={12} shape="star" duration={750}>
     <div ref={box} className="mt-3 rounded-2xl bg-black/[.03] p-3 dark:bg-white/[.04]">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className={`whitespace-nowrap text-sm font-bold ${heading.extra ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{heading.title}</span>
-        {lastSet && tracking !== 'tick' && hasRecordedValue(tracking, lastSet) && (
-          <span className="whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent">
-            Last: {setSummary(tracking, lastSet)}
-          </span>
-        )}
+      <div className="mb-2">
+        <p className={`text-sm font-bold ${heading.extra ? 'text-success' : 'text-black dark:text-zinc-50'}`}>{heading.title}</p>
+        {/* Last time's numbers show one way (TR17): the boxes start from them, and this one line says what they were for this set. */}
+        {lastTime && <p className="text-xs text-zinc-500 dark:text-zinc-400">{lastTime}</p>}
       </div>
       <form onSubmit={handleSubmit} className="space-y-2.5">
         <SetInputsGrid tracking={tracking} inputs={inputs} onChange={setInputs} showLoad={showLoad} />
@@ -1100,8 +974,8 @@ export function WorkoutTab({
   }, {});
 
   // The member's previous session of the same library exercise (a different programme day/week
-  // than the one open): its working sets in order, with a "Last week" / "Last time" label. Shown
-  // next to each set and as a summary line, so they know what to beat.
+  // than the one open): its working sets in order, with a "Last week" / "Last time" label. The set
+  // boxes start from it, and one line under each set's heading says what it was (TR17).
   // Same exercise = same library entry when it has one, otherwise the same name (custom exercises).
   const exerciseById = new Map(programs.flatMap((p) => p.workout_program_days.flatMap((d) => d.workout_exercises)).map((e) => [e.id, e]));
   // Working sets from other sessions of the same exercise.
@@ -1449,17 +1323,7 @@ export function WorkoutTab({
         />
       )}
 
-      {!isCoachView && (
-        <details className="group rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-bold text-black dark:text-zinc-50">
-            Record a tested max
-            <span className="text-xs font-semibold text-accent group-open:hidden">Add</span>
-          </summary>
-          <div className="px-4 pb-4">
-            <RecordMaxForm clientId={clientId} bare />
-          </div>
-        </details>
-      )}
+      {/* A member records a tested max in Progress & results → Strength (TR11): it sat under every week list here. */}
 
       {editingSet && (
         <SetEditSheet
@@ -1638,11 +1502,9 @@ export function WorkoutTab({
                 ex.percent_1rm != null &&
                 !!ex.exercise_library_id &&
                 !clientExerciseMaxes.some((m) => m.exercise_library_id === ex.exercise_library_id);
-              // A set on one line. Weight x reps keeps its look; a no-weight exercise shows just the reps (or a tick).
-              const setText = (l: WorkoutLogRow, compact: boolean) =>
-                tracking === 'weight_reps' && weightless && l.actual_load == null
-                  ? (l.actual_reps ?? (compact ? 'done' : '✓'))
-                  : setSummary(tracking, l, compact);
+              // A set on one line, for today's chips. Weight x reps keeps its look; a no-weight exercise shows just the reps (or "done").
+              const setText = (l: WorkoutLogRow) =>
+                tracking === 'weight_reps' && weightless && l.actual_load == null ? (l.actual_reps ?? 'done') : setSummary(tracking, l, true);
               return (
                 <>
                   {needsMax && ex.exercise_library_id && (
@@ -1657,30 +1519,6 @@ export function WorkoutTab({
                   )}
                   {/* Folded until tapped: open, every demo was a full-width player (819 px tall each on a laptop, TR6). */}
                   {(videoUrl?.startsWith('http://') || videoUrl?.startsWith('https://')) && <VideoDemo videoUrl={videoUrl} title={ex.name} />}
-                  {last && !isWarmup && (
-                    <div className="mt-2">
-                      <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-accent">
-                        {last.label} · {last.date}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {last.sets.map((l, i) => (
-                          <span
-                            key={l.id}
-                            className={`flex items-center gap-1.5 rounded-lg border px-1.5 py-1 text-xs ${
-                              i === logs.length ? 'border-accent/50 bg-accent-soft' : 'border-black/[.08] dark:border-white/10'
-                            }`}
-                          >
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-black/10 text-[10px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
-                              {i + 1}
-                            </span>
-                            <span className="whitespace-nowrap font-semibold text-black dark:text-zinc-100">
-                              {setText(l, false)}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   {!isCoachView && ex.block_type === 'exercise' && !isWarmup && (
                     <>
                       {logs.length > 0 && (
@@ -1693,7 +1531,7 @@ export function WorkoutTab({
                               aria-label={`Edit set ${i + 1}`}
                               className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success"
                             >
-                              ✓ {i + 1} · {setText(l, true)}
+                              ✓ {i + 1} · {setText(l)}
                               {priorBest != null && l.actual_load != null && l.actual_load > priorBest ? ' 🏆' : ''}
                             </button>
                           ))}
@@ -1708,7 +1546,7 @@ export function WorkoutTab({
                         setsDone={logs.length}
                         restSeconds={ex.rest_seconds}
                         seed={seed}
-                        lastSet={last ? lastFor(nextSetNumber(logs)) : null}
+                        lastTime={last ? lastTimeLine({ label: last.label, date: last.date, set: lastFor(nextSetNumber(logs)), tracking }) : null}
                         priorBest={priorBest}
                         weightless={weightless}
                         onChange={changeSets}

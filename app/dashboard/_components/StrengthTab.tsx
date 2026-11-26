@@ -11,6 +11,8 @@ import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { exerciseHistory, formatKg, weeklyVolume } from '@/lib/trainingStats';
 import { trackingOf, TRACKING } from '@/lib/workoutTracking';
 import { bestSession, bestsLine, blockInfoFor, blockSeries, exerciseOptions, measureSessions, topSetText } from '@/lib/workoutProgress';
+import { volumeHeadline } from '@/lib/strengthVolume';
+import { RecordMaxForm } from './RecordMaxForm';
 import type { ClientProfileRow, WorkoutBlockResultRow, WorkoutExerciseRow, WorkoutLogRow, WorkoutProgramRow } from '@/lib/data/types';
 
 const cardCls = 'rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10';
@@ -70,6 +72,35 @@ function Sparkline({ values, label }: { values: number[]; label: string }) {
 
 const selectCls = 'max-w-[60%] rounded-xl border border-black/10 bg-card px-2 py-1.5 text-sm dark:border-white/10';
 
+// Recording a tested max lives here (TR11): it sat under every week of the workout list. The exercise list is read only when the form
+// is opened.
+function TestedMaxCard({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={cardCls}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className={headCls}>Tested maxes</h3>
+          <p className="text-xs text-zinc-500">A tested max sets the weight for any lift given as a % of your 1-rep max.</p>
+        </div>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="h-11 shrink-0 rounded-xl border-[1.5px] border-black/20 px-3.5 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
+        >
+          {open ? 'Close' : 'Record a max'}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-3">
+          <RecordMaxForm clientId={clientId} bare />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Load volume (working load x reps) per week, per-exercise progression with personal bests for every way of tracking an exercise, and how each
 // scored block has gone over time.
 export function StrengthTab({
@@ -112,8 +143,8 @@ export function StrengthTab({
 
   const weeks = useMemo(() => weeklyVolume(workoutLogs, today, tz, 12), [workoutLogs, today, tz]);
   const maxVol = Math.max(1, ...weeks.map((w) => w.volume));
-  const thisWeek = weeks[weeks.length - 1];
-  const lastWeek = weeks[weeks.length - 2];
+  // The newest week with any volume; none in the 12 weeks shown leaves the card out (TR12: it opened on "0kg this week, 0 sets").
+  const volume = volumeHeadline(weeks);
 
   // Each saved block result, set against the same block done before: same format, numbers and exercises.
   const series = useMemo(() => {
@@ -150,7 +181,12 @@ export function StrengthTab({
   const block = series.find((s) => s.key === pickedBlock) ?? series[0];
 
   if (options.length === 0 && series.length === 0) {
-    return <EmptyState icon={Dumbbell} title="No lifts logged yet" hint="Log sets in your workouts and your volume and progress will show here." />;
+    return (
+      <div className="space-y-4">
+        <EmptyState icon={Dumbbell} title="No lifts logged yet" hint="Log sets in your workouts and your volume and progress will show here." />
+        <TestedMaxCard clientId={clientId} />
+      </div>
+    );
   }
 
   // Until the earlier bests arrive nothing can be called a PR (they would all look like one); if they cannot be read, fall back to the window.
@@ -204,31 +240,34 @@ export function StrengthTab({
         </section>
       )}
 
-      <div className={cardCls}>
-        <div className="flex items-baseline justify-between gap-2">
-          <h3 className={headCls}>Load volume</h3>
-          <p className="text-xs text-zinc-500">Weight x reps, working sets</p>
+      {volume && (
+        <div className={cardCls}>
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className={headCls}>Load volume</h3>
+            <p className="text-xs text-zinc-500">Weight x reps, working sets</p>
+          </div>
+          <p className="mt-2 text-2xl font-black text-accent">{formatKg(volume.week.volume)}</p>
+          <p className="text-xs text-zinc-500">
+            {volume.isThisWeek ? 'this week' : `week of ${shortDate(volume.week.weekStart)}`}, {volume.week.sets} set{volume.week.sets === 1 ? '' : 's'}
+            {volume.previous ? ` · ${volume.isThisWeek ? 'last week' : 'the week before'} ${formatKg(volume.previous.volume)}` : ''}
+            {volume.isThisWeek ? '' : ' · nothing logged this week yet'}
+          </p>
+          <div className="mt-4 flex h-24 items-end gap-1" role="img" aria-label="Weekly load volume for the last 12 weeks">
+            {weeks.map((w) => (
+              <div key={w.weekStart} className="flex h-full flex-1 flex-col justify-end" title={`Week of ${shortDate(w.weekStart)}: ${formatKg(w.volume)}`}>
+                <div
+                  className={`w-full rounded-t ${w.weekStart === volume.week.weekStart ? 'bg-accent' : 'bg-accent/40'}`}
+                  style={{ height: `${Math.max(w.volume > 0 ? 4 : 0, (w.volume / maxVol) * 100)}%` }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex justify-between text-[10px] text-zinc-400">
+            <span>{shortDate(weeks[0].weekStart)}</span>
+            <span>This week</span>
+          </div>
         </div>
-        <p className="mt-2 text-2xl font-black text-accent">{formatKg(thisWeek.volume)}</p>
-        <p className="text-xs text-zinc-500">
-          this week, {thisWeek.sets} set{thisWeek.sets === 1 ? '' : 's'}
-          {lastWeek && lastWeek.volume > 0 ? ` · last week ${formatKg(lastWeek.volume)}` : ''}
-        </p>
-        <div className="mt-4 flex h-24 items-end gap-1" role="img" aria-label="Weekly load volume for the last 12 weeks">
-          {weeks.map((w, i) => (
-            <div key={w.weekStart} className="flex h-full flex-1 flex-col justify-end" title={`Week of ${shortDate(w.weekStart)}: ${formatKg(w.volume)}`}>
-              <div
-                className={`w-full rounded-t ${i === weeks.length - 1 ? 'bg-accent' : 'bg-accent/40'}`}
-                style={{ height: `${Math.max(w.volume > 0 ? 4 : 0, (w.volume / maxVol) * 100)}%` }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="mt-1 flex justify-between text-[10px] text-zinc-400">
-          <span>{shortDate(weeks[0].weekStart)}</span>
-          <span>This week</span>
-        </div>
-      </div>
+      )}
 
       {selected && (
         <div className={cardCls}>
@@ -334,6 +373,8 @@ export function StrengthTab({
           </div>
         </div>
       )}
+
+      <TestedMaxCard clientId={clientId} />
     </div>
   );
 }

@@ -320,7 +320,17 @@ export function CoachingHub({
 
       {show('Training') && (
         <section className="space-y-2.5">
-          <SectionHead title="Training" />
+          <SectionHead
+            title="Training"
+            right={
+              // Strength (lifts, bests and tested maxes) was three levels down and not reachable from Training (TR12).
+              show('Progress') ? (
+                <button type="button" onClick={() => onNavigate('Progress', 'Strength')} className="min-h-9 text-[13px] font-bold text-accent-strong">
+                  Lifts and bests
+                </button>
+              ) : undefined
+            }
+          />
           <button type="button" onClick={training.onClick} className={`${card} flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.03]`}>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1d1d1b] text-[#5fd6d6] dark:bg-white/10">
               <Dumbbell className="h-[18px] w-[18px]" />
@@ -371,7 +381,7 @@ export function CoachingHub({
         <SectionHead title="Progress and learning" />
         <div className="grid grid-cols-2 gap-2.5">
           {show('Progress') && (
-            <HubTile icon={LineChart} title="Progress and photos" subtitle="Weight, measurements, scans" onClick={() => onNavigate('Progress', 'Progress & Photos')} />
+            <HubTile icon={LineChart} title="Progress and results" subtitle="Weight, lifts, photos, scans" onClick={() => onNavigate('Progress', 'Progress & Photos')} />
           )}
           <HubTile
             icon={Trophy}
