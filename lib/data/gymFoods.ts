@@ -10,7 +10,8 @@ import type { FoodRow } from './types';
 export async function listGymFoods(query: string, limit: number): Promise<{ foods: FoodRow[]; total: number }> {
   const supabase = await createClient();
   const q = query.trim().replace(/[%,()*]/g, ' ').replace(/\s+/g, ' ').trim();
-  const size = Math.min(Math.max(1, Math.floor(limit) || 60), 500);
+  // At most 1,000: the most the database gives in one request (the gym's list is 484 foods).
+  const size = Math.min(Math.max(1, Math.floor(limit) || 60), 1000);
   let request = supabase.from('foods').select('*', { count: 'exact' }).eq('source', 'seed').order('name').order('id').range(0, size - 1);
   if (q) request = request.ilike('name', `%${q}%`);
   const { data, error, count } = await request;

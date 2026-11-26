@@ -300,7 +300,7 @@ const PAGE_SIZE = 100;
 
 // Two to a row on a phone, their own width from a tablet up.
 const filterSelect =
-  'h-10 min-w-0 flex-1 basis-36 rounded-xl border border-black/[.14] bg-card px-2.5 text-sm font-semibold text-black sm:flex-none sm:basis-auto sm:px-3 dark:border-white/15 dark:text-zinc-50';
+  'h-11 min-w-0 flex-1 basis-36 rounded-xl border border-black/[.14] bg-card px-2.5 text-sm font-semibold text-black sm:flex-none sm:basis-auto sm:px-3 dark:border-white/15 dark:text-zinc-50';
 
 export function ExerciseLibraryManager({
   initialExercises,
@@ -389,15 +389,24 @@ export function ExerciseLibraryManager({
     reader.readAsText(file);
   }
 
-  const filteredExercises = useMemo(() => filterLibrary(initialExercises, filters), [initialExercises, filters]);
+  // A filter whose choice has gone (the only kettlebell exercise was changed, say) counts as "Any", as its box then shows.
+  const active = useMemo<LibraryFilters>(
+    () => ({
+      ...filters,
+      equipment: filters.equipment && !equipment.some((o) => o.key === filters.equipment) ? '' : filters.equipment,
+      movement: filters.movement === NO_MOVEMENT && !anyWithoutMovement ? '' : filters.movement,
+    }),
+    [filters, equipment, anyWithoutMovement]
+  );
+  const filteredExercises = useMemo(() => filterLibrary(initialExercises, active), [initialExercises, active]);
   const shown = filteredExercises.slice(0, visible);
   const retiredAt = retiredStartIndex(shown);
-  const filtering = anyFilterOn(filters);
+  const filtering = anyFilterOn(active);
 
   const editing = editingId ? initialExercises.find((ex) => ex.id === editingId) : undefined;
   // The board's filter pill: black when on, an outline when off.
   const chip = (active: boolean) =>
-    `h-10 shrink-0 rounded-full px-3.5 text-sm font-bold transition-colors ${
+    `h-11 shrink-0 rounded-full px-3.5 text-sm font-bold transition-colors ${
       active
         ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
         : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
@@ -452,7 +461,7 @@ export function ExerciseLibraryManager({
           <select
             aria-label={`Filter by ${MOVEMENT_LABEL.toLowerCase()}`}
             className={filterSelect}
-            value={filters.movement}
+            value={active.movement}
             onChange={(e) => setFilter({ movement: e.target.value })}
           >
             <option value="">Any {MOVEMENT_LABEL.toLowerCase()}</option>
@@ -467,7 +476,7 @@ export function ExerciseLibraryManager({
             <select
               aria-label="Filter by equipment"
               className={filterSelect}
-              value={filters.equipment}
+              value={active.equipment}
               onChange={(e) => setFilter({ equipment: e.target.value })}
             >
               <option value="">Any equipment</option>
@@ -502,7 +511,7 @@ export function ExerciseLibraryManager({
             <button
               type="button"
               onClick={() => setFilter(NO_FILTERS)}
-              className="h-10 shrink-0 rounded-full px-3 text-sm font-bold text-accent hover:bg-accent/10"
+              className="h-11 shrink-0 rounded-full px-3 text-sm font-bold text-accent hover:bg-accent/10"
             >
               Clear filters
             </button>

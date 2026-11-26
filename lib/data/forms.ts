@@ -5,6 +5,7 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { rpcFailure } from './migrationCheck';
+import { fetchAllPages } from '@/lib/paging';
 import { createClient } from '@/lib/supabase/server';
 import type { QuestionPayload } from '@/lib/formEdit';
 import type { FormRollupRow, GroupSendCounts, RemindCounts } from '@/lib/libraryRollups';
@@ -148,14 +149,19 @@ export async function getFormRollup(): Promise<FormRollupRow[]> {
   const gymId = await resolveScopingGymId(supabase);
   const { data: templates, error } = await supabase.from('form_templates').select('id').eq('gym_id', gymId);
   if (error || !templates || templates.length === 0) return [];
-  const { data, error: aError } = await supabase
-    .from('form_assignments')
-    .select('template_id, client_id, assigned_at, completed_at')
-    .in('template_id', templates.map((t) => t.id))
-    .order('assigned_at')
-    .limit(5000);
-  if (aError || !data) return [];
-  return data as FormRollupRow[];
+  // Page after page: the database stops at 1,000 rows a request without saying so, and the newest sendings would be the ones lost.
+  const ids = templates.map((t) => t.id);
+  const { rows, error: aError } = await fetchAllPages<FormRollupRow>((from, to) =>
+    supabase
+      .from('form_assignments')
+      .select('template_id, client_id, assigned_at, completed_at')
+      .in('template_id', ids)
+      .order('assigned_at')
+      .order('id')
+      .range(from, to)
+  );
+  if (aError) return [];
+  return rows;
 }
 
 // Sends a form to every member of a group at the gym in one step (assign_form_to_group, migration 0175). Members who have it open already
@@ -184,11 +190,24 @@ export async function remindForm(
   const supabase = await createClient();
   const stale = await checkActiveGym(supabase, expectedGymId);
   if (stale && !stale.ok) return stale;
-  const { data, error } = await supabase.rpc('remind_form', { p_template_id: templateId, p_client_ids: clientIds });
-  if (error) return rpcFailure(error, '0175', 'Could not send the reminders') as { ok: false; error: string };
-  const r = (data ?? {}) as Record<string, number>;
-  return { ok: true, reminded: r.reminded ?? 0, recentlyReminded: r.recently_reminded ?? 0, notWaiting: r.not_waiting ?? 0 };
+  // The database takes at most 500 members a call.
+  const unique = Array.from(new Set(clientIds));
+  const total = { reminded: 0, recentlyReminded: 0, notWaiting: 0 };
+  for (let i = 0; i < unique.length; i += REMIND_BATCH) {
+    const { data, error } = await supabase.rpc('remind_form', { p_template_id: templateId, p_client_ids: unique.slice(i, i + REMIND_BATCH) });
+    if (error) {
+      const failed = rpcFailure(error, '0175', 'Could not send the reminders') as { ok: false; error: string };
+      return i === 0 ? failed : { ok: false, error: `${failed.error} (${total.reminded} were reminded before it stopped.)` };
+    }
+    const r = (data ?? {}) as Record<string, number>;
+    total.reminded += r.reminded ?? 0;
+    total.recentlyReminded += r.recently_reminded ?? 0;
+    total.notWaiting += r.not_waiting ?? 0;
+  }
+  return { ok: true, ...total };
 }
+
+const REMIND_BATCH = 500;
 
 // submit_form_response raises "Form already submitted" -- a domain error the client needs
 // to read, so this returns rather than throws (see result.ts).

@@ -69,6 +69,14 @@ describe('migration 0175', () => {
     expect(fns.get('remind_form')!.body).toContain("interval '12 hours'");
   });
 
+  it("matches a course's notice by its moment, and by title only when no remaining course of the member's wrote it", () => {
+    const { body } = fns.get('clear_course_assigned_notice')!;
+    expect(body).toContain('n.created_at = old.assigned_at');
+    expect(body).toContain("n.message = 'New course assigned: ' || v_title");
+    expect(body).toMatch(/not exists \(\s*select 1 from education_course_assignments a where a\.client_id = old\.client_id and a\.assigned_at = n\.created_at\s*\)/);
+    expect(body).toContain('n.client_id = old.client_id');
+  });
+
   it('clears notices instead of deleting them', () => {
     expect(sql).not.toMatch(/delete from (public\.)?notifications/);
     expect(sql).toContain("set cleared_at = now(), read_at = coalesce(n.read_at, now())");

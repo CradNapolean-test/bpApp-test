@@ -69,7 +69,7 @@ describe('groupSendPreview', () => {
 describe('summaries', () => {
   it('says what a group send did', () => {
     expect(groupSendSummary({ sent: 3, alreadyOpen: 2, otherGym: 1, answeredBefore: 0 })).toBe(
-      'Sent to 3 members · 2 already had it open · 1 at another gym skipped'
+      'Sent to 3 members · 2 already had it open · 1 skipped (not a member at this gym)'
     );
     expect(groupSendSummary({ sent: 1, alreadyOpen: 0, otherGym: 0, answeredBefore: 0 })).toBe('Sent to 1 member');
     expect(groupSendSummary({ sent: 0, alreadyOpen: 4, otherGym: 0, answeredBefore: 0 })).toBe('Nobody new to send it to · 4 already had it open');

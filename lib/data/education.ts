@@ -6,6 +6,7 @@ import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
 import { rpcFailure } from './migrationCheck';
+import { fetchAllPages } from '@/lib/paging';
 import { getClientGymId } from './memberships';
 import { getClientProfile } from './clientProfile';
 import { createClient } from '@/lib/supabase/server';
@@ -235,20 +236,31 @@ export async function getCourseRollup(): Promise<CourseRollupRow[]> {
     lessonsByCourse.set(c.id, set);
   }
 
-  const { data: assignments, error: aError } = await supabase
-    .from('education_course_assignments')
-    .select('course_id, client_id, assigned_at')
-    .in('course_id', courses.map((c) => c.id));
-  if (aError || !assignments || assignments.length === 0) return [];
+  // Page after page (the database stops at 1,000 rows a request without saying so): the "who has it" list and its Unassign use these.
+  const courseIds = courses.map((c) => c.id);
+  const { rows: assignments, error: aError } = await fetchAllPages<{ course_id: string; client_id: string; assigned_at: string }>((from, to) =>
+    supabase
+      .from('education_course_assignments')
+      .select('course_id, client_id, assigned_at')
+      .in('course_id', courseIds)
+      .order('assigned_at')
+      .order('id')
+      .range(from, to)
+  );
+  if (aError || assignments.length === 0) return [];
 
   const clientIds = Array.from(new Set(assignments.map((a) => a.client_id)));
-  const { data: completions } = await supabase
-    .from('education_lesson_completions')
-    .select('lesson_id, client_id')
-    .in('client_id', clientIds);
+  const completions: { lesson_id: string; client_id: string }[] = [];
+  for (let i = 0; i < clientIds.length; i += 100) {
+    const chunk = clientIds.slice(i, i + 100);
+    const { rows } = await fetchAllPages<{ lesson_id: string; client_id: string }>((from, to) =>
+      supabase.from('education_lesson_completions').select('lesson_id, client_id').in('client_id', chunk).order('id').range(from, to)
+    );
+    completions.push(...rows);
+  }
 
   const doneByClient = new Map<string, Set<string>>();
-  for (const c of completions ?? []) {
+  for (const c of completions) {
     const set = doneByClient.get(c.client_id) ?? new Set<string>();
     set.add(c.lesson_id);
     doneByClient.set(c.client_id, set);

@@ -447,7 +447,7 @@ function GroupSendSheet({
 }
 
 // The ready-made forms, named (LB20: they sat behind an unlabelled ⋯ before "+ New form").
-function StarterFormsSheet({ busy, onAdd, onClose }: { busy: boolean; onAdd: (id: string) => void; onClose: () => void }) {
+function StarterFormsSheet({ addingId, onAdd, onClose }: { addingId: string | null; onAdd: (id: string) => void; onClose: () => void }) {
   return (
     <BottomSheet title="Ready-made forms" onClose={onClose}>
       <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">Add one to your forms, then edit it as you like.</p>
@@ -458,8 +458,8 @@ function StarterFormsSheet({ busy, onAdd, onClose }: { busy: boolean; onAdd: (id
               <p className="text-sm font-bold text-black dark:text-zinc-50">{f.name}</p>
               <p className="mt-0.5 text-xs text-zinc-500">{f.summary}</p>
             </div>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => onAdd(f.id)}>
-              {busy ? 'Adding…' : 'Add'}
+            <Button variant="outline" disabled={addingId !== null} onClick={() => onAdd(f.id)}>
+              {addingId === f.id ? 'Adding…' : 'Add'}
             </Button>
           </li>
         ))}
@@ -487,7 +487,8 @@ export function FormsPane({
   const confirm = useConfirm();
   const toast = useToast();
   const { run: runDelete } = useAction();
-  const { run: runStarter, busy: addingStarter } = useAction();
+  const { run: runStarter } = useAction();
+  const [addingStarter, setAddingStarter] = useState<string | null>(null);
   const gymId = useActiveGymId();
   const [starterOpen, setStarterOpen] = useState(false);
   const [sheet, setSheet] = useState<{ kind: 'status' | 'group'; templateId: string } | null>(null);
@@ -541,6 +542,7 @@ export function FormsPane({
   async function addStarter(id: string) {
     const starter = STARTER_FORMS.find((f) => f.id === id);
     if (!starter) return;
+    setAddingStarter(id);
     await runStarter(
       () =>
         createFormTemplate(
@@ -553,6 +555,7 @@ export function FormsPane({
         onDone: () => setStarterOpen(false),
       }
     );
+    setAddingStarter(null);
   }
 
   async function handleDelete(id: string) {
@@ -585,7 +588,7 @@ export function FormsPane({
         </button>
       </div>
 
-      {starterOpen && <StarterFormsSheet busy={addingStarter} onAdd={addStarter} onClose={() => setStarterOpen(false)} />}
+      {starterOpen && <StarterFormsSheet addingId={addingStarter} onAdd={addStarter} onClose={() => setStarterOpen(false)} />}
 
       {initialTemplates.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No form templates yet" hint="Add one above, or start from a ready-made health questionnaire." />
@@ -615,7 +618,7 @@ export function FormsPane({
                         <button
                           type="button"
                           onClick={() => setSheet({ kind: 'status', templateId: t.id })}
-                          className="inline-flex min-h-8 items-center font-semibold text-accent underline-offset-2 hover:underline"
+                          className="inline-flex min-h-11 items-center font-semibold text-accent underline-offset-2 hover:underline"
                         >
                           {line}
                         </button>

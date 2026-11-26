@@ -24,7 +24,8 @@
 --   4. A trigger on education_course_assignments (after delete, any route: unassign above, deleting the course, deleting the member) that
 --      clears the member's "New course assigned" notice for it: the notice written with that assignment (assign_education_course writes
 --      both in one transaction, so they carry the same time; checked live on 26 Nov 2026, the 1 assignment there has its notice at the
---      same time), or a notice with the course's title when the member has no other course of that title. Cleared = what a member's own
+--      same time), or a notice with the course's title when the member has no other course of that title and the notice wasn't written
+--      with one of their remaining courses. Cleared = what a member's own
 --      Clear does (cleared_at and read_at set): it leaves their list and the dot on the bell, on the web and the phone, which both read
 --      notifications without cleared ones. Nothing is deleted.
 --   5. Once, now: the same clean-up for notices already pointing to nothing: every "New course assigned" notice not cleared whose member
@@ -77,7 +78,7 @@
 --     and p.proname in ('assign_form_to_group', 'remind_form', 'unassign_education_course', 'clear_course_assigned_notice')
 --   order by 1;
 -- Expected after: assign_form_to_group f216b6ce2bca0cd020e4c2146168f228 true, clear_course_assigned_notice
--- ecc004952ec3e8021a26bb1526aaf9d8 true, remind_form 42232c2e3a8dad504254d709c3ad6588 true, unassign_education_course
+-- 2985c811467cfc92762233299e31af6e true, remind_form 42232c2e3a8dad504254d709c3ad6588 true, unassign_education_course
 -- 1dd0f576c9e9462c210e9996a5c65962 true (this file's bodies: the values in the guard below).
 --   select has_function_privilege('authenticated', 'public.assign_form_to_group(uuid, uuid)', 'execute') as coaches,
 --          has_function_privilege('anon', 'public.assign_form_to_group(uuid, uuid)', 'execute') as anyone,
@@ -126,7 +127,7 @@ begin
       ('assign_form_to_group', 'f216b6ce2bca0cd020e4c2146168f228'),
       ('remind_form', '42232c2e3a8dad504254d709c3ad6588'),
       ('unassign_education_course', '1dd0f576c9e9462c210e9996a5c65962'),
-      ('clear_course_assigned_notice', 'ecc004952ec3e8021a26bb1526aaf9d8')
+      ('clear_course_assigned_notice', '2985c811467cfc92762233299e31af6e')
     ) as t(name, accepted)
   loop
     select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_md5
@@ -358,11 +359,16 @@ begin
        -- written with this assignment (assign_education_course writes both in one transaction)
        n.created_at = old.assigned_at
        or (
+         -- a notice with the course's title, when the member has no other course of that title, and the notice wasn't written with
+         -- one of their remaining courses (a course since renamed whose old title this one now has)
          v_title is not null
          and n.message = 'New course assigned: ' || v_title
          and not exists (
            select 1 from education_course_assignments a join education_courses c on c.id = a.course_id
            where a.client_id = old.client_id and c.title = v_title
+         )
+         and not exists (
+           select 1 from education_course_assignments a where a.client_id = old.client_id and a.assigned_at = n.created_at
          )
        )
      );

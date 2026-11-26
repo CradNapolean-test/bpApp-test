@@ -91,7 +91,8 @@ export interface GroupSendCounts {
 export function groupSendSummary(r: GroupSendCounts): string {
   const parts = [r.sent === 0 ? 'Nobody new to send it to' : `Sent to ${r.sent} member${r.sent === 1 ? '' : 's'}`];
   if (r.alreadyOpen > 0) parts.push(`${r.alreadyOpen} already had it open`);
-  if (r.otherGym > 0) parts.push(`${r.otherGym} at another gym skipped`);
+  // Group members at another gym, and any coach in the group, are not sent it.
+  if (r.otherGym > 0) parts.push(`${r.otherGym} skipped (not a member at this gym)`);
   return parts.join(' · ');
 }
 

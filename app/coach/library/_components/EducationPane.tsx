@@ -180,6 +180,7 @@ function SortableLesson({
   position,
   count,
   disabled,
+  saving,
   onOpen,
   menu,
 }: {
@@ -187,10 +188,12 @@ function SortableLesson({
   position: number;
   count: number;
   disabled: boolean;
+  // the order is being saved: the handle waits
+  saving: boolean;
   onOpen: () => void;
   menu: React.ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id, disabled });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id, disabled: disabled || saving });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined };
   return (
     <div
@@ -206,7 +209,10 @@ function SortableLesson({
           {...attributes}
           {...listeners}
           aria-label={`Move ${lesson.title}, lesson ${position} of ${count}`}
-          className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-zinc-400 hover:bg-black/5 active:cursor-grabbing dark:text-zinc-500 dark:hover:bg-white/5"
+          aria-disabled={saving || undefined}
+          className={`flex h-11 w-11 shrink-0 touch-none items-center justify-center rounded-lg text-zinc-400 hover:bg-black/5 dark:text-zinc-500 dark:hover:bg-white/5 ${
+            saving ? 'cursor-wait opacity-50' : 'cursor-grab active:cursor-grabbing'
+          }`}
         >
           <GripVertical className="h-4 w-4" />
         </button>
@@ -245,7 +251,7 @@ function ModuleSection({
 }) {
   const confirm = useConfirm();
   const { run } = useAction();
-  const { run: runReorder } = useAction();
+  const { run: runReorder, busy: savingOrder } = useAction();
   const [sheet, setSheet] = useState<{ kind: 'lesson'; lesson: EducationLessonRow | null } | { kind: 'rename' } | null>(null);
   const savedLessons = [...module.education_lessons].sort((a, b) => a.sort_order - b.sort_order);
   const savedKey = savedLessons.map((l) => l.id).join(',');
@@ -285,7 +291,8 @@ function ModuleSection({
 
   async function saveOrder(next: string[]) {
     const previous = sortedLessons.map((l) => l.id);
-    if (sameOrder(next, previous)) return;
+    // One save at a time: two at once could interleave their writes and leave the order different from what was dropped.
+    if (savingOrder || sameOrder(next, previous)) return;
     setPending({ base: savedKey, ids: next });
     const saved = await runReorder(() => reorderLessons(next), { success: 'Lesson order saved' });
     if (!saved) setPending(null);
@@ -337,14 +344,15 @@ function ModuleSection({
                 position={i + 1}
                 count={sortedLessons.length}
                 disabled={sortedLessons.length < 2}
+                saving={savingOrder}
                 onOpen={() => setSheet({ kind: 'lesson', lesson })}
                 menu={
                   <DropdownMenu
                     triggerLabel={`More actions for ${lesson.title}`}
                     items={[
                       { label: 'Edit', onSelect: () => setSheet({ kind: 'lesson', lesson }) },
-                      ...(i > 0 ? [{ label: 'Move up', onSelect: () => moveLesson(i, -1) }] : []),
-                      ...(i < sortedLessons.length - 1 ? [{ label: 'Move down', onSelect: () => moveLesson(i, 1) }] : []),
+                      ...(i > 0 ? [{ label: 'Move up', onSelect: () => moveLesson(i, -1), disabled: savingOrder }] : []),
+                      ...(i < sortedLessons.length - 1 ? [{ label: 'Move down', onSelect: () => moveLesson(i, 1), disabled: savingOrder }] : []),
                       { label: 'Delete lesson', destructive: true, onSelect: () => handleDeleteLesson(lesson) },
                     ]}
                   />

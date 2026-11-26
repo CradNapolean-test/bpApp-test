@@ -393,7 +393,7 @@ export function FoodsPane() {
             Showing {foods.length} of {gymTotal} gym food{gymTotal === 1 ? '' : 's'}
           </p>
           {gymTotal > foods.length && (
-            <Button variant="outline" size="sm" onClick={() => setGymLimit((n) => n + GYM_PAGE)}>
+            <Button variant="outline" onClick={() => setGymLimit((n) => n + GYM_PAGE)}>
               Show {Math.min(GYM_PAGE, gymTotal - foods.length)} more
             </Button>
           )}
