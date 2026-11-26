@@ -4,21 +4,23 @@ import { useEffect, useState } from 'react';
 import { CalendarCheck, Minus, Plus } from 'lucide-react';
 import CountUp from '@/app/_components/motion/CountUp';
 import { getMyCreditHistory } from '@/lib/data/memberships';
-import { friendlyCreditReason } from '@/lib/creditsForm';
+import { getMemberSinceSources, getMyCreditActivity } from '@/lib/data/creditHistory';
+import { appendCreditPage, friendlyCreditReason, memberSince, MEMBER_HISTORY_PAGE, shownToMember, type MemberSince } from '@/lib/creditsForm';
 import { planCountdown } from '@/lib/planCountdown';
 import { todayIsoInTz, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import type { ClientMembershipRow, CreditBucketBalances, CreditsLedgerRow } from '@/lib/data/types';
 
+// Every date given here is a day key ("2025-03-14"), so it is read as that day, not shifted by the device's time zone.
 const longDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const cardCls = 'rounded-[20px] border border-black/[.08] bg-card dark:border-white/10';
 const headCls = 'text-base font-extrabold text-black dark:text-zinc-50';
 
 // Client-facing "my credits & membership" screen -- distinct from CreditsTab.tsx, which is a
 // coach-admin panel (grant credits, assign a package, set reminder thresholds). A member sees their
-// balance, what is about to run out, the last few changes and their plan; the full ledger lives with
-// the coach.
+// balance, what is about to run out, their history (10 rows, then "Show more", without the weekly resets that changed nothing: BK24)
+// and their plan. A coach looking at a member of another coach sees this screen too; the coach's own members have CreditsTab.
 export function ClientCreditsTab({
   clientId,
   creditsBalance,
@@ -37,21 +39,57 @@ export function ClientCreditsTab({
   // A plan with a set length (the 6 Week Challenge): how long it is and which week the member is in (D5).
   const countdown =
     membership && pkg?.duration_weeks ? planCountdown({ ...membership, durationWeeks: pkg.duration_weeks }, todayIsoInTz(DEFAULT_TIMEZONE)) : null;
-  // The last ten changes and the bonus credits that will run out (CC1). Read when the screen opens, and again when the balance changes.
-  const [history, setHistory] = useState<{ recent: CreditsLedgerRow[]; expiring: CreditsLedgerRow[] } | null>(null);
+  // The newest changes, a page at a time, and the bonus credits that will run out (CC1). Read when the screen opens, and again from the
+  // first page when the balance changes.
+  const [history, setHistory] = useState<{ recent: CreditsLedgerRow[]; hasMore: boolean; expiring: CreditsLedgerRow[] } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    getMyCreditHistory(clientId, 10)
-      .then((h) => {
-        if (live) setHistory(h);
+    Promise.all([
+      getMyCreditActivity(clientId, 0, MEMBER_HISTORY_PAGE),
+      getMyCreditHistory(clientId, 1).then((h) => h.expiring).catch(() => [] as CreditsLedgerRow[]),
+    ])
+      .then(([page, expiring]) => {
+        if (live) setHistory({ recent: page.rows.filter(shownToMember), hasMore: page.hasMore, expiring });
       })
       .catch(() => {
-        if (live) setHistory({ recent: [], expiring: [] });
+        if (live) setHistory({ recent: [], hasMore: false, expiring: [] });
       });
     return () => {
       live = false;
     };
   }, [clientId, creditsBalance]);
+
+  async function showMore() {
+    if (!history || loadingMore) return;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    try {
+      const page = await getMyCreditActivity(clientId, history.recent.length, MEMBER_HISTORY_PAGE);
+      setHistory((prev) => (prev ? { ...prev, recent: appendCreditPage(prev.recent, page.rows), hasMore: page.hasMore } : prev));
+    } catch {
+      setMoreFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  // When they actually joined (RO15): the earliest plan start, or the day the account was made when that is earlier or there is no plan.
+  const [since, setSince] = useState<MemberSince>(null);
+  useEffect(() => {
+    let live = true;
+    getMemberSinceSources(clientId)
+      .then((s) => {
+        if (live) setSince(memberSince(s.earliestPlanStart, s.accountCreatedDay));
+      })
+      .catch(() => {
+        // Nothing shown rather than the current plan's start, which is the number that was wrong.
+      });
+    return () => {
+      live = false;
+    };
+  }, [clientId]);
 
   return (
     <div className="space-y-5">
@@ -120,6 +158,16 @@ export function ClientCreditsTab({
             })}
           </ul>
         )}
+        {history && history.hasMore && (
+          <button
+            type="button"
+            onClick={showMore}
+            disabled={loadingMore}
+            className="h-11 w-full rounded-xl border-[1.5px] border-black/20 text-sm font-bold text-black disabled:opacity-60 dark:border-white/25 dark:text-zinc-50"
+          >
+            {loadingMore ? 'Loading…' : moreFailed ? 'Could not load more. Try again' : 'Show more'}
+          </button>
+        )}
       </section>
 
       <section className="space-y-2.5">
@@ -162,16 +210,26 @@ export function ClientCreditsTab({
                   <dd className="font-semibold text-black dark:text-zinc-50">{longDate(membership.scheduled_end)}</dd>
                 </div>
               )}
-              {membership?.started_at && (
+              {since && (
                 <div className="flex justify-between py-2">
                   <dt className="text-zinc-500">Member since</dt>
-                  <dd className="font-semibold text-black dark:text-zinc-50">{longDate(membership.started_at)}</dd>
+                  <dd className="font-semibold text-black dark:text-zinc-50">{longDate(since.date)}</dd>
                 </div>
               )}
             </dl>
           </>
         ) : (
-          <p className="text-sm text-zinc-500">No membership plan is set up on your account yet. Ask your coach.</p>
+          <>
+            <p className="text-sm text-zinc-500">No membership plan is set up on your account yet. Ask your coach.</p>
+            {since && (
+              <dl className="mt-3 border-t border-black/[.07] text-sm dark:border-white/10">
+                <div className="flex justify-between py-2">
+                  <dt className="text-zinc-500">Member since</dt>
+                  <dd className="font-semibold text-black dark:text-zinc-50">{longDate(since.date)}</dd>
+                </div>
+              </dl>
+            )}
+          </>
         )}
       </div>
       </section>

@@ -69,6 +69,42 @@ export function friendlyCreditReason(reason: string): string {
 export const HISTORY_PAGE = 25;
 export const PLAN_HISTORY_PAGE = 10;
 
+// ---- a member's own history (BK24) ----
+// The member's Credits screen shows 10 rows, then "Show more" adds 10 at a time. A weekly reset that changed nothing ("±0") is left
+// out: it read as "you got nothing this week". The database query leaves them out too, so every page is full.
+export const MEMBER_HISTORY_PAGE = 10;
+
+export function shownToMember(row: { delta: number }): boolean {
+  return row.delta !== 0;
+}
+
+// The rows on screen with the next page added after them, newest first: a row already there (one that moved down a page because a new
+// one arrived meanwhile) is not shown twice, and a ±0 row never is.
+export function appendCreditPage<T extends { id: string; delta: number }>(shown: readonly T[], page: readonly T[]): T[] {
+  const seen = new Set(shown.map((r) => r.id));
+  const out = [...shown];
+  for (const row of page) {
+    if (!shownToMember(row) || seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
+}
+
+// ---- "Member since" (RO15) ----
+// When the member actually joined: their earliest plan start, or the day their account was made when that is earlier or there is no
+// plan. It used to be the current plan's start, so it moved every time the plan changed. Dates are day keys ("2025-03-14"); the
+// account's moment is turned into the gym's day by the caller.
+export type MemberSince = { date: string; source: 'plan' | 'account' } | null;
+
+export function memberSince(earliestPlanStart: string | null | undefined, accountCreatedDay: string | null | undefined): MemberSince {
+  const plan = earliestPlanStart && /^\d{4}-\d{2}-\d{2}/.test(earliestPlanStart) ? earliestPlanStart.slice(0, 10) : null;
+  const account = accountCreatedDay && /^\d{4}-\d{2}-\d{2}/.test(accountCreatedDay) ? accountCreatedDay.slice(0, 10) : null;
+  if (plan && (!account || plan <= account)) return { date: plan, source: 'plan' };
+  if (account) return { date: account, source: 'account' };
+  return null;
+}
+
 // ---- the "are you sure" boxes ----
 const credits = (n: number) => `${n} credit${n === 1 ? '' : 's'}`;
 
