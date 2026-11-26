@@ -108,7 +108,8 @@ describe('coach dashboard members select', () => {
       'form_assignments.id', 'form_assignments.completed_at', 'form_assignments.form_templates.name',
       'bookings.booking_date', 'bookings.attended', 'bookings.no_show', 'bookings.class.start_time',
       'credits_balance.balance', 'membership_holds.id',
-      'big_dog_results.exercise_key', 'big_dog_results.self_reported', 'big_dog_results.result_text', 'big_dog_results.created_at',
+      'big_dog_results.exercise_key', 'big_dog_results.self_reported', 'big_dog_results.result_text', 'big_dog_results.result_value',
+      'big_dog_results.created_at',
       'workout_programs.id', 'workout_programs.name', 'workout_programs.start_date', 'workout_programs.week_one',
       'workout_programs.workout_program_days.week_num',
     ];

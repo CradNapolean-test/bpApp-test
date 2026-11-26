@@ -67,6 +67,9 @@ export interface ScoreToVerify {
   exercise: string;
   result: string | null;
   mine: boolean;
+  // What the dashboard's Confirm records (CV17): the exercise and the number the member logged.
+  exerciseKey: string;
+  value: number | null;
 }
 export interface ChallengeDue {
   clientId: string;
@@ -193,7 +196,7 @@ interface MemberRow {
   credits_balance: ProfileRel<{ balance: number | null }>;
   // Holds running today.
   membership_holds: { id: string }[] | null;
-  big_dog_results: { exercise_key: string; self_reported: boolean | null; result_text: string | null; created_at: string }[] | null;
+  big_dog_results: { exercise_key: string; self_reported: boolean | null; result_text: string | null; result_value: number | null; created_at: string }[] | null;
   // Programmes started in the last year, each with only its highest week number (see buildQuery).
   workout_programs: { id: string; name: string; start_date: string | null; week_one: string | null; workout_program_days: { week_num: number }[] | null }[] | null;
 }
@@ -421,13 +424,21 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
     }
 
     // Peak week scores the member logged themselves where the newest score is still unverified.
-    const newestByExercise = new Map<string, { self_reported: boolean | null; result_text: string | null }>();
+    const newestByExercise = new Map<string, { self_reported: boolean | null; result_text: string | null; result_value: number | null }>();
     for (const r of [...(m.big_dog_results ?? [])].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
       if (!newestByExercise.has(r.exercise_key)) newestByExercise.set(r.exercise_key, r);
     }
     for (const [key, r] of newestByExercise) {
       if (r.self_reported) {
-        scores.push({ clientId: m.id, name, exercise: EXERCISES.find((e) => e.key === key)?.name ?? key, result: r.result_text, mine: mine(m) });
+        scores.push({
+          clientId: m.id,
+          name,
+          exercise: EXERCISES.find((e) => e.key === key)?.name ?? key,
+          result: r.result_text,
+          mine: mine(m),
+          exerciseKey: key,
+          value: r.result_value ?? null,
+        });
       }
     }
 

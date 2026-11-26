@@ -28,6 +28,8 @@ import { useAction } from '@/app/_components/useAction';
 import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { markAllReviewed } from '@/lib/data/coachDashboard';
+import { verifyBigDogScore } from '@/lib/data/bigDog';
+import { dashboardConfirmArgs } from '@/lib/bigDogConfirm';
 import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from '@/lib/checkinQueue';
 import { formatClassTime, formatLongDate } from '@/lib/utils/dates';
 import CountUp from '@/app/_components/motion/CountUp';
@@ -78,6 +80,8 @@ interface TodoItem {
   href: string;
   // Present when the coach can mark this reviewed from here (their own member).
   review?: () => Promise<{ ok: boolean }>;
+  // Present when the coach can confirm this Peak Week score from here (CV17, their own member): the row folds away once it is saved.
+  confirm?: () => Promise<{ ok: boolean }>;
 }
 interface TodoGroup {
   key: string;
@@ -146,6 +150,20 @@ function TodoRow({ group, open, onToggle }: { group: TodoGroup; open: boolean; o
           className="h-9 shrink-0 rounded-xl bg-accent-soft px-3 text-[13px] font-bold text-accent disabled:opacity-50"
         >
           Reviewed
+        </button>
+      )}
+      {item.confirm && (
+        <button
+          type="button"
+          disabled={busy}
+          aria-label={`Confirm ${item.title}'s ${item.hint}`}
+          onClick={(e) => {
+            const row = e.currentTarget.closest('li');
+            void foldAway(row, () => run(async () => item.confirm!(), { success: 'Score confirmed' }));
+          }}
+          className="h-9 shrink-0 rounded-xl bg-accent-soft px-3 text-[13px] font-bold text-accent disabled:opacity-50"
+        >
+          Confirm
         </button>
       )}
       <Link href={item.href} onClick={group.onOpen} aria-label="Open" className="shrink-0 text-zinc-400">
@@ -486,13 +504,18 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
       tone: 'violet',
       title: 'Peak week scores to verify',
       summary: `${data.scores[0].name}: ${data.scores[0].exercise}${data.scores[0].result ? ` ${data.scores[0].result}` : ''}${data.scores.length > 1 ? ` and ${data.scores.length - 1} more` : ''}`,
-      items: data.scores.map((s) => ({
-        key: `${s.clientId}|${s.exercise}`,
-        clientId: s.clientId,
-        title: s.name,
-        hint: `${s.exercise}${s.result ? ` ${s.result}` : ''}`,
-        href: `/coach/clients/${s.clientId}?open=bigdog`,
-      })),
+      items: data.scores.map((s) => {
+        // Confirm here records the same verified score as Verify on the member's Big Dog page, for the same coach (CV17).
+        const args = dashboardConfirmArgs(s, scope);
+        return {
+          key: `${s.clientId}|${s.exercise}`,
+          clientId: s.clientId,
+          title: s.name,
+          hint: `${s.exercise}${s.result ? ` ${s.result}` : ''}`,
+          href: `/coach/clients/${s.clientId}?open=bigdog`,
+          confirm: args ? () => verifyBigDogScore(s.clientId, args.exerciseKey, args.value) : undefined,
+        };
+      }),
     });
   }
 

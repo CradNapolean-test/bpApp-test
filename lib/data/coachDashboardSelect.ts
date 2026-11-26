@@ -15,7 +15,7 @@ export const MEMBERS_SELECT = `
   coach_reviews!client_id(kind, ref),
   form_assignments!client_id(id, completed_at, form_templates(name)),
   bookings!client_id(booking_date, attended, no_show, class:classes(start_time)),
-  big_dog_results!client_id(exercise_key, self_reported, result_text, created_at),
+  big_dog_results!client_id(exercise_key, self_reported, result_text, result_value, created_at),
   workout_programs(id, name, start_date, week_one, workout_program_days(week_num)),
   ${FOLLOW_UP_RELATIONS}
 `;
