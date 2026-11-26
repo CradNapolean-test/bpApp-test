@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import AnimatedContent from '@/app/_components/motion/AnimatedContent';
 import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Ban, CalendarDays, Check, Dumbbell, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { BottomSheet } from '@/app/_components/BottomSheet';
@@ -19,6 +20,8 @@ import { bookClassForClient, cancelClassOccurrence, getRoster, grantCreditsAndBo
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { startMs } from '@/lib/utils/booking';
+import { ordinal } from '@/lib/utils/bookingWords';
+import { rememberCount, sessionKey, unmarkedInRoster, withMarkedCounts, type MarkedCounts } from '@/lib/sessionMarking';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
 
@@ -28,7 +31,7 @@ import type { CoachClientRow } from '@/lib/data/coach';
 // open Run this class, the door screen, for marking and walk-ins (D18).
 
 const statusOf = (e: RosterEntry): AttendanceStatus => (e.attended ? 'attended' : e.noShow ? 'no_show' : 'unmarked');
-const occKey = (o: ScheduleOccurrence) => `${o.classId}|${o.date}`;
+const occKey = (o: ScheduleOccurrence) => sessionKey(o);
 const parseDay = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
 function longDay(iso: string): string {
@@ -38,7 +41,7 @@ function longDay(iso: string): string {
 const monthShort = (iso: string) => parseDay(iso).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 
 export function SessionsView({
-  occurrences,
+  occurrences: pageOccurrences,
   clients,
   timezone,
   initialTarget = null,
@@ -59,9 +62,47 @@ export function SessionsView({
   const { run: runRemove, busy: removing } = useAction();
   const [removeEntry, setRemoveEntry] = useState<RosterEntry | null>(null);
   const { run: runBook, busy: booking } = useAction();
+  const [openKey, setOpenKey] = useState<string | null>(initialTarget ? `${initialTarget.classId}|${initialTarget.date}` : null);
+  const [roster, setRoster] = useState<RosterEntry[] | null>(null);
+  // Once a session has started it can't be cancelled: that would refund everyone, including the people who came (BK27; the database
+  // refuses it too, migration 0158). Compared at the gym's wall clock.
+  const hasStarted = (o: ScheduleOccurrence) => startMs(o.date, o.startTime) <= nowLocalMs(timezone ?? DEFAULT_TIMEZONE);
+
+  // The banner, the "to mark" badges and the strip's dots follow what is marked here at once (BK20): the open session's count comes
+  // from its roster, and each session's count is remembered when it closes, until the page's own numbers are read again.
+  const [markedCounts, setMarkedCounts] = useState<MarkedCounts | null>(null);
+  const pageOpen = pageOccurrences.find((o) => occKey(o) === openKey) ?? null;
+  const liveCount = pageOpen && roster && hasStarted(pageOpen) ? { key: occKey(pageOpen), count: unmarkedInRoster(roster) } : null;
+  const occurrences = withMarkedCounts(pageOccurrences, markedCounts, liveCount);
+  // After a session in which something was marked closes, the page's own numbers are read again once every mark has saved, so they stay
+  // right after a tab switch too.
+  const router = useRouter();
+  const pendingMarks = useRef(0);
+  const markedHere = useRef(false);
+  const refreshWanted = useRef(false);
+  async function trackMark<T>(save: Promise<T>): Promise<T> {
+    pendingMarks.current += 1;
+    markedHere.current = true;
+    try {
+      return await save;
+    } finally {
+      pendingMarks.current -= 1;
+      if (pendingMarks.current === 0 && refreshWanted.current) {
+        refreshWanted.current = false;
+        router.refresh();
+      }
+    }
+  }
+  function rememberOpenCount() {
+    if (liveCount) setMarkedCounts((prev) => rememberCount(prev, pageOccurrences, liveCount.key, liveCount.count));
+    if (!markedHere.current) return;
+    markedHere.current = false;
+    if (pendingMarks.current > 0) refreshWanted.current = true;
+    else router.refresh();
+  }
 
   const todayIso = todayIsoInTz(timezone ?? DEFAULT_TIMEZONE);
-  const dates = useMemo(() => [...new Set(occurrences.map((o) => o.date))].sort(), [occurrences]);
+  const dates = useMemo(() => [...new Set(pageOccurrences.map((o) => o.date))].sort(), [pageOccurrences]);
   const [pickedDate, setPickedDate] = useState<string | null>(initialTarget?.date ?? initialDate ?? null);
   const defaultDate = dates.find((d) => d >= todayIso) ?? dates[dates.length - 1] ?? null;
   const selectedDate = pickedDate && dates.includes(pickedDate) ? pickedDate : defaultDate;
@@ -72,8 +113,6 @@ export function SessionsView({
     activeChip.current?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }, [selectedDate]);
 
-  const [openKey, setOpenKey] = useState<string | null>(initialTarget ? `${initialTarget.classId}|${initialTarget.date}` : null);
-  const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [loading, setLoading] = useState(!!initialTarget);
   const [adding, setAdding] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -96,6 +135,7 @@ export function SessionsView({
     .sort((a, b) => (a.date + (a.startTime ?? '')).localeCompare(b.date + (b.startTime ?? '')));
 
   async function openSession(occ: ScheduleOccurrence) {
+    rememberOpenCount();
     setOpenKey(occKey(occ));
     setRoster(null);
     setAdding(false);
@@ -120,6 +160,7 @@ export function SessionsView({
   }, []);
 
   function closeSheet() {
+    rememberOpenCount();
     setOpenKey(null);
     setRoster(null);
   }
@@ -134,7 +175,7 @@ export function SessionsView({
       toast.error(message);
     };
     try {
-      const result = await markAttendanceStatus(entry.bookingId, next);
+      const result = await trackMark(markAttendanceStatus(entry.bookingId, next));
       if (!result.ok) revert(result.error);
     } catch (err) {
       revert(err instanceof Error ? err.message : 'Could not update attendance');
@@ -146,7 +187,7 @@ export function SessionsView({
     const todo = (roster ?? []).filter((r) => r.status === 'booked' && statusOf(r) === 'unmarked');
     if (todo.length === 0) return;
     setRoster((prev) => prev && prev.map((r) => (todo.some((t) => t.bookingId === r.bookingId) ? { ...r, attended: true, noShow: false } : r)));
-    const results = await Promise.allSettled(todo.map((t) => markAttendanceStatus(t.bookingId, 'attended')));
+    const results = await trackMark(Promise.allSettled(todo.map((t) => markAttendanceStatus(t.bookingId, 'attended'))));
     const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok)).length;
     if (failed > 0) {
       toast.error(`${failed} could not be marked`);
@@ -176,7 +217,7 @@ export function SessionsView({
     if (!removeEntry || !open) return;
     const entry = removeEntry;
     await runRemove(() => removeFromSession(entry.bookingId, refund), {
-      success: refund ? `${entry.clientName} removed and refunded` : `${entry.clientName} removed`,
+      success: entry.status === 'waitlist' ? `${entry.clientName} taken off the waitlist` : refund ? `${entry.clientName} removed and refunded` : `${entry.clientName} removed`,
       onDone: async () => {
         setRemoveEntry(null);
         setRoster(await getRoster(open.classId, open.date));
@@ -223,9 +264,13 @@ export function SessionsView({
   // From the roster once it has loaded, so a place just filled from this pop-up counts.
   const bookedNow = roster ? active.filter((r) => r.status === 'booked').length : (open?.bookedCount ?? 0);
   const sessionFull = !!open && bookedNow >= open.capacity;
-  // Once a session has started it can't be cancelled: that would refund everyone, including the people who came (BK27; the database
-  // refuses it too, migration 0158). Compared at the gym's wall clock.
-  const hasStarted = (o: ScheduleOccurrence) => startMs(o.date, o.startTime) <= nowLocalMs(timezone ?? DEFAULT_TIMEZONE);
+  // The waitlist in the order people come off it (CS5): getRoster reads bookings oldest first, as promote_from_waitlist moves them in.
+  const queuePlace = new Map(active.filter((r) => r.status === 'waitlist').map((r, i) => [r.bookingId, i + 1]));
+  // Booked places first, then the waitlist in order.
+  const rosterRows = [...active.filter((r) => r.status !== 'waitlist'), ...active.filter((r) => r.status === 'waitlist')];
+  // Someone only on the waitlist never paid, so removing them offers no refund (BK18; coach_cancel_booking gives nothing back for one).
+  const removingWaitlist = removeEntry?.status === 'waitlist';
+  const removeCost = open?.creditCost ?? 1;
 
   return (
     <div className="space-y-4">
@@ -428,7 +473,7 @@ export function SessionsView({
                   <Check className="h-4 w-4" /> Mark everyone attended ({unmarkedBooked})
                 </button>
               )}
-              {active.map((entry) => {
+              {rosterRows.map((entry) => {
                 const st = statusOf(entry);
                 const waitlisted = entry.status === 'waitlist';
                 return (
@@ -438,7 +483,11 @@ export function SessionsView({
                         <Avatar name={entry.clientName} size="sm" />
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.clientName}</span>
-                          {waitlisted && <span className="block text-[11px] font-semibold text-warning">Waitlist</span>}
+                          {waitlisted && (
+                            <span className="block text-[11px] font-semibold text-warning">
+                              {queuePlace.has(entry.bookingId) ? `${ordinal(queuePlace.get(entry.bookingId)!)} on the waitlist` : 'Waitlist'}
+                            </span>
+                          )}
                         </span>
                       </Link>
                       <button
@@ -572,28 +621,45 @@ export function SessionsView({
       )}
 
       {removeEntry && (
-        <BottomSheet title={`Remove ${removeEntry.clientName}?`} onClose={() => setRemoveEntry(null)}>
-          <div className="space-y-3">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              They are taken off this session and told. Choose whether their credit goes back.
-            </p>
-            <button
-              type="button"
-              disabled={removing}
-              onClick={() => removeMember(true)}
-              className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
-            >
-              Remove and refund the credit
-            </button>
-            <button
-              type="button"
-              disabled={removing}
-              onClick={() => removeMember(false)}
-              className="w-full rounded-full border border-black/10 py-3 text-sm font-bold text-zinc-700 disabled:opacity-50 dark:border-white/15 dark:text-zinc-200"
-            >
-              Remove, no refund
-            </button>
-          </div>
+        <BottomSheet title={removingWaitlist ? `Take ${removeEntry.clientName} off the waitlist?` : `Remove ${removeEntry.clientName}?`} onClose={() => setRemoveEntry(null)}>
+          {removingWaitlist ? (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                They are taken off the waitlist and told. They haven&apos;t paid anything for a waitlist place, so there is nothing to refund.
+              </p>
+              <button
+                type="button"
+                disabled={removing}
+                onClick={() => removeMember(false)}
+                className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
+              >
+                Take off the waitlist
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                They are taken off this session and told. Choose whether {removeCost === 1 ? 'their credit goes' : `their ${removeCost} credits go`}{' '}
+                back.
+              </p>
+              <button
+                type="button"
+                disabled={removing}
+                onClick={() => removeMember(true)}
+                className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
+              >
+                Remove and refund {removeCost === 1 ? 'the credit' : `the ${removeCost} credits`}
+              </button>
+              <button
+                type="button"
+                disabled={removing}
+                onClick={() => removeMember(false)}
+                className="w-full rounded-full border border-black/10 py-3 text-sm font-bold text-zinc-700 disabled:opacity-50 dark:border-white/15 dark:text-zinc-200"
+              >
+                Remove, no refund
+              </button>
+            </div>
+          )}
         </BottomSheet>
       )}
     </div>

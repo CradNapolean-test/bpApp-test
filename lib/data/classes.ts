@@ -527,7 +527,9 @@ export async function getRoster(classId: string, date: string): Promise<RosterEn
     .select('id, client_id, status, attended, no_show')
     .eq('class_id', classId)
     .eq('booking_date', date)
-    .order('created_at');
+    // Oldest first, then by id: the order promote_from_waitlist moves people in, so the waitlist reads in queue order (CS5).
+    .order('created_at')
+    .order('id');
   if (error) raise(error);
   if (!bookings || bookings.length === 0) return [];
 

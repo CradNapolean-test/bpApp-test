@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, ChevronDown, ChevronLeft, Tv, UserPlus, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
@@ -15,6 +15,8 @@ import { exerciseBlockKey, exerciseIsVisible, SECTION_TITLE, usesSections } from
 import { describeHistorySets, describePastResult, pastResultsFor } from '@/lib/runClassHistory';
 import { sanitiseConfig } from '@/lib/blockScoring';
 import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz } from '@/lib/utils/dates';
+import { ordinal } from '@/lib/utils/bookingWords';
+import { lastWeightsOrder } from '@/lib/lastWeightsOrder';
 import type { RunClassData, RunClassMember } from '@/lib/data/runClass';
 import type { CoachClientRow } from '@/lib/data/coach';
 import type { AttendanceStatus, WorkoutExerciseRow } from '@/lib/data/types';
@@ -34,7 +36,8 @@ const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateStri
 
 function MemberHistory({ member, exercises }: { member: RunClassMember; exercises: WorkoutExerciseRow[] }) {
   const sectioned = usesSections(exercises);
-  const rows = exercises.filter((e) => (member.chosenKeys.length === 0 || exerciseIsVisible(e, sectioned, member.chosenKeys)));
+  // The main lifts first, the warm-ups last (CS22).
+  const rows = lastWeightsOrder(exercises.filter((e) => member.chosenKeys.length === 0 || exerciseIsVisible(e, sectioned, member.chosenKeys)));
   if (rows.length === 0) return <p className="px-1 py-2 text-sm text-zinc-500">No exercises to show yet.</p>;
   // The day's scored blocks (an AMRAP, a for-time, a score), once each, with the member's earlier results on the same block (CS18).
   const scored = new Map<string, { title: string; format: string | null; config: unknown }>();
@@ -98,7 +101,7 @@ function MemberHistory({ member, exercises }: { member: RunClassMember; exercise
   );
 }
 
-export function RunClassView({ classId, initial }: { classId: string; initial: RunClassData }) {
+export function RunClassView({ classId, initial, timezone }: { classId: string; initial: RunClassData; timezone?: string | null }) {
   const toast = useToast();
   const [members, setMembers] = useState(initial.members);
   // The attendance bar fills when the page opens (GSAP), then follows each tap.
@@ -159,12 +162,14 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
   }
 
   const booked = members.filter((m) => m.status === 'booked');
+  // In the order people come off it (CS5): the roster is read oldest booking first, as promote_from_waitlist moves people in.
   const waitlist = members.filter((m) => m.status === 'waitlist');
+  const queuePlace = new Map(waitlist.map((m, i) => [m.bookingId, i + 1]));
   const here = booked.filter((m) => m.attended).length;
   const unmarked = booked.filter((m) => statusOf(m) === 'unmarked');
   // Attendance can't be marked for a session that hasn't happened yet: it would count toward sessions done, the clubs and rewards (SV1).
-  // The database refuses too; this just says so first. (The gym's own timezone is used when the page passes it in.)
-  const todayIso = todayIsoInTz(DEFAULT_TIMEZONE);
+  // The database refuses too; this just says so first. "Today" is the gym's own, from the page (CS19); London only when it isn't known.
+  const todayIso = todayIsoInTz(timezone || DEFAULT_TIMEZONE);
   const notYetHappened = initial.date > todayIso;
   // A member can be added today or ahead, not to an earlier day (the database refuses a past date).
   const canAdd = initial.date >= todayIso;
@@ -250,7 +255,13 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
           const st = statusOf(m);
           const open = openId === m.bookingId;
           return (
-            <div key={m.bookingId} className="border-t border-black/[.07] px-5 py-3 dark:border-white/10">
+            <Fragment key={m.bookingId}>
+            {waitlist.length > 0 && m.bookingId === waitlist[0].bookingId && (
+              <p className="border-t border-black/[.07] bg-black/[.02] px-5 py-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-zinc-500 dark:border-white/10 dark:bg-white/[.03] dark:text-zinc-400">
+                Waitlist, in order · {waitlist.length} waiting
+              </p>
+            )}
+            <div className="border-t border-black/[.07] px-5 py-3 dark:border-white/10">
               <div className="flex items-center gap-3">
                 <Avatar name={m.clientName} size="md" />
                 <div className="min-w-0 flex-1">
@@ -258,7 +269,11 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                     {m.clientName}
                   </Link>
                   <p className={`truncate text-xs ${m.picks?.switched ? 'font-semibold text-accent' : 'text-zinc-500'}`}>
-                    {m.status === 'waitlist' ? 'Waitlist' : (m.picks?.text ?? 'No block picked yet')}
+                    {m.status === 'waitlist'
+                      ? queuePlace.has(m.bookingId)
+                        ? `${ordinal(queuePlace.get(m.bookingId)!)} on the waitlist`
+                        : 'Waitlist'
+                      : (m.picks?.text ?? 'No block picked yet')}
                   </p>
                 </div>
                 {m.status === 'booked' && (
@@ -308,6 +323,7 @@ export function RunClassView({ classId, initial }: { classId: string; initial: R
                 </>
               )}
             </div>
+            </Fragment>
           );
         })}
       </div>

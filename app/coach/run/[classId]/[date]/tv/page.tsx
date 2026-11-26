@@ -5,6 +5,7 @@ import { getRunClassData } from '@/lib/data/runClass';
 import { blockFormatOf, groupIntoBlocks, parseBlockKey, type WorkoutSection } from '@/lib/workoutSections';
 import { blockConfigOf } from '@/lib/blockScoring';
 import { tvBlockLabel } from '@/lib/tvBlockLabel';
+import { isRunClassDate } from '../runClassPage';
 import { TvExit } from './TvExit';
 import { TvFit } from './TvFit';
 import type { WorkoutExerciseRow } from '@/lib/data/types';
@@ -65,8 +66,8 @@ function Block({ rows, label, blockNo, showSets }: { rows: WorkoutExerciseRow[];
 
 export default async function RunClassTvPage({ params }: { params: Promise<{ classId: string; date: string }> }) {
   const { classId, date } = await params;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) notFound();
 
+  // Who is asking comes first (SE15): a member is sent to their dashboard whatever the address says.
   const supabase = await createClient();
   const {
     data: { user },
@@ -75,6 +76,7 @@ export default async function RunClassTvPage({ params }: { params: Promise<{ cla
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
+  if (!isRunClassDate(date)) notFound();
   const data = await getRunClassData(classId, date).catch(() => null);
   if (!data) notFound();
 
