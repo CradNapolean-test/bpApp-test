@@ -12,7 +12,7 @@ import type { Category, NutritionTrackingMode, Screen } from './categories';
 //   Nutrition  Food tracking / meal planner / recipes (whichever the member's mode uses)
 //   Training   Workout, Step swaps
 //   Check-in   Daily check-in, Forms
-//   Progress   Summary, Insights, Photos, Body scans, Big Dog
+//   Progress   Summary (with Insights), Charts (with Body scans), Photos, Strength (with Big Dog): four tabs that fit a phone (CL11)
 //   Profile    Details, Credits & plan, Notes, Courses
 // The member's own app keeps its own categories; this only reshapes what the coach sees. Tabs point at
 // the existing (category, screen) pairs, so everything that navigates by those keeps working.
@@ -21,6 +21,32 @@ export interface CoachTab {
   category: Category;
   screen: Screen;
   label: string;
+  // Pages inside this tab, picked with a small switch under the tab row (CL11: Insights inside Summary, Body scans inside Charts, Big Dog
+  // inside Strength). Only set when there are two or more; the first is the tab's own page.
+  inner?: CoachTab[];
+}
+
+// One tab made of several pages: it opens on the first page there is, and is named after it when it is the only one left (a member with
+// their Summary switched off still gets an "Insights" tab, not a "Summary" one that shows Insights).
+function tabOf(parts: CoachTab[]): CoachTab[] {
+  if (parts.length === 0) return [];
+  if (parts.length === 1) return [parts[0]];
+  return [{ ...parts[0], inner: parts }];
+}
+
+// The tab a page belongs to, and the page itself: a tab's own page or one inside it. Links to the old tabs (Insights, Body scans, Big
+// Dog: the dashboard's "Open", ?open=bigdog, the Overview's cards) land on the tab that holds them, with that page picked.
+export function findCoachTab(tabs: CoachTab[], category: Category, screen: Screen): { tab: CoachTab; page: CoachTab } | undefined {
+  for (const tab of tabs) {
+    const page = (tab.inner ?? [tab]).find((p) => p.category === category && p.screen === screen);
+    if (page) return { tab, page };
+  }
+  return undefined;
+}
+
+// Every page in the order the tabs show them, inner pages included (the slide direction when the coach moves between them).
+export function coachPageOrder(groups: CoachGroup[]): CoachTab[] {
+  return groups.flatMap((g) => g.tabs.flatMap((t) => t.inner ?? [t]));
 }
 
 export interface CoachGroup {
@@ -68,10 +94,17 @@ export function coachGroups(disabled: Set<Screen>, nutritionMode: NutritionTrack
       key: 'progress',
       label: 'Progress',
       icon: TrendingUp,
-      tabs: [
-        ...tabsFor('Progress', { Overview: 'Summary', Metrics: 'Charts', Insights: 'Insights', 'Progress & Photos': 'Photos', 'Body Scans': 'Body scans', Strength: 'Strength' }),
-        ...tabsFor('Achievements', { 'Big Dog': 'Big Dog' }),
-      ],
+      // Seven tabs became four (CL11): at 375 the last ones were off the screen.
+      tabs: (() => {
+        const progress = tabsFor('Progress', { Overview: 'Summary', Metrics: 'Charts', Insights: 'Insights', 'Progress & Photos': 'Photos', 'Body Scans': 'Body scans', Strength: 'Strength' });
+        const pick = (...screens: Screen[]) => screens.flatMap((s) => progress.filter((t) => t.screen === s));
+        return [
+          ...tabOf(pick('Overview', 'Insights')),
+          ...tabOf(pick('Metrics', 'Body Scans')),
+          ...tabOf(pick('Progress & Photos')),
+          ...tabOf([...pick('Strength'), ...tabsFor('Achievements', { 'Big Dog': 'Big Dog' })]),
+        ];
+      })(),
     },
     {
       key: 'profile',
@@ -88,8 +121,8 @@ export function coachGroups(disabled: Set<Screen>, nutritionMode: NutritionTrack
 // The section the member's current page belongs to.
 export function activeCoachGroup(groups: CoachGroup[], category: Category, screen: Screen): CoachGroup | undefined {
   return (
-    groups.find((g) => g.tabs.some((t) => t.category === category && t.screen === screen)) ??
-    groups.find((g) => g.tabs.some((t) => t.category === category) || g.alsoCategories?.includes(category))
+    groups.find((g) => findCoachTab(g.tabs, category, screen)) ??
+    groups.find((g) => g.tabs.some((t) => (t.inner ?? [t]).some((p) => p.category === category)) || g.alsoCategories?.includes(category))
   );
 }
 
@@ -139,7 +172,7 @@ export function CoachMemberSideNav({
                     type="button"
                     onClick={() => onSelect(t)}
                     className={`block w-full rounded-md px-2 py-1 text-left text-sm transition-colors ${
-                      t.category === category && t.screen === screen
+                      findCoachTab([t], category, screen)
                         ? 'font-medium text-black dark:text-zinc-50'
                         : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300'
                     }`}
@@ -211,9 +244,9 @@ export function CoachMemberBottomNav({ groups, active, onSelect }: { groups: Coa
   );
 }
 
-// The tabs inside the current section, along the top of the page on a phone (a desktop screen lists them in
-// the left menu instead).
-// Scrolls sideways if there are more than fit, with a fade at the edge, and keeps the chosen one in view.
+// The tabs inside the current section, along the top of the page.
+// Scrolls sideways if there are more than fit, with a fade at the edge, and keeps the chosen one in view. A tab with pages inside it
+// (CL11) shows them as a small switch underneath.
 export function CoachMemberTabs({
   tabs,
   category,
@@ -240,7 +273,10 @@ export function CoachMemberTabs({
     return () => window.removeEventListener('resize', measure);
   }, [category, screen, tabs.length]);
 
+  const current = findCoachTab(tabs, category, screen);
+
   return (
+    <>
     <div
       ref={rowRef}
       role="tablist"
@@ -251,7 +287,7 @@ export function CoachMemberTabs({
       className="mb-4 flex w-full gap-5 overflow-x-auto border-b border-black/[.06] [scrollbar-width:none] dark:border-white/10 [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((t) => {
-        const isActive = t.category === category && t.screen === screen;
+        const isActive = current?.tab === t;
         return (
           <button
             key={`${t.category}:${t.screen}`}
@@ -272,5 +308,26 @@ export function CoachMemberTabs({
         );
       })}
     </div>
+    {current?.tab.inner && (
+      <div role="group" aria-label={`${current.tab.label}: pages`} className="-mt-1 mb-4 inline-flex gap-1 rounded-full bg-black/[.05] p-1 dark:bg-white/10">
+        {current.tab.inner.map((p) => {
+          const on = p === current.page;
+          return (
+            <button
+              key={`${p.category}:${p.screen}`}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onSelect(p)}
+              className={`h-9 rounded-full px-4 text-sm transition-colors ${
+                on ? 'bg-card font-bold text-black shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'font-semibold text-zinc-500 hover:text-black dark:hover:text-zinc-200'
+              }`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+    )}
+    </>
   );
 }

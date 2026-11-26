@@ -28,7 +28,7 @@ import { CoachSidebar } from '@/app/coach/_components/CoachSidebar';
 import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMessagesButton } from '@/app/coach/_components/CoachMessagesButton';
 import { useReadSinceDrawn } from '@/app/coach/_components/CoachUnreadContext';
-import { CoachMemberBottomNav, CoachMemberGroupTabs, CoachMemberTabs, activeCoachGroup, coachGroups } from './CoachMemberNav';
+import { CoachMemberBottomNav, CoachMemberGroupTabs, CoachMemberTabs, activeCoachGroup, coachGroups, coachPageOrder, findCoachTab } from './CoachMemberNav';
 import type { CoachTab } from './CoachMemberNav';
 import { ClientBottomTabBar } from './ClientBottomTabBar';
 import type { ClientTab } from './ClientBottomTabBar';
@@ -566,7 +566,7 @@ export function DashboardShell({
   const coachNavGroups = isCoachView ? coachGroups(disabledScreenSet, nutritionMode) : [];
   const activeGroup = isCoachView ? activeCoachGroup(coachNavGroups, category, effectiveScreen) : undefined;
   function selectCoachTab(t: CoachTab) {
-    const order = coachNavGroups.flatMap((g) => g.tabs);
+    const order = coachPageOrder(coachNavGroups);
     const at = (c: Category, s: Screen) => order.findIndex((x) => x.category === c && x.screen === s);
     const from = at(category, effectiveScreen);
     const to = at(t.category, t.screen);
@@ -727,7 +727,7 @@ export function DashboardShell({
     ) : null;
 
   // The coach's own name for the page they are on ("Overview", "Step swaps"), for the screen reader's page title.
-  const coachTabLabel = activeGroup?.tabs.find((t) => t.category === category && t.screen === effectiveScreen)?.label;
+  const coachTabLabel = activeGroup ? findCoachTab(activeGroup.tabs, category, effectiveScreen)?.page.label : undefined;
 
   const coachSummary = isCoachView && (
     <>
@@ -901,7 +901,7 @@ export function DashboardShell({
       }
     >
       {subScreenHeader}
-      {showCoaching && isCoachView && activeGroup && activeGroup.tabs.length > 1 && (
+      {showCoaching && isCoachView && activeGroup && (activeGroup.tabs.length > 1 || activeGroup.tabs.some((t) => t.inner)) && (
         <CoachMemberTabs tabs={activeGroup.tabs} category={category} screen={effectiveScreen} onSelect={selectCoachTab} />
       )}
       {/* The member's nutrition plan and targets, at the top of the coach's view of their Nutrition (CL8). Drawn here, once for the whole
