@@ -609,7 +609,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
 
       </section>
       {/* One line instead of the old five sentences (CS7); what the blocks mean is in the key below. */}
-      <p className="px-1 text-xs text-zinc-500">Tap an empty slot to add a session there, or a session to change it.</p>
+      <p className="px-1 text-xs text-zinc-500">Tap an empty slot to add a session there.</p>
       {classes.length > 0 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 px-1">
           <span className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300">
@@ -759,7 +759,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                 htmlFor="session-class"
                 hint={
                   nameMatch ? (
-                    <>That&apos;s your {nameMatch} class, so the session goes in {nameMatch}.</>
+                    <>You already have {nameMatch}, so it&apos;s saved as {nameMatch}, not as a new class.</>
                   ) : nameNear ? (
                     <>
                       Did you mean{' '}
