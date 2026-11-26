@@ -22,7 +22,7 @@ import { CoachGymsProvider } from '@/app/coach/_components/CoachGymsContext';
 import { PackageManager } from '@/app/coach/classes/_components/PackageManager';
 import { CreditPackManager } from '@/app/coach/classes/_components/CreditPackManager';
 import { RewardsPane } from '@/app/coach/community/_components/CommunityShell';
-import { brandParts, shortGymName } from '@/lib/gymNames';
+import { brandParts, prettyName, shortGymName } from '@/lib/gymNames';
 import { LOAD_FAILED } from '@/lib/ownerReport';
 import type { RosterFilter } from '@/lib/ownerRoster';
 import type { OwnerGym, OwnerGymSettings } from '@/lib/data/owner';
@@ -151,7 +151,9 @@ export function OwnerGymShell({
               ]}
             />
 
-            {section === 'members' && <RosterPane gymId={gymId} initialFilter={initialFilter} />}
+            {section === 'members' && (
+              <RosterPane gymId={gymId} initialFilter={initialFilter} coaches={(gym?.coaches ?? []).map((c) => ({ id: c.id, name: prettyName(c.name) }))} />
+            )}
 
             {section === 'team' && (
               <div className="space-y-6">

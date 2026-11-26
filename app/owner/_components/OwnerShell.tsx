@@ -14,6 +14,8 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { Logo } from '@/app/_components/Logo';
 import { Segmented } from '@/app/_components/ui';
 import { ReportsPane } from './ReportsPane';
+import { FollowThroughTable } from './FollowThroughTable';
+import type { FollowThroughLoad } from '@/lib/data/coachFollowThrough';
 import { brandParts, prettyName, shortGymName } from '@/lib/gymNames';
 import { LOAD_FAILED, monthToDateChange } from '@/lib/ownerReport';
 import { rosterHref, type RosterFilter } from '@/lib/ownerRoster';
@@ -189,7 +191,19 @@ function Retry({ message, onRetry }: { message: string; onRetry: () => void }) {
   );
 }
 
-function GymCard({ gym, title, stats, onRetry }: { gym: OwnerGym; title: string; stats: OwnerGymStats | undefined; onRetry: () => void }) {
+function GymCard({
+  gym,
+  title,
+  stats,
+  followThrough,
+  onRetry,
+}: {
+  gym: OwnerGym;
+  title: string;
+  stats: OwnerGymStats | undefined;
+  followThrough: FollowThroughLoad | undefined;
+  onRetry: () => void;
+}) {
   // min-w-0: a grid item is otherwise at least as wide as its widest content, so the coaches table (which scrolls inside its own box)
   // pushed the card past the screen and the whole page scrolled sideways on a phone (RO22).
   return (
@@ -212,6 +226,8 @@ function GymCard({ gym, title, stats, onRetry }: { gym: OwnerGym; title: string;
           <RedFlagLine rf={stats.redFlags} gymId={gym.id} />
           <SectionLabel>Coaches</SectionLabel>
           <TeamTable team={stats.team} />
+          <SectionLabel>Coach follow-through</SectionLabel>
+          <FollowThroughTable load={followThrough} />
         </>
       ) : (
         <>
@@ -231,12 +247,15 @@ function GymCard({ gym, title, stats, onRetry }: { gym: OwnerGym; title: string;
 export function OwnerShell({
   gyms,
   stats,
+  followThrough = {},
   email,
   orgName,
 }: {
   // null when the list of gyms could not be loaded (as opposed to an empty organisation).
   gyms: OwnerGym[] | null;
   stats: OwnerGymStats[] | null;
+  // What each gym's coaches did (RO19), by gym id.
+  followThrough?: Record<string, FollowThroughLoad>;
   email: string;
   orgName: string | null;
 }) {
@@ -294,7 +313,7 @@ export function OwnerShell({
       >
         <div className="mb-6">
           <CoachPageHeader
-            eyebrow={view === 'overview' ? 'Every gym in the business, side by side' : 'Check-ins and coach messaging over time'}
+            eyebrow={view === 'overview' ? 'Every gym in the business, side by side' : 'Check-ins, classes, retention and staff activity over time'}
             title={view === 'overview' ? 'Your gyms' : 'Reports'}
             actions={
               gyms !== null && gyms.length > 0 ? (
@@ -342,7 +361,7 @@ export function OwnerShell({
             {view === 'overview' && stats !== null && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {shown.map((g) => (
-                  <GymCard key={g.id} gym={g} title={titleOf(g)} stats={statsOf(g.id)} onRetry={retry} />
+                  <GymCard key={g.id} gym={g} title={titleOf(g)} stats={statsOf(g.id)} followThrough={followThrough[g.id]} onRetry={retry} />
                 ))}
               </div>
             )}

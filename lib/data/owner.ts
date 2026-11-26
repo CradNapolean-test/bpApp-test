@@ -6,6 +6,11 @@ import { fail, ok, type ActionResult } from './result';
 import { LOAD_FAILED, type Loaded } from '@/lib/ownerReport';
 import { blackoutProblem, normaliseReferralUrl, referralUrlProblem } from '@/lib/gymSettings';
 import type { RosterFilter } from '@/lib/ownerRoster';
+import { isMissingFunction } from './migrationCheck';
+import { READ_NEEDS_0176 } from '@/lib/followThrough';
+import type { ClassReportRaw } from '@/lib/ownerClassReport';
+import type { RetentionReportRaw } from '@/lib/ownerRetention';
+import { STAFF_PAGE_SIZE, type StaffActivityPage } from '@/lib/staffActivity';
 
 // Owner side: the organisation's gyms, who coaches in each, what happened this month, and the actions an owner may take on a gym's team.
 // Reads come back as { ok, data, error } so a screen can offer "Try again" (R30); the technical reason goes to Sentry and is never shown.
@@ -130,6 +135,35 @@ export async function getOwnerActivityReport(gymId: string | null, weeks = 12): 
     return { ok: false, error: LOAD_FAILED };
   }
   return { ok: true, data: data as ActivityReport };
+}
+
+// ---- Reports added in migration 0176 (RO10, SE23): classes, retention, staff activity ----
+// Each follows the gym picked on the owner screens (null = every gym). Before 0176 is applied they say so instead of "could not load".
+
+async function ownerRead<T>(fn: string, args: Record<string, unknown>): Promise<Loaded<T>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error || !data) {
+    if (isMissingFunction(error)) return { ok: false, error: READ_NEEDS_0176 };
+    logFailure(fn, error ?? new Error('empty answer'));
+    return { ok: false, error: LOAD_FAILED };
+  }
+  return { ok: true, data: data as T };
+}
+
+// Classes, the sessions of the last `weeks` weeks (and the next 14 days, for waitlists), cancelled dates and members who came each week.
+export async function getOwnerClassReport(gymId: string | null, weeks = 12): Promise<Loaded<ClassReportRaw>> {
+  return ownerRead<ClassReportRaw>('owner_class_report', { p_gym: gymId, p_weeks: weeks });
+}
+
+// Members by the month they joined, over the last `months` months.
+export async function getOwnerRetentionReport(gymId: string | null, months = 12): Promise<Loaded<RetentionReportRaw>> {
+  return ownerRead<RetentionReportRaw>('owner_retention_report', { p_gym: gymId, p_months: months });
+}
+
+// The record of staff actions, newest first, one page at a time.
+export async function getOwnerStaffActivity(gymId: string | null, offset = 0, limit = STAFF_PAGE_SIZE): Promise<Loaded<StaffActivityPage>> {
+  return ownerRead<StaffActivityPage>('owner_staff_activity', { p_gym: gymId, p_limit: limit, p_offset: Math.max(0, offset) });
 }
 
 // ---- The roster of one gym (read only, no health data) ----

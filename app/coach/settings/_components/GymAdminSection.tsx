@@ -9,7 +9,9 @@ import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { inputCls } from '@/app/_components/ui';
 import { SetPasswordLinkCard } from '@/app/coach/_components/SetPasswordLinkCard';
 import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
+import { ChangeCoachForm } from './ChangeCoachForm';
 import {
+  getCoachMembersAtGym,
   reassignClients,
   removeCoachFromGym,
   renameGym,
@@ -293,6 +295,8 @@ function CoachRow({
   const label = nameOf(coach);
   const self = coach.id === currentUserId;
   const [moving, setMoving] = useState(false);
+  // BO14: change one member's coach (the gym admin's own Team section; the owner does it from the gym's Members list).
+  const [changing, setChanging] = useState(false);
   const [receiver, setReceiver] = useState('');
   const receiving = others.find((o) => o.id === receiver);
 
@@ -400,12 +404,43 @@ function CoachRow({
           <DropdownMenu
             triggerLabel={`Actions for ${label}`}
             items={[
-              { label: 'Move members…', onSelect: () => setMoving((v) => !v), disabled: busy || coach.members === 0 || others.length === 0 },
+              ...(scope.kind === 'admin'
+                ? [
+                    {
+                      label: "Change one member's coach…",
+                      onSelect: () => {
+                        setMoving(false);
+                        setChanging((v) => !v);
+                      },
+                      disabled: busy || coach.members === 0 || others.length === 0,
+                    },
+                  ]
+                : []),
+              {
+                label: 'Move members…',
+                onSelect: () => {
+                  setChanging(false);
+                  setMoving((v) => !v);
+                },
+                disabled: busy || coach.members === 0 || others.length === 0,
+              },
               { label: 'Remove from gym', onSelect: () => void handleRemove(), destructive: true, disabled: busy || self },
             ]}
           />
         </div>
       </div>
+      {changing && (
+        <div className="mt-3 border-t border-black/[.06] pt-3 dark:border-white/10">
+          <ChangeCoachForm
+            idPrefix={`change-${coach.id}`}
+            loadMembers={() => getCoachMembersAtGym(coach.id, activeGymId)}
+            from={{ id: coach.id, name: label }}
+            coaches={[coach, ...others].map((c) => ({ id: c.id, name: nameOf(c) }))}
+            onCancel={() => setChanging(false)}
+            onDone={() => setChanging(false)}
+          />
+        </div>
+      )}
       {moving && (
         <div className="mt-3 space-y-2 border-t border-black/[.06] pt-3 dark:border-white/10">
           <label htmlFor={`move-${coach.id}`} className="text-xs font-medium text-zinc-500">

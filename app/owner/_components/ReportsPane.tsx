@@ -9,8 +9,11 @@ import { getOwnerActivityReport } from '@/lib/data/owner';
 import type { ActivityReport } from '@/lib/data/owner';
 import { lastTwo, maxOf, settle, weekSoFar, weekdayExtremes, weekdayName } from '@/lib/ownerReport';
 import { prettyName } from '@/lib/gymNames';
+import { MoreReports } from './MoreReports';
+import { StaffActivityList } from './StaffActivityList';
 
-// Owner reports: check-ins through the week, per day and per week, and how much each coach has messaged.
+// Owner reports: check-ins through the week, per day and per week, and how much each coach has messaged; then the class, retention and
+// waitlist reports (RO10) and the staff activity record (SE23), each loading on its own so one failing leaves the others on screen.
 // A check-in is a member logging anything on their daily check-in that day (the same measure as the Overview's
 // "Logged this week"). Percentages are of members who finished onboarding in the chosen gym(s).
 
@@ -53,6 +56,16 @@ function Bars({ items, max, label }: { items: { key: string; value: number; labe
 }
 
 export function ReportsPane({ gymId }: { gymId: string | null }) {
+  return (
+    <div className="space-y-4">
+      <ActivityReports gymId={gymId} />
+      <MoreReports gymId={gymId} />
+      <StaffActivityList gymId={gymId} />
+    </div>
+  );
+}
+
+function ActivityReports({ gymId }: { gymId: string | null }) {
   const [report, setReport] = useState<ActivityReport | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [error, setError] = useState('');

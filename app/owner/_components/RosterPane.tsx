@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import { ChangeCoachForm, type CoachChoice } from '@/app/coach/settings/_components/ChangeCoachForm';
 import { Search } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { useOnDemand } from '@/app/_components/useOnDemand';
@@ -34,9 +35,26 @@ function MemberStatus({ m }: { m: RosterMember }) {
   );
 }
 
-// A read-only list of a gym's members for the owner: name, coach, plan, last active and status, with search, a filter and paging. The
-// database function behind it returns no health information, so there is none to show (R37).
-export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFilter: RosterFilter | null }) {
+// "Change coach" button for one member's row (BO14).
+function ChangeCoachButton({ m, open, onToggle }: { m: RosterMember; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={`Change ${m.name}'s coach`}
+      className="inline-flex h-9 shrink-0 items-center rounded-xl border-[1.5px] border-black/20 px-3 text-xs font-bold text-black hover:bg-black/[.03] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
+    >
+      Change coach
+    </button>
+  );
+}
+
+// A list of a gym's members for the owner: name, coach, plan, last active and status, with search, a filter and paging, and "Change coach"
+// for one member (BO14). The database function behind it returns no health information, so there is none to show (R37).
+export function RosterPane({ gymId, initialFilter, coaches = [] }: { gymId: string; initialFilter: RosterFilter | null; coaches?: CoachChoice[] }) {
+  // The member whose "Change coach" form is open.
+  const [changing, setChanging] = useState<string | null>(null);
   const [filter, setFilter] = useState<RosterFilter | null>(initialFilter);
   const [search, setSearch] = useState('');
   const [typed, setTyped] = useState('');
@@ -120,57 +138,76 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
                   row of its own there, with the same facts under the name. */}
               <ul className="divide-y divide-black/[.05] rounded-[20px] border border-black/[.08] bg-card text-sm sm:hidden dark:divide-white/10 dark:border-white/10">
                 {roster.members.map((m) => (
-                  <li key={m.clientId} className="flex items-start gap-2.5 px-3 py-2.5">
-                    <Avatar name={m.name} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
-                      {m.name !== m.email && <p className="truncate text-xs text-zinc-500">{m.email}</p>}
-                      <p className="mt-1 text-xs">
-                        <MemberStatus m={m} />
-                      </p>
-                      <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-                        {/* No plan is already the status above, so only a plan's name is repeated here. */}
-                        {[m.plan, m.coachName ? prettyName(m.coachName) : 'No coach', `Last active ${lastActiveLabel(m.lastActive).toLowerCase()}`]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
+                  <li key={m.clientId} className="px-3 py-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <Avatar name={m.name} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
+                        {m.name !== m.email && <p className="truncate text-xs text-zinc-500">{m.email}</p>}
+                        <p className="mt-1 text-xs">
+                          <MemberStatus m={m} />
+                        </p>
+                        <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+                          {/* No plan is already the status above, so only a plan's name is repeated here. */}
+                          {[m.plan, m.coachName ? prettyName(m.coachName) : 'No coach', `Last active ${lastActiveLabel(m.lastActive).toLowerCase()}`]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      </div>
+                      <ChangeCoachButton m={m} open={changing === m.clientId} onToggle={() => setChanging((v) => (v === m.clientId ? null : m.clientId))} />
                     </div>
+                    {changing === m.clientId && <ChangeCoachRow m={m} coaches={coaches} onClose={() => setChanging(null)} idPrefix="phone" />}
                   </li>
                 ))}
               </ul>
               <div className="hidden overflow-x-auto rounded-[20px] border border-black/[.08] bg-card sm:block dark:border-white/10">
-                <table className="w-full min-w-[34rem] text-left text-sm">
+                <table className="w-full min-w-[40rem] text-left text-sm">
                   <thead>
                     <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
                       <th className="px-3 py-2 font-bold">Member</th>
                       <th className="px-2 py-2 font-bold">Coach</th>
                       <th className="px-2 py-2 font-bold">Plan</th>
                       <th className="px-2 py-2 font-bold">Last active</th>
-                      <th className="px-3 py-2 font-bold">Status</th>
+                      <th className="px-2 py-2 font-bold">Status</th>
+                      <th className="px-3 py-2 text-right font-bold">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
                     {roster.members.map((m) => (
-                      <tr key={m.clientId}>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar name={m.name} size="sm" />
-                            <div className="min-w-0">
-                              <p className="max-w-[12rem] truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
-                              {m.name !== m.email && <p className="max-w-[12rem] truncate text-xs text-zinc-500">{m.email}</p>}
+                      <Fragment key={m.clientId}>
+                        <tr>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar name={m.name} size="sm" />
+                              <div className="min-w-0">
+                                <p className="max-w-[12rem] truncate font-semibold text-black dark:text-zinc-50">{m.name}</p>
+                                {m.name !== m.email && <p className="max-w-[12rem] truncate text-xs text-zinc-500">{m.email}</p>}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">
-                          {/* A coach with no display name came through as a raw login address (RO20); the Overview tidies it the same way. */}
-                          {m.coachName ? prettyName(m.coachName) : <span className="text-zinc-400">No coach</span>}
-                        </td>
-                        <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{m.plan ?? <span className="text-zinc-400">None</span>}</td>
-                        <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{lastActiveLabel(m.lastActive)}</td>
-                        <td className="px-3 py-2.5">
-                          <MemberStatus m={m} />
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">
+                            {/* A coach with no display name came through as a raw login address (RO20); the Overview tidies it the same way. */}
+                            {m.coachName ? prettyName(m.coachName) : <span className="text-zinc-400">No coach</span>}
+                          </td>
+                          <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{m.plan ?? <span className="text-zinc-400">None</span>}</td>
+                          <td className="px-2 py-2.5 text-zinc-600 dark:text-zinc-300">{lastActiveLabel(m.lastActive)}</td>
+                          <td className="px-2 py-2.5">
+                            <MemberStatus m={m} />
+                          </td>
+                          <td className="px-3 py-2.5 text-right">
+                            <ChangeCoachButton m={m} open={changing === m.clientId} onToggle={() => setChanging((v) => (v === m.clientId ? null : m.clientId))} />
+                          </td>
+                        </tr>
+                        {changing === m.clientId && (
+                          <tr style={{ borderTopWidth: 0 }}>
+                            <td colSpan={6} className="px-3 pb-3">
+                              <ChangeCoachRow m={m} coaches={coaches} onClose={() => setChanging(null)} idPrefix="table" />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -203,6 +240,23 @@ export function RosterPane({ gymId, initialFilter }: { gymId: string; initialFil
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// The open "Change coach" form under a member's row. The coach list is the gym's; the database checks the new coach works there.
+function ChangeCoachRow({ m, coaches, onClose, idPrefix }: { m: RosterMember; coaches: CoachChoice[]; onClose: () => void; idPrefix: string }) {
+  const from = m.coachId ? { id: m.coachId, name: m.coachName ? prettyName(m.coachName) : 'their coach' } : null;
+  return (
+    <div className="mt-2 rounded-xl border border-black/10 p-3 dark:border-white/10">
+      <ChangeCoachForm
+        idPrefix={`${idPrefix}-${m.clientId}`}
+        member={{ id: m.clientId, name: m.name }}
+        from={from}
+        coaches={coaches}
+        onCancel={onClose}
+        onDone={onClose}
+      />
     </div>
   );
 }

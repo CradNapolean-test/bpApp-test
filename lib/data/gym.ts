@@ -8,6 +8,8 @@ import { gymMismatch, type GymMismatch } from '@/lib/gymMismatch';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
 import { blackoutProblem, normaliseReferralUrl, referralUrlProblem } from '@/lib/gymSettings';
 import type { ReassignResult, RemoveCoachResult } from './owner';
+import { rpcFailure } from './migrationCheck';
+import { coachChangeProblem } from '@/lib/coachChange';
 
 export interface GymCoachRow {
   id: string;
@@ -227,12 +229,24 @@ export async function setGymReferralUrl(url: string, expectedGymId?: string | nu
   return error ? fail(error, 'Could not save the referral link') : ok();
 }
 
+// The caller's own active gym. A coach can read many profiles (their members, the gym's members, the other coaches), so the row must be
+// picked by id: an unfiltered .single() failed with "more than one row" and Move members / Remove from gym said "You are not set up at a
+// gym yet" to every gym admin.
+async function callerGym(supabase: Awaited<ReturnType<typeof createClient>>): Promise<{ gym_id: string | null } | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('profiles').select('gym_id').eq('id', user.id).maybeSingle();
+  return (data as { gym_id: string | null } | null) ?? null;
+}
+
 // CH1: move every member of one coach at the caller's gym to another coach (reassign_clients, migration 0131; a gym admin of that gym).
 export async function reassignClients(fromCoachId: string, toCoachId: string, expectedGymId?: string | null): Promise<ReassignResult> {
   const supabase = await createClient();
   const stale = await checkActiveGym(supabase, expectedGymId);
   if (stale && !stale.ok) return stale;
-  const { data: caller } = await supabase.from('profiles').select('gym_id').single();
+  const caller = await callerGym(supabase);
   if (!caller?.gym_id) return { ok: false, error: 'You are not set up at a gym yet' };
   const { data, error } = await supabase.rpc('reassign_clients', { p_gym: caller.gym_id, p_from: fromCoachId, p_to: toCoachId });
   if (error) {
@@ -249,7 +263,7 @@ export async function removeCoachFromGym(coachId: string, expectedGymId?: string
   const supabase = await createClient();
   const stale = await checkActiveGym(supabase, expectedGymId);
   if (stale && !stale.ok) return stale;
-  const { data: caller } = await supabase.from('profiles').select('gym_id').single();
+  const caller = await callerGym(supabase);
   if (!caller?.gym_id) return { ok: false, error: 'You are not set up at a gym yet' };
   const { data, error } = await supabase.rpc('remove_coach_from_gym', { p_gym: caller.gym_id, p_coach: coachId });
   if (error) {
@@ -257,4 +271,47 @@ export async function removeCoachFromGym(coachId: string, expectedGymId?: string
     return failed.ok ? { ok: false, error: 'Could not remove that coach' } : failed;
   }
   return { ok: true, deactivated: (data as { deactivated?: boolean } | null)?.deactivated === true };
+}
+
+// ---- BO14: change one member's coach (change_member_coach, migration 0176) ----
+
+export interface CoachMemberOption {
+  id: string;
+  name: string;
+}
+
+// One coach's members at the caller's active gym, for the gym admin's "Change a member's coach". Read through the caller's own session:
+// a coach at the gym already reads the gym's members (0052), and the change itself is checked again by the database.
+export async function getCoachMembersAtGym(coachId: string, expectedGymId?: string | null): Promise<{ ok: true; members: CoachMemberOption[] } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale && !stale.ok) return stale;
+  const caller = await callerGym(supabase);
+  if (!caller?.gym_id) return { ok: false, error: 'You are not set up at a gym yet' };
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, client_profiles(name)')
+    .eq('role', 'client')
+    .eq('gym_id', caller.gym_id)
+    .eq('coach_id', coachId)
+    .order('email')
+    .limit(1000);
+  if (error) return { ok: false, error: 'Could not load their members. Try again.' };
+  const members = (data ?? []).map((m) => {
+    const cp = Array.isArray(m.client_profiles) ? m.client_profiles[0] : m.client_profiles;
+    const name = (cp as { name?: string | null } | null)?.name?.trim();
+    return { id: m.id as string, name: name || (m.email as string) };
+  });
+  return { ok: true, members: members.sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+// Gives one member a new coach. `fromCoachId` is the coach the screen showed (null for no coach): the database refuses if that is no longer
+// their coach, if the new coach does not work at the member's gym, and anyone but the owner of the gym or a gym admin there. The side
+// effects are the same as Move members (the same database function does both).
+export async function changeMemberCoach(memberId: string, fromCoachId: string | null, toCoachId: string): Promise<ActionResult> {
+  const problem = coachChangeProblem({ memberId, fromCoachId, toCoachId });
+  if (problem) return fail({ message: problem });
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('change_member_coach', { p_member: memberId, p_from: fromCoachId, p_to: toCoachId });
+  return error ? rpcFailure(error, '0176', 'Could not change their coach') : ok();
 }

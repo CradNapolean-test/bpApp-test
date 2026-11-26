@@ -18,6 +18,7 @@ import { getRedFlagReport } from './redFlags';
 import { followUpFilters, followUpOfRow, followUpSince } from './followUps';
 import { MEMBERS_SELECT, MEMBERS_SELECT_BEFORE_0087, MEMBERS_SELECT_BEFORE_0166 } from './coachDashboardSelect';
 import { fetchAllPages } from '@/lib/paging';
+import { getCoachFollowThrough, type FollowThroughLoad } from './coachFollowThrough';
 import { fail, ok } from './result';
 import type { ActionResult } from './result';
 import type { ReviewKind } from './coachReviews';
@@ -550,6 +551,9 @@ export interface BusinessOverview {
     quiet: number;
     toReview: number;
   }[];
+  // What each coach did (RO19, CW5): check-ins reviewed, members waiting for a reply, reply time. Read through coach_follow_through
+  // (migration 0176), which only a gym admin at this gym (or the owner) may call.
+  followThrough: FollowThroughLoad;
 }
 
 // Gym-wide numbers for the owner/manager: who's on which plan, who has no plan (needs setting up),
@@ -572,7 +576,7 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
   const ago30 = toIsoDate(addDays(new Date(todayIso + 'T00:00:00Z'), -30));
 
   const gymId = me.gym_id;
-  const [{ data: coachRows }, { rows, error }] = await Promise.all([
+  const [{ data: coachRows }, { rows, error }, followThrough] = await Promise.all([
     supabase.from('profiles').select('id, email, display_name').eq('role', 'coach').eq('gym_id', gymId),
     fetchAllPages((from, to) =>
       supabase
@@ -595,6 +599,7 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
         .order('id')
         .range(from, to)
     ),
+    getCoachFollowThrough(gymId),
   ]);
   if (error) throw new Error(error.message);
 
@@ -676,5 +681,6 @@ export async function getBusinessOverview(): Promise<BusinessOverview | null> {
     recentlyEnded: recentlyEnded.sort((a, b) => b.endedOn.localeCompare(a.endedOn)),
     plans: [...planCounts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     team: [...team.values()].sort((a, b) => b.members - a.members),
+    followThrough,
   };
 }

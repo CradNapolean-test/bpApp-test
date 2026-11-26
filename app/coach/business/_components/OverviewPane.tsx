@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { prettyName } from '@/lib/gymNames';
 import type { BusinessOverview } from '@/lib/data/coachDashboard';
+import { durationLabel, isLongWait, reviewedLabel, waitedLabel, type CoachFollowThrough } from '@/lib/followThrough';
 import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import { CoachSection, CoachStatStrip, coachRow } from '../../_components/CoachUi';
 
@@ -26,6 +27,24 @@ function MemberRow({ href, name, line, action, actionCls = 'text-accent' }: { hr
   );
 }
 
+// What the coach did (RO19, CW5): "Check-ins reviewed 7 of 9 · 2 waiting for a reply (oldest 3 days) · usually replies in 2 h".
+function FollowThroughLine({ f, now }: { f: CoachFollowThrough; now: Date }) {
+  const long = isLongWait(f.oldestWaitingSince, now);
+  return (
+    <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
+      <span>Check-ins reviewed {reviewedLabel(f)}</span>
+      <span aria-hidden>·</span>
+      <span className={f.waiting > 0 ? (long ? 'font-semibold text-red-700 dark:text-red-400' : 'font-semibold text-amber-700 dark:text-amber-400') : undefined}>
+        {f.waiting === 0
+          ? 'Nobody waiting for a reply'
+          : `${f.waiting} waiting for a reply${f.oldestWaitingSince ? ` (oldest ${waitedLabel(f.oldestWaitingSince, now)})` : ''}`}
+      </span>
+      <span aria-hidden>·</span>
+      <span>{f.medianReplySeconds === null ? 'No replies in 30 days' : `Usually replies in ${durationLabel(f.medianReplySeconds)}`}</span>
+    </p>
+  );
+}
+
 // The owner/manager's picture of the gym (the November 2026 mock-ups): the headline figures, members by plan, how each coach's members
 // are doing this week, and the members whose plan needs something.
 export function OverviewPane({ data }: { data: BusinessOverview }) {
@@ -35,6 +54,8 @@ export function OverviewPane({ data }: { data: BusinessOverview }) {
   // The plan and team bars fill when the overview opens.
   const screen = useRef<HTMLDivElement>(null);
   useGrowIn(screen, 0.2);
+  const follow = data.followThrough.ok ? new Map(data.followThrough.data.coaches.map((c) => [c.coachId, c])) : null;
+  const [now] = useState(() => new Date());
 
   return (
     <div ref={screen} className="space-y-6">
@@ -71,6 +92,13 @@ export function OverviewPane({ data }: { data: BusinessOverview }) {
           </CoachSection>
 
           <CoachSection title="Team this week">
+            {data.team.length > 0 && (
+              <p className={`${coachRow} py-2.5 text-[13px] text-zinc-500 dark:text-zinc-400`} role={data.followThrough.ok ? undefined : 'status'}>
+                {data.followThrough.ok
+                  ? 'Check-ins reviewed: weeks a member logged anything in, over the last 4 complete weeks. Waiting: conversations where the member wrote last. Reply time: the usual (median) wait over the last 30 days.'
+                  : `What each coach did could not be shown. ${data.followThrough.error}`}
+              </p>
+            )}
             {data.team.length === 0 && <p className={`${coachRow} py-4 text-sm text-zinc-500`}>No coaches at this gym yet.</p>}
             {data.team.map((t) => (
               <Link
@@ -87,6 +115,7 @@ export function OverviewPane({ data }: { data: BusinessOverview }) {
                   <div className="mt-1.5 h-1.5 max-w-xs overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
                     <div data-grow="bar" className="h-full rounded-full bg-accent" style={{ width: `${t.eligible > 0 ? (t.checkedIn / t.eligible) * 100 : 0}%` }} />
                   </div>
+                  {follow?.get(t.coachId) && <FollowThroughLine f={follow.get(t.coachId)!} now={now} />}
                 </div>
                 <div className="shrink-0 space-y-1 text-right">
                   {t.quiet > 0 && (
