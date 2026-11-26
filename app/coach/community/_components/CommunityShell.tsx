@@ -13,9 +13,7 @@ import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { createEvent, deleteEvent, getEventAttendees, updateEvent } from '@/lib/data/community';
 import { mayChangeEvent } from '@/lib/eventPermissions';
 import { createReward, deleteReward, markRewardGiven, unmarkRewardGiven } from '@/lib/data/rewards';
-import { getScoresExport, setShirtGiven } from '@/lib/data/bigDog';
-import { gridCsv, scoresCsv } from '@/lib/bigDogExport';
-import { toCsv } from '@/lib/csv';
+import { setShirtGiven } from '@/lib/data/bigDog';
 import type { ShirtRow } from '@/lib/data/bigDog';
 import { TIER_TITLE } from '@/lib/bigDog';
 import type { EventWithSignup, FeedbackRow, RewardOverview } from '@/lib/data/types';
@@ -352,44 +350,6 @@ export function EventsPane({
   );
 }
 
-function ScoresExportCard() {
-  const { run, busy } = useAction();
-  const save = (name: string, text: string) => {
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  };
-  const download = (layout: 'scores' | 'grid') =>
-    run(async () => {
-      const { raw, members } = await getScoresExport();
-      const map = new Map(Object.entries(members));
-      const stamp = new Date().toISOString().slice(0, 10);
-      if (raw.length === 0) save(`peak-week-${layout}-${stamp}.csv`, toCsv(['Member'], []));
-      else save(`peak-week-${layout}-${stamp}.csv`, layout === 'scores' ? scoresCsv(raw, map) : gridCsv(raw, map));
-    });
-  return (
-    <div className={cardCls}>
-      <p className="text-[15px] font-bold text-black dark:text-zinc-50">Peak Week scores</p>
-      <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
-        Download every verified score for your sheet. Opens in Excel or Google Sheets. A newer score a member logged themselves is listed with Verified = No.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={busy} onClick={() => download('scores')} className={softBtn}>
-          One row per score (CSV)
-        </button>
-        <button type="button" disabled={busy} onClick={() => download('grid')} className={`${ghostBtn} disabled:opacity-50`}>
-          One row per member (CSV)
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // Everyone waiting for something, in one list (the board's "To hand out"): club rewards they have reached and Big Dog shirts they have earned.
 function ToHandOut({ rewards, shirts }: { rewards: RewardOverview[]; shirts: ShirtRow[] }) {
   const { run, busy } = useAction();
@@ -508,7 +468,8 @@ export function RewardsPane({
   shirts?: ShirtRow[];
   // Setting rewards up is for gym admins and the owner (D3, migration 0161); handing them out is for every coach at the gym.
   canEdit?: boolean;
-  // false on the owner's gym page: the rewards themselves, without the shirts, the scores export and who is waiting for what.
+  // false on the owner's gym page: the rewards themselves, without the shirts and who is waiting for what. (The Peak Week score
+  // downloads that were here moved to Classes → Reports, BO9.)
   handOut?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
@@ -538,12 +499,7 @@ export function RewardsPane({
           ))}
         </div>
       )}
-      {handOut && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <ShirtsCard shirts={shirts} />
-          <ScoresExportCard />
-        </div>
-      )}
+      {handOut && <ShirtsCard shirts={shirts} />}
     </section>
   );
 }

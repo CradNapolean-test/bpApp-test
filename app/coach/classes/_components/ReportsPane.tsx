@@ -9,6 +9,8 @@ import { fillPercent } from '@/lib/slotPopularity';
 import type { CoachReport } from '@/lib/data/types';
 import { handleTabListKeys } from '@/app/_components/tabKeys';
 import { toCsv, downloadTextFile } from '@/lib/utils/csv';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
+import { PeakWeekScoresCard } from './PeakWeekScoresCard';
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const [headers, ...body] = rows;
@@ -49,7 +51,7 @@ function Delta({ now, before, unit = '', goodWhen = 'up' }: { now: number | null
 
 // Classes and attendance across the gym, for a chosen
 // period (7, 30 or 90 days) and compare it with the period before. `onOpenAttendance` jumps to the Attendance tab,
-// where sessions get marked.
+// where sessions get marked. Overview also holds the Peak Week score downloads (BO9).
 export function ReportsPane({
   report: initialReport,
   onOpenAttendance,
@@ -66,6 +68,8 @@ export function ReportsPane({
   const [loading, setLoading] = useState(true);
   const [showAllSlots, setShowAllSlots] = useState(false);
   const [slotOrder, setSlotOrder] = useState<'busiest' | 'quietest'>('busiest');
+  // The gym chosen in the header: a switch there loads that gym's figures again (getCoachReports reads the active gym).
+  const gymId = useActiveGymId();
   // The switches' white highlights slide to the option picked (GSAP). The order switch only shows on one section, so it is placed again
   // when the section changes.
   const sectionTrack = useRef<HTMLDivElement>(null);
@@ -95,7 +99,7 @@ export function ReportsPane({
     return () => {
       live = false;
     };
-  }, [days]);
+  }, [days, gymId]);
 
   const report = current;
   const rangeLabel = `Last ${days} days, across all classes`;
@@ -239,9 +243,11 @@ export function ReportsPane({
             <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Right now</h2>
             <p className="mt-1 text-sm text-zinc-500">
               {report.activeBookings} upcoming {report.activeBookings === 1 ? 'booking' : 'bookings'}
-              {report.avgClassesPerClient != null ? ` · ${report.avgClassesPerClient} classes per client on average` : ''}
+              {report.avgClassesPerClient != null ? ` · ${report.avgClassesPerClient} classes per member on average` : ''}
             </p>
           </div>
+
+          <PeakWeekScoresCard />
         </>
       )}
 
