@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Repeat, Trash2 } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { useAction } from '@/app/_components/useAction';
@@ -13,6 +14,7 @@ import { Segmented } from '@/app/_components/ui';
 import { composeCommunication, deleteCommunication } from '@/lib/data/communications';
 import { deleteMessageTemplate, saveMessageTemplate } from '@/lib/data/messageTemplates';
 import { FIRST_NAME_TOKEN, STARTER_MESSAGES } from '@/lib/broadcastMessages';
+import { broadcastPreview } from '@/lib/broadcastPreview';
 import {
   broadcastConfirmation,
   broadcastReach,
@@ -78,7 +80,14 @@ function TemplatesSheet({
 
         <div className="space-y-2">
           <p className="text-xs font-medium text-zinc-500">Your gym&apos;s templates</p>
-          {templates.length === 0 && <p className="text-sm text-zinc-500">None yet. Write a message and save it above, or start from one below.</p>}
+          {/* The save box only shows once something is written (MS16): "save it above" pointed at nothing. */}
+          {templates.length === 0 && (
+            <p className="text-sm text-zinc-500">
+              {canSave
+                ? 'None yet. Save what you have written with the box above, or start from one below.'
+                : 'None yet. To save one, write your message first, then open Templates again. Or start from one below.'}
+            </p>
+          )}
           {templates.map((t) => (
             <div key={t.id} className={row}>
               <div className="flex items-start justify-between gap-2">
@@ -297,6 +306,16 @@ export function BroadcastsPane({
             )}
           </div>
           {target === 'gym' && <p className="text-xs text-zinc-500">{gymAudienceNote(channel)}</p>}
+          {/* "A group" is greyed out until there is one (MS15): say where groups are made. */}
+          {groups.length === 0 && (
+            <p className="text-xs text-zinc-500">
+              To send to a group of members, make one first on the{' '}
+              <Link href="/coach/clients" className="font-semibold text-accent underline underline-offset-2">
+                Clients page
+              </Link>
+              , under Manage groups in its ⋯ menu.
+            </p>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -401,7 +420,8 @@ export function BroadcastsPane({
           return (
             <div key={c.id} className="flex items-start justify-between gap-3 rounded-[20px] border border-black/[.08] bg-card p-3.5 text-sm dark:border-white/10">
               <div className="min-w-0 flex-1">
-                <p className="line-clamp-3 whitespace-pre-wrap text-zinc-900 dark:text-zinc-100">{c.message}</p>
+                {/* Blank lines left out of the preview (MS14), so its 3 lines show the message. */}
+                <p className="line-clamp-3 whitespace-pre-wrap text-zinc-900 dark:text-zinc-100">{broadcastPreview(c.message)}</p>
                 <p className="mt-1 text-xs text-zinc-500">
                   {targetLabel(c)} · {channelLabel[c.channel]} ·{' '}
                   {isCancelled ? 'Cancelled (its group was deleted)' : `${isSent ? 'Sent' : 'Scheduled for'} ${when(isSent ? (c.sent_at as string) : c.send_at)}`}

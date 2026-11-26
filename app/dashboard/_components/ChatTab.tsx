@@ -277,6 +277,7 @@ export function ChatTab({
   active = true,
   onClose,
   memberHref,
+  onOpenMember,
   onMarkUnread,
   narrow = false,
   look = 'card',
@@ -302,6 +303,8 @@ export function ChatTab({
   onClose?: () => void;
   // Where to open this person's page from the chat (the coach's Messages page and drawer).
   memberHref?: string;
+  // Called as that link is followed: the Messages drawer closes, so the member's page isn't left under it (MS9).
+  onOpenMember?: () => void;
   // Shows a "Mark unread" button in the header (the coach's inbox).
   onMarkUnread?: () => void;
   // The chat sits in a narrow panel (the coach's Messages drawer): the header's buttons are icons only at every screen width.
@@ -729,6 +732,7 @@ export function ChatTab({
         {memberHref && (
           <Link
             href={memberHref}
+            onClick={onOpenMember}
             title="View member"
             className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-black/10 px-2.5 text-xs font-bold text-accent hover:bg-accent/10 dark:border-white/15 ${narrow ? '' : 'lg:px-3'}`}
           >

@@ -132,6 +132,8 @@ export function MessagesDrawer({ currentUserId, onClose }: { currentUserId: stri
                 narrow
                 draftKey={`coach-${selected}`}
                 memberHref={`/coach/clients/${selected}`}
+                // Going to the member closes the drawer (MS9): it stayed open on top of their page.
+                onOpenMember={onClose}
                 onMarkUnread={() => markUnread(selected)}
                 savedReplies
               />
