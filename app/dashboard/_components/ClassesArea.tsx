@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CalendarDays, Clock, MessageSquare, Ticket } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, MessageSquare, Ticket } from 'lucide-react';
 import { useAction } from '@/app/_components/useAction';
 import { useOnDemand } from '@/app/_components/useOnDemand';
 import { stripSwipe, useDaySwipe } from '@/app/_components/useDaySwipe';
@@ -14,6 +14,7 @@ import { cancelSummary, nextResetDate, sessionPayment, shortDayLabel, startMs } 
 import { cancellationPolicyText } from '@/lib/bookingRules';
 import { cancelCreditWords, waitlistPlaceText } from '@/lib/utils/bookingWords';
 import { bookDayMark, bookDayStatus, bookStripCaption } from '@/lib/utils/dayStrip';
+import { pageOf, weekPages, weekRangeLabel } from '@/lib/bookWeek';
 import { CheckInButton } from './CheckInButton';
 import { DayStrip } from './DayStrip';
 import { MemberHeader } from './MemberHeader';
@@ -106,6 +107,9 @@ export function ClassesArea({
   const { run, busy } = useAction();
   const [view, setView] = useState<View>('book');
   const [pickedDate, setPickedDate] = useState<string | null>(null);
+  // On a laptop (1280px and wider, where a seventh of the column still fits a session) Book shows a week at a time (BK26); null = the
+  // week that holds the day picked on the strip.
+  const [pickedWeek, setPickedWeek] = useState<number | null>(null);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [showPolicy, setShowPolicy] = useState(false);
   // The day chips pop in left to right when the timetable opens.
@@ -165,9 +169,12 @@ export function ClassesArea({
   const firstWithSessions = days.find((d) => sessionDates.has(d)) ?? days[0];
   const selectedDate = pickedDate && days.includes(pickedDate) ? pickedDate : firstWithSessions;
 
-  const dayOccurrences = bookable
-    .filter((o) => o.date === selectedDate)
-    .sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? ''));
+  const byTime = (a: ScheduleOccurrence, b: ScheduleOccurrence) => (a.startTime ?? '').localeCompare(b.startTime ?? '');
+  const dayOccurrences = bookable.filter((o) => o.date === selectedDate).sort(byTime);
+  // The laptop's week: seven days from today, then the seven after, as far as the booking window goes.
+  const weeks = weekPages(days);
+  const weekIndex = Math.min(pickedWeek ?? pageOf(weeks, selectedDate), Math.max(0, weeks.length - 1));
+  const weekDays = weeks[weekIndex] ?? [];
   const morning = dayOccurrences.filter((o) => (o.startTime ?? '00:00') < '12:00');
   const evening = dayOccurrences.filter((o) => (o.startTime ?? '00:00') >= '12:00');
 
@@ -263,6 +270,64 @@ export function ClassesArea({
     );
   }
 
+  // One session in the laptop's week (BK26): the same facts and buttons as the day list, stacked to fit a seventh of the width.
+  function renderWeekSlot(occ: ScheduleOccurrence) {
+    const key = `${occ.classId}|${occ.date}`;
+    const existing = bookingByKey.get(key);
+    const spots = occ.capacity - occ.bookedCount;
+    const full = spots <= 0;
+    const booked = existing?.status === 'booked';
+    const waitlisted = existing?.status === 'waitlist';
+    const place = waitlisted && existing ? placeText(existing.id) : null;
+    const small = 'inline-flex h-5 items-center rounded-full px-2 text-[11px] font-extrabold';
+    const button = 'mt-auto flex h-9 w-full items-center justify-center rounded-lg text-xs';
+    return (
+      <div
+        key={key}
+        className={`flex flex-col gap-1 rounded-xl p-2.5 ${
+          booked ? 'border-2 border-accent bg-accent-soft' : waitlisted ? 'border-[1.5px] border-dashed border-amber-500/70 bg-card' : 'border border-black/[.08] bg-card dark:border-white/10'
+        }`}
+      >
+        <p className="text-sm font-extrabold text-black dark:text-zinc-50">{formatClassTime(occ.startTime)}</p>
+        <p className="line-clamp-2 text-[13px] font-bold leading-snug text-black dark:text-zinc-50" title={occ.className}>
+          {occ.className}
+        </p>
+        <div className="flex flex-wrap items-center gap-1">
+          {booked ? (
+            <span className={`${small} bg-accent text-[#041f1f]`}>Booked</span>
+          ) : waitlisted ? (
+            <span className={`${small} bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300`}>Waitlist</span>
+          ) : (
+            <span className={`${small} ${full || spots <= 3 ? 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300' : 'bg-accent-soft text-accent-strong'}`}>
+              {full ? 'Full' : `${spots} left`}
+            </span>
+          )}
+          {occ.creditCost !== 1 && <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{occ.creditCost} credits</span>}
+        </div>
+        {place && <p className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">{place}</p>}
+        {(booked || waitlisted) && existing ? (
+          <button
+            type="button"
+            onClick={() => setSheet({ kind: 'cancel', booking: existing })}
+            aria-label={`${waitlisted ? 'Leave the waitlist for' : 'Cancel'} ${occ.className}, ${longDay(occ.date)} at ${formatClassTime(occ.startTime)}`}
+            className={`${button} mt-1 border-[1.5px] border-black/20 font-bold text-black hover:bg-black/5 dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5`}
+          >
+            {waitlisted ? 'Leave' : 'Cancel'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSheet({ kind: 'book', occ })}
+            aria-label={`${full ? 'Join the waitlist for' : 'Book'} ${occ.className}, ${longDay(occ.date)} at ${formatClassTime(occ.startTime)}`}
+            className={`${button} mt-1 ${full ? 'border-[1.5px] border-black/20 font-bold text-black hover:bg-black/5 dark:border-white/25 dark:text-zinc-50' : 'bg-accent font-extrabold text-[#041f1f]'}`}
+          >
+            {full ? 'Waitlist' : 'Book'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   const bookSheet = sheet?.kind === 'book' ? sheet.occ : null;
   const cancelSheet = sheet?.kind === 'cancel' ? sheet.booking : null;
   const bookedAhead = upcoming.filter((b) => b.status === 'booked').length;
@@ -293,6 +358,8 @@ export function ClassesArea({
           <div className="space-y-2">
             {/* The shared strip (DayStrip.tsx), in Book's own look: a booked day is the full teal ring, a day with only a waitlist place a
                 dashed amber ring, a day with no sessions faded. */}
+            {/* On a laptop the week below replaces the strip (BK26). */}
+            <div className="xl:hidden">
             <DayStrip
               stripRef={dayStrip}
               selected={selectedDate}
@@ -312,6 +379,7 @@ export function ClassesArea({
                 };
               })}
             />
+            </div>
             <p className="text-xs text-zinc-400">{bookStripCaption(bookedAhead, waitingAhead)}</p>
           </div>
         )}
@@ -337,7 +405,37 @@ export function ClassesArea({
       </MemberHeader>
 
       <div className="flex items-baseline justify-between gap-2 px-1">
-        <h2 className="text-base font-extrabold text-black dark:text-zinc-50">{view === 'book' ? dayLabel(selectedDate, todayIso) : 'My bookings'}</h2>
+        {view === 'book' ? (
+          <>
+            <h2 className="text-base font-extrabold text-black xl:hidden dark:text-zinc-50">{dayLabel(selectedDate, todayIso)}</h2>
+            {/* The laptop's week and its arrows (BK26). */}
+            <div className="hidden items-center gap-1 xl:flex">
+              <button
+                type="button"
+                aria-label="Previous week"
+                disabled={weekIndex <= 0}
+                onClick={() => setPickedWeek(weekIndex - 1)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <h2 className="px-1 text-base font-extrabold text-black dark:text-zinc-50" aria-live="polite">
+                {weekRangeLabel(weekDays)}
+              </h2>
+              <button
+                type="button"
+                aria-label="Next week"
+                disabled={weekIndex >= weeks.length - 1}
+                onClick={() => setPickedWeek(weekIndex + 1)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-black/5 disabled:opacity-30 dark:hover:bg-white/5"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        ) : (
+          <h2 className="text-base font-extrabold text-black dark:text-zinc-50">My bookings</h2>
+        )}
         <button type="button" onClick={() => setShowPolicy((v) => !v)} aria-expanded={showPolicy} className="min-h-9 text-[13px] font-bold text-accent-strong">
           Cancellation policy
         </button>
@@ -350,8 +448,45 @@ export function ClassesArea({
         </div>
       )}
 
-      {view === 'book' &&
-        (dayOccurrences.length === 0 ? (
+      {/* The laptop's week at a glance (BK26): a column a day, today first. The phone's day list is below it. */}
+      {view === 'book' && (
+        <div className="hidden xl:block">
+          {timetable.data == null || occurrences.length === 0 ? (
+            <EmptyState
+              icon={CalendarDays}
+              title={timetable.data == null ? (timetable.error ? 'Could not load the sessions' : 'Loading sessions…') : 'No sessions scheduled'}
+              hint={timetable.data == null ? (timetable.error ? 'Check your connection and open this screen again.' : undefined) : 'Check back once your coach adds sessions.'}
+              compact
+            />
+          ) : (
+            <div className="grid grid-cols-7 gap-2">
+              {weekDays.map((d) => {
+                const dt = parseDay(d);
+                const ofDay = bookable.filter((o) => o.date === d).sort(byTime);
+                return (
+                  <section key={d} aria-label={longDay(d)} className="min-w-0">
+                    <h3
+                      className={`mb-2 rounded-xl px-2 py-1.5 text-center text-xs font-extrabold ${
+                        d === todayIso ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'text-zinc-600 dark:text-zinc-300'
+                      }`}
+                    >
+                      {d === todayIso ? 'Today' : WEEKDAY_SHORT[dt.getUTCDay()]} {dt.getUTCDate()}
+                    </h3>
+                    <div className="space-y-2">
+                      {ofDay.map(renderWeekSlot)}
+                      {ofDay.length === 0 && <p className="px-1 py-3 text-center text-xs text-zinc-400">No sessions</p>}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {view === 'book' && (
+        <div className="xl:hidden">
+        {dayOccurrences.length === 0 ? (
           <EmptyState
             icon={CalendarDays}
             title={timetable.data == null ? (timetable.error ? 'Could not load the sessions' : 'Loading sessions…') : occurrences.length === 0 ? 'No sessions scheduled' : 'Nothing on this day'}
@@ -374,7 +509,9 @@ export function ClassesArea({
               </AnimatedContent>
             )}
           </div>
-        ))}
+        )}
+        </div>
+      )}
 
       {view === 'mine' && (
         <AnimatedContent className="space-y-2" distance={16} duration={0.45} stagger={0.05}>
