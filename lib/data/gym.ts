@@ -296,7 +296,7 @@ export async function getCoachMembersAtGym(coachId: string, expectedGymId?: stri
     .eq('coach_id', coachId)
     .order('email')
     .limit(1000);
-  if (error) return { ok: false, error: 'Could not load their members. Try again.' };
+  if (error) return { ok: false, error: 'Could not load their members. Cancel, then open this again.' };
   const members = (data ?? []).map((m) => {
     const cp = Array.isArray(m.client_profiles) ? m.client_profiles[0] : m.client_profiles;
     const name = (cp as { name?: string | null } | null)?.name?.trim();

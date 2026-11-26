@@ -32,14 +32,20 @@ describe('describeStaffActivity', () => {
       'Adam moved 14 members from Brad to Quays'
     );
     expect(describeStaffActivity(row({ action: 'members_moved', memberCount: 1, toCoachName: 'Quays' }))).toBe('Adam moved 1 member from Brad to Quays');
+    expect(describeStaffActivity(row({ action: 'members_moved', memberCount: 1, toCoachName: 'Quays', actorName: null }))).toBe('1 member from Brad to Quays was moved');
+    expect(describeStaffActivity(row({ action: 'members_moved', memberCount: 3, toCoachName: 'Quays', actorName: null }))).toBe('3 members from Brad to Quays were moved');
   });
 
   it("names the member whose coach changed, and 'no coach' when they had none", () => {
     expect(describeStaffActivity(row({ action: 'member_coach_changed', memberName: 'Jo Bloggs', toCoachName: 'Adam' }))).toBe(
       "Adam changed Jo Bloggs's coach from Brad to Adam"
     );
-    expect(describeStaffActivity(row({ action: 'member_coach_changed', memberName: 'Jo Bloggs', coachName: null, toCoachName: 'Adam' }))).toBe(
+    expect(describeStaffActivity(row({ action: 'member_coach_changed', memberName: 'Jo Bloggs', coachName: null, hadCoach: false, toCoachName: 'Adam' }))).toBe(
       "Adam changed Jo Bloggs's coach from no coach to Adam"
+    );
+    // their old coach's account has gone since
+    expect(describeStaffActivity(row({ action: 'member_coach_changed', memberName: 'Jo Bloggs', coachName: null, hadCoach: true, toCoachName: 'Adam' }))).toBe(
+      "Adam changed Jo Bloggs's coach from a deleted account to Adam"
     );
   });
 

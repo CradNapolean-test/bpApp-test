@@ -15,9 +15,15 @@ export default async function OwnerPage() {
   if (!profile || profile.role !== 'owner') redirect('/');
 
   // A failed read is not "owner access is not set up": the screen says it could not load and offers Try again, and the reason goes to Sentry (R30).
-  const [gyms, stats, orgName] = await Promise.all([getOwnerGyms(), getOwnerGymStats(), getOwnerOrganisationName()]);
-  // What each gym's coaches did (RO19): one read per gym, each checked by the database (the owner of that gym's organisation).
-  const followThrough = gyms.ok ? await getFollowThroughForGyms(gyms.data.map((g) => g.id)) : {};
+  // What each gym's coaches did (RO19): one read per gym, each checked by the database (the owner of that gym's organisation), started
+  // as soon as the gym list is in, alongside the other reads.
+  const gymsRead = getOwnerGyms();
+  const [gyms, stats, orgName, followThrough] = await Promise.all([
+    gymsRead,
+    getOwnerGymStats(),
+    getOwnerOrganisationName(),
+    gymsRead.then((g) => (g.ok ? getFollowThroughForGyms(g.data.map((x) => x.id)) : {})),
+  ]);
 
   return (
     <OwnerShell

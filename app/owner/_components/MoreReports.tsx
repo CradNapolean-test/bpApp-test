@@ -115,23 +115,25 @@ export function ClassFillSection({ raw }: { raw: ClassReportRaw }) {
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
                   <th className="py-1.5 pr-2 font-bold">Class</th>
-                  <th className="px-2 py-1.5 text-right font-bold">Sessions</th>
-                  <th className="px-2 py-1.5 text-right font-bold">Places taken</th>
                   <th className="px-2 py-1.5 text-right font-bold">Full</th>
+                  <th className="px-2 py-1.5 text-right font-bold">Places taken</th>
+                  <th className="px-2 py-1.5 text-right font-bold">Sessions</th>
                   <th className="py-1.5 pl-2 text-right font-bold">Came</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
                 {fill.rows.map((r) => (
                   <tr key={r.slot}>
-                    <td className="max-w-[14rem] py-2 pr-2 font-semibold text-black dark:text-zinc-50">
-                      <span className="block truncate">{r.slot}</span>
+                    <td className="max-w-[9rem] py-2 pr-2 font-semibold text-black sm:max-w-[14rem] dark:text-zinc-50">
+                      <span className="block truncate" title={r.slot}>
+                        {r.slot}
+                      </span>
                     </td>
-                    <td className="px-2 py-2 text-right">{r.sessions}</td>
+                    <td className={`px-2 py-2 text-right font-semibold ${r.fillPct >= 90 ? 'text-accent' : r.fillPct < 40 ? 'text-warning' : ''}`}>{r.fillPct}%</td>
                     <td className="px-2 py-2 text-right">
                       {r.taken} of {r.places}
                     </td>
-                    <td className={`px-2 py-2 text-right font-semibold ${r.fillPct >= 90 ? 'text-accent' : r.fillPct < 40 ? 'text-warning' : ''}`}>{r.fillPct}%</td>
+                    <td className="px-2 py-2 text-right">{r.sessions}</td>
                     <td className="py-2 pl-2 text-right" title={r.marked > 0 ? `${r.attended} of ${r.marked} marked` : 'None marked yet'}>
                       {pctText(r.camePct)}
                     </td>
@@ -169,11 +171,11 @@ export function AttendanceSection({ raw }: { raw: ClassReportRaw }) {
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
               <th className="py-1.5 pr-2 font-bold">Week of</th>
-              <th className="px-2 py-1.5 text-right font-bold">Sessions</th>
               <th className="px-2 py-1.5 text-right font-bold">Attended</th>
               <th className="px-2 py-1.5 text-right font-bold">Members</th>
+              <th className="px-2 py-1.5 text-right font-bold">Full</th>
               <th className="px-2 py-1.5 text-right font-bold">No-shows</th>
-              <th className="py-1.5 pl-2 text-right font-bold">Full</th>
+              <th className="py-1.5 pl-2 text-right font-bold">Sessions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
@@ -183,11 +185,11 @@ export function AttendanceSection({ raw }: { raw: ClassReportRaw }) {
                   {shortDate(w.weekStart)}
                   {w.current ? ' (so far)' : ''}
                 </td>
-                <td className="px-2 py-2 text-right">{w.sessions}</td>
                 <td className="px-2 py-2 text-right font-semibold">{w.attended}</td>
                 <td className="px-2 py-2 text-right">{w.members}</td>
+                <td className="px-2 py-2 text-right">{pctText(w.fillPct)}</td>
                 <td className="px-2 py-2 text-right">{w.noShows}</td>
-                <td className="py-2 pl-2 text-right">{pctText(w.fillPct)}</td>
+                <td className="py-2 pl-2 text-right">{w.sessions}</td>
               </tr>
             ))}
           </tbody>
@@ -273,22 +275,24 @@ export function WaitlistSection({ raw }: { raw: ClassReportRaw }) {
               <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="py-1.5 pr-2 font-bold">Class</th>
                 <th className="px-2 py-1.5 text-right font-bold">Waited</th>
-                <th className="px-2 py-1.5 text-right font-bold">Got a place</th>
                 <th className="px-2 py-1.5 text-right font-bold">Didn&apos;t get in</th>
+                <th className="px-2 py-1.5 text-right font-bold">Got a place</th>
                 <th className="py-1.5 pl-2 text-right font-bold">Waiting now</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/[.05] dark:divide-white/10">
               {rows.map((r) => (
                 <tr key={r.slot}>
-                  <td className="max-w-[14rem] py-2 pr-2 font-semibold text-black dark:text-zinc-50">
-                    <span className="block truncate">{r.slot}</span>
+                  <td className="max-w-[9rem] py-2 pr-2 font-semibold text-black sm:max-w-[14rem] dark:text-zinc-50">
+                    <span className="block truncate" title={r.slot}>
+                        {r.slot}
+                      </span>
                   </td>
                   <td className="px-2 py-2 text-right" title={`${r.sessionsWithWaitlist} session(s) with a waitlist`}>
                     {r.waited}
                   </td>
-                  <td className="px-2 py-2 text-right">{r.gotPlace}</td>
                   <td className={`px-2 py-2 text-right ${r.missedOut > 0 ? 'font-semibold text-warning' : ''}`}>{r.missedOut}</td>
+                  <td className="px-2 py-2 text-right">{r.gotPlace}</td>
                   <td className="py-2 pl-2 text-right">{r.waitingNow}</td>
                 </tr>
               ))}

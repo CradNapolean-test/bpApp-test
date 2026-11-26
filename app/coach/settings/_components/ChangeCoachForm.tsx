@@ -58,7 +58,7 @@ export function ChangeCoachForm({
         if (res.ok) setMembers(res.members);
         else setLoadError(res.error);
       })
-      .catch(() => live && setLoadError('Could not load their members. Try again.'));
+      .catch(() => live && setLoadError('Could not load their members. Cancel, then open this again.'));
     return () => {
       live = false;
     };

@@ -10,8 +10,10 @@
 --      weekly check-ins due against reviewed over the last 4 complete weeks (a week a member who finished onboarding logged anything in,
 --      and whether it has a "Reviewed" mark, coach_reviews kind 'week', 0087). Per conversation whose newest messages are the member's:
 --      the coach, when the oldest unanswered message was sent, the newest one, and the "No reply needed" mark (0160) if any. Per reply in
---      the last 30 days: the coach who replied and how many seconds after the member's first unanswered message. Never a message's text, a
---      member's id or name. The app works out the counts, the oldest wait and the median reply time (lib/followThrough.ts).
+--      the last 30 days: the coach who replied and how many seconds after the member's first unanswered message. A message one coach wrote
+--      into several threads at the same moment (a broadcast, "Message each") ends a wait, as in the Messages list, but is not a reply.
+--      Never a message's text, a member's id or name. The app works out the counts, the oldest wait and the median reply time
+--      (lib/followThrough.ts). New index chat_messages (client_id, created_at) for reading each thread in order.
 --      Who may: a gym admin AT THAT GYM, or the owner of the gym's organisation: can_manage_gym_business(gym) from 0161. A coach who is not
 --      an admin there, an admin of another gym, a member, and anyone signed out are refused ("Not authorized").
 --   2. change_member_coach(member, from_coach, to_coach) -> jsonb. "Change coach" for one member, on the owner's gym Members list and in the
@@ -23,7 +25,8 @@
 --      else changes for either (chat, check-ins, reviews, groups, notices and programmes follow profiles.coach_id or stay where they are,
 --      as 0131 describes).
 --   3. _reassign_clients (0131, behind "Move members...") now calls _move_members_to_coach and records the move (below). Same checks,
---      same members moved, same red flags, same answer (how many moved).
+--      same members moved, same red flags, same answer (how many moved). It now also takes the gym's team lock first (as removing a coach
+--      does), so a coach being removed at the same moment can't receive members; Change coach takes the same lock.
 --   4. owner_class_report(gym, weeks, tz) -> jsonb, owner only: the gym's classes (slots), and per session date the places taken,
 --      attended, no-shows, members still on the waitlist and members who came off it, the cancelled dates, and how many different members
 --      came each week. No member ids. The app turns it into "Class fill against capacity", "Attendance by week" and "Waitlist demand".
@@ -31,7 +34,9 @@
 --      on one now, and were on one 1, 3 and 6 months after joining (with how many have been members that long). Counts only.
 --   6. owner_staff_activity(gym, limit, offset) -> jsonb, owner only: the record of staff actions at the gym(s), newest first, with paging.
 --   7. The record, staff_activity (new table, append-only), written by the database itself so every route is covered:
---        coach_added / coach_removed  a row added to or removed from coach_gym_memberships (trigger log_staff_membership_change)
+--        coach_added / coach_removed  a row added to or removed from coach_gym_memberships (trigger log_staff_membership_change). Add coach
+--                                     for a new address writes that row with the app server's key, so who did it is read from the new
+--                                     coach's sign-in link the same request records (sign_in_links.made_by, 0171).
 --        members_moved                "Move members...": the two coaches and how many moved (_reassign_clients)
 --        member_coach_changed         "Change coach": the member and both coaches (change_member_coach)
 --        login_on                     a coach's login switched back on (profiles.deactivated_at cleared, trigger log_staff_login_on).
@@ -66,6 +71,8 @@
 --   select p.proname, md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) as body_md5
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = '_reassign_clients';
 -- Expected before: _reassign_clients cfc9908fecfd3f90befcaad8fc8f4b43 (0131's body).
+--   select indexname from pg_indexes where schemaname = 'public' and indexname = 'chat_messages_client_created_idx';
+-- Expected before: no rows. After: one row.
 --   select tgname from pg_trigger where not tgisinternal
 --     and tgrelid in ('public.coach_gym_memberships'::regclass, 'public.profiles'::regclass, 'public.admin_audit'::regclass)
 --   order by 1;
@@ -86,11 +93,11 @@
 --                       'owner_retention_report', 'owner_staff_activity')
 --   order by 1;
 -- Expected after (this file's bodies: the values in the guard below), every one prosecdef true:
---   _move_members_to_coach 24646817c1e5ced8432c685bc93676e4, _reassign_clients 15bac4148b1e9e14c86c7a780652162a,
---   block_staff_record_change f1bb67fc53a8e39405c7a579fbcb2e7c, change_member_coach d4c26a460202c57708a3da96171fe31c,
---   coach_follow_through b3937d7f3201bf32db51eeb84c7f7ce9, log_staff_login_on 83f610ed097ec81c60f9bb0dfc9ab3bc,
+--   _move_members_to_coach 24646817c1e5ced8432c685bc93676e4, _reassign_clients adfa1f01026448c277111a0062c7ae9a,
+--   block_staff_record_change f1bb67fc53a8e39405c7a579fbcb2e7c, change_member_coach 83bbe8e6d37f24981fd745ac7575c2a8,
+--   coach_follow_through 943e26e6511fdb39b47580577f978fc6, log_staff_login_on 83f610ed097ec81c60f9bb0dfc9ab3bc,
 --   log_staff_membership_change dd876e75c78e0ddc452051c7db044306, owner_class_report 7097f76fbb77f2dd477e6fe3a2d959cc,
---   owner_retention_report e5a3206e3849f867429446870c78b9f5, owner_staff_activity e7152848dac3993137edc7f9cefe95cf.
+--   owner_retention_report e5a3206e3849f867429446870c78b9f5, owner_staff_activity e97bba5928183672df3ac82a7750d829.
 --   select has_function_privilege('authenticated', 'public.coach_follow_through(uuid)', 'execute') as signed_in,
 --          has_function_privilege('anon', 'public.coach_follow_through(uuid)', 'execute') as anyone_follow_through,
 --          has_function_privilege('anon', 'public.change_member_coach(uuid, uuid, uuid)', 'execute') as anyone_change,
@@ -121,8 +128,10 @@
 --            public.owner_staff_activity()->'total' as staff_rows;
 --     select jsonb_array_length(public.coach_follow_through(g.id)->'coaches') from public.gyms g where g.organisation_id is not null;
 --     rollback;
--- Expected: classes = the organisation's class slots, months 12, staff_rows = the admin_changes number above; one row per gym, its
--- number of coaches. With a member's id (or a coach who is not an admin) in place of the owner's, each call fails "Not authorized".
+-- Expected: classes = the organisation's class slots, months 12, staff_rows = the admin_audit rows at the organisation's gyms (with one
+-- organisation, the admin_changes number above; otherwise select count(*) from public.admin_audit a join public.gyms g on g.id = a.gym_id
+-- where g.organisation_id = (select organisation_id from public.profiles where id = '<owner id>')); one row per gym, its number of coaches.
+-- With a member's id (or a coach who is not an admin) in place of the owner's, each call fails "Not authorized".
 --
 -- Write checks (test accounts, on a sandbox, not the live project): as a gym admin at gym A, change_member_coach(M, C1, C2) for a member
 -- M of C1 at gym A with an open red flag -> M's coach is C2, the open flag's coach is C2, a flag already followed up keeps C1, one
@@ -151,13 +160,13 @@ begin
     select * from (values
       ('_move_members_to_coach', '24646817c1e5ced8432c685bc93676e4'),
       ('block_staff_record_change', 'f1bb67fc53a8e39405c7a579fbcb2e7c'),
-      ('change_member_coach', 'd4c26a460202c57708a3da96171fe31c'),
-      ('coach_follow_through', 'b3937d7f3201bf32db51eeb84c7f7ce9'),
+      ('change_member_coach', '83bbe8e6d37f24981fd745ac7575c2a8'),
+      ('coach_follow_through', '943e26e6511fdb39b47580577f978fc6'),
       ('log_staff_login_on', '83f610ed097ec81c60f9bb0dfc9ab3bc'),
       ('log_staff_membership_change', 'dd876e75c78e0ddc452051c7db044306'),
       ('owner_class_report', '7097f76fbb77f2dd477e6fe3a2d959cc'),
       ('owner_retention_report', 'e5a3206e3849f867429446870c78b9f5'),
-      ('owner_staff_activity', 'e7152848dac3993137edc7f9cefe95cf')
+      ('owner_staff_activity', 'e97bba5928183672df3ac82a7750d829')
     ) as t(name, accepted)
   loop
     select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) into v_md5
@@ -176,7 +185,7 @@ begin
   if v_md5 is null then
     raise exception 'function _reassign_clients is missing, so nothing was changed.';
   end if;
-  if v_md5 not in ('cfc9908fecfd3f90befcaad8fc8f4b43', '15bac4148b1e9e14c86c7a780652162a') then
+  if v_md5 not in ('cfc9908fecfd3f90befcaad8fc8f4b43', 'adfa1f01026448c277111a0062c7ae9a') then
     raise exception '_reassign_clients is not the one from migration 0131 (body md5 %), so nothing was changed.', v_md5;
   end if;
 
@@ -190,7 +199,7 @@ begin
   foreach v_name in array array['public.profiles', 'public.client_profiles', 'public.gyms', 'public.coach_gym_memberships',
                                 'public.coach_reviews', 'public.daily_logs', 'public.chat_messages', 'public.chat_no_reply',
                                 'public.red_flag_entries', 'public.admin_audit', 'public.classes', 'public.bookings',
-                                'public.class_exceptions', 'public.client_memberships'] loop
+                                'public.class_exceptions', 'public.client_memberships', 'public.sign_in_links'] loop
     if to_regclass(v_name) is null then
       raise exception 'table % is missing, so nothing was changed.', v_name;
     end if;
@@ -201,7 +210,8 @@ begin
       ('profiles', 'deactivated_at'), ('profiles', 'gym_id'), ('client_profiles', 'onboarding_completed_at'), ('chat_no_reply', 'marked_at'),
       ('coach_reviews', 'ref'), ('red_flag_entries', 'contacted'), ('classes', 'gym_id'), ('classes', 'specific_date'),
       ('classes', 'retired_at'), ('bookings', 'attended'), ('bookings', 'no_show'), ('bookings', 'promoted_at'),
-      ('client_memberships', 'started_at'), ('admin_audit', 'changed_by')
+      ('client_memberships', 'started_at'), ('admin_audit', 'changed_by'), ('sign_in_links', 'made_by'), ('sign_in_links', 'made_for'),
+      ('sign_in_links', 'kind')
     ) as t(tbl, col)
   loop
     if not exists (
@@ -235,6 +245,8 @@ create table if not exists public.staff_activity (
 );
 
 create index if not exists staff_activity_gym_created_idx on public.staff_activity (gym_id, created_at desc);
+-- coach_follow_through reads each member's thread in order; only chat_messages (client_id) was indexed (0061)
+create index if not exists chat_messages_client_created_idx on public.chat_messages (client_id, created_at);
 create index if not exists admin_audit_gym_changed_idx on public.admin_audit (gym_id, changed_at desc);
 
 alter table public.staff_activity enable row level security;
@@ -387,6 +399,9 @@ begin
     raise exception 'Both coaches must work at this gym.';
   end if;
 
+  -- one change to the gym's team at a time (as _remove_coach_from_gym): a coach being removed at the same moment can't receive members
+  perform 1 from gyms where id = p_gym for update;
+
   v_ids := public._move_members_to_coach(
     p_gym, p_from, p_to,
     array(select id from profiles where role = 'client' and coach_id = p_from and gym_id = p_gym)
@@ -413,6 +428,7 @@ security definer
 set search_path = public
 as $fn$
 declare
+  v_gym uuid;
   v_member profiles;
   v_ids uuid[];
 begin
@@ -420,12 +436,19 @@ begin
     raise exception 'Not authorized';
   end if;
 
-  -- the member's row, held until the change is done, so two changes of the same member wait for each other
-  select * into v_member from profiles where id = p_member for update;
   -- the same answer for "no such member" as for "not yours to change", so nobody can probe for accounts
-  if not found or v_member.role is distinct from 'client' or v_member.gym_id is null
-     or not coalesce(public.can_manage_gym_business(v_member.gym_id), false) then
+  select gym_id into v_gym from profiles where id = p_member and role = 'client';
+  if v_gym is null or not coalesce(public.can_manage_gym_business(v_gym), false) then
     raise exception 'Not authorized';
+  end if;
+
+  -- One change to the gym's team at a time (the lock _remove_coach_from_gym, _set_gym_admin and _reassign_clients take, in the same
+  -- order: the gym, then the people), so a coach being removed at the same moment can't be given this member. Then the member's row,
+  -- held until the change is done.
+  perform 1 from gyms where id = v_gym for update;
+  select * into v_member from profiles where id = p_member for update;
+  if not found or v_member.role is distinct from 'client' or v_member.gym_id is distinct from v_gym then
+    raise exception 'This member''s gym has changed since the page was loaded. Reload the page and try again.';
   end if;
 
   if v_member.coach_id is distinct from p_from then
@@ -514,15 +537,22 @@ begin
     ) w
     where gm.onboarded
   ),
-  -- every message in the gym's members' threads, numbered by how many staff messages came before it (a member's message) or up to and
-  -- including it (a staff message): the member's messages after the k-th staff message share k, and the staff message that answers
-  -- them has k + 1
+  -- every message in the gym's members' threads. bulk: one coach's message written into several threads at the same moment (a broadcast,
+  -- or "Message each"), which is not a reply to anyone. Each message is numbered by how many staff messages came before it (a member's
+  -- message) or up to and including it (a staff message): the member's messages after the k-th staff message share k, and the staff
+  -- message that answers them has k + 1. staff_seq counts every staff message (the Messages list's Needs reply rule, for waiting);
+  -- reply_seq leaves bulk ones out (for reply times).
   msgs as (
-    select cm.client_id, cm.sender_id, cm.created_at, (cm.sender_id = cm.client_id) as from_member,
-           sum(case when cm.sender_id = cm.client_id then 0 else 1 end)
-             over (partition by cm.client_id order by cm.created_at, cm.id rows between unbounded preceding and current row) as staff_seq
-    from chat_messages cm
-    where cm.client_id in (select gm.id from gym_members gm)
+    select m0.*,
+           sum(case when m0.from_member then 0 else 1 end) over w as staff_seq,
+           sum(case when m0.from_member or m0.bulk then 0 else 1 end) over w as reply_seq
+    from (
+      select cm.id, cm.client_id, cm.sender_id, cm.created_at, (cm.sender_id = cm.client_id) as from_member,
+             (cm.sender_id <> cm.client_id and count(*) over (partition by cm.sender_id, cm.created_at) > 1) as bulk
+      from chat_messages cm
+      where cm.client_id in (select gm.id from gym_members gm)
+    ) m0
+    window w as (partition by m0.client_id order by m0.created_at, m0.id rows between unbounded preceding and current row)
   ),
   -- each unbroken run of the member's messages: when it started and its newest message
   runs as (
@@ -530,6 +560,13 @@ begin
     from msgs
     where from_member
     group by client_id, staff_seq
+  ),
+  -- the same runs, not broken by a bulk message
+  reply_runs as (
+    select client_id, reply_seq, min(created_at) as first_at, max(created_at) as last_at
+    from msgs
+    where from_member
+    group by client_id, reply_seq
   ),
   last_seq as (
     select client_id, max(staff_seq) as staff_seq from msgs group by client_id
@@ -559,12 +596,12 @@ begin
       left join chat_no_reply nr on nr.client_id = r.client_id
       where gm.coach_id in (select t.coach_id from team t)
     ), '[]'::jsonb),
-    -- replies sent in the last 30 days by a coach at the gym: seconds from the member's first unanswered message. A run the coach marked
-    -- "No reply needed" before writing again is not a reply.
+    -- replies sent in the last 30 days by a coach at the gym: seconds from the member's first unanswered message to the next staff message
+    -- that wasn't a bulk one. A run the coach marked "No reply needed" before writing again is not a reply.
     'replies', coalesce((
       select jsonb_agg(jsonb_build_object('coachId', s.sender_id, 'seconds', greatest(0, floor(extract(epoch from (s.created_at - r.first_at))))::bigint))
-      from runs r
-      join msgs s on s.client_id = r.client_id and not s.from_member and s.staff_seq = r.staff_seq + 1
+      from reply_runs r
+      join msgs s on s.client_id = r.client_id and not s.from_member and not s.bulk and s.reply_seq = r.reply_seq + 1
       left join chat_no_reply nr on nr.client_id = r.client_id
       where s.created_at >= now() - interval '30 days'
         and s.sender_id in (select t.coach_id from team t)
@@ -808,8 +845,17 @@ begin
     where g.organisation_id = public.my_org_id() and (p_gym is null or g.id = p_gym)
   ),
   entries as (
-    select 'staff'::text as src, s.id, s.gym_id, s.action, s.actor_id, s.coach_id, s.to_coach_id, s.member_id, s.member_count,
-           s.created_at as at
+    select 'staff'::text as src, s.id, s.gym_id, s.action,
+           -- Add coach for a new address inserts the coach's gym row with the app server's key, so the database can't see who did it; the
+           -- same request then records the new coach's sign-in link with who made it (sign_in_links, 0171), and that person is named
+           coalesce(s.actor_id, case when s.action = 'coach_added' then (
+             select l.made_by from sign_in_links l
+             where l.made_for = s.coach_id and l.kind = 'new_coach' and l.gym_id = s.gym_id
+               and l.created_at >= s.created_at and l.created_at < s.created_at + interval '10 minutes'
+             order by l.created_at
+             limit 1
+           ) end) as actor_id,
+           s.coach_id, s.to_coach_id, s.member_id, s.member_count, s.created_at as at
     from staff_activity s
     where s.gym_id in (select gi.id from gyms_in gi)
     union all
@@ -834,6 +880,7 @@ begin
         'actorName', coalesce(nullif(btrim(pa.display_name), ''), pa.email),
         'actorIsYou', coalesce(p.actor_id = auth.uid(), false),
         'coachName', coalesce(nullif(btrim(pc.display_name), ''), pc.email),
+        'hadCoach', p.coach_id is not null,
         'toCoachName', coalesce(nullif(btrim(pt.display_name), ''), pt.email),
         'memberName', coalesce(nullif(btrim(cpm.name), ''), pm.email),
         'memberCount', p.member_count

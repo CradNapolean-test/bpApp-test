@@ -15,6 +15,8 @@ export interface StaffActivityRow {
   actorName: string | null;
   actorIsYou: boolean;
   coachName: string | null;
+  // For a change of coach: whether the member had a coach (their old coach's account may since have gone, which leaves coachName empty).
+  hadCoach?: boolean;
   toCoachName: string | null;
   memberName: string | null;
   memberCount: number | null;
@@ -44,11 +46,11 @@ export function describeStaffActivity(row: StaffActivityRow): string {
     case 'members_moved': {
       const n = row.memberCount ?? 0;
       const what = `${n} member${n === 1 ? '' : 's'} from ${coach} to ${to}`;
-      return who ? `${who} moved ${what}` : `${what} were moved`;
+      return who ? `${who} moved ${what}` : `${what} ${n === 1 ? 'was' : 'were'} moved`;
     }
     case 'member_coach_changed': {
       const member = person(row.memberName, 'a deleted member');
-      const from = row.coachName ? prettyName(row.coachName) : 'no coach';
+      const from = row.coachName ? prettyName(row.coachName) : row.hadCoach ? 'a deleted account' : 'no coach';
       return who ? `${who} changed ${member}'s coach from ${from} to ${to}` : `${member}'s coach was changed from ${from} to ${to}`;
     }
     case 'admin_on':

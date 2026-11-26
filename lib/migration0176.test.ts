@@ -86,15 +86,39 @@ describe('migration 0176', () => {
 
   it('lets the owner of the member\'s gym or an admin there change a coach, to a coach working at that gym only', () => {
     const b = body('change_member_coach');
-    expect(b).toContain('for update');
-    expect(b).toContain('not coalesce(public.can_manage_gym_business(v_member.gym_id), false)');
-    expect(b).toContain("v_member.role is distinct from 'client'");
+    expect(b).toContain("select gym_id into v_gym from profiles where id = p_member and role = 'client';");
+    expect(b).toMatch(/if v_gym is null or not coalesce\(public\.can_manage_gym_business\(v_gym\), false\) then\s+raise exception 'Not authorized'/);
+    // the gym's team, then the member, locked in the order removing a coach and Move members use
+    expect(b.indexOf('perform 1 from gyms where id = v_gym for update;')).toBeGreaterThan(b.indexOf('can_manage_gym_business'));
+    expect(b.indexOf('perform 1 from gyms where id = v_gym for update;')).toBeLessThan(b.indexOf('from profiles where id = p_member for update'));
+    expect(b).toContain('v_member.gym_id is distinct from v_gym');
     // the same answer for "not a member" as for "not yours": nothing to probe
     expect(b.match(/raise exception 'Not authorized'/g)?.length).toBe(2);
     expect(b).toContain('v_member.coach_id is distinct from p_from');
     expect(b).toMatch(/cgm\.coach_id = p_to and cgm\.gym_id = v_member\.gym_id and c\.role = 'coach' and c\.deactivated_at is null/);
     // the permission check comes before any change
     expect(b.indexOf('can_manage_gym_business')).toBeLessThan(b.indexOf('_move_members_to_coach'));
+  });
+
+  it("takes the gym's team lock in Move members too, before moving anyone", () => {
+    const b = body('_reassign_clients');
+    expect(b.indexOf('perform 1 from gyms where id = p_gym for update;')).toBeGreaterThan(-1);
+    expect(b.indexOf('perform 1 from gyms where id = p_gym for update;')).toBeLessThan(b.indexOf('public._move_members_to_coach('));
+  });
+
+  it('counts waiting by every staff message but leaves bulk messages (broadcasts, Message each) out of reply times', () => {
+    const b = body('coach_follow_through');
+    expect(b).toContain('count(*) over (partition by cm.sender_id, cm.created_at) > 1) as bulk');
+    expect(b).toContain('sum(case when m0.from_member then 0 else 1 end) over w as staff_seq');
+    expect(b).toContain('sum(case when m0.from_member or m0.bulk then 0 else 1 end) over w as reply_seq');
+    expect(b).toContain('join last_seq l on l.client_id = r.client_id and l.staff_seq = r.staff_seq');
+    expect(b).toContain('not s.from_member and not s.bulk and s.reply_seq = r.reply_seq + 1');
+  });
+
+  it("names who added a new coach from the sign-in link the same request records, only when the database couldn't tell", () => {
+    const b = body('owner_staff_activity');
+    expect(b).toMatch(/coalesce\(s\.actor_id, case when s\.action = 'coach_added' then \(/);
+    expect(b).toContain("l.made_for = s.coach_id and l.kind = 'new_coach' and l.gym_id = s.gym_id");
   });
 
   it('moves one member exactly as Move members does: through the same function', () => {

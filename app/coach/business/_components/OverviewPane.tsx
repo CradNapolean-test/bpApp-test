@@ -31,15 +31,20 @@ function MemberRow({ href, name, line, action, actionCls = 'text-accent' }: { hr
 function FollowThroughLine({ f, now }: { f: CoachFollowThrough; now: Date }) {
   const long = isLongWait(f.oldestWaitingSince, now);
   return (
-    <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
+    // One fact a line on a phone; side by side with dots between from a small tablet up.
+    <p className="mt-1.5 flex flex-col gap-y-0.5 text-[13px] text-zinc-500 sm:flex-row sm:flex-wrap sm:gap-x-2 dark:text-zinc-400">
       <span>Check-ins reviewed {reviewedLabel(f)}</span>
-      <span aria-hidden>·</span>
+      <span aria-hidden className="hidden sm:inline">
+        ·
+      </span>
       <span className={f.waiting > 0 ? (long ? 'font-semibold text-red-700 dark:text-red-400' : 'font-semibold text-amber-700 dark:text-amber-400') : undefined}>
         {f.waiting === 0
           ? 'Nobody waiting for a reply'
           : `${f.waiting} waiting for a reply${f.oldestWaitingSince ? ` (oldest ${waitedLabel(f.oldestWaitingSince, now)})` : ''}`}
       </span>
-      <span aria-hidden>·</span>
+      <span aria-hidden className="hidden sm:inline">
+        ·
+      </span>
       <span>{f.medianReplySeconds === null ? 'No replies in 30 days' : `Usually replies in ${durationLabel(f.medianReplySeconds)}`}</span>
     </p>
   );

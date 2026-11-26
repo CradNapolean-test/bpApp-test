@@ -43,7 +43,7 @@ function ChangeCoachButton({ m, open, onToggle }: { m: RosterMember; open: boole
       onClick={onToggle}
       aria-expanded={open}
       aria-label={`Change ${m.name}'s coach`}
-      className="inline-flex h-9 shrink-0 items-center rounded-xl border-[1.5px] border-black/20 px-3 text-xs font-bold text-black hover:bg-black/[.03] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
+      className="inline-flex h-10 shrink-0 items-center rounded-xl border-[1.5px] border-black/20 px-3 text-xs font-bold text-black hover:bg-black/[.03] dark:border-white/25 dark:text-zinc-50 dark:hover:bg-white/5"
     >
       Change coach
     </button>
