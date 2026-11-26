@@ -773,6 +773,10 @@ export function ChatTab({
         )}
         {messages.map((m, i) => {
           const isMine = m.sender_id === currentUserId;
+          // A coach looking at a member's chat can find a message another coach wrote: a colleague's "Message everyone booked" (BK16), or
+          // the coach the member had before. It sits on the coach's side, marked as another coach's, never as if the member wrote it.
+          const fromOtherCoach = currentUserId !== clientId && !isMine && m.sender_id !== clientId;
+          const coachSide = isMine || fromOtherCoach;
           const showDay = i === 0 || dayLabel(messages[i - 1].created_at) !== dayLabel(m.created_at);
           return (
             <div key={m.id}>
@@ -786,9 +790,9 @@ export function ChatTab({
                     {dayLabel(m.created_at)}
                   </p>
                 ))}
-              <div className={`flex items-end gap-1.5 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
-                {!isMine && !member && <Avatar name={otherPartyName} size="sm" />}
-                <div className={`flex ${member ? 'max-w-[82%]' : 'max-w-[78%]'} flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+              <div className={`flex items-end gap-1.5 ${coachSide ? 'flex-row-reverse' : 'flex-row'}`}>
+                {!coachSide && !member && <Avatar name={otherPartyName} size="sm" />}
+                <div className={`flex ${member ? 'max-w-[82%]' : 'max-w-[78%]'} flex-col ${coachSide ? 'items-end' : 'items-start'}`}>
                   <div
                     className={`overflow-hidden ${member ? 'text-[15px] leading-snug' : 'text-sm leading-relaxed'} ${m.image_path ? 'p-0' : 'px-3.5 py-2.5'} ${m.pending ? 'opacity-70' : ''} ${
                       member
@@ -797,6 +801,8 @@ export function ChatTab({
                           : 'rounded-[18px] border border-black/[.08] bg-card text-black dark:border-white/10 dark:text-zinc-50'
                         : isMine
                           ? 'rounded-[16px_4px_16px_16px] bg-accent text-accent-foreground'
+                          : fromOtherCoach
+                            ? 'rounded-[16px_4px_16px_16px] border border-accent/30 bg-accent-soft text-black dark:text-zinc-50'
                           : 'rounded-[4px_16px_16px_16px] border border-black/[.05] bg-black/5 text-black dark:border-white/10 dark:bg-white/10 dark:text-zinc-50'
                     }`}
                   >
@@ -824,6 +830,7 @@ export function ChatTab({
                     /* suppressHydrationWarning: formatted in the viewer's own timezone, which the
                        server can't know -- expected to differ between SSR and client. */
                     <p className={`mt-0.5 px-1 ${member ? 'text-xs text-zinc-500 dark:text-zinc-400' : 'text-[10px] text-zinc-400'}`} suppressHydrationWarning>
+                      {fromOtherCoach ? 'Another coach · ' : ''}
                       {timeLabel(m.created_at)}
                     </p>
                   )}

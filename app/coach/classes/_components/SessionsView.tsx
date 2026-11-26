@@ -6,7 +6,7 @@ import AnimatedContent from '@/app/_components/motion/AnimatedContent';
 import { useGrowIn } from '@/app/_components/motion/useGrowIn';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Ban, CalendarDays, Check, Dumbbell, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
+import { Ban, CalendarDays, Check, Dumbbell, MessageSquare, RotateCcw, UserPlus, UserX, X } from 'lucide-react';
 import { Avatar } from '@/app/_components/Avatar';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -21,6 +21,8 @@ import { DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, WEEKDAY_SHORT } from '
 import { nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { startMs } from '@/lib/utils/booking';
 import { ordinal } from '@/lib/utils/bookingWords';
+import { messageEveryoneBooked } from '@/lib/data/sessionMessage';
+import { SESSION_MESSAGE_MAX, bookedRecipients, membersWord, sessionMessageConfirm, sessionMessageProblem } from '@/lib/sessionMessage';
 import { rememberCount, sessionKey, unmarkedInRoster, withMarkedCounts, type MarkedCounts } from '@/lib/sessionMarking';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
@@ -62,6 +64,10 @@ export function SessionsView({
   const { run: runRemove, busy: removing } = useAction();
   const [removeEntry, setRemoveEntry] = useState<RosterEntry | null>(null);
   const { run: runBook, busy: booking } = useAction();
+  // "Message everyone booked" (BK16): the sheet to write it in, then a confirm that says how many it goes to.
+  const { run: runMessage, busy: messaging } = useAction();
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [messageText, setMessageText] = useState('');
   const [openKey, setOpenKey] = useState<string | null>(initialTarget ? `${initialTarget.classId}|${initialTarget.date}` : null);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   // Once a session has started it can't be cancelled: that would refund everyone, including the people who came (BK27; the database
@@ -163,6 +169,8 @@ export function SessionsView({
     rememberOpenCount();
     setOpenKey(null);
     setRoster(null);
+    setMessageOpen(false);
+    setMessageText('');
   }
 
   // Tap a status to set it; tap it again to clear it back to unmarked.
@@ -228,6 +236,30 @@ export function SessionsView({
         setRoster(await getRoster(open.classId, open.date));
       },
     });
+  }
+
+  async function sendToEveryoneBooked() {
+    if (!open || !roster) return;
+    const n = bookedRecipients(roster).length;
+    if (n === 0 || sessionMessageProblem(messageText)) return;
+    const words = sessionMessageConfirm(n, `${formatClassTime(open.startTime)} ${open.className} on ${longDay(open.date)}`);
+    if (!(await confirm({ title: words.title, body: words.body, confirmLabel: words.confirmLabel }))) return;
+    let sent = 0;
+    await runMessage(
+      async () => {
+        const result = await messageEveryoneBooked(open.classId, open.date, messageText);
+        if (result.ok) sent = result.sent;
+        return result;
+      },
+      {
+        refresh: false,
+        onDone: () => {
+          toast.success(sent === 0 ? 'Nobody is booked in now, so nothing was sent' : `Sent to ${membersWord(sent)}`);
+          setMessageOpen(false);
+          setMessageText('');
+        },
+      }
+    );
   }
 
   async function cancelOccurrence() {
@@ -595,6 +627,15 @@ export function SessionsView({
                   <UserPlus className="h-4 w-4" /> Add a member
                 </button>
               )}
+              {bookedRecipients(active).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMessageOpen(true)}
+                  className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-black/15 text-sm font-bold text-black hover:bg-black/[.03] dark:border-white/20 dark:text-zinc-50 dark:hover:bg-white/5"
+                >
+                  <MessageSquare className="h-4 w-4" /> Message everyone booked
+                </button>
+              )}
               {!runToday && (
                 <Link
                   href={`/coach/run/${open.classId}/${open.date}`}
@@ -618,6 +659,40 @@ export function SessionsView({
           </div>
         </BottomSheet>
       )}
+
+      {open && messageOpen && roster && (() => {
+        const n = bookedRecipients(roster).length;
+        const problem = messageText.trim() ? sessionMessageProblem(messageText) : null;
+        return (
+          <BottomSheet title="Message everyone booked" onClose={() => setMessageOpen(false)}>
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {formatClassTime(open.startTime)} {open.className}, {longDay(open.date)}. It goes to the {membersWord(n)} booked in, each in their own
+                chat, with a notification. Not the waitlist.
+              </p>
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-zinc-500">Message</span>
+                <textarea
+                  className={`${inputCls} min-h-28`}
+                  value={messageText}
+                  maxLength={SESSION_MESSAGE_MAX + 200}
+                  placeholder="e.g. The car park is closed tonight: use the side gate."
+                  onChange={(e) => setMessageText(e.target.value)}
+                />
+              </label>
+              {problem && <p className="text-xs font-semibold text-danger">{problem}</p>}
+              <button
+                type="button"
+                disabled={messaging || n === 0 || !!sessionMessageProblem(messageText)}
+                onClick={sendToEveryoneBooked}
+                className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
+              >
+                {messaging ? 'Sending…' : `Send to ${membersWord(n)}`}
+              </button>
+            </div>
+          </BottomSheet>
+        );
+      })()}
 
       {open && cancelOpen && (
         <BottomSheet title={`Cancel ${open.className}?`} onClose={() => setCancelOpen(false)}>
