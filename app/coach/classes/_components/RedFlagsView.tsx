@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
@@ -12,7 +12,7 @@ import { useCoachGyms } from '@/app/coach/_components/CoachGymsContext';
 import { getGymRoster, type GymCoachRow } from '@/lib/data/gym';
 import { generateLatestRedFlagWeek, getRedFlagReport, saveRedFlagThresholds, updateRedFlagEntry } from '@/lib/data/redFlags';
 import { lastCompletedWeekIn } from '@/lib/redFlagWeek';
-import { shortGymName } from '@/lib/gymNames';
+import { redFlagLoadKey, redFlagWeekShown, shownIfCurrent, type GymWeekPick } from '@/lib/redFlagGymView';
 import { addDays, DEFAULT_TIMEZONE, toIsoDate } from '@/lib/utils/dates';
 import type { RedFlagEntry, RedFlagReport, RedFlagStat } from '@/lib/data/types';
 
@@ -302,56 +302,67 @@ function ThresholdsSheet({
 export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => void }) {
   const toast = useToast();
   const { run: runGenerate, busy: generating } = useAction();
-  // A coach who works in two gyms can look at either one's list; the week rolls over on Monday at THAT gym.
+  // The gym chosen in the header, like every other coach screen (CV14); this page has no gym picker of its own. The week rolls over on
+  // Monday at THAT gym.
   const gyms = useCoachGyms();
-  const [pickedGymId, setPickedGymId] = useState<string | null>(null);
-  const gym = gyms.find((g) => g.gymId === pickedGymId) ?? gyms.find((g) => g.isActive) ?? gyms[0] ?? null;
+  const gym = gyms.find((g) => g.isActive) ?? gyms[0] ?? null;
   const gymId = gym?.gymId ?? null;
   const gymTz = gym?.timezone ?? DEFAULT_TIMEZONE;
   const latest = lastCompletedWeekIn(gymTz);
-  const [week, setWeek] = useState(latest);
-  const [data, setData] = useState<{ report: RedFlagReport | null; error: string | null } | null>(null);
-  const [entries, setEntries] = useState<RedFlagEntry[]>([]);
-  const [coaches, setCoaches] = useState<GymCoachRow[]>([]);
-  const [filter, setFilter] = useState<'all' | 'todo' | 'red'>('all');
-  const [sheet, setSheet] = useState<'help' | 'thresholds' | null>(null);
+  // The week the coach moved to, for the gym it was picked in. A switch to another gym goes back to that gym's newest finished week.
+  const [weekPick, setWeekPick] = useState<GymWeekPick | null>(null);
+  const week = redFlagWeekShown(weekPick, gymId, latest);
+  const setWeek = (w: string) => setWeekPick({ gymId, week: w });
   const [reload, setReload] = useState(0);
+  // Everything below is kept with the gym and week it was loaded for, and only shown while those are still the ones on screen: a list
+  // still loading for the old gym when the coach switches never appears under the new one (lib/redFlagGymView.ts).
+  const loadKey = redFlagLoadKey(gymId, week, reload);
+  const [loaded, setLoaded] = useState<{ key: string; report: RedFlagReport | null; error: string | null; entries: RedFlagEntry[] } | null>(null);
+  const [roster, setRoster] = useState<{ gymId: string | null; coaches: GymCoachRow[] } | null>(null);
+  const [filter, setFilter] = useState<'all' | 'todo' | 'red'>('all');
+  const [sheetFor, setSheetFor] = useState<{ kind: 'help' | 'thresholds'; gymId: string | null } | null>(null);
 
-  const load = useCallback(
-    (w: string, forGym: string | null) => {
-      getRedFlagReport(w, forGym).then((d) => {
-        setData(d);
-        setEntries(d.report?.entries ?? []);
+  useEffect(() => {
+    let live = true;
+    getRedFlagReport(week, gymId)
+      .then((d) => {
+        if (live) setLoaded({ key: loadKey, report: d.report, error: d.error, entries: d.report?.entries ?? [] });
+      })
+      .catch(() => {
+        if (live) setLoaded({ key: loadKey, report: null, error: 'Check the connection and try again.', entries: [] });
       });
-    },
-    []
-  );
+    return () => {
+      live = false;
+    };
+  }, [loadKey, week, gymId]);
 
+  // The coaches at the gym, for "Coach following up": loaded again for each gym.
   useEffect(() => {
-    Promise.resolve().then(() => {
-      setData(null);
-      load(week, gymId);
-    });
-  }, [week, gymId, reload, load]);
+    let live = true;
+    getGymRoster()
+      .then((coaches) => {
+        if (live) setRoster({ gymId, coaches });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [gymId]);
 
-  function pickGym(id: string) {
-    const next = gyms.find((g) => g.gymId === id);
-    setPickedGymId(id);
-    // Back to the newest finished week at THAT gym.
-    setWeek(lastCompletedWeekIn(next?.timezone ?? DEFAULT_TIMEZONE));
-  }
-
-  useEffect(() => {
-    getGymRoster().then(setCoaches).catch(() => {});
-  }, []);
+  const data = shownIfCurrent(loaded, loadKey);
+  const entries = data?.entries ?? [];
+  const coaches = roster?.gymId === gymId ? roster.coaches : [];
+  const sheet = sheetFor?.gymId === gymId ? sheetFor.kind : null;
+  const setSheet = (kind: 'help' | 'thresholds' | null) => setSheetFor(kind ? { kind, gymId } : null);
 
   function change(id: string, fields: Partial<RedFlagEntry>) {
+    const key = loadKey;
     const before = entries;
-    setEntries((es) => es.map((e) => (e.id === id ? { ...e, ...fields } : e)));
+    setLoaded((l) => (l && l.key === key ? { ...l, entries: l.entries.map((e) => (e.id === id ? { ...e, ...fields } : e)) } : l));
     updateRedFlagEntry(id, fields).then((r) => {
       if (!r.ok) {
         toast.error(r.error);
-        setEntries(before);
+        setLoaded((l) => (l && l.key === key ? { ...l, entries: before } : l));
       }
     });
   }
@@ -414,26 +425,6 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
           ]}
         />
       </div>
-
-      {gyms.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="red-flag-gym" className="text-xs font-medium text-zinc-500">
-            Gym
-          </label>
-          <select
-            id="red-flag-gym"
-            value={gymId ?? ''}
-            onChange={(e) => pickGym(e.target.value)}
-            className="rounded-xl border border-black/10 bg-transparent px-3 py-1.5 text-sm font-semibold dark:border-white/10"
-          >
-            {gyms.map((g) => (
-              <option key={g.gymId} value={g.gymId}>
-                {shortGymName(g.gymName, { siblings: gyms.map((x) => x.gymName) })}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {data === null && <p className="text-sm text-zinc-500">Loading…</p>}
 
