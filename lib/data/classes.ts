@@ -241,6 +241,20 @@ export async function getSessionCredits(clientId: string, dates: string[]): Prom
   return out;
 }
 
+// The signed-in member's own places on waitlists, by booking id (BK5, my_waitlist_places, migration 0177): 1 is next in. The database
+// answers only the caller's own bookings, never anyone else's, so this takes no member id. An empty answer (the function is not there
+// yet, or nothing could be read) leaves the screens showing "On the waitlist" without a place.
+export async function getMyWaitlistPlaces(): Promise<Record<string, number>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('my_waitlist_places');
+  if (error || !Array.isArray(data)) return {};
+  const out: Record<string, number> = {};
+  for (const r of data as { booking_id: string; place: number }[]) {
+    if (typeof r.booking_id === 'string' && Number.isFinite(r.place) && r.place >= 1) out[r.booking_id] = r.place;
+  }
+  return out;
+}
+
 export async function getCreditsBalance(clientId: string): Promise<number> {
   const supabase = await createClient();
   const { data, error } = await supabase

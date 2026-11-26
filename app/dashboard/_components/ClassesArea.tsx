@@ -7,11 +7,13 @@ import { useOnDemand } from '@/app/_components/useOnDemand';
 import { stripSwipe, useDaySwipe } from '@/app/_components/useDaySwipe';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { BottomSheet } from '@/app/_components/BottomSheet';
-import { bookClass, cancelBooking, getMemberTimetable, getSessionCredits } from '@/lib/data/classes';
+import { bookClass, cancelBooking, getMemberTimetable, getMyWaitlistPlaces, getSessionCredits } from '@/lib/data/classes';
 import { addDays, DEFAULT_TIMEZONE, formatClassTime, todayIsoInTz, toIsoDate, WEEKDAY_SHORT } from '@/lib/utils/dates';
 import { bookSheetNote, cancelDeadline, cancelNote, nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { cancelSummary, nextResetDate, sessionPayment, shortDayLabel, startMs } from '@/lib/utils/booking';
 import { cancellationPolicyText } from '@/lib/bookingRules';
+import { cancelCreditWords, waitlistPlaceText } from '@/lib/utils/bookingWords';
+import { bookDayMark, bookDayStatus, bookStripCaption } from '@/lib/utils/dayStrip';
 import { CheckInButton } from './CheckInButton';
 import { DayStrip } from './DayStrip';
 import { MemberHeader } from './MemberHeader';
@@ -133,6 +135,20 @@ export function ClassesArea({
   const activeBookings = useMemo(() => bookings.filter((b) => b.status !== 'cancelled'), [bookings]);
   const bookingByKey = useMemo(() => new Map(activeBookings.map((b) => [`${b.class_id}|${b.booking_date}`, b])), [activeBookings]);
   const bookedDates = useMemo(() => new Set(activeBookings.filter((b) => b.status === 'booked').map((b) => b.booking_date)), [activeBookings]);
+  // Days with a waitlist place get a mark of their own on the strip (BK6).
+  const waitlistDates = useMemo(() => new Set(activeBookings.filter((b) => b.status === 'waitlist').map((b) => b.booking_date)), [activeBookings]);
+  // The member's own place in each queue (BK5, migration 0177), read again after a booking or a cancel and when the waitlist bookings
+  // change. Nothing until it has loaded, or without the migration: the rows then say "On the waitlist" alone.
+  const waitlistIds = activeBookings
+    .filter((b) => b.status === 'waitlist')
+    .map((b) => b.id)
+    .sort()
+    .join(',');
+  const waitlistPlaces = useOnDemand(
+    () => (waitlistIds ? getMyWaitlistPlaces() : Promise.resolve<Record<string, number>>({})),
+    `${clientId}|${waitlistIds}`
+  );
+  const placeText = (bookingId: string) => waitlistPlaceText(waitlistPlaces.data?.[bookingId]);
 
   const blackoutStart = gymBlackout?.start ?? occurrences.find((o) => o.blackoutStart)?.blackoutStart ?? null;
   const blackoutEnd = gymBlackout?.end ?? occurrences.find((o) => o.blackoutEnd)?.blackoutEnd ?? null;
@@ -230,7 +246,12 @@ export function ClassesArea({
             {booked ? (
               <span className={tagBooked}>Booked</span>
             ) : waitlisted ? (
-              <span className={tagWarn}>On the waitlist</span>
+              <>
+                <span className={tagWarn}>On the waitlist</span>
+                {existing && placeText(existing.id) && (
+                  <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">{placeText(existing.id)}</span>
+                )}
+              </>
             ) : (
               <span className={full || spots <= 3 ? tagWarn : tagGood}>{full ? 'Full' : `${spots} left`}</span>
             )}
@@ -245,6 +266,7 @@ export function ClassesArea({
   const bookSheet = sheet?.kind === 'book' ? sheet.occ : null;
   const cancelSheet = sheet?.kind === 'cancel' ? sheet.booking : null;
   const bookedAhead = upcoming.filter((b) => b.status === 'booked').length;
+  const waitingAhead = upcoming.filter((b) => b.status === 'waitlist').length;
 
   return (
     <div ref={screen} className="space-y-4">
@@ -269,7 +291,8 @@ export function ClassesArea({
 
         {view === 'book' && (
           <div className="space-y-2">
-            {/* The shared strip (DayStrip.tsx), in Book's own look: a booked day is the full teal ring, a day with no sessions faded. */}
+            {/* The shared strip (DayStrip.tsx), in Book's own look: a booked day is the full teal ring, a day with only a waitlist place a
+                dashed amber ring, a day with no sessions faded. */}
             <DayStrip
               stripRef={dayStrip}
               selected={selectedDate}
@@ -277,20 +300,19 @@ export function ClassesArea({
               days={days.map((d) => {
                 const dt = parseDay(d);
                 const hasSessions = sessionDates.has(d);
-                const isBooked = bookedDates.has(d);
+                const mark = bookDayMark(d, bookedDates, waitlistDates);
                 return {
                   iso: d,
                   weekday: WEEKDAY_SHORT[dt.getUTCDay()],
                   dayNum: dt.getUTCDate(),
-                  label: `${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}${isBooked ? ', booked' : ''}${hasSessions ? '' : ', no sessions'}`,
-                  ring: isBooked ? 1 : 0,
+                  label: `${dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}${bookDayStatus(d, bookedDates, waitlistDates, hasSessions)}`,
+                  ring: mark === 'booked' ? 1 : 0,
+                  dashed: mark === 'waitlist',
                   faded: !hasSessions,
                 };
               })}
             />
-            <p className="text-xs text-zinc-400">
-              {bookedAhead === 0 ? 'Nothing booked yet.' : `${bookedAhead} session${bookedAhead === 1 ? '' : 's'} booked. The ringed days are yours.`}
-            </p>
+            <p className="text-xs text-zinc-400">{bookStripCaption(bookedAhead, waitingAhead)}</p>
           </div>
         )}
 
@@ -366,6 +388,8 @@ export function ClassesArea({
           ) : (
             upcoming.map((b, i) => {
               const { waitlisted, late, deadline, refundUntilStart } = cancelSummary(b, nowMs, blackoutStart, blackoutEnd);
+              const words = cancelCreditWords(b.class?.credit_cost);
+              const place = waitlisted ? placeText(b.id) : null;
               const showDay = i === 0 || upcoming[i - 1].booking_date !== b.booking_date;
               return (
                 <div key={b.id}>
@@ -377,8 +401,9 @@ export function ClassesArea({
                       <TimeColumn time={b.class?.start_time} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-bold text-black dark:text-zinc-50">{b.class?.name}</p>
-                        <div className="mt-1">
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           <span className={waitlisted ? tagWarn : tagBooked}>{waitlisted ? 'On the waitlist' : 'Booked'}</span>
+                          {place && <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">{place}</span>}
                         </div>
                       </div>
                       <button type="button" onClick={() => setSheet({ kind: 'cancel', booking: b })} className={outlineBtn}>
@@ -387,11 +412,7 @@ export function ClassesArea({
                     </div>
                     {deadline && (
                       <p className={`mt-2 text-xs ${late ? 'font-semibold text-danger' : 'text-zinc-600 dark:text-zinc-400'}`}>
-                        {refundUntilStart
-                          ? 'You came off the waitlist after the cancel deadline: cancel any time before it starts for a full refund'
-                          : late
-                            ? 'Past the cancel deadline — cancelling now forfeits your credit'
-                            : cancelNote(deadline)}
+                        {refundUntilStart ? words.promotedNote : late ? words.lateNote : cancelNote(deadline)}
                       </p>
                     )}
                     {!waitlisted && b.booking_date === todayIso && (
@@ -497,21 +518,27 @@ export function ClassesArea({
 
       {cancelSheet && (() => {
         const { waitlisted, late, refundUntilStart } = cancelSummary(cancelSheet, nowMs, blackoutStart, blackoutEnd);
+        // The real number of credits (BK7): "Your 2 credits" for a session that costs 2.
+        const words = cancelCreditWords(cancelSheet.class?.credit_cost);
+        const place = waitlisted ? placeText(cancelSheet.id) : null;
         return (
           <BottomSheet title={waitlisted ? 'Leave the waitlist?' : 'Cancel this booking?'} onClose={() => setSheet(null)}>
             <div className="divide-y divide-black/5 dark:divide-white/10">
               <SummaryRow label="Session" value={cancelSheet.class?.name ?? 'Session'} />
               <SummaryRow label="When" value={`${longDay(cancelSheet.booking_date)} · ${formatClassTime(cancelSheet.class?.start_time)}`} />
-              {!waitlisted && <SummaryRow label="Your credit" value={late ? 'Not refunded' : 'Refunded'} tone={late ? 'warn' : 'good'} />}
+              {waitlisted && place && <SummaryRow label="Your place" value={place} />}
+              {!waitlisted && words.rowLabel && (
+                <SummaryRow label={words.rowLabel} value={late ? words.notRefunded : words.refunded} tone={late ? 'warn' : 'good'} />
+              )}
             </div>
             <p className={`mt-3 text-xs leading-relaxed ${late ? 'font-semibold text-danger' : 'text-zinc-500'}`}>
               {waitlisted
                 ? "You won't be charged anything."
                 : refundUntilStart
-                  ? 'You came off the waitlist after the cancel deadline, so you get your credit back if you cancel any time before it starts.'
+                  ? words.promotedLate
                   : late
-                    ? "It's too close to the session to get your credit back. You can still cancel, but it won't be refunded."
-                    : 'You can cancel now and get your credit back.'}
+                    ? words.late
+                    : words.inTime}
             </p>
             <div className="mt-5 flex gap-2.5">
               <button

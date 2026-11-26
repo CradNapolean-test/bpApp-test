@@ -129,6 +129,33 @@ export function checkinRing(date: string, todayIso: string, log: CheckinDay | nu
   return trackersIn(log, trackers) / trackers.length;
 }
 
+// ---- Book's strip ----
+// A day the member is booked on is the full teal ring; a day they are only on a waitlist for gets a dashed ring of its own (BK6). Booked
+// wins on a day that has both: that day is theirs either way, and the screen reader hears both.
+
+export type BookDayMark = 'booked' | 'waitlist' | null;
+
+export function bookDayMark(date: string, booked: ReadonlySet<string>, waitlisted: ReadonlySet<string>): BookDayMark {
+  return booked.has(date) ? 'booked' : waitlisted.has(date) ? 'waitlist' : null;
+}
+
+// What a screen reader hears after the day's name: ", booked", ", on a waitlist", ", no sessions".
+export function bookDayStatus(date: string, booked: ReadonlySet<string>, waitlisted: ReadonlySet<string>, hasSessions: boolean): string {
+  return `${booked.has(date) ? ', booked' : ''}${waitlisted.has(date) ? ', on a waitlist' : ''}${hasSessions ? '' : ', no sessions'}`;
+}
+
+const sessions = (n: number) => `${n} session${n === 1 ? '' : 's'}`;
+
+// The line under Book's strip: what is booked and what is waiting, and which ring means which.
+export function bookStripCaption(booked: number, waitlisted: number): string {
+  if (booked <= 0 && waitlisted <= 0) return 'Nothing booked yet.';
+  if (waitlisted <= 0) return `${sessions(booked)} booked. The ringed days are yours.`;
+  if (booked <= 0) {
+    return waitlisted === 1 ? 'On 1 waitlist. A dashed ring marks the day.' : `On ${waitlisted} waitlists. Dashed rings mark the days.`;
+  }
+  return `${sessions(booked)} booked, ${waitlisted} on ${waitlisted === 1 ? 'a waitlist' : 'waitlists'}. Solid rings are booked, dashed rings are waitlists.`;
+}
+
 // ---- words ----
 
 // "Thu 19 Nov".

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { ChevronLeft, Undo2 } from 'lucide-react';
 import { prefersReducedMotion } from '@/app/_components/motion/gsap';
 
@@ -24,6 +24,8 @@ export interface DayStripDay {
   ring: number;
   // Book: a day with no sessions is faded.
   faded?: boolean;
+  // Book: a day the member is only on a waitlist for is a dashed amber ring (BK6), distinct from a booked day's full ring.
+  dashed?: boolean;
   isToday?: boolean;
   // The small month name over the 1st ("Nov"); null on other days.
   month?: string | null;
@@ -35,11 +37,22 @@ export interface DayStripDay {
 const HEADER_EDGE = '-mx-5 px-5 sm:-mx-6 sm:px-6 md:mx-0 md:px-0';
 const RING_R = 17;
 const RING_C = 2 * Math.PI * RING_R;
+// How wide the fade is at an edge with more days past it (BK23).
+const FADE_PX = 32;
+
+// Book's strip fades out at an edge with more days past it, so a phone (where two weeks don't fit) shows the strip scrolls. A mask, not
+// an overlay, so it works on any background; none at all when every day fits (a laptop).
+export function edgeFadeMask(left: boolean, right: boolean): string | undefined {
+  if (!left && !right) return undefined;
+  const stops = [left ? `transparent, #000 ${FADE_PX}px` : '#000', right ? `#000 calc(100% - ${FADE_PX}px), transparent` : '#000'];
+  return `linear-gradient(to right, ${stops.join(', ')})`;
+}
 
 function chipClass(day: DayStripDay, active: boolean, progress: boolean): string {
   if (active) return 'bg-zinc-100 font-extrabold text-[#1d1d1b]';
   const todayNumber = progress && day.isToday ? 'font-extrabold text-white' : null;
   if (day.ring >= 1) return `border-2 border-accent ${todayNumber ?? 'font-bold text-[#5fd6d6]'}`;
+  if (!progress && day.dashed) return 'border-2 border-dashed border-amber-300/90 font-bold text-amber-200';
   if (!progress) return day.faded ? 'font-semibold text-zinc-600' : 'bg-white/[.07] font-semibold text-zinc-200';
   if (day.ring > 0) return todayNumber ?? 'font-semibold text-zinc-400';
   return `bg-white/[.07] ${todayNumber ?? 'font-semibold text-zinc-400'}`;
@@ -82,6 +95,27 @@ export function DayStrip({
   const scroller = stripRef ?? ownRef;
   // The day last brought into view (null until the strip opens).
   const shownDay = useRef<string | null>(null);
+  // Book only: whether there are days hidden past each edge (BK23). Measured when the strip opens, resizes or scrolls.
+  const [hidden, setHidden] = useState({ left: false, right: false });
+  useEffect(() => {
+    const box = scroller.current;
+    if (progress || !box) return;
+    const measure = () => {
+      const max = box.scrollWidth - box.clientWidth;
+      const next = { left: box.scrollLeft > 2, right: box.scrollLeft < max - 2 };
+      setHidden((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
+    };
+    // The observer reports once straight away, so the strip is measured when it opens too.
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    resize?.observe(box);
+    box.addEventListener('scroll', measure, { passive: true });
+    return () => {
+      resize?.disconnect();
+      box.removeEventListener('scroll', measure);
+    };
+  }, [progress, scroller, days.length]);
+  const mask = progress ? undefined : edgeFadeMask(hidden.left, hidden.right);
+  const maskStyle: CSSProperties | undefined = mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined;
 
   // The day picked is kept in view, with a day's room either side, inside the strip only (the page itself never scrolls). It runs
   // when the strip opens (today, at the right-hand end) and whenever the day changes some other way (the Today button, a swipe across
@@ -105,7 +139,11 @@ export function DayStrip({
   }, [selected, days.length, scroller]);
 
   const strip = (
-    <div ref={scroller} className={`${edgeClassName} flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
+    <div
+      ref={scroller}
+      style={maskStyle}
+      className={`${edgeClassName} flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
+    >
       {before}
       {days.map((d) => {
         const active = d.iso === selected;
