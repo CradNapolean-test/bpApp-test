@@ -321,6 +321,13 @@ export function RedFlagsView({ onOpenAttendance }: { onOpenAttendance?: () => vo
   const [roster, setRoster] = useState<{ gymId: string | null; coaches: GymCoachRow[] } | null>(null);
   const [filter, setFilter] = useState<'all' | 'todo' | 'red'>('all');
   const [sheetFor, setSheetFor] = useState<{ kind: 'help' | 'thresholds'; gymId: string | null } | null>(null);
+  // A gym switch forgets the week picked and any open sheet, so switching away and back lands on the newest week again.
+  const [seenGymId, setSeenGymId] = useState(gymId);
+  if (seenGymId !== gymId) {
+    setSeenGymId(gymId);
+    setWeekPick(null);
+    setSheetFor(null);
+  }
 
   useEffect(() => {
     let live = true;

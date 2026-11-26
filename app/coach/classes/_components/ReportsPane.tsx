@@ -63,13 +63,22 @@ export function ReportsPane({
 }) {
   const [section, setSection] = useState<Section>(initialSection);
   const [days, setDays] = useState<(typeof RANGES)[number]>(30);
-  const [current, setCurrent] = useState<CoachReport>(initialReport);
-  const [previous, setPrevious] = useState<CoachReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [showAllSlots, setShowAllSlots] = useState(false);
-  const [slotOrder, setSlotOrder] = useState<'busiest' | 'quietest'>('busiest');
   // The gym chosen in the header: a switch there loads that gym's figures again (getCoachReports reads the active gym).
   const gymId = useActiveGymId();
+  // Figures are kept with the gym and period they were loaded for. Until a gym's own load arrives (or if it fails) the page shows the
+  // 30 days the server sent with the page for that gym (`initialReport` is redrawn with the switch), never the gym before's.
+  const [loaded, setLoaded] = useState<{ gymId: string | null; days: number; current: CoachReport; previous: CoachReport | null } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const loadKey = `${gymId ?? ''}|${days}`;
+  const forGym = loaded && loaded.gymId === gymId ? loaded : null;
+  const shownDays = forGym ? forGym.days : 30;
+  const current = forGym ? forGym.current : initialReport;
+  const previous = forGym ? forGym.previous : null;
+  const upToDate = forGym?.days === days;
+  const loadFailed = !upToDate && failed === loadKey;
+  const loading = !upToDate && !loadFailed;
+  const [showAllSlots, setShowAllSlots] = useState(false);
+  const [slotOrder, setSlotOrder] = useState<'busiest' | 'quietest'>('busiest');
   // The switches' white highlights slide to the option picked (GSAP). The order switch only shows on one section, so it is placed again
   // when the section changes.
   const sectionTrack = useRef<HTMLDivElement>(null);
@@ -83,18 +92,12 @@ export function ReportsPane({
   // too so the comparison is there.
   useEffect(() => {
     let live = true;
-    Promise.resolve().then(() => {
-      if (live) setLoading(true);
-    });
     getCoachReports(days)
       .then((r) => {
-        if (!live) return;
-        setCurrent(r.current);
-        setPrevious(r.previous);
-        setLoading(false);
+        if (live) setLoaded({ gymId, days, current: r.current, previous: r.previous });
       })
       .catch(() => {
-        if (live) setLoading(false);
+        if (live) setFailed(`${gymId ?? ''}|${days}`);
       });
     return () => {
       live = false;
@@ -102,7 +105,12 @@ export function ReportsPane({
   }, [days, gymId]);
 
   const report = current;
-  const rangeLabel = `Last ${days} days, across all classes`;
+  // What the figures on screen cover, which lags the period picked while it loads.
+  const rangeLabel = !loadFailed
+    ? `Last ${shownDays} days, across all classes`
+    : shownDays === days
+      ? `Last ${days} days, as the page opened (couldn't refresh)`
+      : `Couldn't load the last ${days} days. Showing the last ${shownDays}.`;
 
   // Who has no-showed, most often first, with the dates.
   const noShowByMember = useMemo(() => {
@@ -133,7 +141,7 @@ export function ReportsPane({
 
   function exportPopularity() {
     downloadCsv('class-popularity.csv', [
-      ['Session', `Sessions run (${days}d)`, 'Places', 'Booked', 'Fill %', 'Marked', 'Attended'],
+      ['Session', `Sessions run (${shownDays}d)`, 'Places', 'Booked', 'Fill %', 'Marked', 'Attended'],
       ...report.classPopularity.map((c) => [c.className, c.sessions, c.places, c.bookingCount, fillPercent(c), c.marked, c.attended]),
     ]);
   }
@@ -226,7 +234,7 @@ export function ReportsPane({
               },
             ]}
           />
-          {previous && <p className="text-xs text-zinc-500">Changes are against the {days} days before.</p>}
+          {previous && <p className="text-xs text-zinc-500">Changes are against the {shownDays} days before.</p>}
 
           {report.unmarked > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-amber-500/30 bg-amber-50 px-5 py-4 dark:bg-amber-500/10">
@@ -287,7 +295,7 @@ export function ReportsPane({
               <li className="py-2 text-zinc-500">
                 {report.unmarked > 0
                   ? 'No no-shows marked yet — mark attendance to see them here.'
-                  : `No no-shows in the last ${days} days — everyone who booked turned up.`}
+                  : `No no-shows in the last ${shownDays} days — everyone who booked turned up.`}
               </li>
             )}
           </ul>
@@ -338,7 +346,7 @@ export function ReportsPane({
                 </li>
               );
             })}
-            {report.classPopularity.length === 0 && <li className="text-zinc-500">No sessions in the last {days} days yet.</li>}
+            {report.classPopularity.length === 0 && <li className="text-zinc-500">No sessions in the last {shownDays} days yet.</li>}
           </ul>
           {report.classPopularity.length > 10 && (
             <button type="button" onClick={() => setShowAllSlots((v) => !v)} className="mt-3 min-h-11 text-sm font-bold text-accent">

@@ -31,7 +31,7 @@ import {
   yOfMinute,
   type NewSessionStart,
 } from '@/lib/timetableGrid';
-import { classNameChoices, classNameKey, matchClassName, nearClassName, newClassNameQuestion, tidyClassName } from '@/lib/classNameMatch';
+import { classNameChoices, classNameKey, matchClassName, resolveClassName } from '@/lib/classNameMatch';
 import type { ClassRow, ScheduleOccurrence } from '@/lib/data/types';
 
 // The timetable as a real week calendar: weekly recurring slots repeat every week, one-off sessions
@@ -39,14 +39,12 @@ import type { ClassRow, ScheduleOccurrence } from '@/lib/data/types';
 // On a phone it shows one day at a time, with a day picker (CS11). The days drawn are Monday first, and Sunday only if something is
 // actually scheduled on it.
 
-// The class picker's "type a new name" choice (CS10).
-const NEW_NAME = '__new__';
-
 type Draft = {
   id: string | null; // null = new slot
   name: string;
-  // Typing a new class name rather than picking one of the gym's (CS10).
+  // Typing a new class name rather than picking one of the gym's (CS10), and the class picked before, to go back to.
   newName: boolean;
+  nameBefore: string;
   dayOfWeek: number;
   kind: 'weekly' | 'once';
   date: string; // one-off sessions: YYYY-MM-DD
@@ -64,6 +62,7 @@ function toDraft(c: ClassRow): Draft {
     id: c.id,
     name: c.name,
     newName: false,
+    nameBefore: c.name,
     dayOfWeek: c.day_of_week ?? 1,
     kind: c.specific_date ? 'once' : 'weekly',
     date: c.specific_date ?? '',
@@ -107,7 +106,12 @@ function Field({ label, htmlFor, hint, children }: { label: string; htmlFor?: st
         {label}
       </label>
       {children}
-      {hint && <p className="text-xs text-zinc-500">{hint}</p>}
+      {/* The input names this in aria-describedby, so a screen reader reads it too. */}
+      {hint && (
+        <p id={htmlFor ? `${htmlFor}-hint` : undefined} className="text-xs text-zinc-500">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -181,8 +185,19 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
   const gridH = rows.total;
   const yOf = (min: number) => yOfMinute(rows.rows, min);
 
-  const classNames = useMemo(() => [...new Set(classes.map((c) => c.name))].sort(), [classes]);
-  const hueFor = (name: string) => (classNames.length > 1 ? HUES[classNames.indexOf(name) % HUES.length] : null);
+  // One colour and one legend line per class, whatever its case or spacing, as the picker shows them.
+  const classNames = choices;
+  const hueFor = (name: string) => {
+    const i = classNames.findIndex((n) => classNameKey(n) === classNameKey(name));
+    return classNames.length > 1 && i >= 0 ? HUES[i % HUES.length] : null;
+  };
+  // What a draft's class name is saved as. When editing, the session's own stored name is left out of the comparison (CS10).
+  const nameFor = (d: Draft) =>
+    resolveClassName(
+      d.name,
+      classes.filter((c) => c.id !== d.id).map((c) => c.name),
+      d.id ? (classes.find((c) => c.id === d.id)?.name ?? null) : null
+    );
   // How full each session is. A date inside the loaded window with no entry was cancelled for that day.
   const occMap = useMemo(() => new Map(occurrences.map((o) => [`${o.classId}|${o.date}`, o])), [occurrences]);
   const winFrom = isoAdd(todayIso, -28);
@@ -197,6 +212,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
       id: null,
       name: template ? (matchClassName(template.name, choices) ?? template.name) : '',
       newName: choices.length === 0,
+      nameBefore: '',
       dayOfWeek: start.dayOfWeek,
       kind: 'weekly',
       date: start.date,
@@ -226,10 +242,9 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
     if (!draft) return;
     const once = draft.kind === 'once';
     // A typed name that is one of the gym's classes, ignoring case and extra spaces, is saved as that class (CS10).
-    const typedName = tidyClassName(draft.name);
-    const existingName = matchClassName(typedName, choices);
+    const resolved = nameFor(draft);
     const fields = {
-      name: existingName ?? typedName,
+      name: resolved.name,
       day_of_week: once ? dowOf(draft.date) : draft.dayOfWeek,
       specific_date: once ? draft.date : null,
       start_time: draft.startTime,
@@ -244,17 +259,13 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
       toast.error('A one-off session can\u2019t be in the past.');
       return;
     }
-    // A name that is none of the gym's classes makes a new class type, with its own colour and its own lines in the reports: only on
-    // purpose (CS10).
-    if (!existingName) {
-      const question = newClassNameQuestion(typedName, choices);
-      if (question && !(await confirm(question))) return;
-    }
+    // An edit the bookings don't allow is refused before anything is asked.
+    let check: ReturnType<typeof checkSessionEdit> | null = null;
     if (draft.id) {
       const before = classes.find((c) => c.id === draft.id);
       if (before) {
         const booked = summary ?? (await getClassBookingSummary(draft.id, todayIso));
-        const check = checkSessionEdit(
+        check = checkSessionEdit(
           { dayOfWeek: before.day_of_week, specificDate: before.specific_date, startTime: before.start_time, capacity: before.capacity },
           { dayOfWeek: fields.day_of_week, specificDate: fields.specific_date, startTime: fields.start_time, capacity: fields.capacity },
           booked
@@ -263,9 +274,12 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
           toast.error(check.message);
           return;
         }
-        if (check.kind === 'notify' && !(await confirm({ title: 'Tell booked members?', body: check.message, confirmLabel: 'Save and notify' }))) return;
       }
     }
+    // A name that is none of the gym's classes makes a new class type, with its own colour and its own lines in the reports: only on
+    // purpose (CS10).
+    if (resolved.question && !(await confirm(resolved.question))) return;
+    if (check?.kind === 'notify' && !(await confirm({ title: 'Tell booked members?', body: check.message, confirmLabel: 'Save and notify' }))) return;
     // Skip anything already in the timetable at this time with this name, so saving twice never doubles up.
     const sameSlot = (c: ClassRow) => c.start_time?.slice(0, 5) === draft.startTime && classNameKey(c.name) === classNameKey(fields.name);
     const toCreate: (number | null)[] = once
@@ -471,7 +485,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
       {rows.rows.map((r) => (
         <span
           key={r.top}
-          className={`absolute right-1.5 -translate-y-1/2 text-zinc-400 ${big ? 'text-xs' : 'text-[11px]'}`}
+          className={`absolute right-1.5 -translate-y-1/2 ${big ? 'text-[13px] text-zinc-500' : 'text-[11px] text-zinc-400'}`}
           style={{ top: r.top + (r.top === 0 ? 6 : r.hour === null ? r.height / 2 : 0) }}
         >
           {r.hour === null ? '···' : formatClock(`${String(r.hour).padStart(2, '0')}:00`)}
@@ -483,8 +497,9 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
   // "25 sessions · 300 places a week": the sessions that repeat weekly and the places they offer.
   const weekly = classes.filter((c) => !c.specific_date);
   const weeklySpots = weekly.reduce((n, c) => n + c.capacity, 0);
-  const nameMatch = draft?.newName ? matchClassName(draft.name, choices) : null;
-  const nameNear = draft?.newName ? nearClassName(draft.name, choices) : null;
+  const typedName = draft?.newName ? nameFor(draft) : null;
+  const nameMatch = typedName?.existing ?? null;
+  const nameNear = typedName?.near ?? null;
   return (
     <div ref={timetableRef} className="space-y-4">
       <section className="space-y-4 rounded-[20px] border border-black/[.08] bg-card px-4 pb-4 pt-[18px] sm:px-5 dark:border-white/10">
@@ -549,9 +564,10 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
         <EmptyState icon={CalendarDays} title="No sessions yet" hint="Add your first session, or tap any slot on the calendar once you have one." compact />
       ) : (
         <>
-          {/* A phone: one day at a time, picked from the week's days (CS11). */}
-          <div className="space-y-3 sm:hidden">
-            <div role="group" aria-label="Day to show" className="grid gap-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+          {/* A phone: one day at a time, picked from the week's days (CS11). It reaches 8px into the card's padding, so seven day
+              buttons are still 44px wide at 375. */}
+          <div className="-mx-2 space-y-3 sm:hidden">
+            <div role="group" aria-label="Day to show" className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
               {days.map((d) => {
                 const on = d === phoneDay;
                 const isToday = dateFor(d) === todayIso;
@@ -567,7 +583,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                       on ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black dark:border-white/15 dark:text-zinc-50'
                     }`}
                   >
-                    <span className={`text-xs font-bold uppercase ${on ? '' : isToday ? 'text-accent' : 'text-zinc-500'}`}>{WEEKDAY_SHORT[d]}</span>
+                    <span className={`text-[13px] font-bold uppercase ${on ? '' : isToday ? 'text-accent' : 'text-zinc-500'}`}>{WEEKDAY_SHORT[d]}</span>
                     <span className="text-[15px] font-extrabold leading-5">{Number(dateFor(d).slice(8))}</span>
                     <span aria-hidden className={`mt-0.5 h-1 w-1 rounded-full ${count > 0 ? (on ? 'bg-current' : 'bg-accent') : 'bg-transparent'}`} />
                   </button>
@@ -646,12 +662,12 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
             {draft.id ? (
               <div className="grid grid-cols-2 gap-2">
                 {draft.kind === 'once' ? (
-                  <Field label="Date">
-                    <input type="date" required className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
+                  <Field label="Date" htmlFor="session-date">
+                    <input id="session-date" type="date" required className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
                   </Field>
                 ) : (
-                  <Field label="Day">
-                    <select className={inputCls} value={draft.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
+                  <Field label="Day" htmlFor="session-day">
+                    <select id="session-day" className={inputCls} value={draft.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
                       {DAY_ORDER.map((d) => (
                         <option key={d} value={d}>
                           {WEEKDAY_LABELS[d]}
@@ -660,8 +676,8 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                     </select>
                   </Field>
                 )}
-                <Field label="Start time">
-                  <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
+                <Field label="Start time" htmlFor="session-time">
+                  <input id="session-time" type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
                 </Field>
               </div>
             ) : (
@@ -679,12 +695,12 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                     </button>
                   ))}
                 </div>
-                <Field label="Start time">
-                  <input type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
+                <Field label="Start time" htmlFor="session-time">
+                  <input id="session-time" type="time" required className={inputCls} value={draft.startTime} onChange={(e) => set('startTime', e.target.value)} />
                 </Field>
                 {draft.kind === 'once' ? (
-                  <Field label="Date">
-                    <input type="date" required min={todayIso} className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
+                  <Field label="Date" htmlFor="session-date">
+                    <input id="session-date" type="date" required min={todayIso} className={inputCls} value={draft.date} onChange={(e) => set('date', e.target.value)} />
                   </Field>
                 ) : (
                 <Field label="Repeats every week on">
@@ -727,7 +743,8 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
               </p>
             )}
             {/* The class is picked from the gym's classes, or typed as a new one on purpose, so a slip never makes a new class type
-                (CS10). A gym with no classes yet just types its first. */}
+                (CS10). A gym with no classes yet just types its first. "New class" is a button of its own, not an entry in the list, so
+                arrowing through the list never lands in it. */}
             {choices.length > 0 && !draft.newName ? (
               <Field label="Class" htmlFor="session-class">
                 <select
@@ -735,10 +752,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                   required
                   className={inputCls}
                   value={matchClassName(draft.name, choices) ?? ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setDraft((d) => (d ? (value === NEW_NAME ? { ...d, newName: true, name: '' } : { ...d, name: value }) : d));
-                  }}
+                  onChange={(e) => set('name', e.target.value)}
                 >
                   {!matchClassName(draft.name, choices) && (
                     <option value="" disabled>
@@ -750,8 +764,14 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                       {n}
                     </option>
                   ))}
-                  <option value={NEW_NAME}>New class…</option>
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setDraft((d) => (d ? { ...d, newName: true, nameBefore: d.name, name: '' } : d))}
+                  className="flex min-h-11 items-center gap-1 text-sm font-bold text-accent"
+                >
+                  <Plus className="h-4 w-4" /> New class
+                </button>
               </Field>
             ) : (
               <Field
@@ -777,6 +797,7 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                   id="session-class"
                   required
                   autoFocus={choices.length > 0}
+                  aria-describedby={choices.length > 0 ? 'session-class-hint' : undefined}
                   className={inputCls}
                   placeholder="e.g. Strength"
                   value={draft.name}
@@ -785,8 +806,9 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                 {choices.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setDraft((d) => (d ? { ...d, newName: false, name: matchClassName(d.name, choices) ?? choices[0] } : d))}
-                    className="min-h-9 text-xs font-bold text-accent"
+                    // Back to the class the session had before "New class" (none picked if it had none).
+                    onClick={() => setDraft((d) => (d ? { ...d, newName: false, name: matchClassName(d.nameBefore, choices) ?? '' } : d))}
+                    className="min-h-11 text-sm font-bold text-accent"
                   >
                     Pick one of your classes instead
                   </button>
@@ -803,13 +825,23 @@ export function TimetableView({ classes, occurrences, timezone }: { classes: Cla
                   <input id="session-credits" type="number" min={0} className={inputCls} value={draft.creditCost} onChange={(e) => set('creditCost', Number(e.target.value))} />
                 </Field>
                 <Field label="Cancel by (hours before)" htmlFor="session-cutoff">
-                  <input id="session-cutoff" type="number" min={0} className={inputCls} value={draft.cutoffHours} onChange={(e) => set('cutoffHours', Number(e.target.value))} />
+                  <input
+                    id="session-cutoff"
+                    type="number"
+                    min={0}
+                    aria-describedby="session-cutoff-hint"
+                    className={inputCls}
+                    value={draft.cutoffHours}
+                    onChange={(e) => set('cutoffHours', Number(e.target.value))}
+                  />
                 </Field>
               </div>
-              <p className="text-xs text-zinc-500">A member who cancels later than that doesn&apos;t get the credit back.</p>
+              <p id="session-cutoff-hint" className="text-xs text-zinc-500">
+                A member who cancels later than that doesn&apos;t get the credit back.
+              </p>
             </div>
-            <Field label="Coach note" htmlFor="session-note" hint="For coaches only. Members aren't shown this note.">
-              <input id="session-note" className={inputCls} value={draft.note} onChange={(e) => set('note', e.target.value)} />
+            <Field label="Coach note" htmlFor="session-note" hint="For coaches. Members don't see this note in the app.">
+              <input id="session-note" aria-describedby="session-note-hint" className={inputCls} value={draft.note} onChange={(e) => set('note', e.target.value)} />
             </Field>
             <button
               type="submit"

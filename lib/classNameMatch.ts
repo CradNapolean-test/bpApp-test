@@ -9,8 +9,11 @@ export const tidyClassName = (name: string) => name.trim().replace(/\s+/g, ' ');
 // What two names are compared by.
 export const classNameKey = (name: string) => tidyClassName(name).toLowerCase();
 
-// The gym's class names for the picker: one per key, spelt the way most of its sessions spell it (the first in A to Z order on a tie),
-// sorted A to Z. Blank names are left out.
+// On a tie between spellings: the one with a capital first, then A to Z ("Strength" before "strength", which A to Z alone would pick).
+const capitalFirst = (a: string, b: string) => Number(/^[a-z]/.test(a)) - Number(/^[a-z]/.test(b)) || a.localeCompare(b);
+
+// The gym's class names for the picker: one per key, spelt the way most of its sessions spell it (on a tie, the one starting with a
+// capital), sorted A to Z. Blank names are left out.
 export function classNameChoices(names: string[]): string[] {
   const byKey = new Map<string, Map<string, number>>();
   for (const raw of names) {
@@ -23,7 +26,7 @@ export function classNameChoices(names: string[]): string[] {
   }
   const out: string[] = [];
   for (const spellings of byKey.values()) {
-    const [best] = [...spellings.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const [best] = [...spellings.entries()].sort((a, b) => b[1] - a[1] || capitalFirst(a[0], b[0]));
     out.push(best[0]);
   }
   return out.sort((a, b) => a.localeCompare(b));
@@ -51,13 +54,15 @@ function editDistance(a: string, b: string): number {
 }
 
 // An existing class a new name looks like a slip of ("Strenght" for Strength, "HIT" for HIIT): one letter out for a short name, two for
-// a name of six letters or more. null when nothing is that close, or the name already is an existing class.
+// a name of six letters or more, with the same first letter (a slip rarely changes it: "Jump" is not a slip of Pump). A name that is an
+// existing one plus a word ("Strength 2", "Strength Club") is meant. null when nothing is that close, or the name already is a class.
 export function nearClassName(typed: string, choices: string[]): string | null {
   const key = classNameKey(typed);
   if (!key || matchClassName(typed, choices)) return null;
   let best: { name: string; distance: number } | null = null;
   for (const c of choices) {
     const other = classNameKey(c);
+    if (other[0] !== key[0] || key.startsWith(`${other} `) || other.startsWith(`${key} `)) continue;
     const allowed = Math.min(key.length, other.length) >= 6 ? 2 : 1;
     const distance = editDistance(key, other);
     if (distance <= allowed && (!best || distance < best.distance)) best = { name: c, distance };
@@ -78,5 +83,26 @@ export function newClassNameQuestion(typed: string, choices: string[]): { title:
       ? `It looks like ${near}, which you already have. ${effect} To use ${near}, go back and pick it from the list.`
       : `${effect} Your classes now: ${choices.join(', ')}.`,
     confirmLabel: 'Add new class',
+  };
+}
+
+// What the session form saves as the class name, and what it says about it. `otherNames` are the names of the gym's OTHER sessions;
+// `ownName` is the stored name of the session being edited (null for a new one). Its own name is left out of the comparison, so fixing
+// the only "Strenght" session to "Strength" isn't met with "did you mean Strenght?", and an edit that keeps the class (in any case or
+// spacing) keeps the stored spelling instead of quietly renaming the session.
+export function resolveClassName(
+  typed: string,
+  otherNames: string[],
+  ownName: string | null
+): { name: string; existing: string | null; near: string | null; question: ReturnType<typeof newClassNameQuestion> } {
+  const name = tidyClassName(typed);
+  const choices = classNameChoices(otherNames);
+  const keepsOwn = ownName !== null && name !== '' && classNameKey(ownName) === classNameKey(name);
+  const existing = keepsOwn ? ownName : matchClassName(name, choices);
+  return {
+    name: existing ?? name,
+    existing,
+    near: existing ? null : nearClassName(name, choices),
+    question: existing ? null : newClassNameQuestion(name, choices),
   };
 }
