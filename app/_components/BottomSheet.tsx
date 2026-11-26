@@ -8,8 +8,19 @@ import { nextDialogId } from '@/lib/dialogFocus';
 
 // A sheet that slides up from the bottom on a phone and centres as a dialog on desktop. It is a modal dialog (SH3): focus starts on the close
 // button, Tab stays inside, Escape closes (only this one, if a confirm question is open over it), the page behind is inert and does not
-// scroll, and focus returns to what opened it.
-export function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+// scroll, and focus returns to what opened it. `wide` makes the centred dialog wider from a tablet up, for a pop-up with two columns on a
+// laptop (CS21); on a phone it is the same sheet either way.
+export function BottomSheet({
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
   const [titleId] = useState(() => nextDialogId('sheet-title'));
   const ref = useDialog<HTMLDivElement>({ onClose });
 
@@ -24,7 +35,7 @@ export function BottomSheet({ title, onClose, children }: { title: string; onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-black/10 bg-card p-5 pb-[calc(2rem+env(safe-area-inset-bottom))] shadow-2xl md:rounded-3xl md:pb-5 dark:border-white/10"
+        className={`relative max-h-[88vh] w-full overflow-y-auto ${wide ? 'max-w-md md:max-w-2xl lg:max-w-4xl' : 'max-w-md'} rounded-t-3xl border border-black/10 bg-card p-5 pb-[calc(2rem+env(safe-area-inset-bottom))] shadow-2xl md:rounded-3xl md:pb-5 dark:border-white/10`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id={titleId} className="text-lg font-extrabold text-black dark:text-zinc-50">

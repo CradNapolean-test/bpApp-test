@@ -434,7 +434,11 @@ export function SessionsView({
       </section>
 
       {open && (
-        <BottomSheet title={`${formatClassTime(open.startTime)} · ${open.className}`} onClose={closeSheet}>
+        <BottomSheet title={`${formatClassTime(open.startTime)} · ${open.className}`} onClose={closeSheet} wide>
+          {/* On a laptop the session's details and actions sit on the left and the roster beside them (CS21); on a phone it is one column:
+              details, roster, then the actions. */}
+          <div className="lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-x-6">
+          <div className="lg:col-start-1 lg:row-start-1">
           <p className="-mt-2 mb-3 text-xs text-zinc-500">
             {longDay(open.date)}
             {open.cancelled ? ' · Cancelled' : ` · ${open.bookedCount} of ${open.capacity} booked`}
@@ -459,7 +463,9 @@ export function SessionsView({
               <SessionCoachNote note={open.coachNote} />
             </div>
           )}
+          </div>
 
+          <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-black/[.06] lg:pl-6 lg:dark:border-white/10">
           {loading && <p className="py-6 text-center text-sm text-zinc-500">Loading roster…</p>}
 
           {!loading && roster && active.length === 0 && !open.cancelled && (
@@ -485,47 +491,49 @@ export function SessionsView({
                 const waitlisted = entry.status === 'waitlist';
                 return (
                   <div key={entry.bookingId} className="rounded-xl border border-black/[.05] p-2.5 dark:border-white/10">
-                    <div className="flex items-center justify-between gap-2">
-                      <Link href={`/coach/clients/${entry.clientId}`} className="flex min-w-0 items-center gap-2.5">
-                        <Avatar name={entry.clientName} size="sm" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.clientName}</span>
-                          {waitlisted && (
-                            <span className="block text-[11px] font-semibold text-warning">
-                              {queuePlace.has(entry.bookingId) ? `${ordinal(queuePlace.get(entry.bookingId)!)} on the waitlist` : 'Waitlist'}
-                            </span>
-                          )}
-                        </span>
-                      </Link>
+                    {/* The name row is only the member (CS21): Remove sits under it, quieter than Attended and No-show. */}
+                    <Link href={`/coach/clients/${entry.clientId}`} className="flex min-w-0 items-center gap-2.5">
+                      <Avatar name={entry.clientName} size="sm" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-black dark:text-zinc-50">{entry.clientName}</span>
+                        {waitlisted && (
+                          <span className="block text-[11px] font-semibold text-warning">
+                            {queuePlace.has(entry.bookingId) ? `${ordinal(queuePlace.get(entry.bookingId)!)} on the waitlist` : 'Waitlist'}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                    <RosterMarkers entry={entry} creditCost={open.creditCost} />
+                    <div className="mt-2 flex items-center gap-2">
+                      {!waitlisted && markHere && (
+                        <>
+                          <button
+                            type="button"
+                            aria-pressed={st === 'attended'}
+                            onClick={() => setStatus(entry, 'attended')}
+                            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold ${st === 'attended' ? 'bg-success text-white' : 'border border-black/15 bg-card text-black hover:bg-success/10 dark:border-white/20 dark:text-zinc-50'}`}
+                          >
+                            <Check className="h-4 w-4" /> Attended
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={st === 'no_show'}
+                            onClick={() => setStatus(entry, 'no_show')}
+                            className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold ${st === 'no_show' ? 'bg-danger text-white' : 'border border-black/15 bg-card text-black hover:bg-danger/10 dark:border-white/20 dark:text-zinc-50'}`}
+                          >
+                            <X className="h-4 w-4" /> No-show
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => setRemoveEntry(entry)}
-                        className="shrink-0 rounded-full px-3 py-2 text-xs font-semibold text-zinc-500 hover:text-danger"
+                        aria-label={waitlisted ? `Take off the waitlist: ${entry.clientName}` : `Remove ${entry.clientName} from this session`}
+                        className="ml-auto h-11 shrink-0 rounded-lg px-2.5 text-xs font-semibold text-zinc-500 hover:bg-danger/10 hover:text-danger dark:text-zinc-400"
                       >
-                        Remove
+                        {waitlisted ? 'Take off the waitlist' : 'Remove'}
                       </button>
                     </div>
-                    <RosterMarkers entry={entry} creditCost={open.creditCost} />
-                    {!waitlisted && markHere && (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          aria-pressed={st === 'attended'}
-                          onClick={() => setStatus(entry, 'attended')}
-                          className={`flex items-center justify-center gap-1 rounded-full py-2 text-sm font-semibold ${st === 'attended' ? 'bg-success/15 text-success ring-1 ring-success/40' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'}`}
-                        >
-                          <Check className="h-3.5 w-3.5" /> Attended
-                        </button>
-                        <button
-                          type="button"
-                          aria-pressed={st === 'no_show'}
-                          onClick={() => setStatus(entry, 'no_show')}
-                          className={`flex items-center justify-center gap-1 rounded-full py-2 text-sm font-semibold ${st === 'no_show' ? 'bg-danger/15 text-danger ring-1 ring-danger/40' : 'bg-black/5 text-zinc-600 dark:bg-white/10 dark:text-zinc-300'}`}
-                        >
-                          <X className="h-3.5 w-3.5" /> No-show
-                        </button>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -550,6 +558,9 @@ export function SessionsView({
             </div>
           )}
 
+          </div>
+
+          <div className="lg:col-start-1 lg:row-start-2">
           {!loading && roster && open.cancelled && (
             <button
               type="button"
@@ -575,12 +586,13 @@ export function SessionsView({
                   onAddWithCredits={addClient}
                 />
               ) : (
+                // Not the biggest button any more (CS21): marking the members is the pop-up's main job.
                 <button
                   type="button"
                   onClick={() => setAdding(true)}
-                  className="flex h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground"
+                  className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-black/15 text-sm font-bold text-black hover:bg-black/[.03] dark:border-white/20 dark:text-zinc-50 dark:hover:bg-white/5"
                 >
-                  <UserPlus className="h-4 w-4" /> Add a client
+                  <UserPlus className="h-4 w-4" /> Add a member
                 </button>
               )}
               {!runToday && (
@@ -602,6 +614,8 @@ export function SessionsView({
               )}
             </div>
           )}
+          </div>
+          </div>
         </BottomSheet>
       )}
 
