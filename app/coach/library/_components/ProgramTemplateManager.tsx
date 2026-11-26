@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, ClipboardList, UserPlus } from 'lucide-react';
+import { ClipboardList, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useLenis } from 'lenis/react';
@@ -90,32 +90,6 @@ function exportTemplate(template: ProgramTemplateWithDays) {
   downloadTextFile(`${slug}.json`, json, 'application/json');
 }
 
-function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | null }) {
-  const { run } = useAction();
-
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const parsed = e.target.value === '' ? null : Number(e.target.value);
-    if (parsed === initial) return;
-    await run(() => updateTemplateDay(dayId, { day_position: parsed }));
-  }
-
-  return (
-    <select
-      title="Day of the week -- carried onto every program instantiated from this template"
-      className="w-20 shrink-0 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10"
-      value={initial ?? ''}
-      onChange={handleChange}
-    >
-      <option value="">Day…</option>
-      {PROGRAM_WEEKDAYS.map((d) => (
-        <option key={d} value={d}>
-          {WEEKDAY_SHORT[d]}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 function DayNotesField({ dayId, initial }: { dayId: string; initial: string | null }) {
   const { run } = useAction();
   const [value, setValue] = useState(initial ?? '');
@@ -144,6 +118,7 @@ function WeekdayChips({ value, onChange }: { value: number | null; onChange: (v:
         <button
           key={d}
           type="button"
+          aria-pressed={value === d}
           onClick={() => onChange(value === d ? null : d)}
           className={`h-11 min-w-11 rounded-xl px-3 text-sm font-bold ${
             value === d ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
@@ -156,39 +131,60 @@ function WeekdayChips({ value, onChange }: { value: number | null; onChange: (v:
   );
 }
 
-// Name + description, saved when you leave the field.
+// Name + description, saved when you leave the field. Each says when it has saved, or that it could not (LB15: the name saved silently).
 function TemplateDetails({ template }: { template: ProgramTemplateWithDays }) {
   const { run } = useAction();
   const [name, setName] = useState(template.name);
   const [description, setDescription] = useState(template.description ?? '');
+  const [saveState, setSaveState] = useState<{ field: 'name' | 'description'; state: 'saving' | 'saved' | 'failed' } | null>(null);
+
+  async function save(field: 'name' | 'description', fields: { name?: string; description?: string | null }) {
+    setSaveState({ field, state: 'saving' });
+    const saved = await run(() => updateProgramTemplate(template.id, fields), {
+      success: field === 'name' ? 'Name saved' : 'Description saved',
+    });
+    setSaveState({ field, state: saved ? 'saved' : 'failed' });
+  }
+
+  const note = (field: 'name' | 'description') =>
+    saveState?.field === field ? (
+      <p role="status" className={`text-xs font-semibold ${saveState.state === 'failed' ? 'text-danger' : 'text-zinc-500'}`}>
+        {saveState.state === 'saving' ? 'Saving…' : saveState.state === 'saved' ? 'Saved' : 'Not saved. Try again, or check your connection.'}
+      </p>
+    ) : null;
+
   return (
     <div className="space-y-2">
       <input
         aria-label="Template name"
         className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm font-bold dark:border-white/10"
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e) => {
+          setName(e.target.value);
+          if (saveState?.field === 'name') setSaveState(null);
+        }}
         onBlur={() => {
           const next = name.trim();
           if (!next) return setName(template.name);
-          if (next !== template.name) run(() => updateProgramTemplate(template.id, { name: next }));
+          if (next !== template.name) void save('name', { name: next });
         }}
       />
+      {note('name')}
       <textarea
         aria-label="Description"
         rows={2}
         placeholder="Describe it, e.g. 4 weeks, 3 days a week, fat loss, beginner"
         className="w-full rounded-xl border border-black/10 bg-transparent px-3.5 py-2 text-sm dark:border-white/10"
         value={description}
-        onChange={(e) => setDescription(e.target.value)}
+        onChange={(e) => {
+          setDescription(e.target.value);
+          if (saveState?.field === 'description') setSaveState(null);
+        }}
         onBlur={() => {
-          if (description.trim() !== (template.description ?? '')) {
-            run(() => updateProgramTemplate(template.id, { description: description.trim() || null }), {
-              success: 'Saved',
-            });
-          }
+          if (description.trim() !== (template.description ?? '')) void save('description', { description: description.trim() || null });
         }}
       />
+      {note('description')}
     </div>
   );
 }
@@ -225,6 +221,7 @@ export function ProgramTemplateManager({
   const [activeWeek, setActiveWeek] = useState<number | null>(null);
   const [addWorkout, setAddWorkout] = useState<{ label: string; position: number | null } | null>(null);
   const [renameDay, setRenameDay] = useState<{ id: string; name: string; position: number | null } | null>(null);
+  const [changeDay, setChangeDay] = useState<{ id: string; label: string; position: number | null } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignName, setAssignName] = useState('');
   const [assignStart, setAssignStart] = useState('');
@@ -701,12 +698,9 @@ export function ProgramTemplateManager({
                       : `${weekNums.length} week${weekNums.length === 1 ? '' : 's'} · ${perWeek} workout${perWeek === 1 ? '' : 's'} a week · ${exercises} exercise${exercises === 1 ? '' : 's'}`}
                   </p>
                 </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
               </button>
-              <div className="ml-auto flex shrink-0 items-center gap-1 text-sm font-semibold">
-                <button type="button" onClick={() => openTemplate(template.id)} className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent">
-                  Edit
-                </button>
+              {/* One menu (CV13: a chevron, Edit and a menu each opened or acted on the template); the row itself opens it. */}
+              <div className="ml-auto flex shrink-0 items-center text-sm font-semibold">
                 <DropdownMenu
                   triggerLabel={`More actions for ${template.name}`}
                   items={[
@@ -929,6 +923,7 @@ export function ProgramTemplateManager({
 
           <ProgramDayList
             columns
+            weekdayOnce
             animateWeeks
             ownerId={previewTemplate.id}
             library={library.filter((l) => l.is_active !== false)}
@@ -951,11 +946,12 @@ export function ProgramTemplateManager({
               const day = previewTemplate.program_template_days.find((d) => d.id === summary.id)!;
               return (
                 <>
-                  <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
+                  {/* The day of the week is in the tile (or the name) and set from this menu (LB13: a third copy sat here as a dropdown). */}
                   <DropdownMenu
-                    triggerLabel="Workout actions"
+                    triggerLabel={`Actions for ${day.day_label}`}
                     items={[
                       { label: 'Rename', onSelect: () => setRenameDay({ id: day.id, name: day.day_label, position: day.day_position }) },
+                      { label: day.day_position == null ? 'Set the day' : 'Change the day', onSelect: () => setChangeDay({ id: day.id, label: day.day_label, position: day.day_position }) },
                       { label: 'Copy to next week', onSelect: () => handleCopyDay(previewTemplate, day) },
                       {
                         label: 'Delete workout',
@@ -1020,6 +1016,31 @@ export function ProgramTemplateManager({
               onSubmit={(name, allWeeks) => handleRenameDay(previewTemplate, name, allWeeks)}
               onClose={() => setRenameDay(null)}
             />
+          )}
+
+          {changeDay && (
+            <BottomSheet title={`Which day is “${changeDay.label}”?`} onClose={() => setChangeDay(null)}>
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Programmes started from this template put this workout on that day. Tap the picked day again for no day.
+                </p>
+                <WeekdayChips value={changeDay.position} onChange={(v) => setChangeDay({ ...changeDay, position: v })} />
+                <Button
+                  variant="primary"
+                  className="w-full"
+                  disabled={mutating}
+                  onClick={() => {
+                    const target = changeDay;
+                    void runMutate(() => updateTemplateDay(target.id, { day_position: target.position }), {
+                      success: target.position == null ? 'Day cleared' : `Moved to ${WEEKDAY_SHORT[target.position]}`,
+                      onDone: () => setChangeDay(null),
+                    });
+                  }}
+                >
+                  {mutating ? 'Saving…' : 'Save day'}
+                </Button>
+              </div>
+            </BottomSheet>
           )}
 
           {addWorkout && (

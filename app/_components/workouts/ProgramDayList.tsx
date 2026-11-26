@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { WEEKDAY_SHORT } from '@/lib/utils/dates';
+import { labelNamesWeekday } from '@/lib/weekdayLabel';
 import { DefaultMuscleGroupIcon, MUSCLE_GROUP_ICONS } from './muscleGroups';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
 import AnimatedContent from '../motion/AnimatedContent';
@@ -54,6 +55,7 @@ export function ProgramDayList({
   currentWeek,
   animateWeeks = false,
   columns = false,
+  weekdayOnce = false,
 }: {
   ownerId: string;
   days: ProgramDaySummary[];
@@ -72,6 +74,8 @@ export function ProgramDayList({
   animateWeeks?: boolean;
   // The coach's screens (the board): the week's days side by side from a tablet up, instead of one under another.
   columns?: boolean;
+  // The programme template editor (LB13): a workout named after its weekday ("Monday") shows its icon in the tile, not the day again.
+  weekdayOnce?: boolean;
 }) {
   const weekNums = Array.from(new Set(days.map((d) => d.weekNum))).sort((a, b) => a - b);
   const [internalActiveWeek, setInternalActiveWeek] = useState<number | null>(null);
@@ -160,7 +164,8 @@ export function ProgramDayList({
       <DayListFrame key={slide === 'none' ? 'still' : `${activeWeek}:${days_.length > 0}`} slide={slide} columns={columns}>
         {days_.map((day) => {
           const Icon = iconFor(day);
-          const weekday = day.dayPosition != null ? WEEKDAY_SHORT[day.dayPosition] : null;
+          const weekday =
+            day.dayPosition != null && !(weekdayOnce && labelNamesWeekday(day.dayLabel, day.dayPosition)) ? WEEKDAY_SHORT[day.dayPosition] : null;
           const lifts = day.liftCount ?? 0;
           const logged = day.loggedCount ?? 0;
           const allDone = lifts > 0 && logged >= lifts;

@@ -4,8 +4,10 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
 import { checkActiveGym } from './gymGuard';
+import { rpcFailure } from './migrationCheck';
 import { createClient } from '@/lib/supabase/server';
 import type { QuestionPayload } from '@/lib/formEdit';
+import type { FormRollupRow, GroupSendCounts, RemindCounts } from '@/lib/libraryRollups';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow, FormTemplateWithQuestions } from './types';
 
 // What a new form is created with. (Saving an existing form sends QuestionPayload: the same, plus the id of a question that already exists.)
@@ -137,6 +139,55 @@ export async function assignForm(templateId: string, clientId: string): Promise<
   const supabase = await createClient();
   const { error } = await supabase.rpc('assign_form', { p_template_id: templateId, p_client_id: clientId });
   return error ? fail(error, 'Could not assign that form') : ok();
+}
+
+// Every sending of this gym's forms the coach can read (their own members, and their gym's members, 0053), for "who has answered"
+// (LB19). Empty (never an error) so the Library still loads.
+export async function getFormRollup(): Promise<FormRollupRow[]> {
+  const supabase = await createClient();
+  const gymId = await resolveScopingGymId(supabase);
+  const { data: templates, error } = await supabase.from('form_templates').select('id').eq('gym_id', gymId);
+  if (error || !templates || templates.length === 0) return [];
+  const { data, error: aError } = await supabase
+    .from('form_assignments')
+    .select('template_id, client_id, assigned_at, completed_at')
+    .in('template_id', templates.map((t) => t.id))
+    .order('assigned_at')
+    .limit(5000);
+  if (aError || !data) return [];
+  return data as FormRollupRow[];
+}
+
+// Sends a form to every member of a group at the gym in one step (assign_form_to_group, migration 0175). Members who have it open already
+// are skipped. Returns rather than throws so the reason reaches the screen.
+export async function sendFormToGroup(
+  templateId: string,
+  groupId: string,
+  expectedGymId?: string | null
+): Promise<({ ok: true } & GroupSendCounts) | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale && !stale.ok) return stale;
+  const { data, error } = await supabase.rpc('assign_form_to_group', { p_template_id: templateId, p_group_id: groupId });
+  if (error) return rpcFailure(error, '0175', 'Could not send that form') as { ok: false; error: string };
+  const r = (data ?? {}) as Record<string, number>;
+  return { ok: true, sent: r.sent ?? 0, alreadyOpen: r.already_open ?? 0, otherGym: r.other_gym ?? 0, answeredBefore: r.answered_before ?? 0 };
+}
+
+// A reminder in the notifications of each member given who still has the form open (remind_form, migration 0175). Anyone reminded about
+// this form in the last 12 hours is skipped.
+export async function remindForm(
+  templateId: string,
+  clientIds: string[],
+  expectedGymId?: string | null
+): Promise<({ ok: true } & RemindCounts) | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale && !stale.ok) return stale;
+  const { data, error } = await supabase.rpc('remind_form', { p_template_id: templateId, p_client_ids: clientIds });
+  if (error) return rpcFailure(error, '0175', 'Could not send the reminders') as { ok: false; error: string };
+  const r = (data ?? {}) as Record<string, number>;
+  return { ok: true, reminded: r.reminded ?? 0, recentlyReminded: r.recently_reminded ?? 0, notWaiting: r.not_waiting ?? 0 };
 }
 
 // submit_form_response raises "Form already submitted" -- a domain error the client needs

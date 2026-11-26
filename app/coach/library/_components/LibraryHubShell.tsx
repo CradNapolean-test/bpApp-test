@@ -30,6 +30,7 @@ import type {
   ProgrammeRolloutRow,
   CourseRollupRow,
 } from '@/lib/data/types';
+import type { FormRollupRow } from '@/lib/libraryRollups';
 
 
 type Tab = 'Exercises' | 'Program templates' | 'Education' | 'Forms' | 'Foods';
@@ -56,6 +57,8 @@ export function LibraryHubShell({
   rollouts,
   exerciseUsage,
   courseRollup,
+  formRollup = [],
+  memberNames = {},
   otherGyms,
   email,
 }: {
@@ -69,6 +72,9 @@ export function LibraryHubShell({
   rollouts: ProgrammeRolloutRow[];
   exerciseUsage: Record<string, number>;
   courseRollup: CourseRollupRow[];
+  formRollup?: FormRollupRow[];
+  // Names of other coaches' members at the gym who have a course or form (the coach's own are in members).
+  memberNames?: Record<string, string>;
   otherGyms: { id: string; name: string }[];
   email: string;
 }) {
@@ -130,8 +136,19 @@ export function LibraryHubShell({
       {tab === 'Program templates' && (
         <ProgramTemplateManager initialTemplates={initialTemplates} library={initialExercises} groups={groups} members={members} rollouts={rollouts} />
       )}
-      {tab === 'Education' && <EducationPane initialCourses={initialCourses} members={members} groups={groups} rollup={courseRollup} otherGyms={otherGyms} />}
-      {tab === 'Forms' && <FormsPane initialTemplates={initialFormTemplates} />}
+      {tab === 'Education' && (
+        <EducationPane
+          initialCourses={initialCourses}
+          members={members}
+          groups={groups}
+          rollup={courseRollup}
+          otherGyms={otherGyms}
+          memberNames={memberNames}
+        />
+      )}
+      {tab === 'Forms' && (
+        <FormsPane initialTemplates={initialFormTemplates} groups={groups} rollup={formRollup} members={members} memberNames={memberNames} />
+      )}
       {tab === 'Foods' && <FoodsPane />}
       </div>
     </AppShell>

@@ -4,6 +4,8 @@ import { raise } from './errors';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import { fail, ok, type ActionResult } from './result';
 import { resolveScopingGymId } from './coach';
+import { checkActiveGym } from './gymGuard';
+import { rpcFailure } from './migrationCheck';
 import { getClientGymId } from './memberships';
 import { getClientProfile } from './clientProfile';
 import { createClient } from '@/lib/supabase/server';
@@ -264,6 +266,17 @@ export async function copyCourseToGym(courseId: string, targetGymId: string): Pr
   const supabase = await createClient();
   const { error } = await supabase.rpc('copy_education_course_to_gym', { p_course_id: courseId, p_target_gym_id: targetGymId });
   return error ? fail(error, 'Could not copy that course') : ok();
+}
+
+// Takes a course off a member (unassign_education_course, migration 0175, LB17): a coach at the course's gym, for a member of that gym.
+// What they have finished is kept, and their "New course assigned" notice is cleared (MX5). Returns rather than throws so the reason
+// reaches the screen; a database without 0175 says so.
+export async function unassignCourse(courseId: string, clientId: string, expectedGymId?: string | null): Promise<ActionResult> {
+  const supabase = await createClient();
+  const stale = await checkActiveGym(supabase, expectedGymId);
+  if (stale) return stale;
+  const { error } = await supabase.rpc('unassign_education_course', { p_course_id: courseId, p_client_id: clientId });
+  return error ? rpcFailure(error, '0175', 'Could not take that course off them') : ok();
 }
 
 // Gives a course to several members at once. Anyone who already has it is skipped, so it is safe to run

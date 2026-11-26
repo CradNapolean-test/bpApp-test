@@ -1,12 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { GraduationCap, Link2, Lock } from 'lucide-react';
+import { GraduationCap, GripVertical, Link2, Lock } from 'lucide-react';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
+import { useActiveGymId } from '@/app/coach/_components/CoachGymsContext';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import { EmptyState } from '@/app/_components/EmptyState';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
@@ -21,10 +33,13 @@ import {
   deleteModule,
   reorderLessons,
   reorderModules,
+  unassignCourse,
   updateCourse,
   updateLesson,
   updateModule,
 } from '@/lib/data/education';
+import { courseMembers, courseProgressText } from '@/lib/libraryRollups';
+import { moveBy, moveTo, sameOrder } from '@/lib/reorder';
 import type {
   ClientGroupWithMembers,
   CourseRollupRow,
@@ -158,6 +173,65 @@ function LessonSheet({
   );
 }
 
+// One lesson in a module, with a handle to drag it into place: a mouse or a finger drags it; with the keyboard, the handle picks it up on
+// Space or Enter, the arrow keys move it, and Space or Enter puts it down (Escape puts it back) (LB18).
+function SortableLesson({
+  lesson,
+  position,
+  count,
+  disabled,
+  onOpen,
+  menu,
+}: {
+  lesson: EducationLessonRow;
+  position: number;
+  count: number;
+  disabled: boolean;
+  onOpen: () => void;
+  menu: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: lesson.id, disabled });
+  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-1.5 rounded-xl border bg-card py-1.5 pl-1 pr-2 dark:border-white/10 ${
+        isDragging ? 'border-accent/50 shadow-lg' : 'border-black/[.06]'
+      }`}
+    >
+      {!disabled && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Move ${lesson.title}, lesson ${position} of ${count}`}
+          className="flex h-11 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-zinc-400 hover:bg-black/5 active:cursor-grabbing dark:text-zinc-500 dark:hover:bg-white/5"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
+      <button type="button" onClick={onOpen} className={`min-w-0 flex-1 py-1 text-left ${disabled ? 'pl-2' : ''}`}>
+        <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{lesson.title}</span>
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-zinc-500">
+          {lesson.link_url && (
+            <span className="flex items-center gap-1">
+              <Link2 className="h-3 w-3" /> Video or link
+            </span>
+          )}
+          {lesson.unlock_at && (
+            <span className="flex items-center gap-1">
+              <Lock className="h-3 w-3" /> Opens {shortDate(lesson.unlock_at)}
+            </span>
+          )}
+          {!lesson.link_url && !lesson.unlock_at && <span>{lesson.body ? 'Text only' : 'Empty, tap to add content'}</span>}
+        </span>
+      </button>
+      {menu}
+    </div>
+  );
+}
+
 function ModuleSection({
   module,
   index,
@@ -171,8 +245,23 @@ function ModuleSection({
 }) {
   const confirm = useConfirm();
   const { run } = useAction();
+  const { run: runReorder } = useAction();
   const [sheet, setSheet] = useState<{ kind: 'lesson'; lesson: EducationLessonRow | null } | { kind: 'rename' } | null>(null);
-  const sortedLessons = [...module.education_lessons].sort((a, b) => a.sort_order - b.sort_order);
+  const savedLessons = [...module.education_lessons].sort((a, b) => a.sort_order - b.sort_order);
+  const savedKey = savedLessons.map((l) => l.id).join(',');
+  // A new order on screen straight away when a lesson is dropped or moved, until the saved order arrives (it replaces this) or saving
+  // fails (it is dropped, so the saved order shows again) (LB18).
+  const [pending, setPending] = useState<{ base: string; ids: string[] } | null>(null);
+  const order = pending && pending.base === savedKey ? pending.ids : savedLessons.map((l) => l.id);
+  const byId = new Map(savedLessons.map((l) => [l.id, l]));
+  const sortedLessons = [
+    ...order.map((id) => byId.get(id)).filter((l): l is EducationLessonRow => l != null),
+    ...savedLessons.filter((l) => !order.includes(l.id)),
+  ];
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   async function handleDeleteModule() {
     const ok = await confirm({
@@ -194,12 +283,25 @@ function ModuleSection({
     await run(() => deleteLesson(lesson.id), { success: 'Lesson deleted' });
   }
 
-  async function moveLesson(lessonIndex: number, direction: -1 | 1) {
-    const reordered = [...sortedLessons];
-    const target = lessonIndex + direction;
-    if (target < 0 || target >= reordered.length) return;
-    [reordered[lessonIndex], reordered[target]] = [reordered[target], reordered[lessonIndex]];
-    await run(() => reorderLessons(reordered.map((l) => l.id)));
+  async function saveOrder(next: string[]) {
+    const previous = sortedLessons.map((l) => l.id);
+    if (sameOrder(next, previous)) return;
+    setPending({ base: savedKey, ids: next });
+    const saved = await runReorder(() => reorderLessons(next), { success: 'Lesson order saved' });
+    if (!saved) setPending(null);
+  }
+
+  // Up or down one place: the menu's buttons (and the keyboard, through the drag handle).
+  function moveLesson(lessonIndex: number, step: number) {
+    return saveOrder(moveBy(sortedLessons.map((l) => l.id), lessonIndex, step));
+  }
+
+  // Dropped on another lesson: it takes that lesson's place.
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = sortedLessons.map((l) => l.id);
+    void saveOrder(moveTo(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
   }
 
   return (
@@ -222,37 +324,36 @@ function ModuleSection({
         />
       </div>
 
-      <div className="space-y-2">
-        {sortedLessons.map((lesson, i) => (
-          <div key={lesson.id} className="flex items-center gap-2 rounded-xl border border-black/[.06] px-3 py-2.5 dark:border-white/10">
-            <button type="button" onClick={() => setSheet({ kind: 'lesson', lesson })} className="min-w-0 flex-1 text-left">
-              <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{lesson.title}</span>
-              <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-zinc-500">
-                {lesson.link_url && (
-                  <span className="flex items-center gap-1">
-                    <Link2 className="h-3 w-3" /> Video or link
-                  </span>
-                )}
-                {lesson.unlock_at && (
-                  <span className="flex items-center gap-1">
-                    <Lock className="h-3 w-3" /> Opens {shortDate(lesson.unlock_at)}
-                  </span>
-                )}
-                {!lesson.link_url && !lesson.unlock_at && <span>{lesson.body ? 'Text only' : 'Empty, tap to add content'}</span>}
-              </span>
-            </button>
-            <DropdownMenu
-              triggerLabel={`More actions for ${lesson.title}`}
-              items={[
-                { label: 'Edit', onSelect: () => setSheet({ kind: 'lesson', lesson }) },
-                ...(i > 0 ? [{ label: 'Move up', onSelect: () => moveLesson(i, -1) }] : []),
-                ...(i < sortedLessons.length - 1 ? [{ label: 'Move down', onSelect: () => moveLesson(i, 1) }] : []),
-                { label: 'Delete lesson', destructive: true, onSelect: () => handleDeleteLesson(lesson) },
-              ]}
-            />
+      {sortedLessons.length > 1 && (
+        <p className="text-xs text-zinc-500">Drag a lesson by its handle to put it in order, or use Move up and Move down in its menu.</p>
+      )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={sortedLessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {sortedLessons.map((lesson, i) => (
+              <SortableLesson
+                key={lesson.id}
+                lesson={lesson}
+                position={i + 1}
+                count={sortedLessons.length}
+                disabled={sortedLessons.length < 2}
+                onOpen={() => setSheet({ kind: 'lesson', lesson })}
+                menu={
+                  <DropdownMenu
+                    triggerLabel={`More actions for ${lesson.title}`}
+                    items={[
+                      { label: 'Edit', onSelect: () => setSheet({ kind: 'lesson', lesson }) },
+                      ...(i > 0 ? [{ label: 'Move up', onSelect: () => moveLesson(i, -1) }] : []),
+                      ...(i < sortedLessons.length - 1 ? [{ label: 'Move down', onSelect: () => moveLesson(i, 1) }] : []),
+                      { label: 'Delete lesson', destructive: true, onSelect: () => handleDeleteLesson(lesson) },
+                    ]}
+                  />
+                }
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       <button
         type="button"
@@ -292,7 +393,8 @@ function AssignSheet({
   onClose: () => void;
 }) {
   const { run, busy } = useAction();
-  const [audience, setAudience] = useState<'all' | 'group' | 'choose'>('all');
+  // Nothing is picked until the coach chooses (LB18: it started on everyone).
+  const [audience, setAudience] = useState<'all' | 'group' | 'choose' | null>(null);
   const [groupId, setGroupId] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -300,7 +402,7 @@ function AssignSheet({
   const mine = new Set(members.map((m) => m.id));
   const groupIds = (groups.find((g) => g.id === groupId)?.memberIds ?? []).filter((id) => mine.has(id));
   const chosen =
-    audience === 'all' ? members.map((m) => m.id) : audience === 'group' ? groupIds : picked;
+    audience === 'all' ? members.map((m) => m.id) : audience === 'group' ? groupIds : audience === 'choose' ? picked : [];
   const targets = chosen.filter((id) => !assignedIds.has(id));
   const skipped = chosen.length - targets.length;
   const shown = members.filter((m) => m.name.toLowerCase().includes(search.trim().toLowerCase()));
@@ -308,7 +410,8 @@ function AssignSheet({
   return (
     <BottomSheet title={`Assign “${course.title}”`} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Who gets it?</p>
+        <div role="group" aria-label="Who gets it" className="flex flex-wrap gap-2">
           {([
             ['all', 'Everyone I coach'],
             ...(groups.length > 0 ? ([['group', 'A group']] as const) : []),
@@ -317,6 +420,7 @@ function AssignSheet({
             <button
               key={key}
               type="button"
+              aria-pressed={audience === key}
               onClick={() => setAudience(key)}
               className={`h-11 rounded-full px-4 text-sm font-bold ${
                 audience === key ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]' : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
@@ -376,7 +480,15 @@ function AssignSheet({
           onClick={() => run(() => assignCourseToMany(course.id, targets), { success: `Assigned to ${targets.length}`, onDone: onClose })}
           className={primaryBtn}
         >
-          {busy ? 'Assigning…' : targets.length === 0 ? 'Nobody new to assign' : `Assign to ${targets.length} member${targets.length === 1 ? '' : 's'}`}
+          {busy
+            ? 'Assigning…'
+            : audience === null
+              ? 'Choose who gets it'
+              : audience === 'group' && !groupId
+                ? 'Choose a group'
+                : targets.length === 0
+                  ? 'Nobody new to assign'
+                  : `Assign to ${targets.length} member${targets.length === 1 ? '' : 's'}`}
         </button>
       </div>
     </BottomSheet>
@@ -436,6 +548,92 @@ function CopyToGymSheet({
   );
 }
 
+const lessonTotalOf = (course: EducationCourseWithModules) => course.education_modules.reduce((n, m) => n + m.education_lessons.length, 0);
+
+// "3 assigned · 1 finished": a button that opens who has the course (LB17).
+function AssignedLine({ course, rollup, onOpen }: { course: EducationCourseWithModules; rollup: CourseRollupRow[]; onOpen: () => void }) {
+  const people = courseMembers(rollup, course.id, lessonTotalOf(course), {});
+  if (people.length === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="inline-flex min-h-11 items-center rounded-xl px-1 text-sm font-semibold text-accent underline-offset-2 hover:underline"
+    >
+      {people.length} assigned · {people.filter((p) => p.finished).length} finished
+    </button>
+  );
+}
+
+// Who has the course and how far each is, with Unassign behind a confirm (LB17). Unassigning clears the member's "New course assigned"
+// notice too (MX5, migration 0175); what they finished is kept.
+function CourseMembersSheet({
+  course,
+  rollup,
+  names,
+  onClose,
+}: {
+  course: EducationCourseWithModules;
+  rollup: CourseRollupRow[];
+  names: Record<string, string>;
+  onClose: () => void;
+}) {
+  const confirm = useConfirm();
+  const gymId = useActiveGymId();
+  const { run, busy } = useAction();
+  const [removing, setRemoving] = useState<string | null>(null);
+  const people = courseMembers(rollup, course.id, lessonTotalOf(course), names);
+
+  async function handleUnassign(clientId: string, name: string) {
+    const ok = await confirm({
+      title: `Take “${course.title}” off ${name}?`,
+      body: `It leaves their Learn page, and the notice that it was assigned leaves their notifications. What they have finished is kept if you give it to them again.`,
+      confirmLabel: 'Unassign',
+      destructive: true,
+    });
+    if (!ok) return;
+    setRemoving(clientId);
+    await run(() => unassignCourse(course.id, clientId, gymId), { success: `${name} no longer has “${course.title}”` });
+    setRemoving(null);
+  }
+
+  return (
+    <BottomSheet title={`Who has “${course.title}”`} onClose={onClose}>
+      {people.length === 0 ? (
+        <p className="text-sm text-zinc-500">Nobody has this course now.</p>
+      ) : (
+        <ul className="divide-y divide-black/[.06] rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+          {people.map((p) => {
+            const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+            return (
+              <li key={p.clientId} className="flex items-center gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-black dark:text-zinc-50">{p.name}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" aria-hidden>
+                      <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className={`truncate text-xs ${p.finished ? 'font-bold text-success' : 'text-zinc-500'}`}>{courseProgressText(p)}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleUnassign(p.clientId, p.name)}
+                  aria-label={`Unassign ${p.name}`}
+                  className="h-11 shrink-0 rounded-xl px-3 text-sm font-bold text-danger hover:bg-danger/10 disabled:opacity-50"
+                >
+                  {removing === p.clientId ? 'Removing…' : 'Unassign'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </BottomSheet>
+  );
+}
+
 function CourseOverlay({
   course,
   members,
@@ -444,6 +642,7 @@ function CourseOverlay({
   otherGyms,
   onClose,
   onDelete,
+  names,
 }: {
   course: EducationCourseWithModules;
   members: { id: string; name: string }[];
@@ -452,11 +651,11 @@ function CourseOverlay({
   otherGyms: { id: string; name: string }[];
   onClose: () => void;
   onDelete: (id: string, courseTitle: string) => void;
+  names: Record<string, string>;
 }) {
   const { run: runReorder } = useAction();
-  const [sheet, setSheet] = useState<'module' | 'details' | 'assign' | 'copy' | null>(null);
+  const [sheet, setSheet] = useState<'module' | 'details' | 'assign' | 'copy' | 'members' | null>(null);
   const sortedModules = [...course.education_modules].sort((a, b) => a.sort_order - b.sort_order);
-  const lessonTotal = sortedModules.reduce((n, m) => n + m.education_lessons.length, 0);
   const people = rollup.filter((r) => r.course_id === course.id);
 
   async function handleMoveModule(index: number, direction: -1 | 1) {
@@ -493,11 +692,7 @@ function CourseOverlay({
           Assign to members
         </button>
 
-        {people.length > 0 && (
-          <p className="text-sm text-zinc-500">
-            {people.length} assigned · {people.filter((p) => lessonTotal > 0 && p.done >= lessonTotal).length} finished
-          </p>
-        )}
+        <AssignedLine course={course} rollup={rollup} onOpen={() => setSheet('members')} />
 
         <div className="space-y-3">
           {sortedModules.length === 0 && (
@@ -540,6 +735,7 @@ function CourseOverlay({
         />
       )}
       {sheet === 'copy' && <CopyToGymSheet course={course} gyms={otherGyms} onClose={() => setSheet(null)} />}
+      {sheet === 'members' && <CourseMembersSheet course={course} rollup={rollup} names={names} onClose={() => setSheet(null)} />}
       {sheet === 'assign' && (
         <AssignSheet
           course={course}
@@ -559,18 +755,25 @@ export function EducationPane({
   groups,
   rollup,
   otherGyms,
+  memberNames = {},
 }: {
   initialCourses: EducationCourseWithModules[];
   members: { id: string; name: string }[];
   groups: ClientGroupWithMembers[];
   rollup: CourseRollupRow[];
   otherGyms: { id: string; name: string }[];
+  // Names of everyone in the rollup the coach may read (their own members and their gym's), for who has each course.
+  memberNames?: Record<string, string>;
 }) {
   const confirm = useConfirm();
   const { run: runDelete } = useAction();
   const [openCourseId, setOpenCourseId] = useState<string | null>(null);
+  const [membersCourseId, setMembersCourseId] = useState<string | null>(null);
   const [addingCourse, setAddingCourse] = useState(false);
   const openCourse = openCourseId ? initialCourses.find((c) => c.id === openCourseId) : undefined;
+  const membersCourse = membersCourseId ? initialCourses.find((c) => c.id === membersCourseId) : undefined;
+  // The coach's own members' names, then anyone else's at the gym.
+  const names = { ...memberNames, ...Object.fromEntries(members.map((m) => [m.id, m.name])) };
 
   async function handleDelete(id: string, courseTitle: string) {
     const ok = await confirm({
@@ -621,9 +824,9 @@ export function EducationPane({
             </span>
           </div>
           {initialCourses.map((c) => {
-            const lessonCount = c.education_modules.reduce((sum, m) => sum + m.education_lessons.length, 0);
-            const people = rollup.filter((r) => r.course_id === c.id);
-            const finished = people.filter((p) => lessonCount > 0 && p.done >= lessonCount).length;
+            const lessonCount = lessonTotalOf(c);
+            const people = courseMembers(rollup, c.id, lessonCount, {});
+            const finished = people.filter((p) => p.finished).length;
             const finishedPct = people.length > 0 ? Math.round((finished / people.length) * 100) : 0;
             return (
               <div key={c.id} data-stagger className="flex min-h-[72px] flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10">
@@ -639,12 +842,19 @@ export function EducationPane({
                   </span>
                 </button>
                 {people.length > 0 && (
-                  <span className="flex w-40 shrink-0 items-center gap-2.5">
-                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" role="img" aria-label={`${finished} of ${people.length} finished`}>
+                  <button
+                    type="button"
+                    onClick={() => setMembersCourseId(c.id)}
+                    aria-label={`${people.length} assigned, ${finished} finished: see who has ${c.title}`}
+                    className="flex min-h-11 w-44 shrink-0 items-center gap-2.5 rounded-xl px-1 text-left hover:bg-black/[.03] dark:hover:bg-white/[.04]"
+                  >
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/15" aria-hidden>
                       <span className="block h-full rounded-full bg-accent" style={{ width: `${finishedPct}%` }} />
                     </span>
-                    <span className="w-20 text-right text-[13px] font-bold text-black dark:text-zinc-50">{finishedPct}% done</span>
-                  </span>
+                    <span className="text-right text-[13px] font-bold text-accent underline-offset-2 hover:underline">
+                      {finished}/{people.length} done
+                    </span>
+                  </button>
                 )}
                 <span className="ml-auto flex shrink-0 items-center gap-1">
                   <button type="button" onClick={() => setOpenCourseId(c.id)} className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent">
@@ -670,7 +880,11 @@ export function EducationPane({
           otherGyms={otherGyms}
           onClose={() => setOpenCourseId(null)}
           onDelete={handleDelete}
+          names={names}
         />
+      )}
+      {membersCourse && !openCourse && (
+        <CourseMembersSheet course={membersCourse} rollup={rollup} names={names} onClose={() => setMembersCourseId(null)} />
       )}
     </div>
   );

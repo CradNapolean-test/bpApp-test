@@ -1,14 +1,26 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Dumbbell } from 'lucide-react';
+import { Dumbbell, PlayCircle } from 'lucide-react';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { useToast } from '@/app/_components/ToastProvider';
 import { EmptyState } from '@/app/_components/EmptyState';
-import { MUSCLE_GROUPS } from '@/app/_components/workouts/muscleGroups';
+import { MOVEMENT_LABEL, MUSCLE_GROUPS } from '@/app/_components/workouts/muscleGroups';
+import {
+  NO_FILTERS,
+  NO_MOVEMENT,
+  anyFilterOn,
+  equipmentOptions,
+  filterLibrary,
+  hasVideo,
+  isRetired,
+  retiredStartIndex,
+  type LibraryFilters,
+  type StatusFilter,
+} from '@/lib/exerciseLibraryList';
 import { VideoDemo } from '@/app/_components/workouts/VideoDemo';
 import {
   bulkCreateLibraryExercises,
@@ -101,16 +113,23 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-// Add or edit an exercise. The things you reach for first (name, video, muscle, equipment) are up top; the
-// defaults a programme starts from, and the longer text, sit under "Defaults and notes".
+// Add or edit an exercise. The things you reach for first (name, video, movement, equipment) are up top; the
+// defaults a programme starts from, and the longer text, sit under "Defaults and notes". An exercise that is already in the library
+// opens here from its row, so this is also where its video plays, where it says which templates use it, and the one place to retire,
+// bring back or delete it (LB12).
 function ExerciseFormSheet({
   exercise,
+  templates = 0,
   onClose,
   onDelete,
+  onSetActive,
 }: {
   exercise: ExerciseLibraryRow | null;
+  // How many programme templates use it.
+  templates?: number;
   onClose: () => void;
   onDelete?: (id: string, name: string) => void;
+  onSetActive?: (id: string, active: boolean) => void;
 }) {
   const { run, busy } = useAction();
   const toast = useToast();
@@ -167,14 +186,21 @@ function ExerciseFormSheet({
   return (
     <BottomSheet title={exercise ? 'Edit exercise' : 'Add an exercise'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {exercise && (
+          <p className="text-xs font-semibold text-zinc-500">
+            {isRetired(exercise) ? 'Retired: not offered for new programmes. ' : ''}
+            {templates > 0 ? `In ${templates} programme template${templates === 1 ? '' : 's'}.` : 'Not in any programme template.'}
+          </p>
+        )}
         <Labeled label="Exercise name">
           <input required autoFocus={!exercise} className={sheetField} value={name} onChange={(e) => changeName(e.target.value)} />
         </Labeled>
         <Labeled label="Video link">
           <input className={sheetField} value={videoUrl} placeholder="https://" onChange={(e) => setVideoUrl(e.target.value)} />
+          {exercise && hasVideo(exercise) && exercise.video_url === videoUrl && <VideoDemo videoUrl={exercise.video_url} title={exercise.name} />}
         </Labeled>
         <div className="grid grid-cols-2 gap-3">
-          <Labeled label="Muscle group">
+          <Labeled label={MOVEMENT_LABEL}>
             <select className={sheetField} value={muscleGroup} onChange={(e) => setMuscleGroup(e.target.value)}>
               <option value="">None</option>
               {MUSCLE_GROUPS.map((g) => (
@@ -241,17 +267,40 @@ function ExerciseFormSheet({
         <button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50">
           {busy ? 'Saving…' : exercise ? 'Save' : 'Add to library'}
         </button>
-        {exercise && onDelete && (
-          <button type="button" onClick={() => onDelete(exercise.id, exercise.name)} className="w-full rounded-full py-2 text-sm font-bold text-danger">
-            Delete exercise
-          </button>
+        {exercise && (onSetActive || onDelete) && (
+          <div className="flex flex-wrap justify-center gap-2 border-t border-black/[.07] pt-3 dark:border-white/10">
+            {onSetActive && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onSetActive(exercise.id, isRetired(exercise))}
+                className="h-11 rounded-full px-4 text-sm font-bold text-black hover:bg-black/5 disabled:opacity-50 dark:text-zinc-50 dark:hover:bg-white/5"
+              >
+                {isRetired(exercise) ? 'Bring back' : 'Retire exercise'}
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDelete(exercise.id, exercise.name)}
+                className="h-11 rounded-full px-4 text-sm font-bold text-danger hover:bg-danger/10 disabled:opacity-50"
+              >
+                Delete exercise
+              </button>
+            )}
+          </div>
         )}
       </form>
     </BottomSheet>
   );
 }
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 100;
+
+// Two to a row on a phone, their own width from a tablet up.
+const filterSelect =
+  'h-10 min-w-0 flex-1 basis-36 rounded-xl border border-black/[.14] bg-card px-2.5 text-sm font-semibold text-black sm:flex-none sm:basis-auto sm:px-3 dark:border-white/15 dark:text-zinc-50';
 
 export function ExerciseLibraryManager({
   initialExercises,
@@ -267,15 +316,20 @@ export function ExerciseLibraryManager({
   const { run: runImport, busy: importing } = useAction();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filterGroup, setFilterGroup] = useState('');
-  const [noVideoOnly, setNoVideoOnly] = useState(false);
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<LibraryFilters>(NO_FILTERS);
   // The library can hold hundreds of exercises -- render a page at a time so the tab stays fast.
   const [visible, setVisible] = useState(PAGE_SIZE);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const hasVideo = (ex: ExerciseLibraryRow) => !!ex.video_url?.startsWith('https://');
   const missingVideos = useMemo(() => initialExercises.filter((ex) => !hasVideo(ex)).length, [initialExercises]);
+  const retiredCount = useMemo(() => initialExercises.filter(isRetired).length, [initialExercises]);
+  const equipment = useMemo(() => equipmentOptions(initialExercises), [initialExercises]);
+  const anyWithoutMovement = useMemo(() => initialExercises.some((ex) => !ex.muscle_group), [initialExercises]);
+
+  function setFilter(patch: Partial<LibraryFilters>) {
+    setFilters((f) => ({ ...f, ...patch }));
+    setVisible(PAGE_SIZE);
+  }
 
   // An exercise a programme template uses cannot be deleted (the database refuses): offer to retire it instead, which hides it from
   // pickers and keeps it in the programmes that already use it.
@@ -284,7 +338,7 @@ export function ExerciseLibraryManager({
     if (templates > 0) {
       const retire = await confirm({
         title: `“${exerciseName}” is in use`,
-        body: `In use by ${templates} programme template${templates === 1 ? '' : 's'}, so it can\u2019t be deleted. Retire it instead: it stays in those programmes but is not offered for new ones.`,
+        body: `In use by ${templates} programme template${templates === 1 ? '' : 's'}, so it can’t be deleted. Retire it instead: it stays in those programmes but is not offered for new ones.`,
         confirmLabel: 'Retire exercise',
       });
       if (!retire) return;
@@ -298,6 +352,14 @@ export function ExerciseLibraryManager({
     });
     if (!ok) return;
     await runDelete(() => deleteLibraryExercise(id), { success: 'Exercise removed', onDone: () => setEditingId(null) });
+  }
+
+  // Retire (hidden from pickers, kept where it is used) or bring back: from the exercise's sheet only (LB12).
+  async function handleSetActive(id: string, active: boolean) {
+    await runDelete(() => setExerciseActive(id, active), {
+      success: active ? 'Exercise is back in the library' : 'Exercise retired',
+      onDone: () => setEditingId(null),
+    });
   }
 
   function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -327,36 +389,28 @@ export function ExerciseLibraryManager({
     reader.readAsText(file);
   }
 
-  const filteredExercises = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return initialExercises.filter(
-      (ex) =>
-        (!filterGroup || ex.muscle_group === filterGroup) &&
-        (!noVideoOnly || !hasVideo(ex)) &&
-        (!q || ex.name.toLowerCase().includes(q) || (ex.equipment ?? '').toLowerCase().includes(q))
-    );
-  }, [initialExercises, filterGroup, noVideoOnly, search]);
+  const filteredExercises = useMemo(() => filterLibrary(initialExercises, filters), [initialExercises, filters]);
+  const shown = filteredExercises.slice(0, visible);
+  const retiredAt = retiredStartIndex(shown);
+  const filtering = anyFilterOn(filters);
 
   const editing = editingId ? initialExercises.find((ex) => ex.id === editingId) : undefined;
-  // The board's filter pills: black when on, an outline when off.
+  // The board's filter pill: black when on, an outline when off.
   const chip = (active: boolean) =>
-    `h-11 rounded-full px-4 text-sm font-bold transition-colors ${
+    `h-10 shrink-0 rounded-full px-3.5 text-sm font-bold transition-colors ${
       active
         ? 'bg-[#1d1d1b] text-white dark:bg-zinc-100 dark:text-[#1d1d1b]'
         : 'border border-black/[.14] bg-card text-black hover:bg-black/[.03] dark:border-white/15 dark:text-zinc-50'
     }`;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-end gap-2">
         {initialExercises.length > 0 && (
           <input
             type="search"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setVisible(PAGE_SIZE);
-            }}
+            value={filters.search}
+            onChange={(e) => setFilter({ search: e.target.value })}
             placeholder={`Search ${initialExercises.length} exercises`}
             aria-label="Search exercises"
             className="h-11 min-w-0 flex-1 basis-56 rounded-xl border border-black/[.16] bg-card px-3.5 text-base sm:text-[15px] md:max-w-sm dark:border-white/15"
@@ -382,49 +436,77 @@ export function ExerciseLibraryManager({
       </div>
 
       {adding && <ExerciseFormSheet exercise={null} onClose={() => setAdding(false)} />}
-      {editing && <ExerciseFormSheet key={editing.id} exercise={editing} onClose={() => setEditingId(null)} onDelete={handleDelete} />}
+      {editing && (
+        <ExerciseFormSheet
+          key={editing.id}
+          exercise={editing}
+          templates={usage[editing.id] ?? 0}
+          onClose={() => setEditingId(null)}
+          onDelete={handleDelete}
+          onSetActive={handleSetActive}
+        />
+      )}
 
       {initialExercises.length > 0 && (
-        <div role="group" aria-label="Filter exercises" className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            aria-pressed={filterGroup === '' && !noVideoOnly}
-            onClick={() => {
-              setFilterGroup('');
-              setNoVideoOnly(false);
-              setVisible(PAGE_SIZE);
-            }}
-            className={chip(filterGroup === '' && !noVideoOnly)}
+        <div role="group" aria-label="Filter exercises" className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label={`Filter by ${MOVEMENT_LABEL.toLowerCase()}`}
+            className={filterSelect}
+            value={filters.movement}
+            onChange={(e) => setFilter({ movement: e.target.value })}
           >
-            All
-          </button>
+            <option value="">Any {MOVEMENT_LABEL.toLowerCase()}</option>
+            {MUSCLE_GROUPS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+            {anyWithoutMovement && <option value={NO_MOVEMENT}>No {MOVEMENT_LABEL.toLowerCase()} set</option>}
+          </select>
+          {equipment.length > 0 && (
+            <select
+              aria-label="Filter by equipment"
+              className={filterSelect}
+              value={filters.equipment}
+              onChange={(e) => setFilter({ equipment: e.target.value })}
+            >
+              <option value="">Any equipment</option>
+              {equipment.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label} ({o.count})
+                </option>
+              ))}
+            </select>
+          )}
+          <select
+            aria-label="Active or retired"
+            className={filterSelect}
+            value={filters.status}
+            onChange={(e) => setFilter({ status: e.target.value as StatusFilter })}
+          >
+            <option value="all">Active and retired</option>
+            <option value="active">Active only</option>
+            <option value="retired">Retired only ({retiredCount})</option>
+          </select>
           {missingVideos > 0 && (
             <button
               type="button"
-              aria-pressed={noVideoOnly}
-              onClick={() => {
-                setNoVideoOnly((v) => !v);
-                setVisible(PAGE_SIZE);
-              }}
-              className={chip(noVideoOnly)}
+              aria-pressed={filters.noVideoOnly}
+              onClick={() => setFilter({ noVideoOnly: !filters.noVideoOnly })}
+              className={chip(filters.noVideoOnly)}
             >
               No video ({missingVideos})
             </button>
           )}
-          {MUSCLE_GROUPS.map((g) => (
+          {filtering && (
             <button
-              key={g}
               type="button"
-              aria-pressed={filterGroup === g}
-              onClick={() => {
-                setFilterGroup(filterGroup === g ? '' : g);
-                setVisible(PAGE_SIZE);
-              }}
-              className={chip(filterGroup === g)}
+              onClick={() => setFilter(NO_FILTERS)}
+              className="h-10 shrink-0 rounded-full px-3 text-sm font-bold text-accent hover:bg-accent/10"
             >
-              {g}
+              Clear filters
             </button>
-          ))}
+          )}
         </div>
       )}
 
@@ -434,67 +516,38 @@ export function ExerciseLibraryManager({
           title={initialExercises.length === 0 ? 'No library exercises yet' : 'No exercises match'}
           hint={
             initialExercises.length === 0
-              ? 'Add exercises here once and pick them when building any client\'s program or a programme template.'
-              : 'Try a different search or muscle group.'
+              ? 'Add exercises here once and pick them when building any member’s programme or a programme template.'
+              : 'Try a different search or filter.'
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {filteredExercises.slice(0, visible).map((ex) => {
-            const templates = usage[ex.id] ?? 0;
-            return (
-              <div
-                key={ex.id}
-                data-stagger
-                className="rounded-[20px] border border-black/[.08] bg-card p-4 dark:border-white/10"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-[15px] font-bold text-black dark:text-zinc-50">
-                    {ex.name}
-                    {ex.is_active === false && <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/10">Retired</span>}
-                  </p>
-                  <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-1 text-sm font-semibold">
-                    <button type="button" onClick={() => setEditingId(ex.id)} aria-label={`Edit ${ex.name}`} className="min-h-10 min-w-10 rounded-full px-3 py-1 text-accent hover:bg-accent/10">
-                      Edit
-                    </button>
-                    <DropdownMenu
-                      triggerLabel={`More actions for ${ex.name}`}
-                      items={[
-                        ex.is_active === false
-                          ? { label: 'Bring back', onSelect: () => runDelete(() => setExerciseActive(ex.id, true), { success: 'Exercise is back in the library' }) }
-                          : { label: 'Retire exercise', onSelect: () => runDelete(() => setExerciseActive(ex.id, false), { success: 'Exercise retired' }) },
-                        { label: 'Delete exercise', destructive: true, onSelect: () => handleDelete(ex.id, ex.name) },
-                      ]}
-                    />
-                  </div>
-                </div>
-                <p className="mt-0.5 text-[13px] text-zinc-500">{[ex.muscle_group, ex.equipment].filter(Boolean).join(' · ') || 'No muscle group or equipment set'}</p>
-                {ex.default_sets != null && (
-                  <p className="mt-1 text-sm text-zinc-500">
-                    Default {ex.default_sets}×{ex.default_reps ?? '—'}
-                    {ex.default_rpe != null ? ` · RPE ${ex.default_rpe}` : ''}
-                    {ex.default_rest_seconds != null ? ` · rest ${ex.default_rest_seconds}s` : ''}
+        <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
+          <div className="flex items-baseline justify-between gap-3 border-b border-black/[.07] px-4 py-2 text-xs font-semibold text-zinc-500 dark:border-white/10">
+            <span>{filtering ? `${filteredExercises.length} of ${initialExercises.length} exercises` : `${initialExercises.length} exercises`}</span>
+            <span className="hidden md:inline">Tap one to see or edit it</span>
+          </div>
+          {/* Column names, laptop and up. On a phone each row says the same on its second line. */}
+          <div
+            aria-hidden
+            className={`${rowGrid} hidden border-b border-black/[.07] px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-zinc-400 md:grid dark:border-white/10`}
+          >
+            <span>Exercise</span>
+            <span>{MOVEMENT_LABEL}</span>
+            <span>Records</span>
+            <span className="text-right">Video</span>
+          </div>
+          <ul className="divide-y divide-black/[.06] dark:divide-white/10">
+            {shown.map((ex, i) => (
+              <li key={ex.id}>
+                {i === retiredAt && (
+                  <p className="border-b border-black/[.06] bg-black/[.02] px-4 py-1.5 text-xs font-bold text-zinc-500 dark:border-white/10 dark:bg-white/[.03]">
+                    Retired: not offered for new programmes
                   </p>
                 )}
-                {hasVideo(ex) ? (
-                  <VideoDemo videoUrl={ex.video_url as string} title={ex.name} />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(ex.id)}
-                    className="mt-2 inline-flex h-7 items-center rounded-full bg-amber-100 px-2.5 text-xs font-extrabold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300"
-                  >
-                    No video · add one
-                  </button>
-                )}
-                {templates > 0 && (
-                  <p className="mt-1.5 text-xs font-semibold text-zinc-500">
-                    In {templates} programme template{templates === 1 ? '' : 's'}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+                <ExerciseRow exercise={ex} onOpen={() => setEditingId(ex.id)} />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -513,5 +566,50 @@ export function ExerciseLibraryManager({
         </div>
       )}
     </div>
+  );
+}
+
+// Laptop: name, movement, what it records, video. Phone: the name with the rest on a second line, and the video mark on the right.
+const rowGrid = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 md:grid-cols-[minmax(0,1fr)_7.5rem_10.5rem_5rem]';
+
+// One exercise as a compact row (LB5: about 15 to a laptop screen instead of 4 cards). Tapping it opens its sheet: everything the card
+// showed, the fields to edit, and Retire and Delete (LB12: one way to each).
+function ExerciseRow({ exercise: ex, onOpen }: { exercise: ExerciseLibraryRow; onOpen: () => void }) {
+  const retired = isRetired(ex);
+  const video = hasVideo(ex);
+  const records = TRACKING[trackingOf(ex.tracking_type)].label;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`${rowGrid} min-h-11 w-full px-4 py-1.5 text-left md:min-h-9 md:py-1 hover:bg-black/[.03] focus-visible:bg-black/[.03] dark:hover:bg-white/[.04] dark:focus-visible:bg-white/[.04]`}
+    >
+      <span className="min-w-0">
+        <span className={`flex min-w-0 items-baseline gap-2 text-sm font-bold ${retired ? 'text-zinc-500' : 'text-black dark:text-zinc-50'}`}>
+          <span className="truncate">{ex.name}</span>
+          {ex.equipment && <span className="hidden min-w-0 truncate text-xs font-medium text-zinc-500 lg:inline">{ex.equipment}</span>}
+          {retired && (
+            <span className="shrink-0 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-white/10">
+              Retired
+            </span>
+          )}
+        </span>
+        <span className="block truncate text-xs text-zinc-500 md:hidden">{[ex.muscle_group, records].filter(Boolean).join(' · ')}</span>
+      </span>
+      <span className="hidden truncate text-[13px] text-zinc-600 md:block dark:text-zinc-400">{ex.muscle_group ?? '—'}</span>
+      <span className="hidden truncate text-[13px] text-zinc-600 md:block dark:text-zinc-400">{records}</span>
+      <span className="flex justify-end">
+        {video ? (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-500">
+            <PlayCircle aria-hidden className="h-4 w-4 text-success" />
+            <span className="sr-only md:not-sr-only">Video</span>
+          </span>
+        ) : (
+          <span className="inline-flex h-6 items-center whitespace-nowrap rounded-full bg-amber-100 px-2 text-[11px] font-extrabold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
+            No video
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

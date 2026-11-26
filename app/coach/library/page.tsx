@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getExerciseLibrary, getExerciseUsage } from '@/lib/data/exerciseLibrary';
 import { getPendingRollouts, getProgramTemplatesWithDays } from '@/lib/data/programTemplates';
-import { getFormTemplates } from '@/lib/data/forms';
+import { getFormRollup, getFormTemplates } from '@/lib/data/forms';
+import { readMemberNames } from '@/lib/data/memberNames';
 import { getCourseRollup, getCourses } from '@/lib/data/education';
 import { getCoachUnreadTotal } from '@/lib/data/coach';
 import { getGroups } from '@/lib/data/clientGroups';
@@ -24,7 +25,7 @@ export default async function CoachLibraryPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [exercises, templates, formTemplates, courses, unreadCount, groups, myClients, rollouts, exerciseUsage, courseRollup, myGyms] = await Promise.all([
+  const [exercises, templates, formTemplates, courses, unreadCount, groups, myClients, rollouts, exerciseUsage, courseRollup, myGyms, formRollup] = await Promise.all([
     getExerciseLibrary(),
     getProgramTemplatesWithDays(),
     getFormTemplates(),
@@ -36,7 +37,14 @@ export default async function CoachLibraryPage() {
     getExerciseUsage(),
     getCourseRollup(),
     getMyGyms().catch(() => []),
+    getFormRollup(),
   ]);
+  // Who has each course and form can include other coaches' members at the gym: their names, where the coach may read them.
+  const mine = new Set(myClients.map((c) => c.id));
+  const memberNames = await readMemberNames(
+    supabase,
+    [...courseRollup.map((r) => r.client_id), ...formRollup.map((r) => r.client_id)].filter((id) => !mine.has(id))
+  );
 
   return (
     <LibraryHubShell
@@ -49,6 +57,8 @@ export default async function CoachLibraryPage() {
       rollouts={rollouts}
       exerciseUsage={exerciseUsage}
       courseRollup={courseRollup}
+      formRollup={formRollup}
+      memberNames={memberNames}
       otherGyms={myGyms.filter((g) => !g.isActive).map((g) => ({ id: g.gymId, name: g.gymName }))}
       members={myClients.map((c) => ({ id: c.id, name: c.name ?? c.email }))}
       email={user.email ?? 'Coach'}

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ClipboardList } from 'lucide-react';
+import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Button } from '@/app/_components/Button';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { EmptyState } from '@/app/_components/EmptyState';
@@ -14,8 +15,19 @@ import {
   createFormTemplate,
   deleteFormTemplate,
   getFormTemplateWithQuestions,
+  remindForm,
+  sendFormToGroup,
   updateFormTemplate,
 } from '@/lib/data/forms';
+import {
+  formStatus,
+  formStatusLine,
+  groupSendPreview,
+  groupSendSummary,
+  nameList,
+  remindSummary,
+  type FormRollupRow,
+} from '@/lib/libraryRollups';
 import {
   buildQuestionPayload,
   describeChanges,
@@ -28,7 +40,7 @@ import {
   type QuestionDraft,
 } from '@/lib/formEdit';
 import { STARTER_FORMS } from '@/lib/starterForms';
-import type { FormQuestionType, FormTemplateRow } from '@/lib/data/types';
+import type { ClientGroupWithMembers, FormQuestionType, FormTemplateRow } from '@/lib/data/types';
 import { inputCls } from '@/app/_components/ui';
 
 const QUESTION_TYPES: { value: FormQuestionType; label: string }[] = [
@@ -160,7 +172,7 @@ function FormEditorOverlay({
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-          Use as default onboarding form for new clients
+          Use as default onboarding form for new members
         </label>
 
         <div className="space-y-3 border-t border-black/10 pt-3 dark:border-white/10">
@@ -259,12 +271,226 @@ function FormEditorOverlay({
   );
 }
 
-export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplateRow[] }) {
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+// Who has answered a form and who hasn't, with Remind for those who haven't, behind a confirm that names them (LB19).
+function FormStatusSheet({
+  template,
+  rollup,
+  names,
+  onClose,
+}: {
+  template: FormTemplateRow;
+  rollup: FormRollupRow[];
+  names: Record<string, string>;
+  onClose: () => void;
+}) {
+  const confirm = useConfirm();
+  const toast = useToast();
+  const gymId = useActiveGymId();
+  const { run, busy } = useAction();
+  const status = formStatus(rollup, template.id, names);
+
+  async function handleRemind() {
+    const waiting = status.waiting;
+    if (waiting.length === 0) return;
+    const ok = await confirm({
+      title: `Remind ${waiting.length === 1 ? waiting[0].name : `${waiting.length} members`} to fill in “${template.name}”?`,
+      body: `${nameList(waiting.map((w) => w.name), 8)} ${waiting.length === 1 ? 'gets' : 'each get'} a reminder in their notifications. Anyone reminded about this form in the last 12 hours is skipped.`,
+      confirmLabel: waiting.length === 1 ? 'Send reminder' : `Remind ${waiting.length}`,
+    });
+    if (!ok) return;
+    let summary = '';
+    await run(
+      async () => {
+        const r = await remindForm(template.id, waiting.map((w) => w.clientId), gymId);
+        if (r.ok) summary = remindSummary(r);
+        return r;
+      },
+      { onDone: () => toast.success(summary) }
+    );
+  }
+
+  return (
+    <BottomSheet title={`“${template.name}”: who has answered`} onClose={onClose}>
+      {status.waiting.length + status.answered.length === 0 ? (
+        <p className="text-sm text-zinc-500">Nobody has been sent this form yet. Send it from a member&apos;s Check-in page, or to a group from its menu.</p>
+      ) : (
+        <div className="space-y-4">
+          <section className="space-y-1.5">
+            <h3 className="text-sm font-extrabold text-black dark:text-zinc-50">Not answered yet ({status.waiting.length})</h3>
+            {status.waiting.length === 0 ? (
+              <p className="text-sm text-zinc-500">Everyone has answered.</p>
+            ) : (
+              <ul className="divide-y divide-black/[.06] rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+                {status.waiting.map((w) => (
+                  <li key={w.clientId} className="px-3 py-2">
+                    <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{w.name}</span>
+                    <span className="block text-xs text-zinc-500">
+                      Sent {shortDate(w.sentAt)}
+                      {w.answeredBefore ? ' · answered an earlier one' : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          {status.waiting.length > 0 && (
+            <Button variant="primary" className="w-full" disabled={busy} onClick={handleRemind}>
+              {busy ? 'Sending…' : `Remind ${status.waiting.length} who haven't answered`}
+            </Button>
+          )}
+          <section className="space-y-1.5">
+            <h3 className="text-sm font-extrabold text-black dark:text-zinc-50">Answered ({status.answered.length})</h3>
+            {status.answered.length === 0 ? (
+              <p className="text-sm text-zinc-500">No answers yet.</p>
+            ) : (
+              <ul className="divide-y divide-black/[.06] rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+                {status.answered.map((a) => (
+                  <li key={a.clientId} className="px-3 py-2">
+                    <span className="block truncate text-sm font-bold text-black dark:text-zinc-50">{a.name}</span>
+                    <span className="block text-xs text-zinc-500">Answered {shortDate(a.answeredAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-zinc-500">Their answers are on each member&apos;s Check-in page.</p>
+          </section>
+        </div>
+      )}
+    </BottomSheet>
+  );
+}
+
+// Send a form to one of the groups made on the Members list, in one step (LB19). Members who already have it open are skipped.
+function GroupSendSheet({
+  template,
+  groups,
+  rollup,
+  onClose,
+}: {
+  template: FormTemplateRow;
+  groups: ClientGroupWithMembers[];
+  rollup: FormRollupRow[];
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const gymId = useActiveGymId();
+  const { run, busy } = useAction();
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const group = groups.find((g) => g.id === groupId);
+  const preview = group ? groupSendPreview(group.memberIds, rollup, template.id) : null;
+
+  async function handleSend() {
+    if (!group) return;
+    let summary = '';
+    await run(
+      async () => {
+        const r = await sendFormToGroup(template.id, group.id, gymId);
+        if (r.ok) summary = groupSendSummary(r);
+        return r;
+      },
+      {
+        onDone: () => {
+          toast.success(summary);
+          onClose();
+        },
+      }
+    );
+  }
+
+  return (
+    <BottomSheet title={`Send “${template.name}” to a group`} onClose={onClose}>
+      {groups.length === 0 ? (
+        <p className="text-sm text-zinc-500">There are no groups yet. Make one on the Members list (select members, then Add to a group).</p>
+      ) : (
+        <div className="space-y-4">
+          <fieldset className="space-y-1.5">
+            <legend className="text-xs font-medium text-zinc-500">Group</legend>
+            <div className="max-h-64 divide-y divide-black/[.06] overflow-y-auto rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+              {groups.map((g) => (
+                <label key={g.id} className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                  <input type="radio" name="form-group" checked={groupId === g.id} onChange={() => setGroupId(g.id)} />
+                  <span className="min-w-0 flex-1 truncate font-bold text-black dark:text-zinc-50">{g.name}</span>
+                  <span className="shrink-0 text-xs text-zinc-500">
+                    {g.memberIds.length} member{g.memberIds.length === 1 ? '' : 's'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {preview && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              {preview.toSend === 0
+                ? preview.total === 0
+                  ? 'Nobody is in this group yet.'
+                  : 'Everyone in this group already has it open.'
+                : `${preview.toSend} member${preview.toSend === 1 ? '' : 's'} get${preview.toSend === 1 ? 's' : ''} it, with a notice.`}
+              {preview.alreadyOpen > 0 && ` ${preview.alreadyOpen} already ${preview.alreadyOpen === 1 ? 'has' : 'have'} it open and ${preview.alreadyOpen === 1 ? 'is' : 'are'} skipped.`}
+              {preview.answeredBefore > 0 &&
+                ` ${preview.answeredBefore} answered it before and ${preview.answeredBefore === 1 ? 'gets' : 'get'} it again.`}
+            </p>
+          )}
+          <Button variant="primary" className="w-full" disabled={busy || !preview || preview.toSend === 0} onClick={handleSend}>
+            {busy
+              ? 'Sending…'
+              : !preview
+                ? 'Choose a group'
+                : preview.toSend === 0
+                  ? 'Nobody new to send it to'
+                  : `Send to ${preview.toSend} member${preview.toSend === 1 ? '' : 's'}`}
+          </Button>
+        </div>
+      )}
+    </BottomSheet>
+  );
+}
+
+// The ready-made forms, named (LB20: they sat behind an unlabelled ⋯ before "+ New form").
+function StarterFormsSheet({ busy, onAdd, onClose }: { busy: boolean; onAdd: (id: string) => void; onClose: () => void }) {
+  return (
+    <BottomSheet title="Ready-made forms" onClose={onClose}>
+      <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">Add one to your forms, then edit it as you like.</p>
+      <ul className="space-y-2">
+        {STARTER_FORMS.map((f) => (
+          <li key={f.id} className="flex items-start gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-black dark:text-zinc-50">{f.name}</p>
+              <p className="mt-0.5 text-xs text-zinc-500">{f.summary}</p>
+            </div>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => onAdd(f.id)}>
+              {busy ? 'Adding…' : 'Add'}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </BottomSheet>
+  );
+}
+
+export function FormsPane({
+  initialTemplates,
+  groups = [],
+  rollup = [],
+  members = [],
+  memberNames = {},
+}: {
+  initialTemplates: FormTemplateRow[];
+  // The gym's groups (made on the Members list), for Send to a group.
+  groups?: ClientGroupWithMembers[];
+  // Every sending of these forms the coach can read, for who has answered.
+  rollup?: FormRollupRow[];
+  members?: { id: string; name: string }[];
+  // Names of the other members in the rollup the coach may read.
+  memberNames?: Record<string, string>;
+}) {
   const confirm = useConfirm();
   const toast = useToast();
   const { run: runDelete } = useAction();
   const { run: runStarter, busy: addingStarter } = useAction();
   const gymId = useActiveGymId();
+  const [starterOpen, setStarterOpen] = useState(false);
+  const [sheet, setSheet] = useState<{ kind: 'status' | 'group'; templateId: string } | null>(null);
   const [editorState, setEditorState] = useState<{
     editingId: string | null;
     name: string;
@@ -272,6 +498,8 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
     isDefault: boolean;
     questions: QuestionDraft[];
   } | null>(null);
+  const names = { ...memberNames, ...Object.fromEntries(members.map((m) => [m.id, m.name])) };
+  const sheetTemplate = sheet ? initialTemplates.find((t) => t.id === sheet.templateId) : undefined;
 
   function openNew() {
     setEditorState({ editingId: null, name: '', description: '', isDefault: false, questions: [newDraft()] });
@@ -320,7 +548,10 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
           starter.questions.map((q, i) => ({ order_index: i, ...q })),
           gymId
         ),
-      { success: `Added "${starter.name}". Edit it, or tick "default onboarding form" so new members get it.` }
+      {
+        success: `Added "${starter.name}". Edit it, or tick "default onboarding form" so new members get it.`,
+        onDone: () => setStarterOpen(false),
+      }
     );
   }
 
@@ -337,16 +568,14 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
-        <DropdownMenu
-          variant="header"
-          triggerLabel="Start from a ready-made form"
-          items={STARTER_FORMS.map((f) => ({
-            label: addingStarter ? 'Adding…' : f.name,
-            onSelect: () => addStarter(f.id),
-            disabled: addingStarter,
-          }))}
-        />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setStarterOpen(true)}
+          className="inline-flex h-11 shrink-0 items-center rounded-xl border-[1.5px] border-black/20 px-4 text-sm font-bold text-black dark:border-white/25 dark:text-zinc-50"
+        >
+          Ready-made forms
+        </button>
         <button
           type="button"
           onClick={openNew}
@@ -356,47 +585,77 @@ export function FormsPane({ initialTemplates }: { initialTemplates: FormTemplate
         </button>
       </div>
 
+      {starterOpen && <StarterFormsSheet busy={addingStarter} onAdd={addStarter} onClose={() => setStarterOpen(false)} />}
+
       {initialTemplates.length === 0 ? (
-        <EmptyState icon={ClipboardList} title="No form templates yet" hint="Add one above, or use the ⋯ menu to start from a ready-made health questionnaire." />
+        <EmptyState icon={ClipboardList} title="No form templates yet" hint="Add one above, or start from a ready-made health questionnaire." />
       ) : (
         <div className="overflow-hidden rounded-[20px] border border-black/[.08] bg-card dark:border-white/10">
           <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 pb-3.5 pt-[18px] sm:px-6">
             <h2 className="text-lg font-extrabold text-black dark:text-zinc-50">Your forms</h2>
-            <span className="text-[13px] font-semibold text-zinc-500">Send one from a member&apos;s Check-in page</span>
+            <span className="text-[13px] font-semibold text-zinc-500">Send one from a member&apos;s Check-in page, or to a group from its menu</span>
           </div>
-          {initialTemplates.map((t) => (
-            <div
-              key={t.id}
-              data-stagger
-              className="flex min-h-[64px] flex-wrap items-center justify-between gap-2.5 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10"
-            >
-              <div className="min-w-0">
-                <p className="text-[15px] font-bold text-black dark:text-zinc-50">{t.name}</p>
-                <p className="mt-0.5 text-[13px] text-zinc-500 dark:text-zinc-400">
-                  {t.questionCount} question{t.questionCount === 1 ? '' : 's'}
-                </p>
+          {initialTemplates.map((t) => {
+            const line = formStatusLine(formStatus(rollup, t.id, names));
+            return (
+              <div
+                key={t.id}
+                data-stagger
+                className="flex min-h-[64px] flex-wrap items-center justify-between gap-2.5 border-t border-black/[.07] px-5 py-3 sm:px-6 dark:border-white/10"
+              >
+                <div className="min-w-0">
+                  <p className="text-[15px] font-bold text-black dark:text-zinc-50">{t.name}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[13px] text-zinc-500 dark:text-zinc-400">
+                    <span>
+                      {t.questionCount} question{t.questionCount === 1 ? '' : 's'}
+                    </span>
+                    {line && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <button
+                          type="button"
+                          onClick={() => setSheet({ kind: 'status', templateId: t.id })}
+                          className="inline-flex min-h-8 items-center font-semibold text-accent underline-offset-2 hover:underline"
+                        >
+                          {line}
+                        </button>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="ml-auto flex shrink-0 items-center gap-2.5">
+                  {t.is_default_onboarding && (
+                    <span className="inline-flex h-6 items-center rounded-full bg-accent-soft px-2.5 text-xs font-extrabold text-accent">
+                      Default onboarding
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openEdit(t.id)}
+                    className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent"
+                  >
+                    Edit
+                  </button>
+                  <DropdownMenu
+                    triggerLabel={`More actions for ${t.name}`}
+                    items={[
+                      { label: 'Send to a group', onSelect: () => setSheet({ kind: 'group', templateId: t.id }) },
+                      { label: 'Who has answered', onSelect: () => setSheet({ kind: 'status', templateId: t.id }) },
+                      { label: 'Delete form', destructive: true, onSelect: () => handleDelete(t.id) },
+                    ]}
+                  />
+                </div>
               </div>
-              <div className="ml-auto flex shrink-0 items-center gap-2.5">
-                {t.is_default_onboarding && (
-                  <span className="inline-flex h-6 items-center rounded-full bg-accent-soft px-2.5 text-xs font-extrabold text-accent">
-                    Default onboarding
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => openEdit(t.id)}
-                  className="inline-flex h-11 items-center rounded-xl bg-accent-soft px-4 text-sm font-bold text-accent"
-                >
-                  Edit
-                </button>
-                <DropdownMenu
-                  triggerLabel={`More actions for ${t.name}`}
-                  items={[{ label: 'Delete form', destructive: true, onSelect: () => handleDelete(t.id) }]}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+      )}
+
+      {sheet?.kind === 'status' && sheetTemplate && (
+        <FormStatusSheet template={sheetTemplate} rollup={rollup} names={names} onClose={() => setSheet(null)} />
+      )}
+      {sheet?.kind === 'group' && sheetTemplate && (
+        <GroupSendSheet template={sheetTemplate} groups={groups} rollup={rollup} onClose={() => setSheet(null)} />
       )}
 
       {editorState && (

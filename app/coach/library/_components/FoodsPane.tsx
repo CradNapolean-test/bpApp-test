@@ -8,6 +8,7 @@ import { useAction } from '@/app/_components/useAction';
 import { useConfirm } from '@/app/_components/ConfirmDialog';
 import { inputCls } from '@/app/_components/ui';
 import { correctScannedFood, listMemberAddedFoods, searchAllFoodsForCoach, searchScannedFoods, setFoodHidden, setFoodServings } from '@/lib/data/foods';
+import { listGymFoods } from '@/lib/data/gymFoods';
 import type { FoodAddition, FoodRow } from '@/lib/data/types';
 import { BARCODE_FOOD_BRAND_MAX, CORRECTED_NAME_MAX, productText, readProductCorrection, type BarcodeFoodText } from '@/lib/utils/barcodeFoods';
 import { MAX_SERVINGS, cleanServings, unitText, type ServingDraft } from '@/lib/utils/foodUnits';
@@ -157,15 +158,20 @@ function ServingsEditor({ food, onDone, onCancel }: { food: FoodRow; onDone: () 
 // Foods that members added by scanning a barcode (M12), or typed in from the pack when nobody had the product (owner's list item 6, 0173).
 // The first one for a product is shared with everyone, so a wrong entry stays wrong until a coach corrects it or takes it off the list.
 // Hiding removes it from every member's search, favourites and scans; it can be brought back.
-const SCOPES = { scanned: 'Scanned products', members: 'Added by members', all: 'All foods' } as const;
+// It opens on the gym's own foods (LB23: it opened on scanned products, though setting servings on the gym's foods is the main job here).
+const SCOPES = { gym: 'Gym foods', scanned: 'Scanned products', members: 'Added by members', all: 'All foods' } as const;
 type Scope = keyof typeof SCOPES;
+const GYM_PAGE = 60;
 
 export function FoodsPane() {
   const [query, setQuery] = useState('');
   const [foods, setFoods] = useState<ListedFood[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Scanned products, the ones this gym's members typed in (newest first, to check), or every food (to set the servings on an egg).
-  const [scope, setScope] = useState<Scope>('scanned');
+  // The gym's own food list (A-Z, a page at a time), scanned products, the ones this gym's members typed in (newest first, to check), or
+  // every food (to set the servings on an egg).
+  const [scope, setScope] = useState<Scope>('gym');
+  const [gymLimit, setGymLimit] = useState(GYM_PAGE);
+  const [gymTotal, setGymTotal] = useState(0);
   // The food whose servings or figures are open, and which.
   const [editing, setEditing] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState<string | null>(null);
@@ -178,13 +184,18 @@ export function FoodsPane() {
   useEffect(() => {
     const ticket = ++latest.current;
     const timer = setTimeout(() => {
-      (scope === 'all'
-        ? query.trim().length >= 2
-          ? searchAllFoodsForCoach(query)
-          : Promise.resolve([])
-        : scope === 'members'
-          ? listMemberAddedFoods(query)
-          : searchScannedFoods(query)
+      (scope === 'gym'
+        ? listGymFoods(query, gymLimit).then((r) => {
+            if (ticket === latest.current) setGymTotal(r.total);
+            return r.foods as ListedFood[];
+          })
+        : scope === 'all'
+          ? query.trim().length >= 2
+            ? searchAllFoodsForCoach(query)
+            : Promise.resolve([])
+          : scope === 'members'
+            ? listMemberAddedFoods(query)
+            : searchScannedFoods(query)
       )
         .then((rows: ListedFood[]) => {
           if (ticket !== latest.current) return;
@@ -198,7 +209,7 @@ export function FoodsPane() {
         });
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, reloads, scope]);
+  }, [query, reloads, scope, gymLimit]);
 
   async function toggle(food: FoodRow) {
     const hide = !food.hidden;
@@ -233,6 +244,7 @@ export function FoodsPane() {
               type="button"
               onClick={() => {
                 setScope(sc);
+                setGymLimit(GYM_PAGE);
                 setFoods(null);
                 setEditing(null);
                 setCorrecting(null);
@@ -252,8 +264,11 @@ export function FoodsPane() {
       <input
         type="search"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={scope === 'all' ? 'Search any food (2+ letters)' : 'Search by name, brand or barcode'}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setGymLimit(GYM_PAGE);
+        }}
+        placeholder={scope === 'all' ? 'Search any food (2+ letters)' : scope === 'gym' ? 'Search the gym’s foods' : 'Search by name, brand or barcode'}
         aria-label="Search foods"
         className="h-11 w-full rounded-xl border border-black/[.16] bg-card px-3.5 text-base sm:max-w-md sm:text-[15px] dark:border-white/15"
       />
@@ -263,11 +278,23 @@ export function FoodsPane() {
       ) : foods.length === 0 ? (
         <EmptyState
           icon={ScanBarcode}
-          title={query.trim() ? 'No food matches that' : scope === 'all' ? 'Search for a food' : scope === 'members' ? 'No products added by members yet' : 'No scanned foods yet'}
+          title={
+            query.trim()
+              ? 'No food matches that'
+              : scope === 'all'
+                ? 'Search for a food'
+                : scope === 'gym'
+                  ? 'No gym foods'
+                  : scope === 'members'
+                    ? 'No products added by members yet'
+                    : 'No scanned foods yet'
+          }
           hint={
             scope === 'all'
               ? 'Type at least two letters.'
-              : scope === 'members'
+              : scope === 'gym'
+                ? 'The gym’s own food list is empty.'
+                : scope === 'members'
                 ? 'Products your gym’s members type in from the pack, when nobody had them yet, appear here newest first.'
                 : 'Products appear here once a member scans their barcode.'
           }
@@ -285,7 +312,7 @@ export function FoodsPane() {
                         f.source === 'scan' ? 'bg-accent-soft text-accent' : 'bg-black/[.06] text-zinc-600 dark:bg-white/10 dark:text-zinc-300'
                       }`}
                     >
-                      {f.source === 'scan' ? (f.addition?.typed ? 'Typed in' : 'Barcode') : 'Built in'}
+                      {f.source === 'scan' ? (f.addition?.typed ? 'Typed in' : 'Barcode') : f.source === 'seed' ? 'Gym food' : 'Built in'}
                     </span>
                   </p>
                   <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
@@ -359,6 +386,18 @@ export function FoodsPane() {
             </li>
           ))}
         </ul>
+      )}
+      {scope === 'gym' && foods !== null && foods.length > 0 && (
+        <div className="flex flex-col items-center gap-1 pt-1">
+          <p className="text-xs text-zinc-500">
+            Showing {foods.length} of {gymTotal} gym food{gymTotal === 1 ? '' : 's'}
+          </p>
+          {gymTotal > foods.length && (
+            <Button variant="outline" size="sm" onClick={() => setGymLimit((n) => n + GYM_PAGE)}>
+              Show {Math.min(GYM_PAGE, gymTotal - foods.length)} more
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );
