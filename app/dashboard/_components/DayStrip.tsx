@@ -37,8 +37,8 @@ export interface DayStripDay {
 const HEADER_EDGE = '-mx-5 px-5 sm:-mx-6 sm:px-6 md:mx-0 md:px-0';
 const RING_R = 17;
 const RING_C = 2 * Math.PI * RING_R;
-// How wide the fade is at an edge with more days past it (BK23).
-const FADE_PX = 32;
+// How wide the fade is at an edge with more days past it (BK23): about one day, so the day at the edge is visibly cut off.
+const FADE_PX = 44;
 
 // Book's strip fades out at an edge with more days past it, so a phone (where two weeks don't fit) shows the strip scrolls. A mask, not
 // an overlay, so it works on any background; none at all when every day fits (a laptop).

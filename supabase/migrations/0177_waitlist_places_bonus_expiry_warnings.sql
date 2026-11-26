@@ -62,7 +62,7 @@
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('my_waitlist_places', 'warn_expiring_bonus_credits')
 --   order by 1;
 -- Expected after (this file's bodies: the values in the guard below), both prosecdef true, proconfig {search_path=public}:
---   my_waitlist_places cc0dc32a71e774dde8427267f295ad85, warn_expiring_bonus_credits 47fe9cc912d5dc8f2abe77b34d1a3630.
+--   my_waitlist_places cc0dc32a71e774dde8427267f295ad85, warn_expiring_bonus_credits 8d277d9306d60b9d0fa90833b102573d.
 --   select has_function_privilege('authenticated', 'public.my_waitlist_places()', 'execute') as member_places,
 --          has_function_privilege('anon', 'public.my_waitlist_places()', 'execute') as anyone_places,
 --          has_function_privilege('authenticated', 'public.warn_expiring_bonus_credits(integer)', 'execute') as signed_in_warn,
@@ -109,7 +109,7 @@ begin
   for v_check in
     select * from (values
       ('my_waitlist_places', 'cc0dc32a71e774dde8427267f295ad85'),
-      ('warn_expiring_bonus_credits', '47fe9cc912d5dc8f2abe77b34d1a3630')
+      ('warn_expiring_bonus_credits', '8d277d9306d60b9d0fa90833b102573d')
     ) as t(name, accepted)
   loop
     v_md5 := null;
@@ -209,6 +209,9 @@ declare
   v_unspent integer;
   v_bonus_balance integer;
   v_left integer;
+  v_gym_tz text;
+  v_checked_tz text;
+  v_checked_ok boolean := false;
   v_tz text;
   v_notice text;
 begin
@@ -241,14 +244,17 @@ begin
     -- Another run got there first: it sent the warning.
     continue when not found;
 
-    -- The date in the gym's own time zone (an expiry the coach picks is the end of that day at the gym), London when not known.
-    v_tz := null;
-    select nullif(btrim(g.timezone), '') into v_tz
+    -- The date in the gym's own time zone (an expiry the coach picks is the end of that day at the gym), London when not known. The zone
+    -- is checked against pg_timezone_names (a slow view) only when it differs from the last one checked: members come gym by gym.
+    v_gym_tz := null;
+    select nullif(btrim(g.timezone), '') into v_gym_tz
     from profiles p join gyms g on g.id = p.gym_id
     where p.id = v_grant.client_id;
-    if v_tz is null or not exists (select 1 from pg_timezone_names tz where tz.name = v_tz) then
-      v_tz := 'Europe/London';
+    if v_gym_tz is distinct from v_checked_tz then
+      v_checked_tz := v_gym_tz;
+      v_checked_ok := v_gym_tz is not null and exists (select 1 from pg_timezone_names tz where tz.name = v_gym_tz);
     end if;
+    v_tz := case when v_checked_ok then v_gym_tz else 'Europe/London' end;
 
     v_notice := v_left::text
       || case when v_left = 1 then ' bonus credit expires on ' else ' bonus credits expire on ' end

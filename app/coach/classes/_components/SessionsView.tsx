@@ -217,7 +217,12 @@ export function SessionsView({
     if (!removeEntry || !open) return;
     const entry = removeEntry;
     await runRemove(() => removeFromSession(entry.bookingId, refund), {
-      success: entry.status === 'waitlist' ? `${entry.clientName} taken off the waitlist` : refund ? `${entry.clientName} removed and refunded` : `${entry.clientName} removed`,
+      success:
+        entry.status === 'waitlist'
+          ? `${entry.clientName} taken off the waitlist`
+          : refund
+            ? `${entry.clientName} removed and refunded`
+            : `${entry.clientName} removed`,
       onDone: async () => {
         setRemoveEntry(null);
         setRoster(await getRoster(open.classId, open.date));
@@ -271,6 +276,8 @@ export function SessionsView({
   // Someone only on the waitlist never paid, so removing them offers no refund (BK18; coach_cancel_booking gives nothing back for one).
   const removingWaitlist = removeEntry?.status === 'waitlist';
   const removeCost = open?.creditCost ?? 1;
+  // A free session has nothing to give back either way.
+  const removingFree = !removingWaitlist && removeCost <= 0;
 
   return (
     <div className="space-y-4">
@@ -627,13 +634,29 @@ export function SessionsView({
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 They are taken off the waitlist and told. They haven&apos;t paid anything for a waitlist place, so there is nothing to refund.
               </p>
+              {/* Asked with a refund: if a place opened and they came off the waitlist since this roster was read, they have paid, and
+                  coach_cancel_booking gives that back; for a place still on the waitlist it gives nothing (it refunds 'booked' only). */}
+              <button
+                type="button"
+                disabled={removing}
+                onClick={() => removeMember(true)}
+                className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
+              >
+                Take off the waitlist
+              </button>
+            </div>
+          ) : removingFree ? (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                They are taken off this session and told. It&apos;s a free session, so there is nothing to refund.
+              </p>
               <button
                 type="button"
                 disabled={removing}
                 onClick={() => removeMember(false)}
                 className="h-12 w-full rounded-xl bg-accent text-[15px] font-extrabold text-accent-foreground disabled:opacity-50"
               >
-                Take off the waitlist
+                Remove
               </button>
             </div>
           ) : (

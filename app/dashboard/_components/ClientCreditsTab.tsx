@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CalendarCheck, Minus, Plus } from 'lucide-react';
 import CountUp from '@/app/_components/motion/CountUp';
 import { getMyCreditHistory } from '@/lib/data/memberships';
@@ -44,8 +44,12 @@ export function ClientCreditsTab({
   const [history, setHistory] = useState<{ recent: CreditsLedgerRow[]; hasMore: boolean; expiring: CreditsLedgerRow[] } | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
+  // Which reading of the list is on screen: a "Show more" page asked for before the list started over (the balance changed) is dropped,
+  // or it would be added after the new first page and leave a gap.
+  const listGeneration = useRef(0);
   useEffect(() => {
     let live = true;
+    listGeneration.current += 1;
     Promise.all([
       getMyCreditActivity(clientId, 0, MEMBER_HISTORY_PAGE),
       getMyCreditHistory(clientId, 1).then((h) => h.expiring).catch(() => [] as CreditsLedgerRow[]),
@@ -63,10 +67,12 @@ export function ClientCreditsTab({
 
   async function showMore() {
     if (!history || loadingMore) return;
+    const generation = listGeneration.current;
     setLoadingMore(true);
     setMoreFailed(false);
     try {
       const page = await getMyCreditActivity(clientId, history.recent.length, MEMBER_HISTORY_PAGE);
+      if (generation !== listGeneration.current) return;
       setHistory((prev) => (prev ? { ...prev, recent: appendCreditPage(prev.recent, page.rows), hasMore: page.hasMore } : prev));
     } catch {
       setMoreFailed(true);

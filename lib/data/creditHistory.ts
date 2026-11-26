@@ -34,17 +34,29 @@ export async function getMyCreditActivity(
 }
 
 // What "Member since" is worked out from (RO15, memberSince in lib/creditsForm.ts): the start of the member's earliest plan, and the
-// day their account was made, in the gym's time zone. Either is null when it can't be read.
-export async function getMemberSinceSources(clientId: string, timezone?: string | null): Promise<{ earliestPlanStart: string | null; accountCreatedDay: string | null }> {
+// day their account was made, in the time zone of the member's gym (London when it can't be read). Either is null when it can't be read.
+export async function getMemberSinceSources(clientId: string): Promise<{ earliestPlanStart: string | null; accountCreatedDay: string | null }> {
   if (!clientId) return { earliestPlanStart: null, accountCreatedDay: null };
   const supabase = await createClient();
   const [plans, account] = await Promise.all([
     supabase.from('client_memberships').select('started_at').eq('client_id', clientId).not('started_at', 'is', null).order('started_at').limit(1),
-    supabase.from('profiles').select('created_at').eq('id', clientId).maybeSingle(),
+    supabase.from('profiles').select('created_at, gym_id').eq('id', clientId).maybeSingle(),
   ]);
   const earliestPlanStart = ((plans.data ?? [])[0] as { started_at?: string | null } | undefined)?.started_at ?? null;
-  const created = (account.data as { created_at?: string | null } | null)?.created_at ?? null;
-  const createdAt = created ? new Date(created) : null;
-  const accountCreatedDay = createdAt && !Number.isNaN(createdAt.getTime()) ? isoDateInTz(createdAt, timezone || DEFAULT_TIMEZONE) : null;
+  const profile = account.data as { created_at?: string | null; gym_id?: string | null } | null;
+  const createdAt = profile?.created_at ? new Date(profile.created_at) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) return { earliestPlanStart, accountCreatedDay: null };
+  let timezone: string | null = null;
+  if (profile?.gym_id) {
+    const { data: gym } = await supabase.from('gyms').select('timezone').eq('id', profile.gym_id).maybeSingle();
+    timezone = (gym as { timezone?: string | null } | null)?.timezone?.trim() || null;
+  }
+  let accountCreatedDay: string;
+  try {
+    accountCreatedDay = isoDateInTz(createdAt, timezone || DEFAULT_TIMEZONE);
+  } catch {
+    // A time zone the server's date library doesn't know: the default instead.
+    accountCreatedDay = isoDateInTz(createdAt, DEFAULT_TIMEZONE);
+  }
   return { earliestPlanStart, accountCreatedDay };
 }
