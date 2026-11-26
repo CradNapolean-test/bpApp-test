@@ -208,6 +208,12 @@ export function MealPlannerTab({
               {held ? 'Your coach is setting up your plan. Your targets show here once they have been checked.' : 'No daily targets yet. Plan your meals below.'}
             </p>
           )}
+          {/* What the planner is for, while it is empty (NU14). */}
+          {initialEntries.length === 0 && (
+            <p className="text-[13px] leading-snug text-zinc-500 dark:text-zinc-400">
+              Plan a typical day&apos;s meals here, then add a meal or the whole day to your food diary in one tap.
+            </p>
+          )}
         </div>
       ) : (
       <NutritionSummary

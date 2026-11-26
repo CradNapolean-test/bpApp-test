@@ -262,15 +262,15 @@ export function RecipesTab({
                           onScan={() => scan.start({ id: recipe.id, label: recipe.name })}
                           scanLabel={`Scan a barcode into ${recipe.name}`}
                         />
-                        <div className="flex items-center justify-between gap-3">
-                          <ServingsInput recipeId={recipe.id} initial={per} />
+                        <ServingsInput recipeId={recipe.id} initial={per} />
+                        {/* Delete is on its own line below a rule, away from the servings box it sat right next to (NU16). It still asks first. */}
+                        <div className="border-t border-black/[.07] pt-2 dark:border-white/10">
                           <button
                             type="button"
-                            aria-label="Delete recipe"
                             onClick={() => handleDelete(recipe.id, recipe.name)}
-                            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold text-danger"
+                            className="-ml-2 flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-[13px] font-bold text-danger hover:bg-danger/10"
                           >
-                            <Trash2 className="h-4 w-4" /> Delete
+                            <Trash2 aria-hidden className="h-4 w-4" /> Delete recipe
                           </button>
                         </div>
                       </div>

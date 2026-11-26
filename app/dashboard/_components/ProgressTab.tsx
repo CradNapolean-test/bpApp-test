@@ -17,7 +17,7 @@ import type { ZoomPan } from '@/lib/zoomPan';
 import { useBackHandler } from '@/app/_components/useBackHandler';
 import { useDialog } from '@/app/_components/useDialog';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
-import { formatDelta, siteReadings } from '@/lib/utils/measurementDeltas';
+import { NOTHING_TO_COMPARE, anythingToCompare, siteChangeText, siteSummary } from '@/lib/utils/measurementDeltas';
 import type { ClientProfileRow, MeasurementLogRow, ProgressPhoto } from '@/lib/data/types';
 
 const shortDate = (iso: string) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -238,42 +238,55 @@ export function ProgressTab({
         ) : (
           <>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Last logged {longDate(initialMeasurements[0].log_date)} · all in cm</p>
-            <div className="mt-2 divide-y divide-black/[.07] dark:divide-white/10">
-              <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] gap-1 pb-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                <span />
-                <span className="text-right">Start</span>
-                <span className="text-right">Last</span>
-                <span className="text-right">Now</span>
-              </div>
-              {MEASUREMENT_FIELDS.map(({ key, label }) => {
-                // Now is the latest value logged for THIS site; Start is the first ever (members no longer type a start figure, so the
-                // very first entry becomes Start automatically).
-                const { now: latest, last, start } = siteReadings(initialMeasurements, key);
-                const vsStart = latest != null && start != null ? latest - start : null;
-                const vsPrevious = latest != null && last != null ? latest - last : null;
-                const deltaLabel = formatDelta(vsStart);
-                // Waist/hips going down is the usual aim; for arm/chest/quad, up is.
-                const towardsGoal = vsStart != null && Math.abs(vsStart) >= 0.05
-                  ? (key === 'waist' || key === 'hips' ? vsStart < 0 : vsStart > 0)
-                  : null;
-                return (
-                  <div key={key} className="py-2.5">
-                    <div className="grid grid-cols-[1fr_3.5rem_3.5rem_3.5rem] items-center gap-1">
-                      <span className="text-[15px] font-bold text-black dark:text-zinc-50">{label}</span>
-                      <span className="text-right text-sm text-zinc-500">{start ?? '—'}</span>
-                      <span className="text-right text-sm text-zinc-500">{last ?? '—'}</span>
-                      <span className="text-right text-[15px] font-black text-black dark:text-zinc-50">{latest ?? '—'}</span>
+            {(() => {
+              // Start is the first reading for each site, Last the one before Now (MX14). With only one entry there is nothing to compare,
+              // so the card shows the figures and says so, instead of an empty Last column and "±0cm" on every row.
+              const sites = MEASUREMENT_FIELDS.map(({ key, label }) => ({ key, label, ...siteSummary(initialMeasurements, key) }));
+              const compare = anythingToCompare(sites);
+              const cols = compare ? 'grid-cols-[1fr_3.5rem_3.5rem_3.5rem]' : 'grid-cols-[1fr_3.5rem]';
+              return (
+                <>
+                  <div className="mt-2 divide-y divide-black/[.07] dark:divide-white/10">
+                    <div className={`grid ${cols} gap-1 pb-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400`}>
+                      <span />
+                      {compare && <span className="text-right">Start</span>}
+                      {compare && <span className="text-right">Last</span>}
+                      <span className="text-right">Now</span>
                     </div>
-                    {deltaLabel && start != null && latest != null && (
-                      <p className={`mt-0.5 text-xs font-semibold ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-accent' : 'text-danger'}`}>
-                        {deltaLabel}cm since your first measurement
-                        {formatDelta(vsPrevious) ? ` · ${formatDelta(vsPrevious)}cm since last time` : ''}
-                      </p>
-                    )}
+                    {sites.map((site) => {
+                      const change = compare ? siteChangeText(site) : null;
+                      // Waist/hips going down is the usual aim; for arm/chest/quad, up is.
+                      const towardsGoal =
+                        site.vsStart != null && Math.abs(site.vsStart) >= 0.05
+                          ? site.key === 'waist' || site.key === 'hips'
+                            ? site.vsStart < 0
+                            : site.vsStart > 0
+                          : null;
+                      return (
+                        <div key={site.key} className="py-2.5">
+                          <div className={`grid ${cols} items-center gap-1`}>
+                            <span className="text-[15px] font-bold text-black dark:text-zinc-50">{site.label}</span>
+                            {compare && <span className="text-right text-sm text-zinc-500">{site.start ?? '—'}</span>}
+                            {compare && <span className="text-right text-sm text-zinc-500">{site.last ?? '—'}</span>}
+                            <span className="text-right text-[15px] font-black text-black dark:text-zinc-50">{site.now ?? '—'}</span>
+                          </div>
+                          {change && (
+                            <p className={`mt-0.5 text-xs font-semibold ${towardsGoal == null ? 'text-zinc-500' : towardsGoal ? 'text-accent' : 'text-danger'}`}>
+                              {change}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                  {!compare && (
+                    <p className="mt-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                      {readOnly ? 'Nothing to compare yet: their next measurement shows the change.' : NOTHING_TO_COMPARE}
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
       </div>
