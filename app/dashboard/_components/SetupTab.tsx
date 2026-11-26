@@ -13,7 +13,8 @@ import { requestDetailsUpdate } from '@/lib/data/onboarding';
 import { MemberMetricToggles, MemberScreenToggles } from './MemberScreenToggles';
 import { MemberResetLink } from '@/app/coach/_components/MemberResetLink';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/dates';
-import type { ClientProfileRow } from '@/lib/data/types';
+import type { ClientJournalEntryRow, ClientProfileRow } from '@/lib/data/types';
+import { goalsStillInNotes, mergeGoalText, GOAL_MAX } from '@/lib/goalMove';
 import { weightUnitOf } from '@/lib/utils/weightUnits';
 import { StLbInput } from '@/app/_components/StLbInput';
 
@@ -85,10 +86,13 @@ export function SetupTab({
   readOnly,
   isCoachView = false,
   screenToggles,
+  notesGoals = [],
 }: {
   clientId: string;
   initialProfile: ClientProfileRow | null;
   readOnly: boolean;
+  // The coach's view: goals written in the old Notes "Client Goals" card (CL10). Any not moved into the goal yet show under it.
+  notesGoals?: ClientJournalEntryRow[];
   // Coach-only controls (the member's screens and check-in measures, asking them to confirm their details) show for a coach.
   isCoachView?: boolean;
   screenToggles?: { disabledScreens: string[]; disabledMetrics: string[]; planIncludedScreens: string[] | null; planName: string | null };
@@ -253,6 +257,44 @@ export function SetupTab({
                 onChange={(e) => setForm({ ...form, goal_description: e.target.value })}
               />
               {!isCoachView && <p id={idOf('goal-hint')} className="text-xs text-zinc-500">The more your coach knows, the better they can tailor your plan.</p>}
+              {isCoachView && (() => {
+                // Goals from the old Notes card not in the goal yet (CL10): before migration 0178 moves them, or one that would pass the
+                // limit. "Add to goal" puts it in the box above; Save keeps it. The member sees the goal, so it is the coach's call.
+                const waiting = goalsStillInNotes(notesGoals, form.goal_description);
+                if (waiting.length === 0) return null;
+                return (
+                  <div className="mt-2 space-y-2 rounded-xl border border-dashed border-black/15 p-3 dark:border-white/15">
+                    <p className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                      From the old Notes goals, not in the goal yet. The member sees the goal once it&apos;s in it.
+                    </p>
+                    {waiting.map((g) => {
+                      const merged = mergeGoalText(form.goal_description, [g.body]);
+                      const tooLong = merged.length > GOAL_MAX;
+                      return (
+                        <div key={g.id} className="flex items-start gap-2">
+                          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-black dark:text-zinc-100">
+                            <span className="text-xs text-zinc-500">
+                              {new Date(g.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}:{' '}
+                            </span>
+                            {g.body}
+                          </p>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              disabled={tooLong}
+                              title={tooLong ? 'The goal would pass 5,000 characters: shorten it first' : undefined}
+                              onClick={() => setForm({ ...form, goal_description: merged })}
+                              className="h-9 shrink-0 rounded-lg bg-accent-soft px-3 text-[13px] font-bold text-accent disabled:opacity-50"
+                            >
+                              Add to goal
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
             <div className="space-y-1">
               <label htmlFor={idOf('experience')} className={labelCls}>Training experience</label>

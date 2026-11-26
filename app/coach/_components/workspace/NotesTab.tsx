@@ -10,8 +10,9 @@ import { getClientCoachNotes, updateClientAdminDetails } from '@/lib/data/client
 import type { ClientJournalEntryRow, ClientProfileRow } from '@/lib/data/types';
 import { DeleteMemberCard } from './DeleteMemberCard';
 
+// The goal lives in one place, on Details with the weights (CL10): the "Client Goals" card is gone, and its entries move into that goal
+// (migration 0178; until then Details shows them with "Add to goal").
 const SECTIONS: { kind: ClientJournalEntryRow['kind']; label: string; addLabel: string; placeholder: string }[] = [
-  { kind: 'goal', label: 'Client Goals', addLabel: '+ Add Goal', placeholder: 'e.g. Lose 5kg by December' },
   { kind: 'injury', label: 'Injuries & Limitations', addLabel: '+ Add Injury', placeholder: 'e.g. Lower back, avoid loaded spinal flexion' },
   { kind: 'note', label: 'Client Notes', addLabel: '+ Add Note', placeholder: 'Freeform note -- never shown to the client' },
 ];

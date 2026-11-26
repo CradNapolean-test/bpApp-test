@@ -68,4 +68,40 @@ describe('migration 0178', () => {
       expect(b).toContain("if v_text = '' then");
     });
   });
+
+  describe('the goal move (CL10)', () => {
+    const move = () => {
+      const start = sql.indexOf('alter table public.client_journal_entries add column if not exists moved_to_goal_at timestamptz;');
+      expect(start).toBeGreaterThan(-1);
+      return sql.slice(start, sql.indexOf('where j.id = t.id;', start) + 'where j.id = t.id;'.length);
+    };
+
+    it('only ever reads goal entries not moved yet, so a second run moves nothing twice', () => {
+      const m = move();
+      expect(m).toContain("where j.kind = 'goal'\n    and j.moved_to_goal_at is null");
+      expect(m).toContain('set moved_to_goal_at = now()');
+    });
+
+    it('keeps every row: no delete anywhere in the file', () => {
+      expect(sql).not.toMatch(/^\s*delete\s+from/im);
+      expect(sql).not.toMatch(/^\s*truncate/im);
+    });
+
+    it('appends after the goal, oldest first, a blank line between: the same rule as lib/goalMove.ts', () => {
+      const m = move();
+      expect(m).toContain("string_agg(t.body, E'\\n\\n' order by t.created_at, t.id)");
+      expect(m).toContain("when btrim(coalesce(old_goal, '')) = '' then added");
+      expect(m).toContain("else regexp_replace(old_goal, '\\s+$', '') || E'\\n\\n' || added");
+      // An entry already in the goal word for word adds nothing; an empty one adds nothing.
+      expect(m).toContain("filter (where t.body <> '' and strpos(coalesce(p.goal_description, ''), t.body) = 0)");
+    });
+
+    it("never writes a goal past its limit, and marks only the entries of members whose goal was written", () => {
+      const m = move();
+      expect(m).toContain('where new_goal is null or char_length(new_goal) <= 5000');
+      expect(m).toContain('join fits f on f.client_id = t.client_id');
+      // The goal is written from the same rows that are marked.
+      expect(m).toContain('from fits f\n  where p.client_id = f.client_id');
+    });
+  });
 });

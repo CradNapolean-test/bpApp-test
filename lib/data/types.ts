@@ -869,6 +869,8 @@ export interface ClientJournalEntryRow {
   body: string;
   created_at: string;
   related_date: string | null;
+  // When migration 0178 moved this goal into the member's goal on Details (CL10); null (or missing before 0178) when not moved.
+  moved_to_goal_at?: string | null;
 }
 
 export interface ActivityEventRow {

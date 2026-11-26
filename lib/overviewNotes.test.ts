@@ -25,6 +25,11 @@ describe('overviewNotes', () => {
     expect(allMine).toBe(false);
   });
 
+  it('leaves goals out: they live in the goal on Details now (CL10)', () => {
+    const { notes } = overviewNotes([note('g', 'me', '2026-11-02T10:00:00Z', 'goal'), note('n', 'me', '2026-11-01T10:00:00Z')], 'me');
+    expect(notes.map((n) => n.id)).toEqual(['n']);
+  });
+
   it('leaves injuries out (they have their own box) and is empty with no notes', () => {
     expect(overviewNotes([note('i', 'me', '2026-11-01T10:00:00Z', 'injury')], 'me')).toEqual({ notes: [], allMine: false });
   });

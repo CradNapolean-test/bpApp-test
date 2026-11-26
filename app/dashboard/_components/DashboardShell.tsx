@@ -1010,6 +1010,7 @@ export function DashboardShell({
               initialProfile={profile}
               readOnly={isCoachView && !isOwnClient}
               isCoachView={isCoachView}
+              notesGoals={isCoachView ? journalEntries.filter((e) => e.kind === 'goal') : undefined}
               screenToggles={
                 isCoachView
                   ? { disabledScreens, disabledMetrics, planIncludedScreens: membership?.package?.included_screens ?? null, planName: membership?.package?.name ?? null }
