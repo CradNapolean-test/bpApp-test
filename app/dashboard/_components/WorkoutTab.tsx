@@ -46,6 +46,7 @@ import { isTestTemplateName, nextProgrammeStart } from '@/lib/utils/programmeSta
 import { sameWorkoutInWeek } from '@/lib/utils/programmeDays';
 import { coachProgrammeEndLine, memberProgrammeNotice, needsNextProgramme, programmeEnd } from '@/lib/utils/programEnding';
 import { applySetChange, finishMessage, isWeightless, nextSetNumber, reconcileLocalChoices, setFormHeading, sortedSets, workoutSummary, type BlockChoice, type LocalBlockChoice, type SetChange, type WorkoutSummary } from '@/lib/workoutSets';
+import { mainLiftNames } from '@/lib/workoutDayCard';
 import { blockFormatOf, chosenBlockKeys, dayHighlights, dayLogProgress, describeChoices, exerciseBlockKey } from '@/lib/workoutSections';
 import { blockConfigOf, resultForConfig, resultSummary } from '@/lib/blockScoring';
 import { blankSetMessage, hasRecordedValue, inputsFromLog, isBlankSet, readSetInputs, setSummary, trackingOf, type LogValues, type SetInputs, type TrackingType } from '@/lib/workoutTracking';
@@ -560,23 +561,31 @@ function FinishWorkoutPanel({
 
 // Which weekday (Mon-Sat) this day falls on -- shared by every week of the block (Week 1's
 // Monday and Week 2's Monday share the same value). A class scheduled for the same weekday
-// auto-links to it for client check-in, see lib/utils/checkin.ts. Editable after the fact,
-// not just at Add-day time.
-function DayOfWeekSelect({ dayId, initial }: { dayId: string; initial: number | null }) {
+// auto-links to it for member check-in, see lib/utils/checkin.ts. Editable after the fact,
+// not just at Add-day time. Shown only while the coach is changing the day (CV12): the card says the weekday once, and "Change day" in
+// its menu opens this. Picking a day, leaving the box or Escape closes it.
+function DayOfWeekSelect({ dayId, initial, onDone }: { dayId: string; initial: number | null; onDone: () => void }) {
   const { run } = useAction();
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const parsed = e.target.value === '' ? null : Number(e.target.value);
-    if (parsed === initial) return;
+    if (parsed === initial) return onDone();
     await run(() => updateProgramDay(dayId, { day_position: parsed }));
+    onDone();
   }
 
   return (
     <select
-      title="Day of the week -- a class scheduled the same day auto-links here for client check-in"
-      className="w-20 shrink-0 rounded-lg border border-black/[.16] bg-transparent px-2 py-1 text-xs dark:border-white/10"
+      aria-label="Day of the week"
+      title="Day of the week: a class on the same day links here for the member's check-in"
+      autoFocus
+      className="h-9 w-28 shrink-0 rounded-lg border border-black/[.16] bg-transparent px-2 text-sm dark:border-white/10"
       value={initial ?? ''}
       onChange={handleChange}
+      onBlur={onDone}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onDone();
+      }}
     >
       <option value="">Day…</option>
       {PROGRAM_WEEKDAYS.map((d) => (
@@ -801,6 +810,8 @@ export function WorkoutTab({
     setLiveLogs((prev) => applySetChange(prev, change));
   }
   const [openDayId, setOpenDayId] = useState<string | null>(null);
+  // The day card whose weekday the coach is changing (CV12): its day box shows only then.
+  const [dayPickerFor, setDayPickerFor] = useState<string | null>(null);
   // The page carries only the library entries this member's programmes use (DB21: the whole library was about 227 KB of every coach's
   // member page, which took 3-8 s). The coach's builder needs the whole library for its exercise picker, so it is read the first time
   // the coach opens a day, and kept while they stay on the page.
@@ -1178,6 +1189,8 @@ export function WorkoutTab({
               showPhaseLabel={!isCoachView}
               animateWeeks
               columns={isCoachView}
+              // The coach's card says its weekday once: in the name when the name is the weekday, else in the tile (CV12).
+              weekdayOnce={isCoachView}
               onOpenDay={setOpenDayId}
               activeWeek={shownWeek}
               currentWeek={currentWeek(program) > 0 ? currentWeek(program) : undefined}
@@ -1195,7 +1208,8 @@ export function WorkoutTab({
                   exerciseLibraryIds: day.workout_exercises.map((ex) => ex.exercise_library_id),
                   done: day.workout_exercises.some((ex) => (logsByExercise[ex.id]?.length ?? 0) > 0),
                   liftCount: progress.total,
-                  highlights: dayHighlights(day.workout_exercises),
+                  // The coach's card names the main lifts (CV12); the member's keeps the phone's rule.
+                  highlights: isCoachView ? mainLiftNames(day.workout_exercises) : dayHighlights(day.workout_exercises),
                   loggedCount: progress.done,
                   dayPosition: day.day_position,
                   isToday: day.day_position != null && day.day_position === todayDow && day.week_num === currentWeek(program),
@@ -1207,11 +1221,25 @@ export function WorkoutTab({
                       const day = program.workout_program_days.find((d) => d.id === summary.id)!;
                       return (
                         <>
-                          <DayOfWeekSelect dayId={day.id} initial={day.day_position} />
+                          {dayPickerFor === day.id ? (
+                            <DayOfWeekSelect dayId={day.id} initial={day.day_position} onDone={() => setDayPickerFor(null)} />
+                          ) : (
+                            day.day_position == null && (
+                              // No weekday yet: nothing on the card says so, and a class on that day can't link here until one is set.
+                              <button
+                                type="button"
+                                onClick={() => setDayPickerFor(day.id)}
+                                className="h-9 rounded-lg px-2 text-sm font-semibold text-accent-strong hover:bg-accent-soft"
+                              >
+                                Set the day
+                              </button>
+                            )
+                          )}
                           <DropdownMenu
                             triggerLabel="Workout actions"
                             items={[
                               { label: 'Rename', onSelect: () => setSheet({ kind: 'renameDay', dayId: day.id, name: day.day_label, position: day.day_position }) },
+                              { label: day.day_position == null ? 'Set the day' : 'Change day', onSelect: () => setDayPickerFor(day.id) },
                               { label: 'Copy to next week', onSelect: () => handleCopyDay(program, day) },
                               {
                                 label: 'Delete workout',
