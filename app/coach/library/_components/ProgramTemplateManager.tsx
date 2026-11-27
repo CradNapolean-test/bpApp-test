@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ClipboardList, UserPlus } from 'lucide-react';
+import { ClipboardList, Eye, UserPlus } from 'lucide-react';
 import { Button } from '@/app/_components/Button';
 import { useAction } from '@/app/_components/useAction';
 import { useLenis } from 'lenis/react';
@@ -17,6 +17,8 @@ import { EmptyState } from '@/app/_components/EmptyState';
 import { DropdownMenu } from '@/app/_components/DropdownMenu';
 import { ExerciseEditor } from '@/app/_components/workouts/ExerciseEditor';
 import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
+import { MemberDayPreview } from './MemberDayPreview';
+import { previewStartDay } from '@/lib/memberDayPreview';
 import { ProgramDayList, type ProgramDaySummary } from '@/app/_components/workouts/ProgramDayList';
 import {
   addTemplateDay,
@@ -216,6 +218,8 @@ export function ProgramTemplateManager({
   const { run: runImport, busy: importing } = useAction();
   const [newTemplateName, setNewTemplateName] = useState('');
   const [previewId, setPreviewId] = useState<string | null>(null);
+  // "Preview as member" (LB16): which template and workout it shows. It saves nothing.
+  const [memberPreview, setMemberPreview] = useState<{ templateId: string; dayId: string } | null>(null);
   const [openDayId, setOpenDayId] = useState<string | null>(null);
   const [addingTemplate, setAddingTemplate] = useState(false);
   const [activeWeek, setActiveWeek] = useState<number | null>(null);
@@ -587,6 +591,11 @@ export function ProgramTemplateManager({
   const shownWeek = activeWeek != null && previewWeeks.includes(activeWeek) ? activeWeek : (previewWeeks[0] ?? 1);
   const shownWeekDays = previewTemplate?.program_template_days.filter((d) => d.week_num === shownWeek) ?? [];
   const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(memberSearch.trim().toLowerCase()));
+  const memberPreviewTemplate = memberPreview ? initialTemplates.find((t) => t.id === memberPreview.templateId) : undefined;
+  function openMemberPreview(template: ProgramTemplateWithDays, dayId: string | null, week: number | null) {
+    const start = previewStartDay(template, dayId, week);
+    if (start) setMemberPreview({ templateId: template.id, dayId: start });
+  }
 
   return (
     <div className="space-y-4">
@@ -722,6 +731,12 @@ export function ProgramTemplateManager({
               <UserPlus className="h-3.5 w-3.5" />
               Start a programme
             </Button>
+            {previewTemplate.program_template_days.length > 0 && (
+              <Button variant="outline" size="sm" className="flex items-center gap-1.5" onClick={() => openMemberPreview(previewTemplate, null, shownWeek)}>
+                <Eye className="h-3.5 w-3.5" />
+                Preview as member
+              </Button>
+            )}
             <div className="ml-auto">
               <DropdownMenu
                 variant="header"
@@ -1207,7 +1222,22 @@ export function ProgramTemplateManager({
       )}
 
       {openDay && (
-        <FocusOverlay title={openDay.day_label} subtitle={`Week ${openDay.week_num}`} onClose={() => setOpenDayId(null)}>
+        <FocusOverlay
+          title={openDay.day_label}
+          subtitle={`Week ${openDay.week_num}`}
+          onClose={() => setOpenDayId(null)}
+          headerActions={
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-1.5"
+              onClick={() => setMemberPreview({ templateId: openDay.template_id, dayId: openDay.id })}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview as member
+            </Button>
+          }
+        >
           <DayNotesField dayId={openDay.id} initial={openDay.notes} />
 
           <ExerciseEditor
@@ -1222,6 +1252,16 @@ export function ProgramTemplateManager({
             onReorder={reorderTemplateExercises}
           />
         </FocusOverlay>
+      )}
+
+      {memberPreview && memberPreviewTemplate && (
+        <MemberDayPreview
+          key={memberPreview.templateId}
+          template={memberPreviewTemplate}
+          initialDayId={memberPreview.dayId}
+          library={library}
+          onClose={() => setMemberPreview(null)}
+        />
       )}
     </div>
   );
