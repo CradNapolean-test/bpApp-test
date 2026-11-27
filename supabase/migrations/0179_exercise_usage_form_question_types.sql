@@ -18,9 +18,13 @@
 --      that answer. When the phone app is updated, a later migration drops this check (and the app lets coaches tick Required again).
 --      form_question_types() -> text[]: the types the database takes. The app offers yes / no and scale only when it lists them, so the
 --      app deployed before this file never offers a type a save would refuse. Reads nothing, writes nothing.
---   3. submit_form_response: 0111's body with two answer checks added and nothing else changed (the caller checks, "Form already
---      submitted", the list and size checks are as they were): a yes_no answer must be true or false, a scale answer a whole number from
---      1 to 10. As before, the function never asks for every question: a question left out is simply not answered.
+--   3. submit_form_response: 0111's body with one block added for the two types and nothing else changed (the caller checks, "Form
+--      already submitted", the list and size checks are as they were). A yes_no answer is stored as true or false, a scale answer as a
+--      whole number from 1 to 10. An answer of another shape for these two types is never refused: "yes" / "no" in any case becomes
+--      true / false, a whole number sent as text becomes that number, and anything else is left out (not stored), as an unanswered
+--      question is. Why: a member's phone can hold a draft answer from before the coach changed a question to yes / no or scale (a
+--      question with no answers keeps its id when its type changes), and the released phone app has no box to change it, so refusing it
+--      would leave that member unable to send the form. As before, the function never asks for every question.
 --   4. save_form_template: 0135's body with the two types allowed, a scale's words checked and kept (trimmed; none when both are empty),
 --      and required saved as false for these two types whatever is sent. The caller checks are as they were.
 --
@@ -66,7 +70,7 @@
 --   exercise_library_usage 91bf7b4c376cd596310940490eb0c17f, prosecdef false, provolatile s
 --   form_question_types 27978289cd95f1f87db1e6b678ddc72b, prosecdef false, provolatile i
 --   save_form_template 54409b569808bf0cff2cba13b681b45b, prosecdef true, provolatile v
---   submit_form_response 1cb9a17f7d51e2bb15c01f64ed802c56, prosecdef true, provolatile v
+--   submit_form_response 64bbe0677d24af17b521d82d878bdac2, prosecdef true, provolatile v
 --   select f, has_function_privilege('authenticated', f, 'execute') as signed_in, has_function_privilege('anon', f, 'execute') as anyone
 --   from unnest(array['public.exercise_library_usage()', 'public.form_question_types()', 'public.submit_form_response(uuid, jsonb)',
 --                     'public.save_form_template(uuid, jsonb, jsonb)']) as f;
@@ -85,13 +89,14 @@
 --
 -- Write checks (test accounts, on a sandbox, not the live project): a form with a yes / no question and a 1-10 scale question, sent to a
 -- test member. As that member: submit_form_response(assignment, '[{"question_id": <yes/no>, "answer": true}, {"question_id": <scale>,
--- "answer": 7}]') -> sent. Each of these is refused with nothing written: yes / no with "yes" or 1 ("That answer should be yes or no"),
--- scale with 0, 11, 7.5 or "7" ("That answer should be a whole number from 1 to 10"). Sending the form with neither question answered
--- ('[]', or only the other questions) -> sent. As the coach: save_form_template with a scale question and options ["  Not at all ", ""] ->
+-- "answer": 7}]') -> sent, stored as true and 7. On a second assignment: yes / no "Yes" -> stored true; scale "7" or 7.0 -> stored 7.
+-- On a third: yes / no 1 or "maybe", scale 0, 11, 7.5 or "seven" -> sent, and those two answers are not stored (no form_responses row
+-- for them). Sending the form with neither question answered ('[]', or only the other questions) -> sent. As the coach: save_form_template with a scale question and options ["  Not at all ", ""] ->
 -- saved as ["Not at all", ""]; options ["a"] or three items, or a label of 61 characters -> refused; a yes_no question sent with
 -- "required": true -> saved with required false. A direct insert of a required yes_no question -> refused by form_questions_yes_no_scale_optional.
 --
--- REVERSE: only once no yes_no or scale question exists (delete them first, or the type check below fails):
+-- REVERSE: only once no yes_no or scale question is left (the type check below fails otherwise). Change each such question to another
+-- type in the form editor: one with answers is archived with its answers kept. Do NOT delete them: deleting a question deletes its answers.
 --   drop function if exists public.exercise_library_usage(); drop function if exists public.form_question_types();
 --   alter table public.form_questions drop constraint if exists form_questions_yes_no_scale_optional;
 --   alter table public.form_questions drop constraint if exists form_questions_question_type_check;
@@ -126,7 +131,7 @@ begin
   -- Replaced functions: must be there, with the body this file was written against (was) or this file's own (now, a second run).
   for v_check in
     select * from (values
-      ('submit_form_response', '4ab7b3bb873b97346f19b23124118bdb', '1cb9a17f7d51e2bb15c01f64ed802c56'),
+      ('submit_form_response', '4ab7b3bb873b97346f19b23124118bdb', '64bbe0677d24af17b521d82d878bdac2'),
       ('save_form_template', 'cdad3080d7aa3971d99b77dc6c2e9995', '54409b569808bf0cff2cba13b681b45b')
     ) as t(name, was, now)
   loop
@@ -300,18 +305,30 @@ begin
     ) then
       raise exception 'That answer should be a list of choices';
     end if;
-    -- Yes / no and 1-10 scale (0179). A missing answer is left out like any other: nothing here asks for every question.
-    if v_question.question_type = 'yes_no' and jsonb_typeof(v_answer.answer) <> 'boolean' then
-      raise exception 'That answer should be yes or no';
+    -- Yes / no and 1-10 scale (0179): stored only as true / false, or a whole number from 1 to 10. An answer of another shape never stops
+    -- the form: it can be a draft kept on a member's phone from before the coach changed the question's type, and the released phone app
+    -- shows no box for these types, so the member could not change it. "yes" / "no" (any case) is taken as true / false, a whole number
+    -- sent as text as that number, and anything else is left out, as an unanswered question is (nothing here asks for every question).
+    if v_question.question_type = 'yes_no' then
+      if jsonb_typeof(v_answer.answer) = 'string' and lower(btrim(v_answer.answer #>> '{}')) in ('yes', 'no') then
+        v_answer.answer := to_jsonb(lower(btrim(v_answer.answer #>> '{}')) = 'yes');
+      end if;
+      if jsonb_typeof(v_answer.answer) <> 'boolean' then
+        continue;
+      end if;
     end if;
     if v_question.question_type = 'scale' then
+      if jsonb_typeof(v_answer.answer) = 'string' and btrim(v_answer.answer #>> '{}') ~ '^[0-9]{1,2}$' then
+        v_answer.answer := to_jsonb(btrim(v_answer.answer #>> '{}')::integer);
+      end if;
       if jsonb_typeof(v_answer.answer) <> 'number' then
-        raise exception 'That answer should be a whole number from 1 to 10';
+        continue;
       end if;
       if (v_answer.answer #>> '{}')::numeric not between 1 and 10
          or (v_answer.answer #>> '{}')::numeric <> trunc((v_answer.answer #>> '{}')::numeric) then
-        raise exception 'That answer should be a whole number from 1 to 10';
+        continue;
       end if;
+      v_answer.answer := to_jsonb((v_answer.answer #>> '{}')::numeric::integer);
     end if;
 
     insert into form_responses (assignment_id, question_id, answer)

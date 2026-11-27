@@ -34,7 +34,10 @@ describe('the answers (member side, web)', () => {
   });
 
   it('treats anything else as not answered, so it is left out instead of sent wrong', () => {
-    for (const odd of [undefined, '', 'Yes', 'true', ['yes']]) expect(yesNoValue(odd)).toBeNull();
+    for (const odd of [undefined, '', 'true', 'maybe', ['yes']]) expect(yesNoValue(odd)).toBeNull();
+    // A draft from before the coach turned a "Yes / No" choice question into yes / no reads "Yes": it is kept, as the database keeps it.
+    expect(yesNoValue('Yes')).toBe(true);
+    expect(yesNoValue(' NO ')).toBe(false);
     for (const odd of [undefined, '', '0', '11', '7.5', ' 7x', '-1', ['7']]) expect(scaleValue(odd)).toBeNull();
     expect(scaleValue(' 3 ')).toBe(3);
   });

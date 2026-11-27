@@ -10,7 +10,7 @@ import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
 import { getMyCheckinReviews, markReviewed } from '@/lib/data/coachReviews';
 import { reviewedByLine, reviewsByRef, type ReviewMark } from '@/lib/checkinReviews';
-import { SCALE_POINTS, answerProblems, formAnswerText, newTypePayload, parseNumberAnswer } from '@/lib/formAnswers';
+import { SCALE_POINTS, answerProblems, formAnswerText, newTypePayload, parseNumberAnswer, yesNoValue } from '@/lib/formAnswers';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow } from '@/lib/data/types';
 
 const fieldCls =
@@ -228,10 +228,11 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
 
               {q.question_type === 'yes_no' && (
                 <div className="grid grid-cols-2 gap-2">
-                  {(['yes', 'no'] as const).map((v) => (
+                  {(['yes', 'no'] as const).map((v) => {
                     // Tapping the one picked again clears it (these questions are optional for now).
-                    <Choice key={v} label={v === 'yes' ? 'Yes' : 'No'} selected={value === v} onClick={() => setAnswer(q.id, value === v ? '' : v)} />
-                  ))}
+                    const on = yesNoValue(value) === (v === 'yes');
+                    return <Choice key={v} label={v === 'yes' ? 'Yes' : 'No'} selected={on} onClick={() => setAnswer(q.id, on ? '' : v)} />;
+                  })}
                 </div>
               )}
               {q.question_type === 'scale' && (

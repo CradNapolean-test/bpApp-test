@@ -249,16 +249,15 @@ function FormEditorOverlay({
                 </p>
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-xs text-zinc-500">
-                  {/* Yes / no and scale are optional until the phone app is updated (see PHONE_PENDING_NOTE). */}
-                  <input
-                    type="checkbox"
-                    checked={q.required && !isAlwaysOptional(q.question_type)}
-                    disabled={isAlwaysOptional(q.question_type)}
-                    onChange={(e) => updateQuestion(i, { required: e.target.checked })}
-                  />
-                  {isAlwaysOptional(q.question_type) ? 'Required (optional for now)' : 'Required'}
-                </label>
+                {isAlwaysOptional(q.question_type) ? (
+                  // Yes / no and scale are optional until the phone app is updated (see PHONE_PENDING_NOTE).
+                  <span className="text-xs text-zinc-500">Optional</span>
+                ) : (
+                  <label className="flex items-center gap-2 text-xs text-zinc-500">
+                    <input type="checkbox" checked={q.required} onChange={(e) => updateQuestion(i, { required: e.target.checked })} />
+                    Required
+                  </label>
+                )}
                 <div className="flex items-center gap-1">
                   <button
                     type="button"

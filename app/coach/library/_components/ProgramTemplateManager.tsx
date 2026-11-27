@@ -732,9 +732,17 @@ export function ProgramTemplateManager({
               Start a programme
             </Button>
             {previewTemplate.program_template_days.length > 0 && (
-              <Button variant="outline" size="sm" className="flex items-center gap-1.5" onClick={() => openMemberPreview(previewTemplate, null, shownWeek)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5"
+                aria-label="Preview as member"
+                onClick={() => openMemberPreview(previewTemplate, null, shownWeek)}
+              >
                 <Eye className="h-3.5 w-3.5" />
-                Preview as member
+                {/* "Preview" on a phone, so the row still fits its ⋯ menu at 375 px. */}
+                <span className="sm:hidden">Preview</span>
+                <span className="hidden sm:inline">Preview as member</span>
               </Button>
             )}
             <div className="ml-auto">
@@ -1231,10 +1239,12 @@ export function ProgramTemplateManager({
               variant="outline"
               size="sm"
               className="flex items-center gap-1.5"
+              aria-label="Preview as member"
               onClick={() => setMemberPreview({ templateId: openDay.template_id, dayId: openDay.id })}
             >
               <Eye className="h-3.5 w-3.5" />
-              Preview as member
+              <span className="sm:hidden">Preview</span>
+              <span className="hidden sm:inline">Preview as member</span>
             </Button>
           }
         >

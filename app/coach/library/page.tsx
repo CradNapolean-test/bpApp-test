@@ -6,7 +6,8 @@ import { parseLibraryTab } from '@/lib/libraryTabs';
 import { LibraryHubShell } from './_components/LibraryHubShell';
 
 // Loads the tiles' counts and only the tab that opens (?tab=..., Exercises when none): each other tab's data is fetched the first time
-// it is opened (LB25). A save's refresh redraws this for the tab in the address, which is the open one.
+// it is opened (LB25). A save's refresh redraws this for the tab in the address, which is the open one (the shell writes the address so
+// that Next.js's router follows it: writeLibraryTabToUrl).
 export default async function CoachLibraryPage({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
   const supabase = await createClient();
   const {

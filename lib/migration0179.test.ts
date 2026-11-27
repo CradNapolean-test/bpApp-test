@@ -76,6 +76,12 @@ describe('migration 0179', () => {
       expect(added).toContain("jsonb_typeof(v_answer.answer) <> 'boolean'");
       expect(added).toContain('not between 1 and 10');
       expect(added).toContain('<> trunc(');
+      // A wrongly shaped answer to these two types is normalised or left out, never refused: no member can be stopped by one (a phone
+      // draft from before a type change can't be cleared on the released phone app).
+      expect(added).not.toMatch(/raise/);
+      expect(added.match(/continue;/g)).toHaveLength(3);
+      expect(added).toContain("in ('yes', 'no')");
+      expect(added).toContain('::numeric::integer');
       expect(now.replace(added, '')).toBe(bodyOf(old0111, 'submit_form_response', '$$'));
       const header = (src: string, q: string) => {
         const b = functionBlock(src, 'submit_form_response', q);

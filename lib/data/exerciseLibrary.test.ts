@@ -115,7 +115,7 @@ describe('getExerciseUsage (LB11)', () => {
     const calls = usageClient({
       rpc: { data: [{ exercise_library_id: 'ex-1', templates: 2, member_programmes: 5 }], error: null },
     });
-    expect(await getExerciseUsage()).toEqual({ 'ex-1': { templates: 2, programmes: 5 } });
+    expect(await getExerciseUsage()).toEqual({ byId: { 'ex-1': { templates: 2, programmes: 5 } }, membersCounted: true });
     expect(calls).toEqual(['rpc:exercise_library_usage']);
   });
 
@@ -128,7 +128,7 @@ describe('getExerciseUsage (LB11)', () => {
         { exercise_library_id: 'ex-1', program_template_days: [{ template_id: 't2' }] },
       ],
     });
-    expect(await getExerciseUsage()).toEqual({ 'ex-1': { templates: 2, programmes: null } });
+    expect(await getExerciseUsage()).toEqual({ byId: { 'ex-1': { templates: 2, programmes: null } }, membersCounted: false });
     expect(calls).toEqual(['rpc:exercise_library_usage', 'from:program_template_exercises', 'page']);
   });
 });

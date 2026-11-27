@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LIBRARY_TAB, LIBRARY_TAB_SLUGS, isLibraryTab, parseLibraryTab, tabSource } from './libraryTabs';
+import { DEFAULT_LIBRARY_TAB, LIBRARY_TAB_SLUGS, isLibraryTab, parseLibraryTab, tabSource, writeLibraryTabToUrl } from './libraryTabs';
 
 describe('parseLibraryTab (the address picks the tab that opens, LB25)', () => {
   it('opens the tab the address names, including the /coach/forms and /coach/education redirects', () => {
@@ -51,5 +51,22 @@ describe('tabSource (each tab loads when it is opened)', () => {
     expect(tabSource('forms', redrawn, { forms: { data: 'old form data', version: 1 } }, 4)).toEqual({ data: 'fresh form data', fetch: false });
     // The tab the page first loaded is fetched like any other when the page now holds a different one.
     expect(tabSource('exercises', redrawn, {}, 4)).toEqual({ data: null, fetch: true });
+  });
+});
+
+describe('writeLibraryTabToUrl (review: the router must follow the tab, so a save redraws the open tab)', () => {
+  it('puts the tab in the address keeping the rest, and hands the browser no state of its own so Next.js syncs its router', () => {
+    const calls: unknown[][] = [];
+    const win = {
+      location: { href: 'http://localhost/coach/library?tab=exercises&x=1' },
+      history: { replaceState: (...args: unknown[]) => calls.push(args) },
+    } as unknown as Pick<Window, 'location' | 'history'>;
+    writeLibraryTabToUrl('forms', win);
+    expect(calls).toEqual([[null, '', 'http://localhost/coach/library?tab=forms&x=1']]);
+  });
+
+  it('never throws on an address it cannot rewrite', () => {
+    const win = { location: { href: 'not a url' }, history: { replaceState: () => {} } } as unknown as Pick<Window, 'location' | 'history'>;
+    expect(() => writeLibraryTabToUrl('forms', win)).not.toThrow();
   });
 });

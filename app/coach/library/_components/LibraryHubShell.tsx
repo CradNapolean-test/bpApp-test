@@ -13,7 +13,6 @@ import { CoachBrand } from '@/app/coach/_components/CoachBrand';
 import { CoachMobileBrand } from '@/app/coach/_components/CoachMobileBrand';
 import { CoachHeaderExtras } from '@/app/coach/_components/CoachHeaderExtras';
 import { LibraryTiles } from './LibraryTiles';
-import { writeTabToUrl } from '@/app/coach/_components/tabUrl';
 import { ActiveGymTag } from '@/app/coach/_components/ActiveGymTag';
 import { ExerciseLibraryManager } from './ExerciseLibraryManager';
 import { ProgramTemplateManager } from './ProgramTemplateManager';
@@ -24,7 +23,7 @@ import { Skeleton } from '@/app/_components/Skeleton';
 import { Button } from '@/app/_components/Button';
 import { loadLibraryTab } from '@/lib/data/libraryTabActions';
 import type { LibraryTabData } from '@/lib/data/libraryTabs';
-import { tabSource, type CachedTab, type LibrarySummary, type LibraryTabSlug } from '@/lib/libraryTabs';
+import { tabSource, writeLibraryTabToUrl, type CachedTab, type LibrarySummary, type LibraryTabSlug } from '@/lib/libraryTabs';
 import { getDataVersion, getServerDataVersion, subscribeDataVersion } from '@/lib/refreshSignal';
 
 type Tab = 'Exercises' | 'Program templates' | 'Education' | 'Forms' | 'Foods';
@@ -57,7 +56,7 @@ export function LibraryHubShell({
   const paneRef = useRef<HTMLDivElement>(null);
   const setTab = (next: Tab) => {
     setTabState(next);
-    writeTabToUrl(TAB_SLUG[next]);
+    writeLibraryTabToUrl(TAB_SLUG[next]);
   };
 
   const version = useSyncExternalStore(subscribeDataVersion, getDataVersion, getServerDataVersion);
@@ -145,7 +144,7 @@ export function LibraryHubShell({
           </Button>
         </div>
       ) : !data ? (
-        <div aria-busy="true" aria-label={`Loading ${tab}`} className="space-y-3">
+        <div aria-busy="true" aria-label="Loading this tab" className="space-y-3">
           <Skeleton className="h-11 w-full rounded-xl" />
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-24 w-full rounded-2xl" />

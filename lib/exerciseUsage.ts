@@ -6,6 +6,16 @@ export type ExerciseUsage = { templates: number; programmes: number | null };
 
 export const NO_USAGE: ExerciseUsage = { templates: 0, programmes: 0 };
 
+// Where every exercise is used: `membersCounted` is false until 0179 is applied (or when the count could not be read), and then an
+// exercise missing from `byId` is in no template but its members' programmes are unknown, never "none".
+export type ExerciseUsageMap = { byId: Record<string, ExerciseUsage>; membersCounted: boolean };
+
+export const EMPTY_USAGE_MAP: ExerciseUsageMap = { byId: {}, membersCounted: false };
+
+export function usageFor(map: ExerciseUsageMap, exerciseId: string): ExerciseUsage {
+  return map.byId[exerciseId] ?? (map.membersCounted ? NO_USAGE : { templates: 0, programmes: null });
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 // "2 templates, 5 members' programmes", or "2 templates" / "5 members' programmes" when the other is none. '' when it is in nothing.
@@ -24,7 +34,8 @@ export function isInUse(u: ExerciseUsage): boolean {
 export function usageLine(u: ExerciseUsage): string {
   if (isInUse(u)) return `In ${usageSummary(u)}.`;
   if (u.programmes === null) return 'Not in any programme template.';
-  return "Not in any template or member's programme.";
+  // Counted over what this coach can read: another gym's member's programme can still use it.
+  return "Not in any template or member's programme you can see.";
 }
 
 // What Delete says before it does anything: retire instead when it is used (the database refuses to delete it), else confirm.
@@ -40,7 +51,7 @@ export function deleteWording(u: ExerciseUsage): { inUse: boolean; body: string 
     body:
       u.programmes === null
         ? "No programme template uses it. If a member's workout still does, it can't be deleted and you can retire it instead."
-        : "No template or member's programme uses it. If a member logged it or has a tested max for it, it can't be deleted and you can retire it instead.",
+        : "No template or member's programme you can see uses it. If anything else does (another gym's programme, a logged set or a tested max), it can't be deleted and you can retire it instead.",
   };
 }
 

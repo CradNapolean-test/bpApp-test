@@ -4,7 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ExerciseLibraryRow } from './types';
-import { usageFromRows, type ExerciseUsage } from '@/lib/exerciseUsage';
+import { usageFromRows, type ExerciseUsageMap } from '@/lib/exerciseUsage';
 import {
   LIBRARY_ADD_REFUSED,
   canAddToLibrary,
@@ -45,10 +45,10 @@ export async function getExerciseOptions(): Promise<{ id: string; name: string }
 // counted by the database in one call (exercise_library_usage, migration 0179). It runs as the coach, so it counts only what this coach
 // can already read. Until 0179 is applied: templates only (as before), page by page, with the members' figure unknown (null).
 // Empty if it can't be read.
-export async function getExerciseUsage(): Promise<Record<string, ExerciseUsage>> {
+export async function getExerciseUsage(): Promise<ExerciseUsageMap> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('exercise_library_usage');
-  if (!error && Array.isArray(data)) return usageFromRows(data);
+  if (!error && Array.isArray(data)) return { byId: usageFromRows(data), membersCounted: true };
 
   const templatesByExercise = new Map<string, Set<string>>();
   const PAGE = 1000;
@@ -68,7 +68,10 @@ export async function getExerciseUsage(): Promise<Record<string, ExerciseUsage>>
     }
     if (rows.length < PAGE) break;
   }
-  return Object.fromEntries(Array.from(templatesByExercise.entries()).map(([id, set]) => [id, { templates: set.size, programmes: null }]));
+  return {
+    byId: Object.fromEntries(Array.from(templatesByExercise.entries()).map(([id, set]) => [id, { templates: set.size, programmes: null }])),
+    membersCounted: false,
+  };
 }
 
 export async function createLibraryExercise(

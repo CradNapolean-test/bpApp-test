@@ -46,3 +46,16 @@ export function tabSource<T>(
   if (!cached) return { data: null, fetch: true };
   return { data: cached.data, fetch: cached.version !== version };
 }
+
+// Puts the open tab in the address (?tab=...) so a reload or a shared link opens it, WITHOUT a server round trip. Unlike the hubs' shared
+// writeTabToUrl, it hands the browser no state of its own (null): Next.js then copies the new address into its router, so a save's
+// refresh redraws the page for the tab that is open (the page loads only that tab, LB25) and doesn't put the old ?tab= back in the address.
+export function writeLibraryTabToUrl(slug: LibraryTabSlug, win: Pick<Window, 'location' | 'history'> = window): void {
+  try {
+    const url = new URL(win.location.href);
+    url.searchParams.set('tab', slug);
+    win.history.replaceState(null, '', url.toString());
+  } catch {
+    // An address that cannot be rewritten (an odd embedded browser) just means a reload opens the tab the page last loaded.
+  }
+}

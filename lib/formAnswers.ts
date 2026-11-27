@@ -62,10 +62,12 @@ export const SCALE_MIN = 1;
 export const SCALE_MAX = 10;
 export const SCALE_POINTS = Array.from({ length: SCALE_MAX - SCALE_MIN + 1 }, (_, i) => SCALE_MIN + i);
 
-// 'yes' -> true, 'no' -> false, anything else -> null (not answered).
+// 'yes' -> true, 'no' -> false (any case: a draft from before the coach turned a "Yes / No" choice question into yes / no reads "Yes"),
+// anything else -> null (not answered). The database takes the same (0179).
 export function yesNoValue(a: FormAnswer | undefined): boolean | null {
-  if (a === 'yes') return true;
-  if (a === 'no') return false;
+  const t = typeof a === 'string' ? a.trim().toLowerCase() : '';
+  if (t === 'yes') return true;
+  if (t === 'no') return false;
   return null;
 }
 

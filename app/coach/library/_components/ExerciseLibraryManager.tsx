@@ -33,7 +33,7 @@ import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv'
 import { describeImport, prepareExerciseImport } from '@/lib/exerciseImport';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
-import { NO_USAGE, deleteWording, usageLine, type ExerciseUsage } from '@/lib/exerciseUsage';
+import { EMPTY_USAGE_MAP, NO_USAGE, deleteWording, usageFor, usageLine, type ExerciseUsage, type ExerciseUsageMap } from '@/lib/exerciseUsage';
 import { TRACKING, TRACKING_TYPES, isTrackingType, trackingOf, type TrackingType } from '@/lib/workoutTracking';
 import { guessTrackingType } from '@/lib/trackingGuess';
 
@@ -305,11 +305,11 @@ const filterSelect =
 
 export function ExerciseLibraryManager({
   initialExercises,
-  usage = {},
+  usage = EMPTY_USAGE_MAP,
 }: {
   initialExercises: ExerciseLibraryRow[];
   // Where each exercise is used (templates and members' own programmes), by exercise id.
-  usage?: Record<string, ExerciseUsage>;
+  usage?: ExerciseUsageMap;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -335,7 +335,7 @@ export function ExerciseLibraryManager({
   // An exercise a template or a member's programme uses cannot be deleted (the database refuses): offer to retire it instead, which hides
   // it from pickers and keeps it where it is used. The confirm says where that is (LB11).
   async function handleDelete(id: string, exerciseName: string) {
-    const wording = deleteWording(usage[id] ?? NO_USAGE);
+    const wording = deleteWording(usageFor(usage, id));
     if (wording.inUse) {
       const retire = await confirm({
         title: `“${exerciseName}” is in use`,
@@ -450,7 +450,7 @@ export function ExerciseLibraryManager({
         <ExerciseFormSheet
           key={editing.id}
           exercise={editing}
-          usage={usage[editing.id] ?? NO_USAGE}
+          usage={usageFor(usage, editing.id)}
           onClose={() => setEditingId(null)}
           onDelete={handleDelete}
           onSetActive={handleSetActive}
