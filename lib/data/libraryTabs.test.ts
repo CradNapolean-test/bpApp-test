@@ -15,6 +15,7 @@ vi.mock('./programTemplates', () => ({ getProgramTemplatesWithDays: track('templ
 vi.mock('./forms', () => ({
   getFormTemplates: track('formTemplates', []),
   getFormRollup: track('formRollup', [{ client_id: 'other-1' }, { client_id: 'mine-1' }]),
+  newFormQuestionTypesReady: track('typesReady', true),
 }));
 vi.mock('./education', () => ({ getCourses: track('courses', []), getCourseRollup: track('courseRollup', [{ client_id: 'other-2' }]) }));
 vi.mock('./clientGroups', () => ({ getGroups: track('groups', []) }));
@@ -54,9 +55,9 @@ describe('readLibraryTab', () => {
 
   it("Forms reads forms and who has them, and names only the other coaches' members among them", async () => {
     const data = await readLibraryTab({} as never, 'coach-1', 'forms');
-    expect(calls.sort()).toEqual(['formRollup', 'formTemplates', 'groups', 'members']);
+    expect(calls.sort()).toEqual(['formRollup', 'formTemplates', 'groups', 'members', 'typesReady']);
     expect(readMemberNames).toHaveBeenCalledWith(expect.anything(), ['other-1']);
-    expect(data).toMatchObject({ tab: 'forms', memberNames: { 'other-1': 'Name other-1' } });
+    expect(data).toMatchObject({ tab: 'forms', memberNames: { 'other-1': 'Name other-1' }, newTypesReady: true });
   });
 
   it('Education reads courses, who has them and the other gyms, and none of the forms', async () => {

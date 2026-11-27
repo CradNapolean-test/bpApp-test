@@ -32,9 +32,12 @@ import {
   buildQuestionPayload,
   describeChanges,
   diffQuestions,
+  PHONE_PENDING_NOTE,
+  SCALE_LABEL_MAX,
+  draftOptions,
+  isAlwaysOptional,
   isChoice,
   moveQuestion,
-  optionsToText,
   removalNote,
   validateDrafts,
   type QuestionDraft,
@@ -49,12 +52,21 @@ const QUESTION_TYPES: { value: FormQuestionType; label: string }[] = [
   { value: 'number', label: 'Number' },
   { value: 'single_choice', label: 'Single choice' },
   { value: 'multi_choice', label: 'Multiple choice' },
+  { value: 'yes_no', label: 'Yes / no' },
+  { value: 'scale', label: 'Scale 1-10' },
 ];
+
+// Yes / no and 1-10 scale need migration 0179: until the database takes them they are not offered (a question already of that type still
+// shows its own type).
+const NEW_TYPES: FormQuestionType[] = ['yes_no', 'scale'];
+function typesFor(current: FormQuestionType, newTypesReady: boolean) {
+  return QUESTION_TYPES.filter((t) => newTypesReady || !NEW_TYPES.includes(t.value) || t.value === current);
+}
 
 let draftCounter = 0;
 function newDraft(): QuestionDraft {
   draftCounter += 1;
-  return { key: `new-${draftCounter}`, id: null, question_text: '', question_type: 'short_text', optionsText: '', required: true, answerCount: 0 };
+  return { key: `new-${draftCounter}`, id: null, question_text: '', question_type: 'short_text', optionsText: '', scaleLow: '', scaleHigh: '', required: true, answerCount: 0 };
 }
 
 // Fullscreen editor for one form template -- name/description/default-onboarding flag, plus
@@ -65,6 +77,7 @@ function FormEditorOverlay({
   initialDescription,
   initialIsDefault,
   initialQuestions,
+  newTypesReady,
   onClose,
   onDelete,
 }: {
@@ -73,6 +86,8 @@ function FormEditorOverlay({
   initialDescription: string;
   initialIsDefault: boolean;
   initialQuestions: QuestionDraft[];
+  // The database takes yes / no and 1-10 scale questions (migration 0179).
+  newTypesReady: boolean;
   onClose: () => void;
   onDelete: (id: string) => void;
 }) {
@@ -190,7 +205,7 @@ function FormEditorOverlay({
                   value={q.question_type}
                   onChange={(e) => updateQuestion(i, { question_type: e.target.value as FormQuestionType })}
                 >
-                  {QUESTION_TYPES.map((t) => (
+                  {typesFor(q.question_type, newTypesReady).map((t) => (
                     <option key={t.value} value={t.value}>
                       {t.label}
                     </option>
@@ -207,6 +222,27 @@ function FormEditorOverlay({
                   onChange={(e) => updateQuestion(i, { optionsText: e.target.value })}
                 />
               )}
+              {q.question_type === 'scale' && (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <input
+                    placeholder="Words under 1 (optional)"
+                    aria-label="Words under 1 (optional)"
+                    maxLength={SCALE_LABEL_MAX}
+                    className={inputCls}
+                    value={q.scaleLow ?? ''}
+                    onChange={(e) => updateQuestion(i, { scaleLow: e.target.value })}
+                  />
+                  <input
+                    placeholder="Words under 10 (optional)"
+                    aria-label="Words under 10 (optional)"
+                    maxLength={SCALE_LABEL_MAX}
+                    className={inputCls}
+                    value={q.scaleHigh ?? ''}
+                    onChange={(e) => updateQuestion(i, { scaleHigh: e.target.value })}
+                  />
+                </div>
+              )}
+              {isAlwaysOptional(q.question_type) && <p className="text-xs text-zinc-500">{PHONE_PENDING_NOTE}</p>}
               {q.answerCount > 0 && (
                 <p className="text-xs text-zinc-500">
                   {q.answerCount} answer{q.answerCount === 1 ? '' : 's'} so far. Changing the wording keeps them.
@@ -214,12 +250,14 @@ function FormEditorOverlay({
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="flex items-center gap-2 text-xs text-zinc-500">
+                  {/* Yes / no and scale are optional until the phone app is updated (see PHONE_PENDING_NOTE). */}
                   <input
                     type="checkbox"
-                    checked={q.required}
+                    checked={q.required && !isAlwaysOptional(q.question_type)}
+                    disabled={isAlwaysOptional(q.question_type)}
                     onChange={(e) => updateQuestion(i, { required: e.target.checked })}
                   />
-                  Required
+                  {isAlwaysOptional(q.question_type) ? 'Required (optional for now)' : 'Required'}
                 </label>
                 <div className="flex items-center gap-1">
                   <button
@@ -474,6 +512,7 @@ export function FormsPane({
   rollup = [],
   members = [],
   memberNames = {},
+  newTypesReady = false,
 }: {
   initialTemplates: FormTemplateRow[];
   // The gym's groups (made on the Members list), for Send to a group.
@@ -483,6 +522,8 @@ export function FormsPane({
   members?: { id: string; name: string }[];
   // Names of the other members in the rollup the coach may read.
   memberNames?: Record<string, string>;
+  // The database takes yes / no and 1-10 scale questions (migration 0179); until then they are not offered.
+  newTypesReady?: boolean;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -530,7 +571,7 @@ export function FormsPane({
               id: q.id,
               question_text: q.question_text,
               question_type: q.question_type,
-              optionsText: optionsToText(q.options),
+              ...draftOptions(q.question_type, q.options),
               required: q.required,
               answerCount: q.answerCount ?? 0,
             }))
@@ -668,6 +709,7 @@ export function FormsPane({
           initialDescription={editorState.description}
           initialIsDefault={editorState.isDefault}
           initialQuestions={editorState.questions}
+          newTypesReady={newTypesReady}
           onClose={() => setEditorState(null)}
           onDelete={handleDelete}
         />

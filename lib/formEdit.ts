@@ -5,6 +5,17 @@ import type { FormQuestionType } from '@/lib/data/types';
 
 export const CHOICE_TYPES: FormQuestionType[] = ['single_choice', 'multi_choice'];
 
+// Yes / no and 1-10 scale questions (LB22, migration 0179). The phone app as released draws no box for a type it doesn't know, and holds back
+// a form whose required question has no answer, so until the phone app is updated these are always optional: a member on the phone can
+// still send the form, just without that answer. The database holds the same rule (form_questions_yes_no_scale_optional).
+export const PHONE_PENDING_TYPES: FormQuestionType[] = ['yes_no', 'scale'];
+export const PHONE_PENDING_NOTE = 'Members using the phone app can answer this once the app is updated.';
+export const SCALE_LABEL_MAX = 60;
+
+export function isAlwaysOptional(type: FormQuestionType): boolean {
+  return PHONE_PENDING_TYPES.includes(type);
+}
+
 export interface QuestionDraft {
   // Stable key for React lists (an existing question's id, or a made-up one for a new question).
   key: string;
@@ -14,6 +25,9 @@ export interface QuestionDraft {
   question_type: FormQuestionType;
   // One option per line, so an option can contain a comma.
   optionsText: string;
+  // A scale question's words under 1 and 10 (both optional).
+  scaleLow?: string;
+  scaleHigh?: string;
   required: boolean;
   // How many answers this question already has (0 for a new question).
   answerCount: number;
@@ -65,6 +79,19 @@ export function optionsToText(options: string[] | null | undefined): string {
   return (options ?? []).join('\n');
 }
 
+// A saved question's options as the editor holds them: choices one per line, a scale's [low, high] labels in their own boxes.
+export function draftOptions(type: FormQuestionType, options: string[] | null | undefined): Pick<QuestionDraft, 'optionsText' | 'scaleLow' | 'scaleHigh'> {
+  if (type === 'scale') return { optionsText: '', scaleLow: options?.[0] ?? '', scaleHigh: options?.[1] ?? '' };
+  return { optionsText: isChoice(type) ? optionsToText(options) : '', scaleLow: '', scaleHigh: '' };
+}
+
+// What a scale question stores: [low, high] when either has words, else nothing.
+export function scaleOptions(draft: Pick<QuestionDraft, 'scaleLow' | 'scaleHigh'>): string[] | null {
+  const low = (draft.scaleLow ?? '').trim();
+  const high = (draft.scaleHigh ?? '').trim();
+  return low || high ? [low, high] : null;
+}
+
 // A question with no text is an empty row the coach never filled in: it is left out when saving (and counts as removed if it was saved).
 const isBlank = (draft: QuestionDraft) => draft.question_text.trim().length === 0;
 
@@ -74,6 +101,9 @@ export function validateDrafts(drafts: QuestionDraft[]): string | null {
     if (isBlank(draft)) continue;
     if (isChoice(draft.question_type) && parseOptions(draft.optionsText).length === 0) {
       return `Add at least one option to "${draft.question_text.trim()}", one per line.`;
+    }
+    if (draft.question_type === 'scale' && (scaleOptions(draft) ?? []).some((label) => label.length > SCALE_LABEL_MAX)) {
+      return `The words under 1 and 10 of "${draft.question_text.trim()}" can be up to ${SCALE_LABEL_MAX} characters each.`;
     }
   }
   return null;
@@ -87,8 +117,8 @@ export function buildQuestionPayload(drafts: QuestionDraft[]): QuestionPayload[]
         order_index: index,
         question_text: draft.question_text.trim(),
         question_type: draft.question_type,
-        options: isChoice(draft.question_type) ? parseOptions(draft.optionsText) : null,
-        required: draft.required,
+        options: isChoice(draft.question_type) ? parseOptions(draft.optionsText) : draft.question_type === 'scale' ? scaleOptions(draft) : null,
+        required: isAlwaysOptional(draft.question_type) ? false : draft.required,
       };
       if (draft.id) payload.id = draft.id;
       return payload;

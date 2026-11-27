@@ -179,7 +179,16 @@ function LibraryPane({ data }: { data: LibraryTabData }) {
         />
       );
     case 'forms':
-      return <FormsPane initialTemplates={data.formTemplates} groups={data.groups} rollup={data.rollup} members={data.members} memberNames={data.memberNames} />;
+      return (
+        <FormsPane
+          initialTemplates={data.formTemplates}
+          groups={data.groups}
+          rollup={data.rollup}
+          members={data.members}
+          memberNames={data.memberNames}
+          newTypesReady={data.newTypesReady}
+        />
+      );
     case 'foods':
       return <FoodsPane />;
   }

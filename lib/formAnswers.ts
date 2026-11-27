@@ -43,8 +43,50 @@ export function answerProblems(
       if (q.required && parsed.value === null) missing.push(q.id);
       continue;
     }
+    if (q.question_type === 'yes_no' || q.question_type === 'scale') {
+      // Never "invalid": anything that isn't a yes / no or a point on the scale is just not answered (LB22).
+      if (q.required && newTypePayload(q.question_type, a) == null) missing.push(q.id);
+      continue;
+    }
     const answered = Array.isArray(a) ? a.length > 0 : (a ?? '').trim() !== '';
     if (q.required && !answered) missing.push(q.id);
   }
   return { missing, invalid };
+}
+
+// ---- Yes / no and 1-10 scale questions (LB22, migration 0179) ----
+// On the form they are held as text like every other answer ('yes' / 'no', '1' to '10'), so a draft kept on the device still reads back.
+// Anything else (an old or odd draft) simply counts as not answered: it never stops a form being sent.
+
+export const SCALE_MIN = 1;
+export const SCALE_MAX = 10;
+export const SCALE_POINTS = Array.from({ length: SCALE_MAX - SCALE_MIN + 1 }, (_, i) => SCALE_MIN + i);
+
+// 'yes' -> true, 'no' -> false, anything else -> null (not answered).
+export function yesNoValue(a: FormAnswer | undefined): boolean | null {
+  if (a === 'yes') return true;
+  if (a === 'no') return false;
+  return null;
+}
+
+// '1' to '10' -> that whole number; anything else -> null (not answered).
+export function scaleValue(a: FormAnswer | undefined): number | null {
+  if (typeof a !== 'string' || !/^\d{1,2}$/.test(a.trim())) return null;
+  const n = Number(a.trim());
+  return n >= SCALE_MIN && n <= SCALE_MAX ? n : null;
+}
+
+// What is sent for one of these answers (true / false, or the whole number), or null to leave it out. undefined: not one of these types.
+export function newTypePayload(questionType: string, a: FormAnswer | undefined): boolean | number | null | undefined {
+  if (questionType === 'yes_no') return yesNoValue(a);
+  if (questionType === 'scale') return scaleValue(a);
+  return undefined;
+}
+
+// An answer as shown in a finished form, for the member and the coach: Yes / No, "7 out of 10", a list, the text, or a dash.
+export function formAnswerText(questionType: string, answer: unknown): string {
+  if (questionType === 'yes_no' && typeof answer === 'boolean') return answer ? 'Yes' : 'No';
+  if (questionType === 'scale' && typeof answer === 'number') return `${answer} out of ${SCALE_MAX}`;
+  if (Array.isArray(answer)) return answer.length ? answer.join(', ') : '—';
+  return answer == null || answer === '' ? '—' : String(answer);
 }

@@ -10,7 +10,7 @@ import { FocusOverlay } from '@/app/_components/workouts/FocusOverlay';
 import { assignForm, submitFormResponses } from '@/lib/data/forms';
 import { getMyCheckinReviews, markReviewed } from '@/lib/data/coachReviews';
 import { reviewedByLine, reviewsByRef, type ReviewMark } from '@/lib/checkinReviews';
-import { answerProblems, parseNumberAnswer } from '@/lib/formAnswers';
+import { SCALE_POINTS, answerProblems, formAnswerText, newTypePayload, parseNumberAnswer } from '@/lib/formAnswers';
 import type { FormAssignmentWithDetails, FormQuestionRow, FormTemplateRow } from '@/lib/data/types';
 
 const fieldCls =
@@ -23,11 +23,18 @@ type Answer = string | string[];
 
 const isAnswered = (a: Answer | undefined) => (Array.isArray(a) ? a.length > 0 : (a ?? '').trim() !== '');
 // A number question only counts as answered with a real number: "-" or "1.2.3" used to pass as an answer and then vanish when sent (FM2).
-const isAnsweredQ = (q: { question_type: string }, a: Answer | undefined) =>
-  q.question_type === 'number' ? parseNumberAnswer(typeof a === 'string' ? a : '').ok && isAnswered(a) : isAnswered(a);
+// A yes / no or 1-10 answer counts only when it is one (LB22).
+const isAnsweredQ = (q: { question_type: string }, a: Answer | undefined) => {
+  const newType = newTypePayload(q.question_type, a);
+  if (newType !== undefined) return newType !== null;
+  return q.question_type === 'number' ? parseNumberAnswer(typeof a === 'string' ? a : '').ok && isAnswered(a) : isAnswered(a);
+};
 
 // What is stored for one answer: text/number as given, a list for multi-choice, null when blank.
 function toPayload(q: FormQuestionRow, a: Answer | undefined): unknown {
+  // Yes / no is sent as true or false, a scale as its whole number (LB22).
+  const newType = newTypePayload(q.question_type, a);
+  if (newType !== undefined) return newType;
   if (q.question_type === 'multi_choice') return Array.isArray(a) ? a : [];
   if (!isAnswered(a)) return null;
   const text = String(a).trim();
@@ -219,6 +226,48 @@ function FillableForm({ assignment, onClose }: { assignment: FormAssignmentWithD
                 </div>
               )}
 
+              {q.question_type === 'yes_no' && (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['yes', 'no'] as const).map((v) => (
+                    // Tapping the one picked again clears it (these questions are optional for now).
+                    <Choice key={v} label={v === 'yes' ? 'Yes' : 'No'} selected={value === v} onClick={() => setAnswer(q.id, value === v ? '' : v)} />
+                  ))}
+                </div>
+              )}
+              {q.question_type === 'scale' && (
+                <div role="group" aria-label={`${q.question_text}: pick 1 to 10`}>
+                  <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                    {SCALE_POINTS.map((n) => {
+                      const on = value === String(n);
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={(e) => {
+                            pop(e.currentTarget, 0.94);
+                            setAnswer(q.id, on ? '' : String(n));
+                          }}
+                          className={`h-11 rounded-xl border text-sm font-bold transition-colors ${
+                            on
+                              ? 'border-[#1d1d1b] bg-[#1d1d1b] text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-[#1d1d1b]'
+                              : 'border-black/10 text-black hover:bg-black/[.03] dark:border-white/10 dark:text-zinc-100 dark:hover:bg-white/[.04]'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(q.options?.[0] || q.options?.[1]) && (
+                    <div className="mt-1.5 flex justify-between gap-3 px-1 text-xs text-zinc-500">
+                      <span>{q.options?.[0] ? `1 = ${q.options[0]}` : ''}</span>
+                      <span className="text-right">{q.options?.[1] ? `10 = ${q.options[1]}` : ''}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {showError && <p className="mt-2 text-sm font-semibold text-danger">Please answer this one.</p>}
             </div>
           );
@@ -291,7 +340,7 @@ function CompletedForm({
                   {q.archived_at && <span className="ml-1.5 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide dark:bg-white/10">Archived question</span>}
                 </dt>
                 <dd className="mt-0.5 font-semibold text-black dark:text-zinc-50">
-                  {Array.isArray(answer) ? (answer.length ? answer.join(', ') : '—') : answer == null || answer === '' ? '—' : String(answer)}
+                  {formAnswerText(q.question_type, answer)}
                 </dd>
               </div>
             );

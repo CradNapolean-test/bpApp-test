@@ -2,7 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getExerciseLibrary, getExerciseUsage } from './exerciseLibrary';
 import { getPendingRollouts, getProgramTemplatesWithDays } from './programTemplates';
-import { getFormRollup, getFormTemplates } from './forms';
+import { getFormRollup, getFormTemplates, newFormQuestionTypesReady } from './forms';
 import { readMemberNames } from './memberNames';
 import { getCourseRollup, getCourses } from './education';
 import { getGroups } from './clientGroups';
@@ -50,6 +50,8 @@ export type LibraryTabData =
       groups: ClientGroupWithMembers[];
       rollup: FormRollupRow[];
       memberNames: Record<string, string>;
+      // The database takes yes / no and 1-10 scale questions (migration 0179).
+      newTypesReady: boolean;
     }
   | { tab: 'foods' };
 
@@ -98,14 +100,15 @@ export async function readLibraryTab(supabase: SupabaseClient, coachId: string, 
       return { tab, courses, groups, members, rollup, otherGyms, memberNames };
     }
     case 'forms': {
-      const [formTemplates, groups, members, rollup] = await Promise.all([
+      const [formTemplates, groups, members, rollup, newTypesReady] = await Promise.all([
         getFormTemplates(),
         getGroups(),
         myMembers(supabase, coachId),
         getFormRollup(),
+        newFormQuestionTypesReady().catch(() => false),
       ]);
       const memberNames = await otherMembersNames(supabase, members, rollup.map((r) => r.client_id));
-      return { tab, formTemplates, groups, members, rollup, memberNames };
+      return { tab, formTemplates, groups, members, rollup, memberNames, newTypesReady };
     }
     case 'foods':
       // The Foods pane fetches its own lists as the coach searches.

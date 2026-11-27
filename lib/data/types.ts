@@ -744,7 +744,8 @@ export interface RosterEntry {
 
 export type AttendanceStatus = 'unmarked' | 'attended' | 'no_show';
 
-export type FormQuestionType = 'short_text' | 'long_text' | 'number' | 'single_choice' | 'multi_choice';
+// yes_no (answer true / false) and scale (a whole number 1 to 10, `options` holding its optional [low, high] labels) need migration 0179.
+export type FormQuestionType = 'short_text' | 'long_text' | 'number' | 'single_choice' | 'multi_choice' | 'yes_no' | 'scale';
 
 export interface FormTemplateRow {
   id: string;

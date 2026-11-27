@@ -142,6 +142,14 @@ export async function assignForm(templateId: string, clientId: string): Promise<
   return error ? fail(error, 'Could not assign that form') : ok();
 }
 
+// Whether the database takes yes / no and 1-10 scale questions (LB22, migration 0179): form_question_types() lists the types it accepts.
+// False when the function isn't there yet, so the editor doesn't offer types a save would refuse.
+export async function newFormQuestionTypesReady(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('form_question_types');
+  return !error && Array.isArray(data) && data.includes('yes_no') && data.includes('scale');
+}
+
 // Every sending of this gym's forms the coach can read (their own members, and their gym's members, 0053), for "who has answered"
 // (LB19). Empty (never an error) so the Library still loads.
 export async function getFormRollup(): Promise<FormRollupRow[]> {
