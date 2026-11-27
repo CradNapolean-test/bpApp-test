@@ -1,17 +1,13 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getExerciseLibrary, getExerciseUsage } from '@/lib/data/exerciseLibrary';
-import { getPendingRollouts, getProgramTemplatesWithDays } from '@/lib/data/programTemplates';
-import { getFormRollup, getFormTemplates } from '@/lib/data/forms';
-import { readMemberNames } from '@/lib/data/memberNames';
-import { getCourseRollup, getCourses } from '@/lib/data/education';
 import { getCoachUnreadTotal } from '@/lib/data/coach';
-import { getGroups } from '@/lib/data/clientGroups';
-import { getMyGyms } from '@/lib/data/gym';
-import { getMyClients } from '@/lib/data/coach';
+import { readLibrarySummary, readLibraryTab } from '@/lib/data/libraryTabs';
+import { parseLibraryTab } from '@/lib/libraryTabs';
 import { LibraryHubShell } from './_components/LibraryHubShell';
 
-export default async function CoachLibraryPage() {
+// Loads the tiles' counts and only the tab that opens (?tab=..., Exercises when none): each other tab's data is fetched the first time
+// it is opened (LB25). A save's refresh redraws this for the tab in the address, which is the open one.
+export default async function CoachLibraryPage({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -25,43 +21,12 @@ export default async function CoachLibraryPage() {
     .single();
   if (profile?.role !== 'coach') redirect('/dashboard');
 
-  const [exercises, templates, formTemplates, courses, unreadCount, groups, myClients, rollouts, exerciseUsage, courseRollup, myGyms, formRollup] = await Promise.all([
-    getExerciseLibrary(),
-    getProgramTemplatesWithDays(),
-    getFormTemplates(),
-    getCourses(),
+  const tab = parseLibraryTab((await searchParams).tab);
+  const [unreadCount, summary, tabData] = await Promise.all([
     getCoachUnreadTotal(supabase),
-    getGroups(),
-    getMyClients(supabase, user.id),
-    getPendingRollouts(),
-    getExerciseUsage(),
-    getCourseRollup(),
-    getMyGyms().catch(() => []),
-    getFormRollup(),
+    readLibrarySummary(supabase),
+    readLibraryTab(supabase, user.id, tab),
   ]);
-  // Who has each course and form can include other coaches' members at the gym: their names, where the coach may read them.
-  const mine = new Set(myClients.map((c) => c.id));
-  const memberNames = await readMemberNames(
-    supabase,
-    [...courseRollup.map((r) => r.client_id), ...formRollup.map((r) => r.client_id)].filter((id) => !mine.has(id))
-  );
 
-  return (
-    <LibraryHubShell
-      initialExercises={exercises}
-      initialTemplates={templates}
-      initialFormTemplates={formTemplates}
-      initialCourses={courses}
-      unreadCount={unreadCount}
-      groups={groups}
-      rollouts={rollouts}
-      exerciseUsage={exerciseUsage}
-      courseRollup={courseRollup}
-      formRollup={formRollup}
-      memberNames={memberNames}
-      otherGyms={myGyms.filter((g) => !g.isActive).map((g) => ({ id: g.gymId, name: g.gymName }))}
-      members={myClients.map((c) => ({ id: c.id, name: c.name ?? c.email }))}
-      email={user.email ?? 'Coach'}
-    />
-  );
+  return <LibraryHubShell initialTab={tabData} summary={summary} unreadCount={unreadCount} email={user.email ?? 'Coach'} />;
 }
