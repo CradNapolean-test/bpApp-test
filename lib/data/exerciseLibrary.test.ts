@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const createClient = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({ createClient: () => createClient() }));
 
-import { canAddLibraryExercises, createLibraryExerciseByName } from './exerciseLibrary';
+import { canAddLibraryExercises, createLibraryExerciseByName, getExerciseUsage } from './exerciseLibrary';
 import { LIBRARY_ADD_REFUSED } from '@/lib/libraryCreate';
 
 // A database client that knows who is signed in, their profile, and the library rows a name search finds; it records what is inserted.
@@ -83,5 +83,52 @@ describe('canAddLibraryExercises', () => {
     expect(await canAddLibraryExercises()).toBe(false);
     fakeClient({ user: null });
     expect(await canAddLibraryExercises()).toBe(false);
+  });
+});
+
+describe('getExerciseUsage (LB11)', () => {
+  // A client whose database either has exercise_library_usage (0179) or not; it records every call.
+  function usageClient(opts: { rpc: { data: unknown; error: { code: string } | null }; templateRows?: unknown[] }) {
+    const calls: string[] = [];
+    const query = {
+      select: () => query,
+      not: () => query,
+      range: async () => {
+        calls.push('page');
+        return { data: opts.templateRows ?? [], error: null };
+      },
+    };
+    createClient.mockResolvedValue({
+      rpc: async (name: string) => {
+        calls.push(`rpc:${name}`);
+        return opts.rpc;
+      },
+      from: (table: string) => {
+        calls.push(`from:${table}`);
+        return query;
+      },
+    });
+    return calls;
+  }
+
+  it("asks the database once for both counts, over what the coach can read, and never once per exercise", async () => {
+    const calls = usageClient({
+      rpc: { data: [{ exercise_library_id: 'ex-1', templates: 2, member_programmes: 5 }], error: null },
+    });
+    expect(await getExerciseUsage()).toEqual({ 'ex-1': { templates: 2, programmes: 5 } });
+    expect(calls).toEqual(['rpc:exercise_library_usage']);
+  });
+
+  it("counts templates as before when 0179 isn't applied, with the members' figure unknown", async () => {
+    const calls = usageClient({
+      rpc: { data: null, error: { code: 'PGRST202' } },
+      templateRows: [
+        { exercise_library_id: 'ex-1', program_template_days: { template_id: 't1' } },
+        { exercise_library_id: 'ex-1', program_template_days: { template_id: 't1' } },
+        { exercise_library_id: 'ex-1', program_template_days: [{ template_id: 't2' }] },
+      ],
+    });
+    expect(await getExerciseUsage()).toEqual({ 'ex-1': { templates: 2, programmes: null } });
+    expect(calls).toEqual(['rpc:exercise_library_usage', 'from:program_template_exercises', 'page']);
   });
 });

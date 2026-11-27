@@ -33,6 +33,7 @@ import { toCsv, parseCsv, headerIndex, downloadTextFile } from '@/lib/utils/csv'
 import { describeImport, prepareExerciseImport } from '@/lib/exerciseImport';
 import { normaliseLessonLink } from '@/lib/lessonLink';
 import type { ExerciseLibraryRow } from '@/lib/data/types';
+import { NO_USAGE, deleteWording, usageLine, type ExerciseUsage } from '@/lib/exerciseUsage';
 import { TRACKING, TRACKING_TYPES, isTrackingType, trackingOf, type TrackingType } from '@/lib/workoutTracking';
 import { guessTrackingType } from '@/lib/trackingGuess';
 
@@ -115,18 +116,18 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
 
 // Add or edit an exercise. The things you reach for first (name, video, movement, equipment) are up top; the
 // defaults a programme starts from, and the longer text, sit under "Defaults and notes". An exercise that is already in the library
-// opens here from its row, so this is also where its video plays, where it says which templates use it, and the one place to retire,
+// opens here from its row, so this is also where its video plays, where it says which templates and members' programmes use it, and the one place to retire,
 // bring back or delete it (LB12).
 function ExerciseFormSheet({
   exercise,
-  templates = 0,
+  usage = NO_USAGE,
   onClose,
   onDelete,
   onSetActive,
 }: {
   exercise: ExerciseLibraryRow | null;
-  // How many programme templates use it.
-  templates?: number;
+  // How many templates and members' programmes use it.
+  usage?: ExerciseUsage;
   onClose: () => void;
   onDelete?: (id: string, name: string) => void;
   onSetActive?: (id: string, active: boolean) => void;
@@ -189,7 +190,7 @@ function ExerciseFormSheet({
         {exercise && (
           <p className="text-xs font-semibold text-zinc-500">
             {isRetired(exercise) ? 'Retired: not offered for new programmes. ' : ''}
-            {templates > 0 ? `In ${templates} programme template${templates === 1 ? '' : 's'}.` : 'Not in any programme template.'}
+            {usageLine(usage)}
           </p>
         )}
         <Labeled label="Exercise name">
@@ -307,8 +308,8 @@ export function ExerciseLibraryManager({
   usage = {},
 }: {
   initialExercises: ExerciseLibraryRow[];
-  // How many programme templates use each exercise, by exercise id.
-  usage?: Record<string, number>;
+  // Where each exercise is used (templates and members' own programmes), by exercise id.
+  usage?: Record<string, ExerciseUsage>;
 }) {
   const confirm = useConfirm();
   const toast = useToast();
@@ -331,14 +332,14 @@ export function ExerciseLibraryManager({
     setVisible(PAGE_SIZE);
   }
 
-  // An exercise a programme template uses cannot be deleted (the database refuses): offer to retire it instead, which hides it from
-  // pickers and keeps it in the programmes that already use it.
+  // An exercise a template or a member's programme uses cannot be deleted (the database refuses): offer to retire it instead, which hides
+  // it from pickers and keeps it where it is used. The confirm says where that is (LB11).
   async function handleDelete(id: string, exerciseName: string) {
-    const templates = usage[id] ?? 0;
-    if (templates > 0) {
+    const wording = deleteWording(usage[id] ?? NO_USAGE);
+    if (wording.inUse) {
       const retire = await confirm({
         title: `“${exerciseName}” is in use`,
-        body: `In use by ${templates} programme template${templates === 1 ? '' : 's'}, so it can’t be deleted. Retire it instead: it stays in those programmes but is not offered for new ones.`,
+        body: wording.body,
         confirmLabel: 'Retire exercise',
       });
       if (!retire) return;
@@ -347,7 +348,7 @@ export function ExerciseLibraryManager({
     }
     const ok = await confirm({
       title: `Delete “${exerciseName}” from the library?`,
-      body: "No programme template uses it. If a member's workout still does, it can't be deleted and you can retire it instead.",
+      body: wording.body,
       destructive: true,
     });
     if (!ok) return;
@@ -449,7 +450,7 @@ export function ExerciseLibraryManager({
         <ExerciseFormSheet
           key={editing.id}
           exercise={editing}
-          templates={usage[editing.id] ?? 0}
+          usage={usage[editing.id] ?? NO_USAGE}
           onClose={() => setEditingId(null)}
           onDelete={handleDelete}
           onSetActive={handleSetActive}

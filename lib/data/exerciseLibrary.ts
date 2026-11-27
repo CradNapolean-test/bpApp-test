@@ -4,6 +4,7 @@ import { raise } from './errors';
 import { fail, ok, type ActionResult } from './result';
 import { createClient } from '@/lib/supabase/server';
 import type { ExerciseLibraryRow } from './types';
+import { usageFromRows, type ExerciseUsage } from '@/lib/exerciseUsage';
 import {
   LIBRARY_ADD_REFUSED,
   canAddToLibrary,
@@ -40,29 +41,34 @@ export async function getExerciseOptions(): Promise<{ id: string; name: string }
   return (data ?? []) as { id: string; name: string }[];
 }
 
-// How many programme templates use each library exercise (by exercise id). Counts distinct templates, not
-// rows: a 12-week template that repeats an exercise every week still counts once. Empty if it can't be read.
-export async function getExerciseUsage(): Promise<Record<string, number>> {
+// Where each library exercise is used (LB11), by exercise id: in how many programme templates and how many members' own programmes,
+// counted by the database in one call (exercise_library_usage, migration 0179). It runs as the coach, so it counts only what this coach
+// can already read. Until 0179 is applied: templates only (as before), page by page, with the members' figure unknown (null).
+// Empty if it can't be read.
+export async function getExerciseUsage(): Promise<Record<string, ExerciseUsage>> {
   const supabase = await createClient();
+  const { data, error } = await supabase.rpc('exercise_library_usage');
+  if (!error && Array.isArray(data)) return usageFromRows(data);
+
   const templatesByExercise = new Map<string, Set<string>>();
   const PAGE = 1000;
   for (let from = 0; from < 20000; from += PAGE) {
-    const { data, error } = await supabase
+    const { data: rows, error: pageError } = await supabase
       .from('program_template_exercises')
       .select('exercise_library_id, program_template_days(template_id)')
       .not('exercise_library_id', 'is', null)
       .range(from, from + PAGE - 1);
-    if (error || !data) break;
-    for (const row of data) {
+    if (pageError || !rows) break;
+    for (const row of rows) {
       const day = Array.isArray(row.program_template_days) ? row.program_template_days[0] : row.program_template_days;
       if (!row.exercise_library_id || !day?.template_id) continue;
       const set = templatesByExercise.get(row.exercise_library_id) ?? new Set<string>();
       set.add(day.template_id);
       templatesByExercise.set(row.exercise_library_id, set);
     }
-    if (data.length < PAGE) break;
+    if (rows.length < PAGE) break;
   }
-  return Object.fromEntries(Array.from(templatesByExercise.entries()).map(([id, set]) => [id, set.size]));
+  return Object.fromEntries(Array.from(templatesByExercise.entries()).map(([id, set]) => [id, { templates: set.size, programmes: null }]));
 }
 
 export async function createLibraryExercise(

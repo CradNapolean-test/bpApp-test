@@ -18,13 +18,14 @@ import type {
   ProgramTemplateWithDays,
 } from './types';
 import type { FormRollupRow } from '@/lib/libraryRollups';
+import type { ExerciseUsage } from '@/lib/exerciseUsage';
 import { EMPTY_LIBRARY_SUMMARY, type LibrarySummary, type LibraryTabSlug } from '@/lib/libraryTabs';
 
 type Member = { id: string; name: string };
 
 // One tab's data (LB25): exactly what that tab's pane is drawn from, and nothing of the other tabs.
 export type LibraryTabData =
-  | { tab: 'exercises'; exercises: ExerciseLibraryRow[]; usage: Record<string, number> }
+  | { tab: 'exercises'; exercises: ExerciseLibraryRow[]; usage: Record<string, ExerciseUsage> }
   | {
       tab: 'templates';
       templates: ProgramTemplateWithDays[];
