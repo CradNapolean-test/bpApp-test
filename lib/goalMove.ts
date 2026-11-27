@@ -15,12 +15,26 @@ interface GoalEntry {
   moved_to_goal_at?: string | null;
 }
 
-// The Notes goals still to move: not marked as moved, with words in them, and not already in the goal word for word.
+// The goal's paragraphs (split at blank lines, trimmed): an entry is already in the goal when its words are one of them. A word inside a
+// longer paragraph doesn't count ("5kg" is not in "Lose 15kg").
+export function goalParagraphs(goal: string | null | undefined): Set<string> {
+  return new Set((goal ?? '').split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p !== ''));
+}
+
+// The Notes goals still to move: not marked as moved, with words in them, not already a paragraph of the goal, and only the first of any
+// entries with the same words.
 export function goalsStillInNotes<T extends GoalEntry>(entries: T[], goal: string | null | undefined): T[] {
-  const current = goal ?? '';
+  const there = goalParagraphs(goal);
+  const seen = new Set<string>();
   return entries
-    .filter((e) => e.kind === 'goal' && !e.moved_to_goal_at && e.body.trim() !== '' && !current.includes(e.body.trim()))
-    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+    .filter((e) => e.kind === 'goal' && !e.moved_to_goal_at)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+    .filter((e) => {
+      const words = e.body.trim();
+      if (words === '' || there.has(words) || seen.has(words)) return false;
+      seen.add(words);
+      return true;
+    });
 }
 
 // The goal with those entries added: after a blank line when there is a goal already, oldest first, each one whole. Nothing is dropped:

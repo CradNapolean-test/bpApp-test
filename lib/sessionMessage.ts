@@ -2,7 +2,14 @@
 // Who it reaches is decided in the database (message_session_booked, migration 0178): the members booked into that session on that date,
 // read when the coach presses Send. This is the same rule for the pop-up's count, so the confirm says how many it goes to.
 
-export const SESSION_MESSAGE_MAX = 4000; // chat_messages.text's own limit (migration 0108)
+// chat_messages.text allows 4,000 (migration 0108); a colleague's member's copy starts with the sender's name, so 3,900 leaves room.
+export const SESSION_MESSAGE_MAX = 3900;
+
+// The database takes a session from yesterday on (message_session_booked, 0178), so the pop-up offers it from then.
+export function canMessageSession(sessionDate: string, todayIso: string): boolean {
+  const yesterday = new Date(Date.parse(todayIso + 'T00:00:00Z') - 86_400_000).toISOString().slice(0, 10);
+  return sessionDate >= yesterday;
+}
 
 // Booked places only: not the waitlist, not anyone removed or cancelled. One message each, even if a member somehow has two bookings.
 export function bookedRecipients(roster: { clientId: string; status: string }[]): string[] {

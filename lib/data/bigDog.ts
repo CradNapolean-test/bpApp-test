@@ -10,6 +10,7 @@ import type { MemberInfo, RawScore } from '@/lib/bigDogExport';
 import { pushQuietly, sendPushToClient } from '@/lib/push';
 import type { BigDogLevel } from '@/lib/bigDog';
 import type { BigDogResultRow } from './types';
+import { pendingScore } from '@/lib/bigDogConfirm';
 
 export async function getBigDogResults(clientId: string): Promise<BigDogResultRow[]> {
   const supabase = await createClient();
@@ -105,6 +106,24 @@ export async function logMyBigDogScore(clientId: string, exerciseKey: string, va
 // A coach confirming a score: records a verified row (counts towards the T-shirt tier).
 export async function verifyBigDogScore(clientId: string, exerciseKey: string, value: number): Promise<ActionResult> {
   return insertScore(clientId, exerciseKey, value, false);
+}
+
+// The coach dashboard's Confirm (CV17): confirms the score the member's Big Dog page would offer to verify, worked out again here from all
+// their results (the dashboard reads only 90 days of them) with the page's own rule (pendingScore), and only when it is the score the
+// row showed. It writes through verifyBigDogScore, the page's own call, so the database's rules are the same (is_coach_of).
+export async function confirmPendingScore(clientId: string, exerciseKey: string, shownValue: number): Promise<ActionResult> {
+  const exercise = EXERCISES.find((e) => e.key === exerciseKey);
+  if (!exercise) return fail(null, 'Unknown exercise');
+  const supabase = await createClient();
+  const [results, { data: profile }] = await Promise.all([
+    getBigDogResults(clientId),
+    supabase.from('client_profiles').select('gender').eq('client_id', clientId).maybeSingle(),
+  ]);
+  const pending = pendingScore(results, exercise, genderFromProfile(profile?.gender));
+  if (!pending || pending.result_value !== shownValue) {
+    return fail(null, 'Their scores have changed, or a coach has verified one already: open their Big Dog page to check.');
+  }
+  return verifyBigDogScore(clientId, exerciseKey, pending.result_value);
 }
 
 // Removes one of the member's own self-reported scores (RLS refuses anything else).

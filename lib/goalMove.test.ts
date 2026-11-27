@@ -35,8 +35,15 @@ describe('one goal (CL10)', () => {
       entry('n', 'Prefers mornings', '2026-09-03T10:00:00Z', { kind: 'note' }),
       entry('i', 'Bad knee', '2026-09-04T10:00:00Z', { kind: 'injury' }),
     ];
-    expect(goalsStillInNotes(entries, 'Wants to Run a 5k this year').map((e) => e.id)).toEqual(['b']);
+    expect(goalsStillInNotes(entries, 'Wants to get fit\n\n  Run a 5k  ').map((e) => e.id)).toEqual(['b']);
     expect(goalsStillInNotes(entries, null).map((e) => e.id)).toEqual(['a', 'b']);
+  });
+
+  it('counts only a whole paragraph as already there, and adds entries with the same words once (review finding 3)', () => {
+    // "5kg" inside "Lose 15kg" is not the entry "5kg".
+    expect(goalsStillInNotes([entry('a', '5kg', '2026-10-01T10:00:00Z')], 'Lose 15kg').map((e) => e.id)).toEqual(['a']);
+    const twins = [entry('a', 'Run a 5k', '2026-10-01T10:00:00Z'), entry('b', ' Run a 5k\n', '2026-10-02T10:00:00Z')];
+    expect(goalsStillInNotes(twins, null).map((e) => e.id)).toEqual(['a']);
   });
 
   it('never moves the same text twice: once added, nothing is left to move', () => {

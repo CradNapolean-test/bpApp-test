@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser, getMyCoachProfile } from '@/lib/supabase/currentUser';
 import { challengePrompt } from '@/lib/challengeCheckins';
 import { EXERCISES } from '@/lib/bigDog';
+import { dashboardScore } from '@/lib/bigDogConfirm';
 import { isGoneQuiet, sortFollowUps, type FollowUpKind, type FollowUpReason } from '@/lib/followUp';
 import { hasFoodLogged, hasLoggedData } from '@/lib/utils/dailyLog';
 import { addDays, isoDateInTz, isoWeekKey, todayIsoInTz, toIsoDate, DEFAULT_TIMEZONE } from '@/lib/utils/dates';
@@ -423,21 +424,23 @@ export async function getCoachDashboard(requested: DashboardScope = 'mine', coac
       forms.push({ clientId: m.id, name, assignmentId: f.id, formName: one(f.form_templates)?.name ?? 'Form', completedAt: f.completed_at, mine: mine(m) });
     }
 
-    // Peak week scores the member logged themselves where the newest score is still unverified.
+    // Peak week scores the member logged themselves where the newest score is still unverified. The row names their best logged score of
+    // those read (dashboardScore), the one Confirm checks again and verifies (CV17).
     const newestByExercise = new Map<string, { self_reported: boolean | null; result_text: string | null; result_value: number | null }>();
     for (const r of [...(m.big_dog_results ?? [])].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))) {
       if (!newestByExercise.has(r.exercise_key)) newestByExercise.set(r.exercise_key, r);
     }
     for (const [key, r] of newestByExercise) {
       if (r.self_reported) {
+        const shown = dashboardScore(m.big_dog_results ?? [], key);
         scores.push({
           clientId: m.id,
           name,
           exercise: EXERCISES.find((e) => e.key === key)?.name ?? key,
-          result: r.result_text,
+          result: shown?.text ?? r.result_text,
           mine: mine(m),
           exerciseKey: key,
-          value: r.result_value ?? null,
+          value: shown?.value ?? null,
         });
       }
     }

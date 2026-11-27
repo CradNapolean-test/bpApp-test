@@ -22,7 +22,7 @@ import { nowLocalMs } from '@/lib/utils/cancelDeadline';
 import { startMs } from '@/lib/utils/booking';
 import { ordinal } from '@/lib/utils/bookingWords';
 import { messageEveryoneBooked } from '@/lib/data/sessionMessage';
-import { SESSION_MESSAGE_MAX, bookedRecipients, membersWord, sessionMessageConfirm, sessionMessageProblem } from '@/lib/sessionMessage';
+import { SESSION_MESSAGE_MAX, bookedRecipients, canMessageSession, membersWord, sessionMessageConfirm, sessionMessageProblem } from '@/lib/sessionMessage';
 import { rememberCount, sessionKey, unmarkedInRoster, withMarkedCounts, type MarkedCounts } from '@/lib/sessionMarking';
 import type { AttendanceStatus, RosterEntry, ScheduleOccurrence } from '@/lib/data/types';
 import type { CoachClientRow } from '@/lib/data/coach';
@@ -627,7 +627,7 @@ export function SessionsView({
                   <UserPlus className="h-4 w-4" /> Add a member
                 </button>
               )}
-              {bookedRecipients(active).length > 0 && (
+              {bookedRecipients(active).length > 0 && canMessageSession(open.date, todayIso) && (
                 <button
                   type="button"
                   onClick={() => setMessageOpen(true)}

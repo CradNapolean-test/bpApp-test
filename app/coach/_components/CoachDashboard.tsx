@@ -28,7 +28,7 @@ import { useAction } from '@/app/_components/useAction';
 import { challengeReviewKind } from '@/lib/challengeCheckins';
 import { markReviewed } from '@/lib/data/coachReviews';
 import { markAllReviewed } from '@/lib/data/coachDashboard';
-import { verifyBigDogScore } from '@/lib/data/bigDog';
+import { confirmPendingScore } from '@/lib/data/bigDog';
 import { dashboardConfirmArgs } from '@/lib/bigDogConfirm';
 import { THIN_WEEK_DAYS, checkinRowHint as checkinHint, saveCheckinQueue } from '@/lib/checkinQueue';
 import { formatClassTime, formatLongDate } from '@/lib/utils/dates';
@@ -505,7 +505,7 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
       title: 'Peak week scores to verify',
       summary: `${data.scores[0].name}: ${data.scores[0].exercise}${data.scores[0].result ? ` ${data.scores[0].result}` : ''}${data.scores.length > 1 ? ` and ${data.scores.length - 1} more` : ''}`,
       items: data.scores.map((s) => {
-        // Confirm here records the same verified score as Verify on the member's Big Dog page, for the same coach (CV17).
+        // Confirm here verifies what Verify on the member's Big Dog page would, for the same coach, re-checked on the server (CV17).
         const args = dashboardConfirmArgs(s, scope);
         return {
           key: `${s.clientId}|${s.exercise}`,
@@ -513,7 +513,7 @@ export function CoachDashboard({ data: loaded, activity }: { data: CoachDashboar
           title: s.name,
           hint: `${s.exercise}${s.result ? ` ${s.result}` : ''}`,
           href: `/coach/clients/${s.clientId}?open=bigdog`,
-          confirm: args ? () => verifyBigDogScore(s.clientId, args.exerciseKey, args.value) : undefined,
+          confirm: args ? () => confirmPendingScore(s.clientId, args.exerciseKey, args.value) : undefined,
         };
       }),
     });

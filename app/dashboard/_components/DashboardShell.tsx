@@ -410,7 +410,8 @@ export function DashboardShell({
   }
   useEffect(() => {
     if (!chatOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setChatOpen(false);
+    // Not when something else already used the Escape (a menu on the page beside the chat closing, MS11).
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !e.defaultPrevented && setChatOpen(false);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [chatOpen]);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookedRecipients, membersWord, sessionMessageConfirm, sessionMessageProblem, SESSION_MESSAGE_MAX } from './sessionMessage';
+import { bookedRecipients, canMessageSession, membersWord, sessionMessageConfirm, sessionMessageProblem, SESSION_MESSAGE_MAX } from './sessionMessage';
 
 describe('"Message everyone booked" (BK16)', () => {
   it('reaches booked members only: not the waitlist, not anyone cancelled or removed', () => {
@@ -32,5 +32,15 @@ describe('"Message everyone booked" (BK16)', () => {
     expect(sessionMessageProblem('Car park closed tonight, use the side gate')).toBeNull();
     expect(sessionMessageProblem('x'.repeat(SESSION_MESSAGE_MAX))).toBeNull();
     expect(sessionMessageProblem('x'.repeat(SESSION_MESSAGE_MAX + 1))).toMatch(/too long/);
+  });
+
+  it('is offered for a session from yesterday on, as the database allows (review finding 5)', () => {
+    expect(canMessageSession('2026-11-26', '2026-11-27')).toBe(true);
+    expect(canMessageSession('2026-11-27', '2026-11-27')).toBe(true);
+    expect(canMessageSession('2026-12-03', '2026-11-27')).toBe(true);
+    expect(canMessageSession('2026-11-25', '2026-11-27')).toBe(false);
+    // Across a month end.
+    expect(canMessageSession('2026-11-30', '2026-12-01')).toBe(true);
+    expect(SESSION_MESSAGE_MAX).toBeLessThanOrEqual(4000 - 60);
   });
 });

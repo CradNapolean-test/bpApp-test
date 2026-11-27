@@ -53,18 +53,24 @@ describe('migration 0178', () => {
       expect(b.indexOf('insert into chat_messages')).toBeGreaterThan(check);
     });
 
-    it('writes only to members booked into that session on that date, from the caller', () => {
+    it('writes only to members of the gym booked into that session on that date, from the caller, and from yesterday on', () => {
       const b = block();
       expect(b).toContain('b.class_id = p_class_id');
       expect(b).toContain('b.booking_date = p_date');
       expect(b).toContain("b.status = 'booked'");
-      expect(b).toContain('select distinct b.client_id');
-      expect(b).toContain('values (v_member.client_id, auth.uid(), v_text)');
+      expect(b).toContain('and m.gym_id = v_gym');
+      expect(b).toContain('select distinct b.client_id, m.coach_id');
+      expect(b).toContain('p_date < current_date - 1');
+      expect(b).toMatch(/values \(\s*v_member\.client_id,\s*auth\.uid\(\),/);
     });
 
-    it('keeps to the chat limit and refuses an empty message', () => {
+    it("names the sender to a colleague's member, and keeps to the chat limit with room for the name", () => {
       const b = block();
-      expect(b).toContain('char_length(v_text) > 4000');
+      expect(b).toContain(
+        "case when v_member.coach_id is distinct from auth.uid() then coalesce(v_sender, 'A coach at your gym') || ' (coach): ' || v_text else v_text end"
+      );
+      expect(b).toContain('left(btrim(p.display_name), 40)');
+      expect(b).toContain('char_length(v_text) > 3900');
       expect(b).toContain("if v_text = '' then");
     });
   });
@@ -73,13 +79,13 @@ describe('migration 0178', () => {
     const move = () => {
       const start = sql.indexOf('alter table public.client_journal_entries add column if not exists moved_to_goal_at timestamptz;');
       expect(start).toBeGreaterThan(-1);
-      return sql.slice(start, sql.indexOf('where j.id = t.id;', start) + 'where j.id = t.id;'.length);
+      return sql.slice(start, sql.indexOf('$move$;', start) + '$move$;'.length);
     };
 
     it('only ever reads goal entries not moved yet, so a second run moves nothing twice', () => {
       const m = move();
-      expect(m).toContain("where j.kind = 'goal'\n    and j.moved_to_goal_at is null");
-      expect(m).toContain('set moved_to_goal_at = now()');
+      expect(m).toContain("where j.kind = 'goal'\n        and j.moved_to_goal_at is null");
+      expect(m).toContain('set moved_to_goal_at = now() where id = any(v_member.entry_ids)');
     });
 
     it('keeps every row: no delete anywhere in the file', () => {
@@ -87,21 +93,25 @@ describe('migration 0178', () => {
       expect(sql).not.toMatch(/^\s*truncate/im);
     });
 
-    it('appends after the goal, oldest first, a blank line between: the same rule as lib/goalMove.ts', () => {
+    it('appends after the goal, oldest first, a blank line between, once per wording, unless already a paragraph: the rule in lib/goalMove.ts', () => {
       const m = move();
-      expect(m).toContain("string_agg(t.body, E'\\n\\n' order by t.created_at, t.id)");
+      expect(m).toContain(String.raw`regexp_replace(j.body, '^\s+|\s+$', '', 'g') as body`);
+      expect(m).toContain(String.raw`string_agg(x.body, E'\n\n' order by x.created_at, x.id)`);
+      expect(m).toContain('row_number() over (partition by t.client_id, t.body order by t.created_at, t.id) as nth');
+      expect(m).toContain("x.body <> '' and x.nth = 1 and not x.already_there");
+      expect(m).toContain(String.raw`regexp_split_to_table(coalesce(p.goal_description, ''), '\n\s*\n') as para`);
       expect(m).toContain("when btrim(coalesce(old_goal, '')) = '' then added");
-      expect(m).toContain("else regexp_replace(old_goal, '\\s+$', '') || E'\\n\\n' || added");
-      // An entry already in the goal word for word adds nothing; an empty one adds nothing.
-      expect(m).toContain("filter (where t.body <> '' and strpos(coalesce(p.goal_description, ''), t.body) = 0)");
+      expect(m).toContain(String.raw`else regexp_replace(old_goal, '\s+$', '') || E'\n\n' || added`);
     });
 
-    it("never writes a goal past its limit, and marks only the entries of members whose goal was written", () => {
+    it('never writes past the limit, writes each member on their own, and marks only members whose goal was written', () => {
       const m = move();
-      expect(m).toContain('where new_goal is null or char_length(new_goal) <= 5000');
-      expect(m).toContain('join fits f on f.client_id = t.client_id');
-      // The goal is written from the same rows that are marked.
-      expect(m).toContain('from fits f\n  where p.client_id = f.client_id');
+      expect(m).toContain('char_length(v_member.new_goal) > 5000');
+      expect(m).toContain('exception when check_violation then');
+      // The goal and the marks are in the same block, so a refused goal leaves the entries unmarked.
+      const inner = m.slice(m.indexOf('    begin\n'), m.indexOf('exception when check_violation'));
+      expect(inner).toContain('update public.client_profiles set goal_description = v_member.new_goal');
+      expect(inner).toContain('update public.client_journal_entries set moved_to_goal_at = now()');
     });
   });
 });
