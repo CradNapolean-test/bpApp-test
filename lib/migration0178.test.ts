@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 // locked to the right roles, and the md5 guard matches the bodies actually in the file (an edited body with a stale guard would make the
 // migration refuse to re-run, or let a different body through).
 
-const sql = readFileSync(join(__dirname, '..', 'supabase', 'migrations', '0178_session_message_goal_move_members_nutrition.sql'), 'utf8').replace(
+const sql = readFileSync(join(__dirname, '..', 'supabase', 'migrations', '0178_session_message_goal_move.sql'), 'utf8').replace(
   /\r\n/g,
   '\n'
 );

@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpDown, CalendarCheck, Check, ClipboardCheck, Hourglass, Info, MessageSquare, Search, Users } from 'lucide-react';
+import { Apple, ArrowUpDown, CalendarCheck, Check, ClipboardCheck, Hourglass, Info, MessageSquare, Search, Users } from 'lucide-react';
+import { nutritionText, type MemberNutrition } from '@/lib/memberNutrition';
+import type { TrafficLight } from '@/lib/utils/accountability';
 import { BottomSheet } from '@/app/_components/BottomSheet';
 import { Avatar } from '@/app/_components/Avatar';
 import { GroupsManager } from './GroupsManager';
@@ -59,6 +61,9 @@ const PILL: Record<string, string> = {
   'On hold': 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300',
 };
 const pillCls = (label: string) => PILL[label] ?? 'bg-black/[.06] text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
+// This week's average calories against target (NU30), coloured as on the member's Overview.
+const toneCls = (tone: TrafficLight | null) =>
+  tone === 'green' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'amber' ? 'text-amber-700 dark:text-amber-300' : tone === 'red' ? 'text-red-700 dark:text-red-400' : 'text-black dark:text-zinc-50';
 
 // The Logging column (D10): how recently the member logged anything, as a colour word. It measures logging only, not attendance or
 // progress, hence the name (it was "Status", CL5). The bands are lib/followUp.ts's: red is exactly "Gone quiet" (D11).
@@ -83,6 +88,7 @@ export function ClientTable({
   followUps = {},
   notSetUpIds = [],
   activity = NO_ACTIVITY,
+  nutrition = null,
   todayIso,
 }: {
   clients: CoachClientRow[];
@@ -107,6 +113,8 @@ export function ClientTable({
   notSetUpIds?: string[];
   // This week's check-in and the last class attended, by member (getMemberListActivity, CL6). null: they could not be read.
   activity?: Record<string, MemberListActivity> | null;
+  // The Food column (NU30): how each member tracks food and this week's average calories against target. null when it could not be read.
+  nutrition?: Record<string, MemberNutrition> | null;
   // The gym's today: plan ends, check-in weeks and "3d ago" are counted from it.
   todayIso: string;
 }) {
@@ -323,9 +331,9 @@ const scopeBtnCls = (active: boolean) =>
   const headerCls = 'px-3 py-3 text-left font-bold first:pl-6';
   const sortBtn = 'inline-flex items-center gap-1 uppercase tracking-[0.08em] hover:text-black dark:hover:text-zinc-300';
   const filterSelectCls = 'h-11 min-w-0 rounded-full border border-black/[.14] bg-card px-4 text-sm font-bold dark:border-white/15';
-  // Member, Logging, Plan, Plan end, Check-in, Last class and Credits; then the tick box while selecting, or else the message button (the
-  // bar has Message each); and Coach for the whole gym.
-  const colCount = 8 + (scope === 'gym' ? 1 : 0);
+  // Member, Logging, Plan, Plan end, Check-in, Last class, Food this week and Credits; then the tick box while selecting, or else the
+  // message button (the bar has Message each); and Coach for the whole gym.
+  const colCount = 9 + (scope === 'gym' ? 1 : 0);
   const lastActiveText = (health: ClientHealthStatus | null) =>
     health?.lastActiveDate ? (health.daysSinceActive === 0 ? 'Today' : health.daysSinceActive === 1 ? 'Yesterday' : `${health.daysSinceActive}d ago`) : 'Never logged';
 
@@ -528,6 +536,11 @@ const scopeBtnCls = (active: boolean) =>
               cls: ci.kind === 'waiting' ? 'font-bold text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-400',
             });
           if (lc.short) facts.push({ key: 'class', Icon: CalendarCheck, label: 'Last class', text: lc.short });
+          // NU30 on a phone: this week's average against target, coloured like the Overview's tile.
+          const food = nutrition?.[client.id];
+          const foodWords = nutritionText(food);
+          if (food && food.avg != null)
+            facts.push({ key: 'food', Icon: Apple, label: `Food this week, ${foodWords.detail}`, text: foodWords.main, cls: toneCls(food.tone) });
           const card = (
             <>
               <Avatar name={nameOf(client)} size="md" />
@@ -625,6 +638,7 @@ const scopeBtnCls = (active: boolean) =>
             </th>
             <th className={headerCls}>Check-in</th>
             <th className={headerCls}>Last class</th>
+            <th className={headerCls}>Food this week</th>
             <th className={headerCls}>
               <button onClick={() => toggleSort('credits')} className={sortBtn}>
                 Credits <ArrowUpDown className="h-3 w-3" />
@@ -741,6 +755,18 @@ const scopeBtnCls = (active: boolean) =>
                       {lastClass.className}
                     </span>
                   )}
+                </td>
+                <td className="px-3 py-2.5">
+                  {(() => {
+                    const food = nutrition?.[client.id];
+                    const words = nutritionText(food);
+                    return (
+                      <>
+                        <span className={`whitespace-nowrap ${food?.avg != null ? `font-semibold ${toneCls(food.tone)}` : 'text-zinc-400'}`}>{words.main}</span>
+                        {words.detail && <span className="block whitespace-nowrap text-xs text-zinc-500">{words.detail}</span>}
+                      </>
+                    );
+                  })()}
                 </td>
                 <td className={`px-3 py-2.5 text-[15px] font-bold ${creditCls(client)}`}>{client.balance}</td>
                 {!selecting && (
@@ -880,6 +906,14 @@ const scopeBtnCls = (active: boolean) =>
               <dt className="font-bold text-black dark:text-zinc-50">Last class</dt>
               <dd className="text-zinc-600 dark:text-zinc-400">
                 The last class they were marked as attending. On a phone it has a calendar with a tick <CalendarCheck aria-hidden className="inline h-3 w-3" />.
+              </dd>
+            </div>
+            <div>
+              <dt className="font-bold text-black dark:text-zinc-50">Food this week</dt>
+              <dd className="text-zinc-600 dark:text-zinc-400">
+                Their average calories a day this week against their target, from full days before today (as on their Overview), and how they
+                track food: full tracking, typed totals or a photo diary. Green within 10% of the target, amber within 20%, red further off. On a
+                phone it has an apple <Apple aria-hidden className="inline h-3 w-3" />.
               </dd>
             </div>
             <div>

@@ -5,6 +5,8 @@ import { computeHealth, type ClientHealthBucket } from '@/lib/healthStatus';
 import { fetchAllPages } from '@/lib/paging';
 import { LOGGED_DATA_FILTER } from '@/lib/utils/dailyLog';
 import { checkInOf, checkInWeeks, type CheckIn, type LastClass } from '@/lib/memberList';
+import { NUTRITION_PROFILE_COLUMNS, weekNutrition, type MemberNutrition } from '@/lib/memberNutrition';
+import type { ClientProfileRow } from './types';
 
 // The "coach-global" tables (classes, membership_packages, form_templates) are scoped to a
 // specific coach, but the caller could be that coach themself or one of their clients --
@@ -310,6 +312,56 @@ export async function getMemberListActivity(
       checkIn: checkInOf((row.daily_logs ?? []).map((l) => l.log_date), (row.coach_reviews ?? []).map((r) => r.ref), todayIso),
       lastClass: booking ? { date: booking.booking_date, className: cls?.name ?? null } : null,
     };
+  }
+  return out;
+}
+
+// ---- the Members list's Food column (NU30) ----
+
+type NutritionRow = {
+  id: string;
+  client_profiles: Partial<ClientProfileRow> | Partial<ClientProfileRow>[] | null;
+  week_logs: { log_date: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }[] | null;
+  first_log: { log_date: string }[] | null;
+};
+
+// How each member tracks their food and this week's average calories against their target, for both of the list's scopes in ONE query
+// read page by page (as the Check-in column above): each member's target details, this week's days before today, and their first logged
+// day (for the programme week, when no join date is set). Nothing is read per member and nothing is written; no database function is
+// needed. The numbers are worked out here on the server (lib/memberNutrition.ts, the Overview's rule), so only a few per member go to the
+// page. What the coach's sign-in cannot read (RLS) comes back empty and shows as "—".
+export async function getMemberListNutrition(
+  supabase: SupabaseClient,
+  scope: { coachId: string; gymId: string | null },
+  todayIso: string
+): Promise<Record<string, MemberNutrition>> {
+  const filters = [UUID.test(scope.coachId) ? `coach_id.eq.${scope.coachId}` : null, scope.gymId && UUID.test(scope.gymId) ? `gym_id.eq.${scope.gymId}` : null].filter(Boolean);
+  if (filters.length === 0) return {};
+  const { thisWeek } = checkInWeeks(todayIso);
+  const { rows, error } = await fetchAllPages((from, to) =>
+    supabase
+      .from('profiles')
+      .select(
+        `id, client_profiles(${NUTRITION_PROFILE_COLUMNS}), week_logs:daily_logs(log_date, calories, protein, carbs, fat), first_log:daily_logs(log_date)`
+      )
+      .eq('role', 'client')
+      .or(filters.join(','))
+      // This week's days before today (today is still going), only those with food on them.
+      .gte('week_logs.log_date', thisWeek)
+      .lt('week_logs.log_date', todayIso)
+      .or('calories.not.is.null,protein.not.is.null,carbs.not.is.null,fat.not.is.null', { referencedTable: 'week_logs' })
+      // The first day ever logged (getFirstLoggedDate's rule), one row each.
+      .or(LOGGED_DATA_FILTER, { referencedTable: 'first_log' })
+      .order('log_date', { referencedTable: 'first_log', ascending: true })
+      .limit(1, { referencedTable: 'first_log' })
+      .order('id')
+      .range(from, to)
+  );
+  if (error) raise(error);
+  const out: Record<string, MemberNutrition> = {};
+  for (const row of rows as unknown as NutritionRow[]) {
+    const profile = Array.isArray(row.client_profiles) ? (row.client_profiles[0] ?? null) : row.client_profiles;
+    out[row.id] = weekNutrition(profile, row.week_logs ?? [], row.first_log?.[0]?.log_date ?? null, todayIso);
   }
   return out;
 }

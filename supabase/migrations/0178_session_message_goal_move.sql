@@ -70,7 +70,8 @@
 -- Expected after: true, true.
 --   select p.proname, md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) as body_md5, p.prosecdef, p.proconfig
 --   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('message_session_booked') order by 1;
--- Expected after (this file's bodies: the values in the guard below), prosecdef true, proconfig {search_path=public}.
+-- Expected after (this file's body: the value in the guard below), prosecdef true, proconfig {search_path=public}:
+--   message_session_booked 71b9b9ac8fcb83b4cd60b463329d36a8.
 --   select has_function_privilege('authenticated', 'public.message_session_booked(uuid, date, text)', 'execute') as signed_in,
 --          has_function_privilege('anon', 'public.message_session_booked(uuid, date, text)', 'execute') as anyone;
 -- Expected: true, false (signed-in members can call it but are refused inside: my_gym_id() is null for them).
@@ -102,6 +103,8 @@
 -- coach Y's), C on its waitlist and D who cancelled. As coach Y (same gym): select * from message_session_booked(session, date, 'Car park
 -- closed') -> two rows, for A and B; A's and B's chats each have one new message from Y; C and D have none. Run it as a coach of another
 -- gym -> "Not authorized", nothing written. With text '   ' -> "Write a message first", nothing written.
+--
+-- NU30 (the Members list's food column) needs no database change: it is one read, page by page, through the existing read rules.
 --
 -- REVERSE: drop function if exists public.message_session_booked(uuid, date, text); (the app then says the update is needed again).
 -- The goal move has no automatic reverse: the old entries are all kept, so a goal can be put back by hand from them (each moved entry's

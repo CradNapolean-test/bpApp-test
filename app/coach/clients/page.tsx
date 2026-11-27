@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getClientHealthStatuses, getMemberListActivity, getMyClients, searchGymClients } from '@/lib/data/coach';
+import { getClientHealthStatuses, getMemberListActivity, getMemberListNutrition, getMyClients, searchGymClients } from '@/lib/data/coach';
 import { getFollowUps } from '@/lib/data/followUps';
 import { DEFAULT_TIMEZONE, todayIsoInTz } from '@/lib/utils/dates';
 import { getCoachChatOverview } from '@/lib/data/chat';
@@ -45,7 +45,7 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
 
   // The gym's today, as on the dashboard, so both build the same follow-up list.
   const todayIso = todayIsoInTz(gym?.timezone || DEFAULT_TIMEZONE);
-  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue, holdIds, followUps, activity] = await Promise.all([
+  const [clients, gymClients, healthStatuses, chatOverview, groups, reviewQueue, holdIds, followUps, activity, nutrition] = await Promise.all([
     getMyClients(supabase, user.id),
     searchGymClients(supabase, profile.gym_id, user.id),
     getClientHealthStatuses(supabase, { coachId: user.id, gymId: profile.gym_id }),
@@ -57,6 +57,12 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
     // The Check-in and Last class columns (CL6). If they cannot be read the list still shows, says so, and has "—" in them (null).
     getMemberListActivity(supabase, { coachId: user.id, gymId: profile.gym_id }, todayIso).catch((err) => {
       console.error('Members list: check-ins and last classes could not be read', err);
+      return null;
+    }),
+    // The Food column (NU30): how each member tracks food and this week's average calories against their target, in one read for the
+    // whole list. If it cannot be read the list still shows, with "—" in it.
+    getMemberListNutrition(supabase, { coachId: user.id, gymId: profile.gym_id }, todayIso).catch((err) => {
+      console.error('Members list: food could not be read', err);
       return null;
     }),
   ]);
@@ -104,6 +110,7 @@ export default async function CoachClientsPage({ searchParams }: { searchParams:
           followUps={followUps.byClient}
           notSetUpIds={followUps.notSetUp}
           activity={activity}
+          nutrition={nutrition}
           todayIso={todayIso}
         />
       </div>
